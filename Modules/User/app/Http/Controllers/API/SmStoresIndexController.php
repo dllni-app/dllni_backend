@@ -10,10 +10,10 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Modules\Resturants\Models\Favorite;
-use Modules\Supermarket\Http\Resources\SmStoreResource;
 use Modules\Supermarket\Models\SmStore;
 use Modules\Supermarket\Services\SmSemanticStoreSearchService;
 use Modules\User\Http\Requests\DiscoverSupermarketStoresRequest;
+use Modules\User\Http\Resources\UserSupermarketStoreResource;
 use Modules\User\Services\UserPopularSearchService;
 
 final class SmStoresIndexController
@@ -41,7 +41,7 @@ final class SmStoresIndexController
             if ($semanticPaginator !== null) {
                 $this->attachFavoriteFlags($semanticPaginator->getCollection(), $request->user('sanctum'));
 
-                return SmStoreResource::collection($semanticPaginator);
+                return UserSupermarketStoreResource::collection($semanticPaginator);
             }
         }
 
@@ -73,7 +73,7 @@ final class SmStoresIndexController
         $stores = $query->paginate($request->integer('perPage', 20));
         $this->attachFavoriteFlags($stores->getCollection(), $request->user('sanctum'));
 
-        return SmStoreResource::collection($stores);
+        return UserSupermarketStoreResource::collection($stores);
     }
 
     private function resolveSemanticQuery(DiscoverSupermarketStoresRequest $request): ?string

@@ -200,6 +200,7 @@ final class WorkerOrderSolvencyService
             $grossWorkerTotal = $this->grossWorkerTotal($serviceShare, $travelFee);
             $workerAmount = $this->netWorkerAmount($serviceShare, $travelFee, $adminMargin);
             $isPricingFinal = (bool) $booking->is_pricing_final;
+            $workerSlot = $this->workerSlotForAssignment($booking, $assignment);
 
             return [
                 'id' => (int) $assignment->id,
@@ -210,7 +211,7 @@ final class WorkerOrderSolvencyService
                 'acceptedAt' => $assignment->accepted_at?->toIso8601String(),
                 'roomCount' => (int) $assignment->room_count,
                 'roomsWeight' => (float) $assignment->rooms_weight,
-                'workerSlot' => $nextSlot,
+                'workerSlot' => $workerSlot,
                 'totalHours' => $totalHours,
                 'serviceShareAmount' => $serviceShare,
                 'travelFee' => $travelFee,
@@ -285,6 +286,33 @@ final class WorkerOrderSolvencyService
         return round((float) $this->workerOfferForBooking($worker, $booking)['adminMarginAmount'], 2);
     }
 
+    private function workerSlotForAssignment(
+        CleaningBooking $booking,
+        ?CleaningBookingWorkerAssignment $assignment = null,
+    ): ?int {
+        if ((string) $booking->property_type === 'event_assistance') {
+            return null;
+        }
+
+        $workerCount = max(1, (int) ($booking->number_of_workers ?? 1));
+        $acceptedAssignments = CleaningBookingWorkerAssignment::query()
+            ->where('cleaning_booking_id', $booking->id)
+            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
+            ->orderBy('accepted_at')
+            ->orderBy('id')
+            ->get(['id']);
+        $acceptedCount = $acceptedAssignments->count();
+        $assignmentIndex = $assignment instanceof CleaningBookingWorkerAssignment
+            ? $acceptedAssignments->search(
+                static fn (CleaningBookingWorkerAssignment $candidate): bool => (int) $candidate->id === (int) $assignment->id
+            )
+            : false;
+
+        return $assignmentIndex !== false
+            ? min($workerCount, ((int) $assignmentIndex) + 1)
+            : min($workerCount, $acceptedCount + 1);
+    }
+
     private function assignmentForWorker(CleaningBooking $booking, Worker $worker): ?CleaningBookingWorkerAssignment
     {
         $assignment = $booking->relationLoaded('workerAssignments')
@@ -343,21 +371,7 @@ final class WorkerOrderSolvencyService
             ];
         }
 
-        $acceptedAssignments = CleaningBookingWorkerAssignment::query()
-            ->where('cleaning_booking_id', $booking->id)
-            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
-            ->orderBy('accepted_at')
-            ->orderBy('id')
-            ->get(['id']);
-        $acceptedCount = $acceptedAssignments->count();
-        $assignmentIndex = $assignment instanceof CleaningBookingWorkerAssignment
-            ? $acceptedAssignments->search(
-                static fn (CleaningBookingWorkerAssignment $candidate): bool => (int) $candidate->id === (int) $assignment->id
-            )
-            : false;
-        $nextSlot = $assignmentIndex !== false
-            ? min($workerCount, ((int) $assignmentIndex) + 1)
-            : min($workerCount, $acceptedCount + 1);
+        $nextSlot = $this->workerSlotForAssignment($booking, $assignment) ?? 1;
 
         $plannedRooms = CleaningBookingRoom::query()
             ->where('cleaning_booking_id', $booking->id)

@@ -62,11 +62,11 @@ final class MandoubPrimaryOfferScenarioSeeder extends Seeder
         DeliveryDriverLocation::query()->updateOrCreate(
             [
                 'driver_id' => $driver->id,
-                'recorded_at' => now()->subMinute()->startOfMinute(),
-            ],
-            [
                 'latitude' => 36.20230000,
                 'longitude' => 37.13440000,
+            ],
+            [
+                'recorded_at' => now()->subMinute()->startOfMinute(),
                 'accuracy' => 2.8,
                 'speed' => 12.0,
                 'heading' => 90,
@@ -90,10 +90,34 @@ final class MandoubPrimaryOfferScenarioSeeder extends Seeder
 
         $activeOrder->forceFill(['driver_id' => $nearbyDriver->id])->save();
 
-        DeliveryAssignmentAttempt::query()
+        $primaryAttempts = DeliveryAssignmentAttempt::query()
             ->where('order_id', $activeOrder->id)
             ->where('driver_id', $primaryDriver->id)
-            ->update(['driver_id' => $nearbyDriver->id]);
+            ->get();
+
+        foreach ($primaryAttempts as $attempt) {
+            DeliveryAssignmentAttempt::query()->updateOrCreate(
+                [
+                    'order_id' => $activeOrder->id,
+                    'driver_id' => $nearbyDriver->id,
+                    'attempt_no' => $attempt->attempt_no,
+                ],
+                [
+                    'status' => DeliveryAssignmentAttemptStatus::Accepted->value,
+                    'distance_to_pickup_km' => $attempt->distance_to_pickup_km,
+                    'offered_at' => $attempt->offered_at,
+                    'expires_at' => $attempt->expires_at,
+                    'responded_at' => $attempt->responded_at ?? now(),
+                    'reject_reason' => null,
+                ],
+            );
+
+            $attempt->forceFill([
+                'status' => DeliveryAssignmentAttemptStatus::Cancelled->value,
+                'responded_at' => $attempt->responded_at ?? now(),
+                'reject_reason' => 'أعيد إسناد الطلب التجريبي إلى المندوب الأقرب.',
+            ])->save();
+        }
     }
 
     private function openOfferForPrimary(DeliveryDriver $primaryDriver): void

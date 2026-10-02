@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\UserModuleType;
 use App\Models\User;
 use Laravel\Sanctum\Sanctum;
 use Modules\Resturants\Enums\OrderStatus;
@@ -9,14 +10,20 @@ use Modules\Resturants\Models\Order;
 use Modules\Resturants\Models\Restaurant;
 
 beforeEach(function () {
-    Sanctum::actingAs(User::factory()->create());
+    $this->owner = User::factory()->create([
+        'module_type' => UserModuleType::RestaurantSeller->value,
+    ]);
+    $this->restaurant = Restaurant::factory()->create([
+        'user_id' => $this->owner->id,
+    ]);
+
+    Sanctum::actingAs($this->owner);
 });
 
 it('returns invoice data for order', function () {
-    $restaurant = Restaurant::factory()->create();
     $customer = User::factory()->create(['email' => 'invoice-customer@example.com']);
     $order = Order::factory()->create([
-        'restaurant_id' => $restaurant->id,
+        'restaurant_id' => $this->restaurant->id,
         'user_id' => $customer->id,
         'status' => OrderStatus::Completed,
     ]);

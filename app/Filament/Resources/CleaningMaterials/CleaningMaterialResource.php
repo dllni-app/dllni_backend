@@ -25,60 +25,95 @@ use Modules\Cleaning\Models\CleaningMaterial;
 final class CleaningMaterialResource extends Resource
 {
     protected static ?string $model = CleaningMaterial::class;
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBeaker;
-    protected static ?int $navigationSort = 24;
 
-    public static function getNavigationGroup(): ?string { return __('cleaning_admin.nav_groups.operations'); }
-    public static function getNavigationLabel(): string { return 'Cleaning Materials'; }
-    public static function getModelLabel(): string { return 'Cleaning Material'; }
-    public static function getPluralModelLabel(): string { return 'Cleaning Materials'; }
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBeaker;
+
+    protected static ?int $navigationSort = 13;
+
+    public static function getNavigationGroup(): ?string
+    {
+        return \App\Filament\Support\AdminNavigationGroup::cleaning();
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return __('cleaning_catalog.materials.navigation');
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('cleaning_catalog.materials.singular');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('cleaning_catalog.materials.navigation');
+    }
 
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('name')->required()->maxLength(255),
+            TextInput::make('name')->label(__('cleaning_catalog.materials.fields.name'))->required()->maxLength(255),
             FileUpload::make('image_path')
-                ->label('Product image')
+                ->label(__('cleaning_catalog.materials.fields.image'))
                 ->disk('public')
                 ->directory('cleaning-materials')
                 ->image()
                 ->imageEditor()
                 ->maxSize(5120),
-            Select::make('cleaning_material_type_id')->label('Material Type')->relationship('materialType', 'name')->searchable()->preload()->required(),
-            TextInput::make('stock_quantity')->label('Current Stock')->numeric()->minValue(0)->required()->suffix('configured unit'),
-            TextInput::make('low_stock_threshold')->label('Low-stock Threshold')->numeric()->minValue(0)->required(),
-            Toggle::make('is_active')->default(true),
+            Select::make('cleaning_material_type_id')->label(__('cleaning_catalog.materials.fields.type'))->relationship('materialType', 'name')->searchable()->preload()->required(),
+            TextInput::make('stock_quantity')->label(__('cleaning_catalog.materials.fields.stock'))->numeric()->minValue(0)->required()->suffix(__('cleaning_catalog.materials.fields.unit')),
+            TextInput::make('low_stock_threshold')->label(__('cleaning_catalog.materials.fields.low_stock_at'))->numeric()->minValue(0)->required(),
+            Toggle::make('is_active')->label(__('cleaning_catalog.materials.fields.is_active'))->default(true),
         ])->columns(2);
     }
 
     public static function table(Table $table): Table
     {
         return $table->columns([
-            TextColumn::make('name')->searchable()->sortable(),
-            TextColumn::make('materialType.name')->label('Type')->searchable(),
-            TextColumn::make('image_path')->label('Image')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
-            TextColumn::make('materialType.unit.symbol')->label('Unit')->placeholder('—'),
-            TextColumn::make('stock_quantity')->label('Stock')->numeric(decimalPlaces: 3)->sortable(),
-            TextColumn::make('low_stock_threshold')->label('Low-stock At')->numeric(decimalPlaces: 3)->toggleable(),
-            IconColumn::make('is_low_stock')->label('Low Stock')->boolean()->state(fn (CleaningMaterial $record): bool => $record->isLowStock()),
-            IconColumn::make('is_active')->boolean(),
-            TextColumn::make('updated_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
-        ])->filters([TernaryFilter::make('is_active')])->defaultSort('name');
+            TextColumn::make('name')->label(__('cleaning_catalog.materials.fields.name'))->searchable()->sortable(),
+            TextColumn::make('materialType.name')->label(__('cleaning_catalog.materials.fields.type'))->searchable(),
+            TextColumn::make('image_path')->label(__('cleaning_catalog.materials.fields.image'))->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
+            TextColumn::make('materialType.unit.symbol')->label(__('cleaning_catalog.materials.fields.unit'))->placeholder('—'),
+            TextColumn::make('stock_quantity')->label(__('cleaning_catalog.materials.fields.stock'))->numeric(decimalPlaces: 3)->sortable(),
+            TextColumn::make('low_stock_threshold')->label(__('cleaning_catalog.materials.fields.low_stock_at'))->numeric(decimalPlaces: 3)->toggleable(),
+            IconColumn::make('is_low_stock')->label(__('cleaning_catalog.materials.fields.low_stock'))->boolean()->state(fn (CleaningMaterial $record): bool => $record->isLowStock()),
+            IconColumn::make('is_active')->label(__('cleaning_catalog.materials.fields.is_active'))->boolean(),
+            TextColumn::make('updated_at')->label(__('cleaning_catalog.materials.fields.updated_at'))->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
+        ])->filters([
+            TernaryFilter::make('is_active')->label(__('cleaning_catalog.materials.fields.is_active')),
+        ])->defaultSort('name');
     }
 
     public static function getPages(): array
     {
-        return ['index'=>ListCleaningMaterials::route('/'),'create'=>CreateCleaningMaterial::route('/create'),'edit'=>EditCleaningMaterial::route('/{record}/edit')];
+        return ['index' => ListCleaningMaterials::route('/'), 'create' => CreateCleaningMaterial::route('/create'), 'edit' => EditCleaningMaterial::route('/{record}/edit')];
     }
 
-    public static function canViewAny(): bool { return self::allowed('pricing.view'); }
-    public static function canCreate(): bool { return self::allowed('pricing.create'); }
-    public static function canEdit(Model $record): bool { return self::allowed('pricing.update'); }
-    public static function canDelete(Model $record): bool { return self::allowed('pricing.delete'); }
+    public static function canViewAny(): bool
+    {
+        return self::allowed('pricing.view');
+    }
+
+    public static function canCreate(): bool
+    {
+        return self::allowed('pricing.create');
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return self::allowed('pricing.update');
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return self::allowed('pricing.delete');
+    }
 
     private static function allowed(string $permission): bool
     {
         $user = auth()->user();
+
         return $user !== null && ($user->hasAnyRole(['admin', 'Super Admin']) || $user->can($permission));
     }
 }

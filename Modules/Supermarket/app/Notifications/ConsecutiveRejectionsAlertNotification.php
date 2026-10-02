@@ -33,7 +33,6 @@ final class ConsecutiveRejectionsAlertNotification extends Notification
                 'store_id' => (int) $this->store->id,
                 'store_name' => (string) $this->store->name,
                 'recent_cancellations' => $this->recentCancelledCount,
-                'message' => "Alert: Your store has cancelled {$this->recentCancelledCount} consecutive orders. Please provide clarification.",
             ],
         );
     }

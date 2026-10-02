@@ -51,6 +51,17 @@ it('returns only the canonical supermarket permission catalog', function (): voi
 });
 
 it('keeps stale supermarket permissions out of the auth payload', function (): void {
+    dump([
+        'module_type' => $this->owner->module_type?->value,
+        'has_store' => $this->owner->smStores()->exists(),
+        'guard' => config('auth.defaults.guard'),
+        'catalog_count' => Permission::query()
+            ->where('guard_name', config('auth.defaults.guard'))
+            ->where('group', SupermarketOwnerPermissionCatalog::GROUP)
+            ->whereIn('name', SupermarketOwnerPermissionCatalog::NAMES)
+            ->count(),
+    ]);
+
     $names = collect(SupermarketSellerAuthExtras::permissionsPayload($this->owner))
         ->pluck('name')
         ->sort()

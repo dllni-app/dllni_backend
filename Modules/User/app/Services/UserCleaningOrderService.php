@@ -87,6 +87,14 @@ final class UserCleaningOrderService
                     $normalizedInput['propertyType'],
                     $normalizedInput['propertyDetails'],
                 );
+                $suggestedWorkers = (int) ($estimation['recommendation']['suggestedTeamSize'] ?? 1);
+                $requestedWorkers = $this->resolveRequestedWorkers(
+                    $validated,
+                    $normalizedPropertyType,
+                    $suggestedWorkers,
+                    $resolvedAssignmentMode
+                );
+
                 $pricing = $isOpenTime
                     ? $this->estimationService->priceOpenTime(
                         $normalizedInput['propertyType'],
@@ -106,6 +114,7 @@ final class UserCleaningOrderService
                         null,
                         (bool) ($validated['requestMaterials'] ?? false),
                         is_array($validated['specialServices'] ?? null) ? $validated['specialServices'] : [],
+                        $requestedWorkers,
                     );
             } catch (InvalidArgumentException $exception) {
                 throw ValidationException::withMessages([
@@ -113,13 +122,6 @@ final class UserCleaningOrderService
                 ]);
             }
 
-            $suggestedWorkers = (int) ($estimation['recommendation']['suggestedTeamSize'] ?? 1);
-            $requestedWorkers = $this->resolveRequestedWorkers(
-                $validated,
-                $normalizedPropertyType,
-                $suggestedWorkers,
-                $resolvedAssignmentMode
-            );
             $plannedWorkerRoomAssignments = $this->plannedWorkerRoomAssignments(
                 $normalizedPropertyType,
                 $normalizedPropertyDetails,
@@ -833,6 +835,65 @@ final class UserCleaningOrderService
     }
 
     /**
+     * Link requested special services to materialized recurring/event sessions.
+     * Session identifiers in a create payload are session sequence numbers; on
+     * update, persisted session ids are also accepted.
+     *
+     * @param  array<int,mixed>  $requestedLines
+     */
+    public function syncSpecialServiceSessions(CleaningBooking $booking, array $requestedLines): void
+    {
+        $requestedByService = [];
+        foreach ($requestedLines as $line) {
+            if (! is_array($line)) {
+                continue;
+            }
+            $serviceId = (int) ($line['serviceId'] ?? $line['specialServiceId'] ?? 0);
+            $requestedByService[$serviceId] = array_values(array_unique(array_filter(
+                array_map('intval', (array) ($line['sessionIds'] ?? [])),
+                static fn (int $id): bool => $id > 0,
+            )));
+        }
+
+        $sessions = $booking->sessions()->get(['id', 'sequence']);
+        foreach ($booking->specialServices()->get() as $bookingService) {
+            $requested = $requestedByService[(int) $bookingService->cleaning_special_service_id] ?? [];
+            if ($requested === []) {
+                continue;
+            }
+            $ids = $sessions
+                ->filter(static fn ($session): bool => in_array((int) $session->id, $requested, true)
+                    || in_array((int) $session->sequence, $requested, true))
+                ->pluck('id')
+                ->map(static fn (mixed $id): int => (int) $id)
+                ->all();
+            if ($ids === []) {
+                continue;
+            }
+
+            $sourceItems = $bookingService->items()->get();
+            foreach ($ids as $index => $sessionId) {
+                $line = $index === 0 ? $bookingService : $bookingService->replicate();
+                $line->cleaning_booking_session_id = $sessionId;
+                $line->execution_status = 'pending';
+                $line->assigned_worker_id = null;
+                $line->started_at = null;
+                $line->completed_at = null;
+                $line->save();
+                $line->sessions()->sync([$sessionId]);
+
+                if ($index > 0) {
+                    foreach ($sourceItems as $sourceItem) {
+                        $item = $sourceItem->replicate();
+                        $item->cleaning_booking_special_service_id = $line->id;
+                        $item->save();
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * @param  array<string, mixed>  $pricing
      */
     private function persistNewServiceLines(CleaningBooking $booking, array $pricing): void
@@ -894,65 +955,6 @@ final class UserCleaningOrderService
                     'before_images' => (array) ($item['beforeImages'] ?? []),
                     'after_images' => (array) ($item['afterImages'] ?? []),
                 ]);
-            }
-        }
-    }
-
-    /**
-     * Link requested special services to materialized recurring/event sessions.
-     * Session identifiers in a create payload are session sequence numbers; on
-     * update, persisted session ids are also accepted.
-     *
-     * @param array<int,mixed> $requestedLines
-     */
-    public function syncSpecialServiceSessions(CleaningBooking $booking, array $requestedLines): void
-    {
-        $requestedByService = [];
-        foreach ($requestedLines as $line) {
-            if (! is_array($line)) {
-                continue;
-            }
-            $serviceId = (int) ($line['serviceId'] ?? $line['specialServiceId'] ?? 0);
-            $requestedByService[$serviceId] = array_values(array_unique(array_filter(
-                array_map('intval', (array) ($line['sessionIds'] ?? [])),
-                static fn (int $id): bool => $id > 0,
-            )));
-        }
-
-        $sessions = $booking->sessions()->get(['id', 'sequence']);
-        foreach ($booking->specialServices()->get() as $bookingService) {
-            $requested = $requestedByService[(int) $bookingService->cleaning_special_service_id] ?? [];
-            if ($requested === []) {
-                continue;
-            }
-            $ids = $sessions
-                ->filter(static fn ($session): bool => in_array((int) $session->id, $requested, true)
-                    || in_array((int) $session->sequence, $requested, true))
-                ->pluck('id')
-                ->map(static fn (mixed $id): int => (int) $id)
-                ->all();
-            if ($ids === []) {
-                continue;
-            }
-
-            $sourceItems = $bookingService->items()->get();
-            foreach ($ids as $index => $sessionId) {
-                $line = $index === 0 ? $bookingService : $bookingService->replicate();
-                $line->cleaning_booking_session_id = $sessionId;
-                $line->execution_status = 'pending';
-                $line->assigned_worker_id = null;
-                $line->started_at = null;
-                $line->completed_at = null;
-                $line->save();
-                $line->sessions()->sync([$sessionId]);
-
-                if ($index > 0) {
-                    foreach ($sourceItems as $sourceItem) {
-                        $item = $sourceItem->replicate();
-                        $item->cleaning_booking_special_service_id = $line->id;
-                        $item->save();
-                    }
-                }
             }
         }
     }

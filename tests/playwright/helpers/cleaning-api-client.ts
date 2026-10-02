@@ -24,6 +24,8 @@ export type ApiCallResult<TBody = unknown> = {
   body: TBody;
 };
 
+let createOrderSequence = 0;
+
 export function futureDate(daysAhead = 1): string {
   const value = new Date();
   value.setHours(12, 0, 0, 0);
@@ -50,6 +52,7 @@ export function buildCreateOrderPayload(
   overrides: Partial<CleaningOrderPayload> = {},
 ): CleaningOrderPayload {
   const suffix = `${Date.now()}-${Math.floor(Math.random() * 10_000)}`;
+  const sequence = createOrderSequence++;
 
   return {
     propertyType: 'apartment',
@@ -63,7 +66,10 @@ export function buildCreateOrderPayload(
       living_room_size: 'medium',
       ...overrides.propertyDetails,
     },
-    scheduledDate: overrides.scheduledDate ?? futureDate(2),
+    // Each Playwright scenario shares the seeded worker. Use a distinct default
+    // execution day so accepted bookings from earlier scenarios cannot make
+    // later scenarios fail the real overlap guard.
+    scheduledDate: overrides.scheduledDate ?? futureDate(2 + sequence),
     scheduledTime: overrides.scheduledTime ?? '10:00',
     addressLatitude: overrides.addressLatitude ?? 33.5138,
     addressLongitude: overrides.addressLongitude ?? 36.2765,
@@ -295,6 +301,9 @@ export class CleaningApiClient {
     socketId = '9999.9999',
   ): Promise<ApiCallResult> {
     const response = await this.request.post('/broadcasting/auth', {
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+      },
       form: {
         channel_name: channelName,
         socket_id: socketId,

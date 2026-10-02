@@ -89,7 +89,7 @@ final class DeliveryDriversTable
                                 ->success()
                                 ->send();
                         } catch (InvalidArgumentException $exception) {
-                            Notification::make()->title($exception->getMessage())->danger()->send();
+                            Notification::make()->title(\App\Filament\Support\AdminExceptionMessage::forUser($exception))->danger()->send();
                         }
                     }),
                 Action::make('unsuspend')
@@ -108,7 +108,7 @@ final class DeliveryDriversTable
                                 ->success()
                                 ->send();
                         } catch (InvalidArgumentException $exception) {
-                            Notification::make()->title($exception->getMessage())->danger()->send();
+                            Notification::make()->title(\App\Filament\Support\AdminExceptionMessage::forUser($exception))->danger()->send();
                         }
                     }),
                 Action::make('activate')
@@ -125,7 +125,7 @@ final class DeliveryDriversTable
                                 ->success()
                                 ->send();
                         } catch (InvalidArgumentException $exception) {
-                            Notification::make()->title($exception->getMessage())->danger()->send();
+                            Notification::make()->title(\App\Filament\Support\AdminExceptionMessage::forUser($exception))->danger()->send();
                         }
                     }),
                 Action::make('deactivate')
@@ -142,7 +142,7 @@ final class DeliveryDriversTable
                                 ->success()
                                 ->send();
                         } catch (InvalidArgumentException $exception) {
-                            Notification::make()->title($exception->getMessage())->danger()->send();
+                            Notification::make()->title(\App\Filament\Support\AdminExceptionMessage::forUser($exception))->danger()->send();
                         }
                     }),
             ])

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\UserModuleType;
 use App\Models\User;
 use Laravel\Sanctum\Sanctum;
 use Modules\Resturants\Models\Offer;
@@ -16,12 +17,20 @@ use Modules\Resturants\Models\RestaurantStaff;
 use Modules\Resturants\Models\Review;
 
 beforeEach(function () {
-    Sanctum::actingAs(User::factory()->create());
+    $owner = User::factory()->create([
+        'module_type' => UserModuleType::RestaurantSeller->value,
+    ]);
+
+    $this->restaurant = Modules\Resturants\Models\Restaurant::factory()->create([
+        'user_id' => $owner->id,
+    ]);
+
+    Sanctum::actingAs($owner);
 });
 
 it('lists offers', function () {
     Offer::create([
-        'restaurant_id' => Modules\Resturants\Models\Restaurant::factory()->create()->id,
+        'restaurant_id' => $this->restaurant->id,
         'name' => 'Summer Sale',
         'discount_type' => 'percentage',
         'discount_value' => 20,
@@ -36,7 +45,7 @@ it('lists offers', function () {
 
 it('lists promo codes', function () {
     PromoCode::create([
-        'restaurant_id' => Modules\Resturants\Models\Restaurant::factory()->create()->id,
+        'restaurant_id' => $this->restaurant->id,
         'code' => 'SAVE10',
         'discount_type' => 'percentage',
         'discount_value' => 10,
@@ -104,7 +113,7 @@ it('lists restaurant penalties', function () {
 });
 
 it('lists restaurant staff', function () {
-    $restaurant = Modules\Resturants\Models\Restaurant::factory()->create();
+    $restaurant = $this->restaurant;
     $role = RestaurantRole::create([
         'restaurant_id' => $restaurant->id,
         'name' => 'Manager',

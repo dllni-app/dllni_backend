@@ -29,18 +29,27 @@ final class OwnerEmployeeStoreRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        $permissionIds = $this->input('permissionIds', $this->input('permission_ids'));
+        $merge = [];
 
-        if (is_string($permissionIds)) {
-            $decoded = json_decode($permissionIds, true);
-            $permissionIds = is_array($decoded)
-                ? $decoded
-                : array_filter(array_map('trim', explode(',', $permissionIds)));
+        if ($this->has('permissionIds') || $this->has('permission_ids')) {
+            $permissionIds = $this->input('permissionIds', $this->input('permission_ids'));
+
+            if (is_string($permissionIds)) {
+                $decoded = json_decode($permissionIds, true);
+                $permissionIds = is_array($decoded)
+                    ? $decoded
+                    : array_filter(array_map('trim', explode(',', $permissionIds)));
+            }
+
+            $merge['permissionIds'] = $permissionIds;
         }
 
-        $this->merge([
-            'permissionIds' => $permissionIds,
-            'isActive' => $this->input('isActive', $this->input('is_active')),
-        ]);
+        if ($this->has('isActive') || $this->has('is_active')) {
+            $merge['isActive'] = $this->input('isActive', $this->input('is_active'));
+        }
+
+        if ($merge !== []) {
+            $this->merge($merge);
+        }
     }
 }

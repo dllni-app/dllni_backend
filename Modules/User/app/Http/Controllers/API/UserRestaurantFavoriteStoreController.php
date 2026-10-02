@@ -6,8 +6,8 @@ namespace Modules\User\Http\Controllers\API;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Modules\Resturants\Http\Resources\RestaurantResource;
 use Modules\Resturants\Models\Restaurant;
+use Modules\User\Http\Resources\UserRestaurantResource;
 use Modules\User\Services\UserFavoriteService;
 
 final class UserRestaurantFavoriteStoreController
@@ -23,7 +23,7 @@ final class UserRestaurantFavoriteStoreController
         $restaurant->load(['media', 'cuisineTypes', 'primaryActiveOffer']);
 
         return response()->json([
-            'restaurant' => RestaurantResource::make($restaurant),
+            'restaurant' => UserRestaurantResource::make($restaurant),
         ], $favorite->wasRecentlyCreated ? 201 : 200);
     }
 }

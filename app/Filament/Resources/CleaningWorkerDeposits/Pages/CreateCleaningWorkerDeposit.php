@@ -80,7 +80,7 @@ final class CreateCleaningWorkerDeposit extends CreateRecord
             );
         } catch (InvalidArgumentException $exception) {
             throw ValidationException::withMessages([
-                $type === 'refund' ? 'data.type' : 'data.amount' => $exception->getMessage(),
+                $type === 'refund' ? 'data.type' : 'data.amount' => \App\Filament\Support\AdminExceptionMessage::forUser($exception),
             ]);
         }
     }

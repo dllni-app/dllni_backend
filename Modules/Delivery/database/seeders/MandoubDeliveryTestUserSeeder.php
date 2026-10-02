@@ -92,7 +92,7 @@ final class MandoubDeliveryTestUserSeeder extends Seeder
         return User::updateOrCreate(
             ['email' => 'delivery.owner@dllni.sy'],
             [
-                'name' => 'Delivery Owner',
+                'name' => 'مؤيد العلي',
                 'phone' => '+963944700001',
                 'password' => bcrypt('password'),
                 'email_verified_at' => now(),
@@ -106,11 +106,11 @@ final class MandoubDeliveryTestUserSeeder extends Seeder
         return DeliveryCompany::updateOrCreate(
             ['owner_user_id' => $owner->id],
             [
-                'name' => 'Dllni Fast Delivery',
-                'legal_name' => 'Dllni Fast Delivery LLC',
+                'name' => 'دليلني للتوصيل السريع',
+                'legal_name' => 'شركة دليلني لخدمات التوصيل',
                 'phone' => '+963211123456',
                 'email' => 'ops@dllni-delivery.sy',
-                'address' => 'Aleppo, Syria',
+                'address' => 'حلب، سوريا',
                 'latitude' => 36.20210411,
                 'longitude' => 37.13426044,
                 'is_active' => true,
@@ -299,7 +299,7 @@ final class MandoubDeliveryTestUserSeeder extends Seeder
         foreach ($orders as $key => $order) {
             DeliveryOrderEvent::updateOrCreate(
                 ['order_id' => $order->id, 'to_status' => DeliveryOrderStatus::New->value],
-                ['actor_type' => User::class, 'actor_id' => $owner->id, 'from_status' => null, 'note' => 'Mandoub test order created', 'payload' => ['seed' => 'mandoub_test_user']],
+                ['actor_type' => User::class, 'actor_id' => $owner->id, 'from_status' => null, 'note' => 'تم إنشاء طلب التوصيل التجريبي للمندوب', 'payload' => ['seed' => 'mandoub_test_user']],
             );
 
             DeliveryOrderEvent::updateOrCreate(
@@ -308,7 +308,7 @@ final class MandoubDeliveryTestUserSeeder extends Seeder
                     'actor_type' => DeliveryDriver::class,
                     'actor_id' => $order->driver_id ?? ($key === 'offer' ? $offerDriver->id : $primaryDriver->id),
                     'from_status' => $order->driver_id !== null ? DeliveryOrderStatus::Accepted->value : DeliveryOrderStatus::Dispatching->value,
-                    'note' => 'Mandoub test order status '.$order->status,
+                    'note' => 'تغيرت حالة طلب التوصيل التجريبي إلى '.$order->status,
                     'payload' => ['seed' => 'mandoub_test_user', 'currentStatus' => $order->status],
                 ],
             );
@@ -327,15 +327,15 @@ final class MandoubDeliveryTestUserSeeder extends Seeder
 
         foreach ($rows as $key => $row) {
             DeliveryDriverLocation::updateOrCreate(
-                ['driver_id' => $drivers[$key]->id, 'recorded_at' => $row['recorded_at']],
-                ['latitude' => $row['latitude'], 'longitude' => $row['longitude'], 'accuracy' => $row['accuracy'], 'speed' => $row['speed'], 'heading' => $row['heading']],
+                ['driver_id' => $drivers[$key]->id, 'latitude' => $row['latitude'], 'longitude' => $row['longitude']],
+                ['recorded_at' => $row['recorded_at'], 'accuracy' => $row['accuracy'], 'speed' => $row['speed'], 'heading' => $row['heading']],
             );
         }
     }
 
     /**
-     * @param array<string, DeliveryDriver> $drivers
-     * @param array<string, DeliveryOrder> $orders
+     * @param  array<string, DeliveryDriver>  $drivers
+     * @param  array<string, DeliveryOrder>  $orders
      */
     private function financialAccounts(array $drivers, User $owner, array $orders): void
     {
@@ -356,8 +356,8 @@ final class MandoubDeliveryTestUserSeeder extends Seeder
             }
 
             foreach ([
-                [DeliveryFinancialTransactionType::OrderFeeDebit->value, DeliveryFinancialDirection::Debit->value, 12500, 100000, 87500, $orders['completed']->id, 'Seed completed order fee'],
-                [DeliveryFinancialTransactionType::CollectionCredit->value, DeliveryFinancialDirection::Credit->value, 15000, 72500, 87500, $orders['active']->id, 'Seed active order collection'],
+                [DeliveryFinancialTransactionType::OrderFeeDebit->value, DeliveryFinancialDirection::Debit->value, 12500, 100000, 87500, $orders['completed']->id, 'تسجيل أجرة التوصيل للطلب المكتمل'],
+                [DeliveryFinancialTransactionType::CollectionCredit->value, DeliveryFinancialDirection::Credit->value, 15000, 72500, 87500, $orders['active']->id, 'تسجيل تحصيل نقدي لطلب التوصيل النشط'],
             ] as $index => [$type, $direction, $amount, $before, $after, $referenceId, $note]) {
                 DeliveryFinancialTransaction::updateOrCreate(
                     ['account_id' => $account->id, 'transaction_type' => $type, 'reference_id' => $referenceId, 'amount' => $amount],

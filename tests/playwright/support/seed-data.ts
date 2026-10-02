@@ -13,6 +13,10 @@ export type CleaningSeedData = {
     outsider_worker: { id: number; userId: number; workerId: number; token: string };
   };
   fixtures: {
+    neighborhoods: {
+      damascus: number;
+      homs: number;
+    };
     policies: {
       cancellationId: number | null;
       billingId: number | null;

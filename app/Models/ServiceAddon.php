@@ -24,7 +24,7 @@ final class ServiceAddon extends Model
     {
         return [
             'pricing_type' => AddonPricingType::class,
-            'price_value' => 'integer',
+            'price_value' => 'decimal:2',
             'is_active' => 'boolean',
         ];
     }

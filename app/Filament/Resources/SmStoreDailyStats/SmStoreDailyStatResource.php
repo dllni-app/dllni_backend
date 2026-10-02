@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\SmStoreDailyStats;
 
+use App\Filament\Concerns\AuthorizesPlatformAdminResource;
 use App\Filament\Concerns\ResolvesSupermarketNavigationGroup;
 use App\Filament\Resources\SmStoreDailyStats\Pages\ListSmStoreDailyStats;
 use App\Filament\Resources\SmStoreDailyStats\Pages\ViewSmStoreDailyStat;
@@ -14,10 +15,12 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use Modules\Supermarket\Models\SmStoreDailyStat;
 
 final class SmStoreDailyStatResource extends Resource
 {
+    use AuthorizesPlatformAdminResource;
     use ResolvesSupermarketNavigationGroup;
 
     protected static ?string $model = SmStoreDailyStat::class;
@@ -26,13 +29,28 @@ final class SmStoreDailyStatResource extends Resource
 
     protected static ?string $navigationLabel = null;
 
-    protected static ?int $navigationSort = 10;
+    protected static ?int $navigationSort = 13;
 
     protected static bool $shouldRegisterNavigation = false;
+
+    public static function getNavigationGroup(): ?string
+    {
+        return \App\Filament\Support\AdminNavigationGroup::supermarkets();
+    }
 
     public static function getNavigationLabel(): string
     {
         return __('supermarket_admin.daily_stats');
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('admin_resources.supermarket_daily_stat.singular');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('admin_resources.supermarket_daily_stat.plural');
     }
 
     public static function getNavigationTooltip(): ?string
@@ -50,12 +68,14 @@ final class SmStoreDailyStatResource extends Resource
         return SmStoreDailyStatsTable::configure($table);
     }
 
-    public static function getPages(): array
+    public static function canViewAny(): bool
     {
-        return [
-            'index' => ListSmStoreDailyStats::route('/'),
-            'view' => ViewSmStoreDailyStat::route('/{record}'),
-        ];
+        return self::dashboardAllowed('supermarket_orders.view');
+    }
+
+    public static function canView(Model $record): bool
+    {
+        return self::dashboardAllowed('supermarket_orders.view');
     }
 
     public static function canCreate(): bool
@@ -63,8 +83,18 @@ final class SmStoreDailyStatResource extends Resource
         return false;
     }
 
-    public static function canEdit($record): bool
+    public static function canEdit(Model $record): bool
     {
         return false;
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return false;
+    }
+
+    public static function getPages(): array
+    {
+        return ['index' => ListSmStoreDailyStats::route('/'), 'view' => ViewSmStoreDailyStat::route('/{record}')];
     }
 }

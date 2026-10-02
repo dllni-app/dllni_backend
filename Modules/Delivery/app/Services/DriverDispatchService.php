@@ -44,24 +44,28 @@ final class DriverDispatchService
             }
             if ($order->assignmentAttempts()->where('status', DeliveryAssignmentAttemptStatus::Open->value)->exists()) {
                 $order->forceFill(['status' => DeliveryOrderStatus::Offered->value])->save();
+
                 return;
             }
 
             $order->loadMissing('company');
             if ($order->company?->is_suspended) {
                 $this->deliveryOrderService->markStopped($order, 'Company is suspended.');
+
                 return;
             }
 
             $eligibleRows = $this->eligibleDriverRows($order);
             if ($eligibleRows->isEmpty()) {
                 $this->retryWithoutCandidate($order, self::NO_ELIGIBLE_DRIVERS_NOTE, $redispatchOrderId, $redispatchDelaySeconds);
+
                 return;
             }
 
             $wavePlan = $this->nextWavePlan($order, $eligibleRows);
             if ($wavePlan['exhausted']) {
                 $this->deliveryOrderService->markStopped($order, self::DRIVER_POOL_EXHAUSTED_NOTE);
+
                 return;
             }
 
@@ -71,6 +75,7 @@ final class DriverDispatchService
                 $this->recordEmptyWave($order, $wavePlan);
                 $redispatchOrderId = (int) $order->id;
                 $redispatchDelaySeconds = $this->offerTimeoutSeconds();
+
                 return;
             }
 
@@ -110,6 +115,7 @@ final class DriverDispatchService
 
             if ($createdAttemptIds === []) {
                 $this->retryWithoutCandidate($order, self::NO_ELIGIBLE_DRIVERS_NOTE, $redispatchOrderId, $redispatchDelaySeconds);
+
                 return;
             }
 
@@ -166,6 +172,7 @@ final class DriverDispatchService
             if ($hasOpenAttempts) {
                 $this->deliveryOrderService->recordStatusChange($order, DeliveryOrderStatus::tryFrom((string) $order->status), DeliveryOrderStatus::Offered, 'Assignment attempt timed out; waiting for other drivers', payload: ['attemptId' => $attempt->id]);
                 $timedOutAttemptId = $attempt->id;
+
                 return;
             }
 
@@ -246,6 +253,7 @@ final class DriverDispatchService
 
             if ($hasOpenAttempts) {
                 $this->deliveryOrderService->recordStatusChange($order, DeliveryOrderStatus::tryFrom((string) $order->status), DeliveryOrderStatus::Offered, 'Driver rejected offer; waiting for other drivers', 'delivery_driver', $driver->id, ['attemptId' => $attempt->id, 'reason' => $reason]);
+
                 return;
             }
 
@@ -266,13 +274,14 @@ final class DriverDispatchService
 
     public function currentActiveOrderForDriver(DeliveryDriver $driver): ?DeliveryOrder
     {
-        return DeliveryOrder::query()->where('driver_id', $driver->id)->whereIn('status', [DeliveryOrderStatus::Accepted->value, DeliveryOrderStatus::InProgress->value, DeliveryOrderStatus::PickedUp->value])->latest('updated_at')->first();
+        return DeliveryOrder::query()->where('driver_id', $driver->id)->whereIn('status', [DeliveryOrderStatus::Accepted->value, DeliveryOrderStatus::InProgress->value, DeliveryOrderStatus::PickedUp->value, DeliveryOrderStatus::ReturningToMerchant->value])->latest('updated_at')->first();
     }
 
     private function retryWithoutCandidate(DeliveryOrder $order, string $reason, ?int &$redispatchOrderId, ?int &$redispatchDelaySeconds): void
     {
         if ($this->shouldStopAfterNoCandidateRetries($order)) {
             $this->deliveryOrderService->markStopped($order, $reason);
+
             return;
         }
         $this->deliveryOrderService->recordStatusChange($order, DeliveryOrderStatus::tryFrom((string) $order->status), DeliveryOrderStatus::SearchingForDriver, $reason);
@@ -287,6 +296,7 @@ final class DriverDispatchService
         if ($maxRetries < 0) {
             return false;
         }
+
         return $order->events()->whereIn('to_status', [DeliveryOrderStatus::SearchingForDriver->value, DeliveryOrderStatus::Dispatching->value])->where('note', self::NO_ELIGIBLE_DRIVERS_NOTE)->count() >= $maxRetries;
     }
 
@@ -313,7 +323,7 @@ final class DriverDispatchService
     }
 
     /** @param Collection<int, array<string, mixed>> $eligibleRows
-     *  @return array{wave:int,radius:float,phase:string,candidates:Collection<int, array<string, mixed>>,exhausted:bool}
+     * @return array{wave:int,radius:float,phase:string,candidates:Collection<int, array<string, mixed>>,exhausted:bool}
      */
     private function nextWavePlan(DeliveryOrder $order, Collection $eligibleRows): array
     {
@@ -345,7 +355,7 @@ final class DriverDispatchService
     }
 
     /** @param Collection<int, array<string, mixed>> $candidates
-     *  @return array{wave:int,radius:float,phase:string,candidates:Collection<int, array<string, mixed>>,exhausted:bool}
+     * @return array{wave:int,radius:float,phase:string,candidates:Collection<int, array<string, mixed>>,exhausted:bool}
      */
     private function wavePlan(int $wave, float $radius, string $phase, Collection $candidates, bool $exhausted = false): array
     {
@@ -417,6 +427,6 @@ final class DriverDispatchService
 
     private function driverHasActiveOrder(DeliveryDriver $driver, int $excludingOrderId): bool
     {
-        return DeliveryOrder::query()->where('driver_id', $driver->id)->where('id', '!=', $excludingOrderId)->whereIn('status', [DeliveryOrderStatus::Accepted->value, DeliveryOrderStatus::InProgress->value, DeliveryOrderStatus::PickedUp->value])->exists();
+        return DeliveryOrder::query()->where('driver_id', $driver->id)->where('id', '!=', $excludingOrderId)->whereIn('status', [DeliveryOrderStatus::Accepted->value, DeliveryOrderStatus::InProgress->value, DeliveryOrderStatus::PickedUp->value, DeliveryOrderStatus::ReturningToMerchant->value])->exists();
     }
 }

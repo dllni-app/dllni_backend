@@ -198,3 +198,35 @@ it('rejects restaurant delivery checkout when merchant coordinates are missing',
 
     expect(Order::query()->where('user_id', $user->id)->exists())->toBeFalse();
 });
+
+it('prefers the nearest delivery company when multiple dispatch-capable companies exist', function (): void {
+    Queue::fake();
+    $user = User::factory()->create();
+    $farCompany = DeliveryCompany::factory()->create([
+        'latitude' => 35.000000,
+        'longitude' => 36.000000,
+        'is_active' => true,
+        'is_suspended' => false,
+    ]);
+    $nearCompany = DeliveryCompany::factory()->create([
+        'latitude' => 36.211000,
+        'longitude' => 37.151000,
+        'is_active' => true,
+        'is_suspended' => false,
+    ]);
+    DeliveryDriver::factory()->available()->create(['company_id' => $farCompany->id]);
+    DeliveryDriver::factory()->available()->create(['company_id' => $nearCompany->id]);
+    $address = linkedDeliveryAddress($user);
+    $cart = linkedRestaurantCart($user);
+
+    Sanctum::actingAs($user);
+
+    $this->postJson('/api/v1/user/restaurants/carts/'.$cart->id.'/orders', [
+        'fulfillmentType' => 'delivery',
+        'receiveMode' => 'immediate',
+        'addressId' => $address->id,
+    ])->assertCreated();
+
+    $order = Order::query()->where('user_id', $user->id)->firstOrFail();
+    expect((int) $order->deliveryOrder?->company_id)->toBe((int) $nearCompany->id);
+});

@@ -27,6 +27,7 @@ it('returns owner role and the full supermarket permission catalog at login', fu
     $response = $this->postJson('/api/login', [
         'phone' => '+963955100001',
         'password' => 'secret',
+        'module' => UserModuleType::SupermarketSeller->value,
     ]);
 
     $response->assertOk()
@@ -71,6 +72,7 @@ it('returns only assigned supermarket permissions for an employee at login', fun
     $response = $this->postJson('/api/login', [
         'phone' => '+963955100002',
         'password' => 'secret',
+        'module' => UserModuleType::SupermarketSeller->value,
     ]);
 
     $response->assertOk()

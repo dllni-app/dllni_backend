@@ -12,7 +12,7 @@ use Modules\Resturants\Models\Order;
 final class UserRestaurantReorderLatestOrderProductsService
 {
     public function __construct(
-        private RestaurantCartService $cartService,
+        private UserRestaurantCartService $cartService,
     ) {}
 
     /**
@@ -62,7 +62,7 @@ final class UserRestaurantReorderLatestOrderProductsService
                 ->all();
 
             try {
-                $result = $this->cartService->addProductToCart(
+                $result = $this->cartService->addItem(
                     userId: $userId,
                     productId: (int) $orderItem->product_id,
                     quantity: (int) $orderItem->quantity,
@@ -70,14 +70,14 @@ final class UserRestaurantReorderLatestOrderProductsService
                     substituteProductId: $orderItem->substitute_product_id !== null
                         ? (int) $orderItem->substitute_product_id
                         : null,
-                    specialInstructions: $orderItem->special_instructions,
+                    note: $orderItem->special_instructions,
                 );
             } catch (ValidationException $exception) {
                 if (! $this->hasModifierValidationError($exception)) {
                     throw $exception;
                 }
 
-                $result = $this->cartService->addProductToCart(
+                $result = $this->cartService->addItem(
                     userId: $userId,
                     productId: (int) $orderItem->product_id,
                     quantity: (int) $orderItem->quantity,
@@ -85,12 +85,12 @@ final class UserRestaurantReorderLatestOrderProductsService
                     substituteProductId: $orderItem->substitute_product_id !== null
                         ? (int) $orderItem->substitute_product_id
                         : null,
-                    specialInstructions: $orderItem->special_instructions,
+                    note: $orderItem->special_instructions,
                 );
             }
 
-            $cartId ??= (int) $result['cart']->id;
-            $addedItems[] = (int) $result['item']->id;
+            $cartId ??= (int) $result['cartId'];
+            $addedItems[] = (int) $result['itemId'];
         }
 
         return [

@@ -38,7 +38,10 @@ final class ViewDeliveryOrder extends ViewRecord
                     && $this->record instanceof DeliveryOrder
                     && in_array($this->record->status, [
                         DeliveryOrderStatus::Stopped->value,
+                        DeliveryOrderStatus::WaitingMerchantReady->value,
+                        DeliveryOrderStatus::SearchingForDriver->value,
                         DeliveryOrderStatus::Dispatching->value,
+                        DeliveryOrderStatus::Offered->value,
                     ], true))
                 ->requiresConfirmation()
                 ->action(function (): void {
@@ -51,7 +54,7 @@ final class ViewDeliveryOrder extends ViewRecord
                             ->send();
                     } catch (InvalidArgumentException $exception) {
                         Notification::make()
-                            ->title($exception->getMessage())
+                            ->title(\App\Filament\Support\AdminExceptionMessage::forUser($exception))
                             ->danger()
                             ->send();
                     }
@@ -63,6 +66,9 @@ final class ViewDeliveryOrder extends ViewRecord
                 ->visible(fn (): bool => auth()->user()?->can('cancel', $this->record) === true
                     && $this->record instanceof DeliveryOrder
                     && ! in_array($this->record->status, [
+                        DeliveryOrderStatus::PickedUp->value,
+                        DeliveryOrderStatus::ReturningToMerchant->value,
+                        DeliveryOrderStatus::ReturnedToMerchant->value,
                         DeliveryOrderStatus::Delivered->value,
                         DeliveryOrderStatus::Completed->value,
                         DeliveryOrderStatus::Cancelled->value,
@@ -88,7 +94,7 @@ final class ViewDeliveryOrder extends ViewRecord
                             ->send();
                     } catch (InvalidArgumentException $exception) {
                         Notification::make()
-                            ->title($exception->getMessage())
+                            ->title(\App\Filament\Support\AdminExceptionMessage::forUser($exception))
                             ->danger()
                             ->send();
                     }

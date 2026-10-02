@@ -7,8 +7,10 @@ namespace Modules\Delivery\Services;
 use DateTimeInterface;
 use InvalidArgumentException;
 use Modules\Delivery\Enums\DeliveryDriverAvailabilityStatus;
+use Modules\Delivery\Enums\DeliveryOrderStatus;
 use Modules\Delivery\Enums\DeliverySuspensionReason;
 use Modules\Delivery\Models\DeliveryDriver;
+use Modules\Delivery\Models\DeliveryOrder;
 
 final class DriverManagementService
 {
@@ -17,6 +19,8 @@ final class DriverManagementService
         if ($driver->is_suspended) {
             throw new InvalidArgumentException('السائق موقوف بالفعل.');
         }
+
+        $this->assertNoActiveOrder($driver);
 
         $driver->forceFill([
             'is_suspended' => true,
@@ -75,11 +79,30 @@ final class DriverManagementService
             throw new InvalidArgumentException('السائق غير نشط بالفعل.');
         }
 
+        $this->assertNoActiveOrder($driver);
+
         $driver->forceFill([
             'is_active' => false,
             'availability_status' => DeliveryDriverAvailabilityStatus::Offline->value,
         ])->save();
 
         return $driver->fresh();
+    }
+
+    private function assertNoActiveOrder(DeliveryDriver $driver): void
+    {
+        $hasActiveOrder = DeliveryOrder::query()
+            ->where('driver_id', $driver->id)
+            ->whereIn('status', [
+                DeliveryOrderStatus::Accepted->value,
+                DeliveryOrderStatus::InProgress->value,
+                DeliveryOrderStatus::PickedUp->value,
+                DeliveryOrderStatus::ReturningToMerchant->value,
+            ])
+            ->exists();
+
+        if ($hasActiveOrder) {
+            throw new InvalidArgumentException('لا يمكن إيقاف أو تعطيل السائق أثناء وجود طلب توصيل نشط.');
+        }
     }
 }

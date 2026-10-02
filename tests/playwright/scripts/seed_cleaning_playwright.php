@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Schema;
 use Modules\Cleaning\Enums\CleaningBillingMode;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
+use Modules\Cleaning\Models\CleaningNeighborhood;
 use Modules\Cleaning\Models\CleaningTimeWarning;
 
 require __DIR__.'/../../../vendor/autoload.php';
@@ -92,9 +93,21 @@ try {
         'home_latitude' => 33.5138,
         'home_longitude' => 36.2765,
     ]);
+
+    $damascusNeighborhood = CleaningNeighborhood::factory()->create([
+        'name_ar' => 'PW Damascus '.$runSuffix,
+        'name_en' => 'PW Damascus '.$runSuffix,
+        'is_active' => true,
+    ]);
+    $homsNeighborhood = CleaningNeighborhood::factory()->create([
+        'name_ar' => 'PW Homs '.$runSuffix,
+        'name_en' => 'PW Homs '.$runSuffix,
+        'is_active' => true,
+    ]);
+
     $worker->zones()->createMany([
-        ['name' => 'PW Damascus '.$runSuffix, 'is_active' => true],
-        ['name' => 'PW Homs '.$runSuffix, 'is_active' => true],
+        ['neighborhood_id' => $damascusNeighborhood->id, 'name' => $damascusNeighborhood->name_ar, 'is_active' => true],
+        ['neighborhood_id' => $homsNeighborhood->id, 'name' => $homsNeighborhood->name_ar, 'is_active' => true],
     ]);
 
     $wrongRole = User::factory()->create([
@@ -135,6 +148,8 @@ try {
         'worker_id' => $worker->id,
         'billing_policy_id' => $billingPolicy->id,
         'status' => CleaningBookingStatus::InProgress->value,
+        'scheduled_date' => now()->subDays(3)->format('Y-m-d'),
+        'scheduled_time' => '08:00',
     ]);
 
     $warningBookingForOutsider = CleaningBookingFactory::new()->create([
@@ -142,6 +157,8 @@ try {
         'worker_id' => $outsiderWorker->id,
         'billing_policy_id' => $billingPolicy->id,
         'status' => CleaningBookingStatus::InProgress->value,
+        'scheduled_date' => now()->subDays(2)->format('Y-m-d'),
+        'scheduled_time' => '08:00',
     ]);
 
     $pendingAcceptWarning = CleaningTimeWarning::create([
@@ -199,6 +216,10 @@ try {
             ],
         ],
         'fixtures' => [
+            'neighborhoods' => [
+                'damascus' => $damascusNeighborhood->id,
+                'homs' => $homsNeighborhood->id,
+            ],
             'policies' => [
                 'cancellationId' => $cancellationPolicy->id,
                 'billingId' => $billingPolicy->id,
@@ -218,7 +239,7 @@ try {
     ];
 
     echo json_encode($payload, JSON_THROW_ON_ERROR);
-} catch (\Throwable $throwable) {
+} catch (Throwable $throwable) {
     fwrite(STDERR, (string) $throwable);
     exit(1);
 }

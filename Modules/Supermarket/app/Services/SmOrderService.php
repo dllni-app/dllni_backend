@@ -8,8 +8,9 @@ use Carbon\Carbon;
 use Exception;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
-use Log;
 use InvalidArgumentException;
+use Log;
+use Modules\Delivery\Enums\DeliveryOrderStatus;
 use Modules\Delivery\Services\MerchantOrderDeliveryService;
 use Modules\Supermarket\Data\SmOrderData;
 use Modules\Supermarket\Data\SmOrderRejectStatusData;
@@ -223,6 +224,7 @@ final class SmOrderService
             ]);
 
             $this->logStatus($order, $from, SmOrderStatus::ReadyForPickup, 'Order is ready for courier pickup.', $actorUserId);
+
             return $order->refresh();
         });
 
@@ -289,58 +291,132 @@ final class SmOrderService
     public function handOverToCourier(SmOrder $order, ?int $actorUserId): SmOrder
     {
         return DB::transaction(function () use ($order, $actorUserId): SmOrder {
-            if ($order->status === SmOrderStatus::PickedUp) {
-                return $order->refresh();
+            $lockedOrder = SmOrder::query()->lockForUpdate()->findOrFail($order->id);
+
+            if ($lockedOrder->store_handover_confirmed_at !== null) {
+                return $lockedOrder->refresh();
             }
 
-            if ($order->status !== SmOrderStatus::ReadyForPickup) {
+            if (! in_array($lockedOrder->status, [SmOrderStatus::ReadyForPickup, SmOrderStatus::PickedUp], true)) {
                 throw new Exception(
-                    "Cannot hand over order {$order->order_number}. Order must be in ready_for_pickup status, currently in {$order->status->value}"
+                    "Cannot confirm courier handover for order {$lockedOrder->order_number}. Order must be ready_for_pickup or picked_up, currently in {$lockedOrder->status->value}"
                 );
             }
 
-            $order->update([
-                'status' => SmOrderStatus::PickedUp,
-                'picked_up_at' => now(),
-            ]);
+            $deliveryOrder = $lockedOrder->deliveryOrder()->lockForUpdate()->first();
+            if ($deliveryOrder === null) {
+                throw new Exception('Courier handover is only available for delivery orders.');
+            }
 
-            $this->logStatus($order, SmOrderStatus::ReadyForPickup, SmOrderStatus::PickedUp, 'Handed to courier.', $actorUserId);
+            if ($deliveryOrder->driver_id === null) {
+                throw new Exception('A delivery driver must be assigned before the store can confirm handover.');
+            }
 
-            return $order->refresh();
+            $deliveryStatus = $deliveryOrder->status?->value ?? (string) $deliveryOrder->status;
+            $allowedStatuses = [
+                DeliveryOrderStatus::Accepted->value,
+                DeliveryOrderStatus::InProgress->value,
+                DeliveryOrderStatus::PickedUp->value,
+            ];
+
+            if (! in_array($deliveryStatus, $allowedStatuses, true)) {
+                throw new Exception("Cannot confirm handover while delivery is in {$deliveryStatus} status.");
+            }
+
+            $lockedOrder->forceFill([
+                'store_handover_confirmed_at' => now(),
+                'store_handover_confirmed_by_user_id' => $actorUserId,
+            ])->save();
+
+            return $lockedOrder->refresh();
         });
     }
 
-    public function rejectOrder(SmOrder $order, SmOrderRejectStatusData $data): SmOrder
+    public function completeCustomerPickup(SmOrder $order, ?int $actorUserId): SmOrder
     {
-        return DB::transaction(function () use ($order, $data): SmOrder {
-            if ($order->status !== SmOrderStatus::Pending) {
+        return DB::transaction(function () use ($order, $actorUserId): SmOrder {
+            $lockedOrder = SmOrder::query()->lockForUpdate()->findOrFail($order->id);
+
+            if (
+                $lockedOrder->status === SmOrderStatus::Completed
+                && $lockedOrder->customer_pickup_confirmed_at !== null
+            ) {
+                return $lockedOrder->refresh();
+            }
+
+            if ($lockedOrder->deliveryOrder()->exists()) {
+                throw new Exception('Customer pickup completion is only available for pickup orders.');
+            }
+
+            if ($lockedOrder->status !== SmOrderStatus::ReadyForPickup) {
                 throw new Exception(
-                    "Cannot reject order {$order->order_number}. Order must be in PENDING status, currently in {$order->status->value}"
+                    "Cannot complete customer pickup for order {$lockedOrder->order_number}. Order must be ready_for_pickup, currently in {$lockedOrder->status->value}"
                 );
             }
 
-            $order->update([
+            $completedAt = now();
+            $lockedOrder->forceFill([
+                'status' => SmOrderStatus::Completed,
+                'customer_pickup_confirmed_at' => $completedAt,
+            ])->save();
+
+            $this->logStatus(
+                $lockedOrder,
+                SmOrderStatus::ReadyForPickup,
+                SmOrderStatus::Completed,
+                'Order picked up by customer at store.',
+                $actorUserId,
+            );
+
+            return $lockedOrder->refresh();
+        });
+    }
+
+    public function rejectOrder(SmOrder $order, SmOrderRejectStatusData $data, ?int $actorUserId = null): SmOrder
+    {
+        $cancelled = DB::transaction(function () use ($order, $data, $actorUserId): SmOrder {
+            $lockedOrder = SmOrder::query()->lockForUpdate()->findOrFail($order->id);
+
+            if ($lockedOrder->status !== SmOrderStatus::Pending) {
+                throw new Exception(
+                    "Cannot reject order {$lockedOrder->order_number}. Order must be in PENDING status, currently in {$lockedOrder->status->value}"
+                );
+            }
+
+            $lockedOrder->update([
                 'status' => SmOrderStatus::Cancelled,
                 'cancelled_at' => now(),
                 'cancellation_reason' => $data->reason,
             ]);
 
+            $this->logStatus(
+                $lockedOrder,
+                SmOrderStatus::Pending,
+                SmOrderStatus::Cancelled,
+                $data->reason,
+                $actorUserId,
+            );
+
             $trustPenalty = $this->calculateTrustPenalty(RejectionType::from($data->rejectionType));
 
             if ($trustPenalty > 0) {
-                $this->updateStoreTrustScore($order->store, $trustPenalty);
+                $this->updateStoreTrustScore($lockedOrder->store, $trustPenalty);
             }
 
-            $this->checkConsecutiveRejections($order->store);
+            $this->checkConsecutiveRejections($lockedOrder->store);
 
             try {
-                Notification::send($order->customer, new OrderRejectedNotification($order, $data->reason));
+                Notification::send($lockedOrder->customer, new OrderRejectedNotification($lockedOrder, $data->reason));
             } catch (Exception $e) {
                 Log::warning("Failed to send order rejection notification: {$e->getMessage()}");
             }
 
-            return $order->refresh();
+            return $lockedOrder->refresh();
         });
+
+        $this->merchantDelivery->cancelled($cancelled, $data->reason, $actorUserId);
+
+        return $cancelled->refresh();
     }
 
     private function calculateTrustPenalty(RejectionType $type): int

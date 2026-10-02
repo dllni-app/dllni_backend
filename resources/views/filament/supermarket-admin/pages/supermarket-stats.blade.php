@@ -101,18 +101,18 @@
                                     @if ($stat->store_id)
                                         <a href="{{ \App\Filament\Resources\SmStores\SmStoreResource::getUrl('view', ['record' => $stat->store_id]) }}"
                                             class="text-primary-600 hover:underline dark:text-primary-400">
-                                            {{ $stat->store?->name ?? '—' }}
+                                            {{ $stat->store_name ?? 'â€”' }}
                                         </a>
                                     @else
-                                        —
+                                        â€”
                                     @endif
                                 </td>
                                 <td class="px-3 py-2 text-gray-900 dark:text-gray-100">
-                                    {{ $stat->date?->format('Y-m-d') ?? '—' }}</td>
+                                    {{ filled($stat->date ?? null) ? \Illuminate\Support\Carbon::parse($stat->date)->format('Y-m-d') : 'â€”' }}</td>
                                 <td class="px-3 py-2 text-gray-900 dark:text-gray-100">{{ \App\Filament\Support\AdminUiFormatter::formatNumber($ordersCount, 0) }}</td>
                                 <td class="px-3 py-2 text-gray-900 dark:text-gray-100">{{ \App\Filament\Support\AdminUiFormatter::formatCurrency($revenue) }}</td>
                                 <td class="px-3 py-2 text-gray-900 dark:text-gray-100">
-                                    {{ $avgTicket !== null ? \App\Filament\Support\AdminUiFormatter::formatCurrency($avgTicket) : '—' }}</td>
+                                    {{ $avgTicket !== null ? \App\Filament\Support\AdminUiFormatter::formatCurrency($avgTicket) : 'â€”' }}</td>
                                 <td class="px-3 py-2 text-gray-900 dark:text-gray-100">
                                     {{ \App\Filament\Support\AdminUiFormatter::formatNumber((int) ($stat->unique_customers ?? 0), 0) }}</td>
                                 <td class="px-3 py-2 text-gray-900 dark:text-gray-100">

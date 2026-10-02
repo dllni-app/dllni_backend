@@ -61,6 +61,28 @@ final class DeliveryUserNotificationService
         );
     }
 
+    public function notifyDeliveryFailed(DeliveryOrder $order, string $reason): void
+    {
+        $this->notify(
+            order: $order,
+            title: 'تعذر تسليم الطلب',
+            body: 'تعذر تسليم طلبك ويقوم المندوب الآن بإعادته إلى المتجر.',
+            event: 'delivery_failed',
+            reason: $reason,
+        );
+    }
+
+    public function notifyReturnedToMerchant(DeliveryOrder $order): void
+    {
+        $this->notify(
+            order: $order,
+            title: 'تمت إعادة الطلب إلى المتجر',
+            body: 'تمت إعادة الطلب إلى المتجر بعد تعذر التسليم.',
+            event: 'returned_to_merchant',
+            reason: $order->delivery_failure_reason ?? $order->delivery_failure_code,
+        );
+    }
+
     public function notifyCancelled(DeliveryOrder $order, string $reason): void
     {
         $this->notify(

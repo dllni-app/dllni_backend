@@ -113,6 +113,7 @@ return [
             'performance' => 'إحصاءات الأداء',
             'preferred_zones' => 'مناطق العمل المفضلة',
             'availability' => 'جدول التوفر',
+            'special_qualifications' => 'مؤهلات الخدمات الخاصة',
         ],
         'fields' => [
             'name' => 'الاسم',
@@ -157,6 +158,9 @@ return [
             'suspended' => 'موقوف',
             'id' => 'المعرف',
             'customer' => 'العميل',
+            'approved_special_services' => 'الخدمات الخاصة المعتمدة',
+            'authorized_equipment' => 'المعدات المصرح بها',
+            'special_qualifications_help' => 'لا يستقبل العامل الخدمات الخاصة أو المعدات المقيدة إلا إذا كانت معتمدة هنا.',
         ],        'deposit_status_options' => [
             'active' => 'نشط',
             'insufficient_balance' => 'رصيد غير كافٍ',
@@ -328,6 +332,19 @@ return [
     'automation' => [
         'nav_label' => 'قواعد الأتمتة',
         'tooltip' => 'قواعد أتمتة الخدمة: إيقاف تلقائي حسب درجة الثقة، شارة مميز أو تخفيض العمولة لأفضل العاملين، مع الشروط والإجراءات.',
+        'fields' => [
+            'name' => 'اسم القاعدة',
+            'type' => 'نوع القاعدة',
+            'is_active' => 'مفعّلة',
+            'conditions' => 'الشروط',
+            'actions' => 'الإجراءات',
+            'key' => 'المفتاح',
+            'value' => 'القيمة',
+        ],
+        'types' => [
+            'suspend' => 'إيقاف عامل',
+            'reward' => 'مكافأة عامل',
+        ],
     ],
 
     'cleaning_bookings' => [
@@ -532,6 +549,7 @@ return [
             'coverage_thresholds' => 'عتبات التغطية',
             'time_extension' => 'تمديد الوقت',
             'user_cancellation' => 'غرامة إلغاء المستخدم',
+            'event_assistance' => 'تسعير المناسبات',
             'worker_finance' => 'مالية العاملين',
         ],
         'fields' => [
@@ -544,8 +562,8 @@ return [
             'default_commission_rate' => 'نسبة العمولة الافتراضية (%)',
             'commission_fixed_amount' => 'قيمة العمولة الثابتة',
             'vat_rate' => 'نسبة الضريبة (%)',
-            'travel_markup_type' => 'نوع زيادة التنقل',
-            'travel_markup_value' => 'قيمة زيادة التنقل',
+            'travel_markup_type' => 'طريقة احتساب تكاليف التنقل',
+            'travel_markup_value' => 'قيمة بدل المواصلات لكل عامل',
             'travel_per_km' => 'رسوم التنقل لكل كيلومتر',
             'travel_distance_start_point' => 'نقطة بدء المسافة',
             'time_billing_mode' => 'نمط فوترة الوقت',
@@ -554,7 +572,9 @@ return [
             'extension_rate_per_30_minutes' => 'سعر التمديد لكل 30 دقيقة',
             'coverage_low' => 'عتبة التغطية المنخفضة',
             'coverage_ok' => 'عتبة التغطية الطبيعية',
+            'event_assistance_hourly_rate_per_worker' => 'سعر الساعة للعامل الواحد',
             'minimum_deposit_amount' => 'الحد الأدنى للتأمين لبدء العمل',
+            'allowance_warning_threshold_percent' => 'نسبة تحذير حد السماح (%)',
             'default_max_negative_balance' => 'الحد الأقصى الافتراضي للرصيد السالب',
             'restriction_threshold_percent' => 'حد تقييد العامل (% من التأمين)',
             'trust_reject_after_accept_penalty' => 'خصم الثقة عند الرفض بعد القبول',
@@ -564,10 +584,17 @@ return [
         'hints' => [
             'restriction_threshold_percent' => 'يتم تقييد العامل تلقائياً عندما تبلغ العمولة المستحقة هذه النسبة من قيمة تأمينه.',
             'trust_reject_after_accept_penalty' => 'عدد النقاط التي تُخصم من درجة ثقة العامل عند رفضه طلباً بعد أن قَبِله. كلما زادت القيمة زاد تأثير الرفض على درجة الثقة.',
+            'trust_minimum_for_dispatch' => 'أدنى درجة ثقة يجب أن يملكها العامل حتى يدخل ضمن قائمة العاملين المؤهلين لإرسال الطلبات.',
             'user_cancellation_fee' => 'مبلغ ثابت يُعرض للمستخدم عند إلغاء طلب تنظيف. يُسجَّل على الطلب عند الإلغاء.',
             'coverage_thresholds' => 'إعداد تشغيلي لتصنيف مدى توفّر العاملين في المنطقة (ليس سعراً). يُستخدم لتحديد ما إذا كانت تغطية المنطقة ضعيفة أو كافية.',
             'coverage_low' => 'إذا كان عدد العاملين المتاحين قريباً من هذا الرقم أو أقل، تُعتبر التغطية ضعيفة.',
             'coverage_ok' => 'عند وصول عدد العاملين المتاحين إلى هذا الرقم تقريباً، تُعتبر التغطية كافية.',
+            'travel_worker_allowance' => 'يُحتسب بدل المواصلات تلقائياً لكل عامل ضمن تسعير الطلب.',
+            'travel_fixed_minimum' => 'هذه القيمة هي أيضاً الحد الأدنى لرسوم التنقل؛ إذا كان حساب المسافة أقل منها يتم اعتمادها كحد أدنى.',
+            'event_assistance' => 'حدد سعر الساعة للعامل الواحد في طلبات المناسبات. يُحسب السعر الأساسي بضرب هذا السعر في عدد الساعات وعدد العاملين.',
+            'event_assistance_default' => 'القيمة الافتراضية 400 ل.س لكل عامل عن كل ساعة محجوزة.',
+            'minimum_deposit_amount' => 'القيمة التي يجب أن يمتلكها العامل في رصيد التأمين حتى يكون حسابه فعالاً عند العمل بنظام التأمين.',
+            'allowance_warning_threshold_percent' => 'تظهر رسالة تحذير للعامل عندما يتبقى من حد السماح هذه النسبة أو أقل. القيمة الافتراضية 10%.',
             'time_extension' => 'حدّد سعر تمديد الوقت لكل فترة (كل 15 دقيقة). يُحتسب السعر حسب الفترة التي تقع ضمنها الدقائق الإضافية.',
         ],
         'extension' => [
@@ -576,8 +603,8 @@ return [
         'options' => [
             'commission_percent' => 'نسبة مئوية',
             'commission_fixed' => 'مبلغ ثابت',
-            'travel_fixed' => 'مبلغ ثابت',
-            'travel_percent' => 'نسبة مئوية',
+            'travel_fixed' => 'رسوم حسب المسافة',
+            'travel_worker_allowance' => 'بدل مواصلات لكل عامل',
             'worker_home' => 'موقع منزل العامل',
             'time_billing_full_booked' => 'الوقت المحجوز بالكامل',
             'time_billing_actual' => 'وقت العمل الفعلي',
@@ -586,6 +613,9 @@ return [
             'min_billable_minutes' => 'مثال: 30',
             'time_warning_minutes_before_end' => 'مثال: 15',
             'extension_rate_per_30_minutes' => 'مثال: 4500',
+        ],
+        'currency' => [
+            'syp' => 'ل.س',
         ],
         'actions' => [
             'save' => 'حفظ الإعدادات',

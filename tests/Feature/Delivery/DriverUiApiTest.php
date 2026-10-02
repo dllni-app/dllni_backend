@@ -7,7 +7,6 @@ use Modules\Delivery\Enums\DeliveryOrderStatus;
 use Modules\Delivery\Models\DeliveryCompany;
 use Modules\Delivery\Models\DeliveryDriver;
 use Modules\Delivery\Models\DeliveryDriverLocation;
-use Modules\Delivery\Models\DeliveryOrder;
 use Modules\Delivery\Services\DeliveryOrderService;
 use Modules\Delivery\Services\DriverDispatchService;
 
@@ -149,4 +148,37 @@ it('handles arrived pickup and dropoff transitions with idempotency', function (
     $this->getJson('/api/v1/delivery/driver/orders/'.$order->id.'/timeline')
         ->assertOk()
         ->assertJsonStructure(['data']);
+});
+
+it('keeps the driver busy while returning a failed delivery and releases after merchant return', function (): void {
+    $company = DeliveryCompany::factory()->create();
+    $driver = makeDriverWithLocation($company);
+    Sanctum::actingAs($driver->user);
+
+    $order = app(DeliveryOrderService::class)->create($company, driverUiPayload());
+    app(DriverDispatchService::class)->dispatchByOrderId($order->id);
+    $attemptId = (int) $order->fresh()->assignmentAttempts()->latest('id')->value('id');
+
+    $this->postJson('/api/v1/delivery/driver/offers/'.$attemptId.'/accept')->assertOk();
+    $this->postJson('/api/v1/delivery/driver/orders/'.$order->id.'/start')->assertOk();
+    $this->postJson('/api/v1/delivery/driver/orders/'.$order->id.'/pickup')->assertOk();
+
+    $this->postJson('/api/v1/delivery/driver/orders/'.$order->id.'/delivery-failed', [
+        'reasonCode' => 'CUSTOMER_UNAVAILABLE',
+        'reason' => 'Customer did not answer calls.',
+    ])->assertOk()
+        ->assertJsonPath('data.status', DeliveryOrderStatus::ReturningToMerchant->value)
+        ->assertJsonPath('data.deliveryFailureCode', 'CUSTOMER_UNAVAILABLE');
+
+    expect($driver->fresh()->availability_status)->toBe('busy');
+    $this->getJson('/api/v1/delivery/driver/orders/current')
+        ->assertOk()
+        ->assertJsonPath('data.status', DeliveryOrderStatus::ReturningToMerchant->value);
+
+    $this->postJson('/api/v1/delivery/driver/orders/'.$order->id.'/returned-to-merchant')
+        ->assertOk()
+        ->assertJsonPath('data.status', DeliveryOrderStatus::ReturnedToMerchant->value);
+
+    expect($driver->fresh()->availability_status)->toBe('available')
+        ->and($order->fresh()->returned_to_merchant_at)->not->toBeNull();
 });

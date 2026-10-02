@@ -31,12 +31,22 @@ final class CleaningBillingPolicyResource extends Resource
 
     public static function getNavigationGroup(): ?string
     {
-        return __('cleaning_admin.nav_groups.operations');
+        return \App\Filament\Support\AdminNavigationGroup::cleaning();
     }
 
     public static function getNavigationLabel(): string
     {
         return __('cleaning_admin.billing_policies.nav_label');
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('admin_resources.cleaning_billing_policy.singular');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('admin_resources.cleaning_billing_policy.plural');
     }
 
     public static function getNavigationTooltip(): ?string

@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\SystemAlerts;
 
-use App\Filament\Resources\SystemAlerts\Pages\EditSystemAlert;
 use App\Filament\Resources\SystemAlerts\Pages\ListSystemAlerts;
 use App\Filament\Resources\SystemAlerts\Pages\ViewSystemAlert;
-use App\Filament\Resources\SystemAlerts\Schemas\SystemAlertForm;
 use App\Filament\Resources\SystemAlerts\Schemas\SystemAlertInfolist;
 use App\Filament\Resources\SystemAlerts\Tables\SystemAlertsTable;
 use App\Models\SystemAlert;
@@ -33,7 +31,7 @@ final class SystemAlertResource extends Resource
 
     public static function getNavigationGroup(): ?string
     {
-        return __('restaurant_admin.general_sections');
+        return \App\Filament\Support\AdminNavigationGroup::general();
     }
 
     public static function getNavigationLabel(): string
@@ -58,7 +56,7 @@ final class SystemAlertResource extends Resource
 
     public static function form(Schema $schema): Schema
     {
-        return SystemAlertForm::configure($schema);
+        return $schema->components([]);
     }
 
     public static function infolist(Schema $schema): Schema
@@ -88,7 +86,7 @@ final class SystemAlertResource extends Resource
 
     public static function canEdit(Model $record): bool
     {
-        return self::hasPermission('system_alerts.update');
+        return false;
     }
 
     public static function canDelete(Model $record): bool
@@ -96,32 +94,23 @@ final class SystemAlertResource extends Resource
         return false;
     }
 
-    public static function getRelations(): array
-    {
-        return [];
-    }
-
     public static function getPages(): array
     {
         return [
             'index' => ListSystemAlerts::route('/'),
             'view' => ViewSystemAlert::route('/{record}'),
-            'edit' => EditSystemAlert::route('/{record}/edit'),
         ];
+    }
+
+    public static function canUpdateAlerts(): bool
+    {
+        return self::hasPermission('system_alerts.update');
     }
 
     private static function hasPermission(string $permission): bool
     {
         $user = auth()->user();
 
-        if (! $user) {
-            return false;
-        }
-
-        if ($user->hasAnyRole(['admin', 'Super Admin'])) {
-            return true;
-        }
-
-        return $user->can($permission);
+        return $user !== null && ($user->hasAnyRole(['admin', 'Super Admin']) || $user->can($permission));
     }
 }

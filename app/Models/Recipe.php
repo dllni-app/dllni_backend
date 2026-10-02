@@ -22,9 +22,15 @@ final class Recipe extends Model
         return $this->hasMany(RecipeIngredient::class);
     }
 
+    public function aliases(): HasMany
+    {
+        return $this->hasMany(RecipeAlias::class);
+    }
+
     public function casts(): array
     {
         return [
+            'servings' => 'integer',
             'is_active' => 'boolean',
         ];
     }

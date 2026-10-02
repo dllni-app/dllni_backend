@@ -4,34 +4,45 @@ declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
+use App\Filament\Concerns\AuthorizesPlatformAdminResource;
 use App\Filament\Concerns\ResolvesSupermarketNavigationGroup;
-use App\Filament\Support\AdminUiFormatter;
 use App\Filament\Resources\SmOrders\SmOrderResource;
 use App\Filament\Resources\SmStores\SmStoreResource;
+use App\Filament\Support\AdminUiFormatter;
 use BackedEnum;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\Support\Htmlable;
-use Illuminate\Database\Eloquent\Builder;
-use Modules\Supermarket\Models\SmStoreDailyStat;
+use Illuminate\Support\Facades\DB;
 
 final class SupermarketStatsPage extends Page
 {
+    use AuthorizesPlatformAdminResource;
     use ResolvesSupermarketNavigationGroup;
-
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChartBar;
-
-    protected static ?string $navigationLabel = null;
-
-    protected static ?int $navigationSort = 7;
-
-    protected string $view = 'filament.supermarket-admin.pages.supermarket-stats';
 
     public string $search = '';
 
     public string $dateRange = '30';
 
     public string $revenueState = 'all';
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChartBar;
+
+    protected static ?string $navigationLabel = null;
+
+    protected static ?int $navigationSort = 14;
+
+    protected string $view = 'filament.supermarket-admin.pages.supermarket-stats';
+
+    public static function getNavigationGroup(): ?string
+    {
+        return \App\Filament\Support\AdminNavigationGroup::supermarkets();
+    }
+
+    public static function canAccess(): bool
+    {
+        return self::dashboardAllowed('supermarket_orders.view');
+    }
 
     public static function getNavigationLabel(): string
     {
@@ -50,45 +61,49 @@ final class SupermarketStatsPage extends Page
 
     public function getViewData(): array
     {
-        $search = trim($this->search);
+        $search = mb_trim($this->search);
         $days = max(7, (int) $this->dateRange);
-        $fromDate = now()->subDays($days - 1)->toDateString();
+        $from = now()->subDays($days - 1)->startOfDay();
+        $to = now();
 
-        $dailyStats = SmStoreDailyStat::query()
-            ->with('store:id,name')
-            ->whereDate('date', '>=', $fromDate)
-            ->when($search !== '', function (Builder $query) use ($search): void {
-                $query->whereHas('store', function (Builder $storeQuery) use ($search): void {
-                    $storeQuery->where('name', 'like', '%' . $search . '%');
-                });
-            })
-            ->when($this->revenueState !== 'all', function (Builder $query): void {
-                if ($this->revenueState === 'with_revenue') {
-                    $query->where('orders_revenue', '>', 0);
+        $dailyQuery = DB::table('sm_orders')
+            ->join('sm_stores', 'sm_stores.id', '=', 'sm_orders.store_id')
+            ->whereBetween('sm_orders.created_at', [$from, $to])
+            ->where('sm_orders.status', 'completed')
+            ->when($search !== '', fn ($query) => $query->where('sm_stores.name', 'like', '%'.$search.'%'))
+            ->selectRaw('sm_orders.store_id, sm_stores.name as store_name, DATE(sm_orders.created_at) as date')
+            ->selectRaw('COUNT(*) as orders_count')
+            ->selectRaw('COALESCE(SUM(sm_orders.total_amount), 0) as orders_revenue')
+            ->selectRaw('COUNT(DISTINCT sm_orders.customer_id) as unique_customers')
+            ->selectRaw(
+                'COUNT(DISTINCT CASE
+                    WHEN DATE(sm_orders.created_at) = DATE((
+                        SELECT MIN(first_order.created_at)
+                        FROM sm_orders first_order
+                        WHERE first_order.store_id = sm_orders.store_id
+                          AND first_order.customer_id = sm_orders.customer_id
+                    ))
+                    THEN sm_orders.customer_id
+                END) as new_customers'
+            )
+            ->groupBy('sm_orders.store_id', 'sm_stores.name', DB::raw('DATE(sm_orders.created_at)'));
 
-                    return;
-                }
+        if ($this->revenueState === 'with_revenue') {
+            $dailyQuery->havingRaw('COALESCE(SUM(sm_orders.total_amount), 0) > 0');
+        } elseif ($this->revenueState === 'without_revenue') {
+            $dailyQuery->havingRaw('COALESCE(SUM(sm_orders.total_amount), 0) <= 0');
+        }
 
-                $query->where(function (Builder $inner): void {
-                    $inner
-                        ->whereNull('orders_revenue')
-                        ->orWhere('orders_revenue', '<=', 0);
-                });
-            })
+        $allDailyStats = $dailyQuery
             ->orderByDesc('date')
-            ->limit(100)
+            ->orderBy('store_name')
             ->get();
 
-        $totalOrders = (int) $dailyStats->sum('orders_count');
-        $totalRevenue = (float) $dailyStats->sum(fn (SmStoreDailyStat $row): float => (float) ($row->orders_revenue ?? 0));
-        $averageOrderValue = $totalOrders > 0
-            ? $totalRevenue / $totalOrders
-            : 0.0;
-        $trackedStores = (int) $dailyStats
-            ->pluck('store_id')
-            ->filter()
-            ->unique()
-            ->count();
+        $totalOrders = (int) $allDailyStats->sum(fn ($row): int => (int) $row->orders_count);
+        $totalRevenue = (float) $allDailyStats->sum(fn ($row): float => (float) $row->orders_revenue);
+        $averageOrderValue = $totalOrders > 0 ? $totalRevenue / $totalOrders : 0.0;
+        $trackedStores = $allDailyStats->pluck('store_id')->unique()->count();
+        $dailyStats = $allDailyStats->take(100)->values();
 
         return [
             'dailyStats' => $dailyStats,

@@ -117,54 +117,36 @@ it('returns order details timing data on show response', function (): void {
     Carbon::setTestNow();
 });
 
-it('creates an order', function (): void {
-    $customer = User::factory()->create();
-    $otherStore = SmStoreFactory::new()->create();
+it('does not expose direct order creation through the store-owner read model', function (): void {
+    $response = $this->postJson('/api/v1/sm-orders', []);
 
-    $payload = [
-        'customerId' => $customer->id,
-        'storeId' => $otherStore->id,
-        'orderNumber' => 'ORD-1001',
-        'status' => 'pending',
-        'pickupMode' => 'immediate_pickup',
-        'subtotal' => 100,
-        'discountAmount' => 0,
-        'serviceFee' => 5,
-        'totalAmount' => 105,
-    ];
-
-    $response = $this->postJson('/api/v1/sm-orders', $payload);
-
-    $response->assertCreated();
-    $this->assertDatabaseHas('sm_orders', [
-        'order_number' => 'ORD-1001',
-        'store_id' => $this->store->id,
-    ]);
+    $response->assertMethodNotAllowed();
 });
 
-it('updates an order', function (): void {
+it('does not expose direct order updates through the store-owner read model', function (): void {
     $order = SmOrderFactory::new()->create([
         'store_id' => $this->store->id,
         'status' => 'pending',
     ]);
 
-    $payload = [
+    $response = $this->putJson("/api/v1/sm-orders/{$order->id}", [
         'status' => 'accepted',
-    ];
+    ]);
 
-    $response = $this->putJson("/api/v1/sm-orders/{$order->id}", $payload);
-
-    $response->assertOk();
-    $this->assertDatabaseHas('sm_orders', ['id' => $order->id, 'status' => 'accepted']);
+    $response->assertMethodNotAllowed();
+    $this->assertDatabaseHas('sm_orders', [
+        'id' => $order->id,
+        'status' => 'pending',
+    ]);
 });
 
-it('deletes an order', function (): void {
+it('does not expose direct order deletion through the store-owner read model', function (): void {
     $order = SmOrderFactory::new()->create([
         'store_id' => $this->store->id,
     ]);
 
     $response = $this->deleteJson("/api/v1/sm-orders/{$order->id}");
 
-    $response->assertNoContent();
-    $this->assertDatabaseMissing('sm_orders', ['id' => $order->id]);
+    $response->assertMethodNotAllowed();
+    $this->assertDatabaseHas('sm_orders', ['id' => $order->id]);
 });

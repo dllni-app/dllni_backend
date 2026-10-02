@@ -17,7 +17,12 @@ final class CleaningAutomationRulesTable
         return $table
             ->columns([
                 TextColumn::make('name')->label('الاسم')->searchable(),
-                TextColumn::make('type')->label('النوع')->badge(),
+                TextColumn::make('type')
+                    ->label('النوع')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => $state
+                        ? __('cleaning_admin.automation.types.'.$state)
+                        : '—'),
                 IconColumn::make('is_active')->label('نشط')->boolean(),
                 TextColumn::make('created_at')->label('تاريخ الإنشاء')->since(),
             ])

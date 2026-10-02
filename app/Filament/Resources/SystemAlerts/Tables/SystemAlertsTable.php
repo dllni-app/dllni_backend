@@ -7,9 +7,13 @@ namespace App\Filament\Resources\SystemAlerts\Tables;
 use App\Enums\AlertSeverity;
 use App\Enums\AlertType;
 use App\Enums\SystemAlertStatus;
+use App\Filament\Resources\SystemAlerts\SystemAlertResource;
+use App\Models\SystemAlert;
 use App\Support\BookingMorphTypeLabel;
-use Filament\Actions\EditAction;
+use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\Textarea;
+use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -64,23 +68,59 @@ final class SystemAlertsTable
             ])
             ->recordActions([
                 ViewAction::make()->label(__('cleaning_admin.shared.actions.view')),
-                EditAction::make()->label(__('cleaning_admin.shared.actions.edit')),
-            ]);
+                Action::make('acknowledge')
+                    ->label('استلام')
+                    ->color('warning')
+                    ->visible(fn (SystemAlert $record): bool => SystemAlertResource::canUpdateAlerts() && $record->status === SystemAlertStatus::New)
+                    ->requiresConfirmation()
+                    ->action(function (SystemAlert $record): void {
+                        $before=$record->status?->value;
+                        $record->update([
+                            'status'=>SystemAlertStatus::Acknowledged->value,
+                            'acknowledged_at'=>now(),
+                            'acknowledged_by'=>auth()->id(),
+                        ]);
+                        activity('system_alerts')->performedOn($record)->causedBy(auth()->user())->withProperties(['from'=>$before,'to'=>'acknowledged'])->log('system_alert_acknowledged');
+                        Notification::make()->title('تم استلام التنبيه')->success()->send();
+                    }),
+                Action::make('resolve')
+                    ->label('حل')
+                    ->color('success')
+                    ->visible(fn (SystemAlert $record): bool => SystemAlertResource::canUpdateAlerts() && $record->status !== SystemAlertStatus::Resolved)
+                    ->form([Textarea::make('resolution_note')->label('ملاحظة الحل')->required()->maxLength(2000)])
+                    ->requiresConfirmation()
+                    ->action(function (SystemAlert $record, array $data): void {
+                        $before=$record->status?->value;
+                        $record->update([
+                            'status'=>SystemAlertStatus::Resolved->value,
+                            'resolved_at'=>now(),
+                            'resolved_by'=>auth()->id(),
+                            'resolution_note'=>trim((string)$data['resolution_note']),
+                        ]);
+                        activity('system_alerts')->performedOn($record)->causedBy(auth()->user())->withProperties(['from'=>$before,'to'=>'resolved','note'=>$data['resolution_note']])->log('system_alert_resolved');
+                        Notification::make()->title('تم حل التنبيه')->success()->send();
+                    }),
+            ])
+            ->defaultSort('created_at', 'desc');
     }
 
     private static function alertTypeLabel(AlertType|string|null $type): string
     {
-        $type = self::normalizeAlertType($type);
-
+        $type = $type instanceof AlertType ? $type : ($type ? AlertType::tryFrom($type) : null);
         return $type?->label() ?? '-';
     }
 
     private static function alertTypeColor(AlertType|string|null $type): string
     {
-        return match (self::normalizeAlertType($type)) {
-            AlertType::SOSTriggered => 'danger',
+        $type = $type instanceof AlertType ? $type : ($type ? AlertType::tryFrom($type) : null);
+        return match ($type) {
+            AlertType::SOSTriggered,
+            AlertType::DeliveryDispatchExhausted,
+            AlertType::StaleDriverLocation => 'danger',
             AlertType::OverdueCompletion,
-            AlertType::TimeExpired => 'warning',
+            AlertType::TimeExpired,
+            AlertType::StalledProgress,
+            AlertType::ReadyPickupOverdue => 'warning',
             AlertType::FrozenGPS => 'info',
             default => 'gray',
         };
@@ -88,63 +128,35 @@ final class SystemAlertsTable
 
     private static function severityLabel(AlertSeverity|string|null $severity): string
     {
-        $severity = self::normalizeSeverity($severity);
-
+        $severity = $severity instanceof AlertSeverity ? $severity : ($severity ? AlertSeverity::tryFrom($severity) : null);
         return $severity?->label() ?? '-';
     }
 
     private static function severityColor(AlertSeverity|string|null $severity): string
     {
-        return match (self::normalizeSeverity($severity)) {
+        $severity = $severity instanceof AlertSeverity ? $severity : ($severity ? AlertSeverity::tryFrom($severity) : null);
+        return match ($severity) {
             AlertSeverity::Critical => 'danger',
             AlertSeverity::High => 'warning',
             AlertSeverity::Medium => 'info',
-            AlertSeverity::Low => 'gray',
             default => 'gray',
         };
     }
 
     private static function statusLabel(SystemAlertStatus|string|null $status): string
     {
-        $status = self::normalizeStatus($status);
-
+        $status = $status instanceof SystemAlertStatus ? $status : ($status ? SystemAlertStatus::tryFrom($status) : null);
         return $status?->label() ?? '-';
     }
 
     private static function statusColor(SystemAlertStatus|string|null $status): string
     {
-        return match (self::normalizeStatus($status)) {
+        $status = $status instanceof SystemAlertStatus ? $status : ($status ? SystemAlertStatus::tryFrom($status) : null);
+        return match ($status) {
             SystemAlertStatus::New => 'warning',
             SystemAlertStatus::Acknowledged => 'info',
             SystemAlertStatus::Resolved => 'success',
             default => 'gray',
         };
-    }
-
-    private static function normalizeAlertType(AlertType|string|null $type): ?AlertType
-    {
-        if ($type instanceof AlertType || $type === null) {
-            return $type;
-        }
-
-        return AlertType::tryFrom($type);
-    }
-
-    private static function normalizeSeverity(AlertSeverity|string|null $severity): ?AlertSeverity
-    {
-        if ($severity instanceof AlertSeverity || $severity === null) {
-            return $severity;
-        }
-
-        return AlertSeverity::tryFrom($severity);
-    }
-
-    private static function normalizeStatus(SystemAlertStatus|string|null $status): ?SystemAlertStatus
-    {
-        if ($status instanceof SystemAlertStatus || $status === null) {
-            return $status;
-        }
-
-        return SystemAlertStatus::tryFrom($status);
     }
 }

@@ -82,7 +82,11 @@ test.describe('Cleaning User API contract scenarios', () => {
 
     const confirm = await flow.userApi.confirmStartVerification(orderId, securityCode);
     expect(confirm.response.status()).toBe(200);
-    expect(bookingStatus(confirm.body)).toBe('in_progress');
+    expect(bookingStatus(confirm.body)).toBe('awaiting_worker_start_confirmation');
+
+    const started = await flow.workerApi.startWork(orderId);
+    expect(started.response.status()).toBe(200);
+    expect(bookingStatus(started.body)).toBe('in_progress');
 
     const show = await flow.workerApi.showCleaningBooking(orderId);
     expect(show.response.status()).toBe(200);
@@ -131,9 +135,7 @@ test.describe('Cleaning User API contract scenarios', () => {
     const created = await flow.createPendingOrder();
     const orderId = created.orderId;
 
-    await flow.workerApi.acceptBooking(orderId);
-    await flow.workerApi.startWork(orderId);
-    await flow.workerApi.complete(orderId);
+    await flow.moveToAwaitingCustomerCompletion(orderId);
 
     const extend = await flow.userApi.requestCompletionExtension(orderId, 30);
     expect(extend.response.status()).toBe(200);

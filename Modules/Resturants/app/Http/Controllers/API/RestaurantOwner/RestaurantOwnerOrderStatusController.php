@@ -38,7 +38,7 @@ final class RestaurantOwnerOrderStatusController
             return $this->response($order, $payload, 'Order status is already up to date.');
         }
 
-        if (! in_array($nextStatus, $this->allowedNextStatuses($currentStatus), true)) {
+        if (! in_array($nextStatus, $this->allowedNextStatuses($currentStatus, $order), true)) {
             throw ValidationException::withMessages([
                 'status' => "Cannot change restaurant order status from {$currentStatus} to {$nextStatus}.",
             ]);
@@ -103,14 +103,15 @@ final class RestaurantOwnerOrderStatusController
     }
 
     /** @return list<string> */
-    private function allowedNextStatuses(string $currentStatus): array
+    private function allowedNextStatuses(string $currentStatus, Order $order): array
     {
         return match ($currentStatus) {
             OrderStatus::Pending->value => [OrderStatus::Accepted->value, OrderStatus::Cancelled->value],
             OrderStatus::Accepted->value => [OrderStatus::Preparing->value, OrderStatus::Cancelled->value],
             OrderStatus::Preparing->value => [OrderStatus::ReadyForPickup->value, OrderStatus::Cancelled->value],
-            OrderStatus::ReadyForPickup->value => [OrderStatus::PickedUp->value, OrderStatus::Completed->value],
-            OrderStatus::PickedUp->value => [OrderStatus::Completed->value],
+            OrderStatus::ReadyForPickup->value => ($order->order_type?->value ?? $order->order_type) === 'delivery'
+                ? []
+                : [OrderStatus::Completed->value],
             default => [],
         };
     }

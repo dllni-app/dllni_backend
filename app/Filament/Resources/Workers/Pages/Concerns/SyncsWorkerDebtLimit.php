@@ -26,7 +26,7 @@ trait SyncsWorkerDebtLimit
             app(AdminCleaningTransactionService::class)->updateAllowanceLimit($this->record, $limit);
         } catch (InvalidArgumentException $exception) {
             throw ValidationException::withMessages([
-                'data.worker_debt_limit' => $exception->getMessage(),
+                'data.worker_debt_limit' => \App\Filament\Support\AdminExceptionMessage::forUser($exception),
             ]);
         }
 

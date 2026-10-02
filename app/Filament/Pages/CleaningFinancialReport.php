@@ -19,11 +19,11 @@ final class CleaningFinancialReport extends Page
 
     protected string $view = 'filament.cleaning-admin.pages.financial-report';
 
-    protected static ?int $navigationSort = 53;
+    protected static ?int $navigationSort = 22;
 
     public static function getNavigationGroup(): ?string
     {
-        return __('cleaning_admin.nav_groups.operations');
+        return \App\Filament\Support\AdminNavigationGroup::cleaning();
     }
 
     public static function getNavigationLabel(): string

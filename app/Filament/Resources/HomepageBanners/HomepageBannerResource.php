@@ -25,7 +25,7 @@ final class HomepageBannerResource extends Resource
 
     public static function getNavigationGroup(): ?string
     {
-        return __('restaurant_admin.general_sections');
+        return \App\Filament\Support\AdminNavigationGroup::general();
     }
 
     public static function getNavigationLabel(): string

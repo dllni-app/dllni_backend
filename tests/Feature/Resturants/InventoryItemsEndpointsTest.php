@@ -189,3 +189,76 @@ it('filters inventory items by status', function () {
     expect($normalResponse->json('data'))->toHaveCount(1);
     expect($normalResponse->json('data.0.name'))->toBe('Normal Stock');
 });
+
+it('does not expose or mutate another restaurant inventory item', function () {
+    $owner = User::factory()->create([
+        'module_type' => UserModuleType::RestaurantSeller->value,
+    ]);
+    $restaurant = Restaurant::factory()->create([
+        'user_id' => $owner->id,
+    ]);
+    $otherRestaurant = Restaurant::factory()->create();
+
+    $item = InventoryItem::create([
+        'restaurant_id' => $otherRestaurant->id,
+        'name' => 'Other Restaurant Item',
+        'unit' => 'kg',
+        'quantity' => 8,
+        'minimum_limit' => 2,
+        'unit_cost' => 4,
+    ]);
+
+    Sanctum::actingAs($owner);
+
+    $this->getJson("/api/v1/inventory-items/{$item->id}")
+        ->assertNotFound();
+
+    $this->putJson("/api/v1/inventory-items/{$item->id}", [
+        'name' => 'Tampered Item',
+        'unit' => 'kg',
+        'quantity' => 5,
+        'minimumLimit' => 1,
+        'unitCost' => 2,
+    ])->assertNotFound();
+
+    $this->deleteJson("/api/v1/inventory-items/{$item->id}")
+        ->assertNotFound();
+
+    $this->assertDatabaseHas('inventory_items', [
+        'id' => $item->id,
+        'restaurant_id' => $otherRestaurant->id,
+        'name' => 'Other Restaurant Item',
+    ]);
+});
+
+it('rejects linking inventory to a product from another restaurant', function () {
+    $owner = User::factory()->create([
+        'module_type' => UserModuleType::RestaurantSeller->value,
+    ]);
+    $restaurant = Restaurant::factory()->create([
+        'user_id' => $owner->id,
+    ]);
+    $otherRestaurant = Restaurant::factory()->create();
+    $otherProduct = Product::factory()->create([
+        'restaurant_id' => $otherRestaurant->id,
+    ]);
+
+    Sanctum::actingAs($owner);
+
+    $this->postJson('/api/v1/inventory-items', [
+        'name' => 'Scoped Ingredient',
+        'unit' => 'kg',
+        'quantity' => 10,
+        'minimumLimit' => 2,
+        'unitCost' => 4,
+        'products' => [
+            [
+                'productId' => $otherProduct->id,
+                'quantityUsed' => 0.5,
+            ],
+        ],
+    ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('products');
+});
+

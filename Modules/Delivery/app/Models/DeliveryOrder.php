@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Delivery\Models;
 
+use App\Models\SupportCase;
 use Database\Factories\DeliveryOrderFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -22,28 +23,7 @@ final class DeliveryOrder extends Model
 
     protected $table = 'delivery_orders';
 
-    protected $fillable = ['company_id', 'driver_id', 'order_number', 'customer_name', 'customer_phone', 'customer_notes', 'pickup_address', 'pickup_latitude', 'pickup_longitude', 'dropoff_address', 'dropoff_latitude', 'dropoff_longitude', 'distance_km', 'delivery_fee', 'currency', 'status', 'accepted_at', 'started_at', 'picked_up_at', 'delivered_at', 'completed_at', 'stopped_at', 'cancelled_at', 'stop_reason', 'cancel_reason', 'created_by_user_id', 'source_type', 'source_id', 'merchant_status', 'merchant_accepted_at', 'estimated_preparation_minutes', 'estimated_ready_at', 'merchant_ready_at', 'dispatch_wave', 'search_radius_km', 'dispatch_phase'];
-
-    protected static function booted(): void
-    {
-        static::updating(function (DeliveryOrder $order): void {
-            if (! $order->isDirty('status')) {
-                return;
-            }
-
-            if ($order->status !== DeliveryOrderStatus::Stopped->value || $order->driver_id === null) {
-                return;
-            }
-
-            // Once a driver has accepted the order it represents an active
-            // delivery lifecycle and must never be downgraded to "stopped".
-            // "stopped" is reserved for dispatch/search exhaustion before a
-            // driver is assigned.
-            $order->status = (string) $order->getOriginal('status');
-            $order->stopped_at = $order->getOriginal('stopped_at');
-            $order->stop_reason = $order->getOriginal('stop_reason');
-        });
-    }
+    protected $fillable = ['company_id', 'driver_id', 'order_number', 'customer_name', 'customer_phone', 'customer_notes', 'pickup_address', 'pickup_latitude', 'pickup_longitude', 'dropoff_address', 'dropoff_latitude', 'dropoff_longitude', 'distance_km', 'delivery_fee', 'currency', 'status', 'accepted_at', 'started_at', 'picked_up_at', 'delivered_at', 'completed_at', 'stopped_at', 'cancelled_at', 'stop_reason', 'cancel_reason', 'created_by_user_id', 'source_type', 'source_id', 'merchant_status', 'merchant_accepted_at', 'estimated_preparation_minutes', 'estimated_ready_at', 'merchant_ready_at', 'dispatch_wave', 'search_radius_km', 'dispatch_phase', 'delivery_failure_code', 'delivery_failure_reason', 'delivery_failed_at', 'returned_to_merchant_at'];
 
     public function company(): BelongsTo
     {
@@ -108,6 +88,13 @@ final class DeliveryOrder extends Model
         return $this->hasMany(DeliveryOrderEvent::class, 'order_id');
     }
 
+    public function supportCases(): HasMany
+    {
+        return $this->hasMany(SupportCase::class, 'booking_id')
+            ->whereIn('booking_type', [self::class, 'delivery_order'])
+            ->oldest('created_at');
+    }
+
     public function disputes(): MorphMany
     {
         return $this->morphMany(\App\Models\Dispute::class, 'booking');
@@ -118,6 +105,27 @@ final class DeliveryOrder extends Model
         return $this->morphMany(\App\Models\BookingStatusLog::class, 'booking', 'booking_type', 'booking_id');
     }
 
+    protected static function booted(): void
+    {
+        self::updating(function (DeliveryOrder $order): void {
+            if (! $order->isDirty('status')) {
+                return;
+            }
+
+            if ($order->status !== DeliveryOrderStatus::Stopped->value || $order->driver_id === null) {
+                return;
+            }
+
+            // Once a driver has accepted the order it represents an active
+            // delivery lifecycle and must never be downgraded to "stopped".
+            // "stopped" is reserved for dispatch/search exhaustion before a
+            // driver is assigned.
+            $order->status = (string) $order->getOriginal('status');
+            $order->stopped_at = $order->getOriginal('stopped_at');
+            $order->stop_reason = $order->getOriginal('stop_reason');
+        });
+    }
+
     protected static function newFactory(): DeliveryOrderFactory
     {
         return DeliveryOrderFactory::new();
@@ -125,6 +133,6 @@ final class DeliveryOrder extends Model
 
     protected function casts(): array
     {
-        return ['pickup_latitude' => 'decimal:8', 'pickup_longitude' => 'decimal:8', 'dropoff_latitude' => 'decimal:8', 'dropoff_longitude' => 'decimal:8', 'distance_km' => 'decimal:2', 'delivery_fee' => 'decimal:2', 'accepted_at' => 'datetime', 'started_at' => 'datetime', 'picked_up_at' => 'datetime', 'delivered_at' => 'datetime', 'completed_at' => 'datetime', 'stopped_at' => 'datetime', 'cancelled_at' => 'datetime', 'merchant_accepted_at' => 'datetime', 'estimated_ready_at' => 'datetime', 'merchant_ready_at' => 'datetime', 'dispatch_wave' => 'integer', 'search_radius_km' => 'decimal:3'];
+        return ['pickup_latitude' => 'decimal:8', 'pickup_longitude' => 'decimal:8', 'dropoff_latitude' => 'decimal:8', 'dropoff_longitude' => 'decimal:8', 'distance_km' => 'decimal:2', 'delivery_fee' => 'decimal:2', 'accepted_at' => 'datetime', 'started_at' => 'datetime', 'picked_up_at' => 'datetime', 'delivered_at' => 'datetime', 'completed_at' => 'datetime', 'stopped_at' => 'datetime', 'cancelled_at' => 'datetime', 'merchant_accepted_at' => 'datetime', 'estimated_ready_at' => 'datetime', 'merchant_ready_at' => 'datetime', 'delivery_failed_at' => 'datetime', 'returned_to_merchant_at' => 'datetime', 'dispatch_wave' => 'integer', 'search_radius_km' => 'decimal:3'];
     }
 }

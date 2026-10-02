@@ -148,7 +148,7 @@ it('creates store products from master products and links master_product_id', fu
     $response->assertJsonPath('data.0.name', 'Sparkling Water');
     $response->assertJsonPath('data.0.stockQuantity', 0);
     $response->assertJsonPath('data.0.lowStockThreshold', 0);
-    $response->assertJsonPath('data.0.isAvailable', true);
+    $response->assertJsonPath('data.0.isAvailable', false);
     $response->assertJsonPath('data.0.barcode', '111100000001');
     expect((float) $response->json('data.0.price'))->toBe(0.0);
     expect((float) ($response->json('data.0.discountedPrice') ?? 0))->toBe(0.0);
@@ -163,10 +163,10 @@ it('creates store products from master products and links master_product_id', fu
         'name' => 'Sparkling Water',
         'barcode' => '111100000001',
         'price' => '0.00',
-        'discounted_price' => '0.00',
+        'discounted_price' => null,
         'stock_quantity' => 0,
         'low_stock_threshold' => 0,
-        'is_available' => true,
+        'is_available' => false,
     ]);
 
     $this->assertDatabaseHas('sm_products', [
@@ -175,10 +175,10 @@ it('creates store products from master products and links master_product_id', fu
         'name' => 'Mineral Water',
         'barcode' => '111100000002',
         'price' => '0.00',
-        'discounted_price' => '0.00',
+        'discounted_price' => null,
         'stock_quantity' => 0,
         'low_stock_threshold' => 0,
-        'is_available' => true,
+        'is_available' => false,
     ]);
 
     $this->assertDatabaseHas('sm_categories', [
@@ -236,10 +236,10 @@ it('creates product from single master product id and fills defaults', function 
         'barcode' => '111100000003',
         'description' => 'High protein yogurt',
         'price' => '0.00',
-        'discounted_price' => '0.00',
+        'discounted_price' => null,
         'stock_quantity' => 0,
         'low_stock_threshold' => 0,
-        'is_available' => true,
+        'is_available' => false,
     ]);
 
     $this->assertDatabaseHas('sm_categories', [

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\UserModuleType;
 use App\Models\User;
 use Laravel\Sanctum\Sanctum;
 use Modules\Resturants\Enums\OrderStatus;
@@ -11,7 +12,15 @@ use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
 
 beforeEach(function () {
-    Sanctum::actingAs(User::factory()->create());
+    $this->owner = User::factory()->create([
+        'module_type' => UserModuleType::RestaurantSeller->value,
+    ]);
+    $this->restaurant = Restaurant::factory()->create([
+        'user_id' => $this->owner->id,
+        'is_active' => true,
+    ]);
+
+    Sanctum::actingAs($this->owner);
 });
 
 it('returns 422 when dashboard overview is called without restaurantId', function () {
@@ -22,9 +31,7 @@ it('returns 422 when dashboard overview is called without restaurantId', functio
 });
 
 it('returns dashboard overview with kpis when restaurantId is provided', function () {
-    $restaurant = Restaurant::factory()->create(['is_active' => true]);
-
-    $response = $this->getJson('/api/v1/restaurant/dashboard/overview?restaurantId='.$restaurant->id);
+    $response = $this->getJson('/api/v1/restaurant/dashboard/overview?restaurantId='.$this->restaurant->id);
 
     $response->assertOk();
     $response->assertJsonStructure([
@@ -41,8 +48,8 @@ it('returns dashboard overview with kpis when restaurantId is provided', functio
     ]);
 });
 
-it('returns dashboard overview scoped to the given restaurant', function () {
-    $restaurantA = Restaurant::factory()->create(['is_active' => true]);
+it('returns dashboard overview scoped to the authenticated restaurant', function () {
+    $restaurantA = $this->restaurant;
     $restaurantB = Restaurant::factory()->create(['is_active' => true]);
 
     Order::factory()->create([
@@ -63,7 +70,7 @@ it('returns dashboard overview scoped to the given restaurant', function () {
 });
 
 it('lists new orders with filter status pending and createdToday', function () {
-    $restaurant = Restaurant::factory()->create();
+    $restaurant = $this->restaurant;
     $customer = User::factory()->create(['email' => 'customer@example.com']);
 
     Order::factory()->count(2)->create([
@@ -86,7 +93,7 @@ it('lists new orders with filter status pending and createdToday', function () {
 });
 
 it('lists orders in preparation with filter status preparing', function () {
-    $restaurant = Restaurant::factory()->create();
+    $restaurant = $this->restaurant;
     $customer = User::factory()->create(['email' => 'prep-customer@example.com']);
 
     Order::factory()->count(2)->create([
@@ -107,7 +114,7 @@ it('lists orders in preparation with filter status preparing', function () {
 });
 
 it('accepts an order when preparation time is unknown', function () {
-    $restaurant = Restaurant::factory()->create();
+    $restaurant = $this->restaurant;
     $customer = User::factory()->create(['email' => 'accept-validation@example.com']);
     $order = Order::factory()->create([
         'restaurant_id' => $restaurant->id,
@@ -123,7 +130,7 @@ it('accepts an order when preparation time is unknown', function () {
 });
 
 it('accepts a pending order with preparation time and optional fields', function () {
-    $restaurant = Restaurant::factory()->create();
+    $restaurant = $this->restaurant;
     $customer = User::factory()->create(['email' => 'accept-customer@example.com']);
     $order = Order::factory()->create([
         'restaurant_id' => $restaurant->id,
@@ -150,7 +157,7 @@ it('accepts a pending order with preparation time and optional fields', function
 });
 
 it('rejects a pending order with reason and optional message', function () {
-    $restaurant = Restaurant::factory()->create();
+    $restaurant = $this->restaurant;
     $customer = User::factory()->create(['email' => 'reject-customer@example.com']);
     $order = Order::factory()->create([
         'restaurant_id' => $restaurant->id,
@@ -175,7 +182,7 @@ it('rejects a pending order with reason and optional message', function () {
 });
 
 it('lists low stock products with filter', function () {
-    $restaurant = Restaurant::factory()->create();
+    $restaurant = $this->restaurant;
     $category = Category::factory()->create(['restaurant_id' => $restaurant->id]);
 
     Product::factory()->lowStock()->count(2)->create([

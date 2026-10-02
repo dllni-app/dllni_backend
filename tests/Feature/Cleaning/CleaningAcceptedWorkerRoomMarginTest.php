@@ -135,8 +135,15 @@ it('assigns rooms immediately and deducts the admin percentage from all three wo
     $teamService->recalculateBookingTeam($booking->fresh(), finalizeBooking: false);
     $firstAssignment->refresh();
     $provisionalBooking = $booking->fresh();
+    $firstOffer = app(WorkerOrderSolvencyService::class)->workerOfferForBooking(
+        $firstWorker,
+        $provisionalBooking,
+        $firstAssignment,
+    );
 
-    expect($firstAssignment->room_count)->toBe(1)
+    expect($firstOffer['workerSlot'])->toBe(1)
+        ->and($firstOffer['workerId'])->toBe($firstWorker->id)
+        ->and($firstAssignment->room_count)->toBe(1)
         ->and((float) $firstAssignment->rooms_weight)->toBe(1.0)
         ->and((float) $firstAssignment->service_share_amount)->toBe(1000.0)
         ->and((float) $firstAssignment->admin_margin_amount)->toBe(100.0)

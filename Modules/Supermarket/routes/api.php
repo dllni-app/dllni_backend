@@ -26,6 +26,7 @@ use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerMasterProductS
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerOfferWeeklySummaryController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerOrderCountsController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerPermissionsController;
+use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerProductOptionsController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerStoreController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerTopSellingProductsController;
 use Modules\Supermarket\Http\Middleware\InjectStoreIdFromOwnerContext;
@@ -73,6 +74,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', InjectStoreIdFromOwnerContext::
         ->middleware($ordersPermission)
         ->name('sm-orders.hourly-count');
     Route::apiResource('sm-orders', SmOrderController::class)
+        ->only(['index', 'show'])
         ->middleware($ordersPermission)
         ->names('sm-orders');
 
@@ -120,6 +122,9 @@ Route::prefix('v1')->middleware(['auth:sanctum', InjectStoreIdFromOwnerContext::
         Route::post('products/from-master', StoreOwnerMasterProductCreateController::class)
             ->middleware($productsPermission)
             ->name('products.from-master');
+        Route::put('products/{product}/options', StoreOwnerProductOptionsController::class)
+            ->middleware($productsPermission)
+            ->name('products.options.update');
 
         Route::get('orders/counts', StoreOwnerOrderCountsController::class)
             ->middleware($ordersPermission)
@@ -145,6 +150,9 @@ Route::prefix('v1')->middleware(['auth:sanctum', InjectStoreIdFromOwnerContext::
         Route::post('orders/{order}/courier-handover', [SmOrderStatusController::class, 'courierHandover'])
             ->middleware($ordersPermission)
             ->name('orders.courier-handover');
+        Route::post('orders/{order}/customer-pickup-complete', [SmOrderStatusController::class, 'customerPickupComplete'])
+            ->middleware($ordersPermission)
+            ->name('orders.customer-pickup-complete');
         Route::post('orders/{order}/return', [StoreOwnerInventoryController::class, 'processReturn'])
             ->middleware($ordersPermission)
             ->name('orders.return');

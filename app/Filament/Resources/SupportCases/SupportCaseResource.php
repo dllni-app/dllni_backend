@@ -30,7 +30,7 @@ final class SupportCaseResource extends Resource
 
     public static function getNavigationGroup(): ?string
     {
-        return 'العمليات والدعم';
+        return \App\Filament\Support\AdminNavigationGroup::general();
     }
 
     public static function getNavigationLabel(): string
@@ -45,7 +45,7 @@ final class SupportCaseResource extends Resource
 
     public static function getNavigationBadge(): ?string
     {
-        $count = static::getEloquentQuery()
+        $count = self::getEloquentQuery()
             ->whereIn('status', SupportCaseStatus::activeValues())
             ->count();
 

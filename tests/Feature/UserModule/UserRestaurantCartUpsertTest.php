@@ -52,6 +52,7 @@ it('updates the matching restaurant cart item instead of creating a duplicate', 
     $this->postJson('/api/v1/user/restaurants/cart/items', [
         'productId' => $product->id,
         'quantity' => 7,
+        'quantityMode' => 'set',
     ])->assertOk()->assertJson([
         'itemId' => $first->json('itemId'),
         'quantity' => 7,
@@ -96,7 +97,7 @@ it('preserves modifiers when updating quantity only', function (): void {
         'modifierIds' => [$modifier->id],
     ])->assertCreated();
 
-    $this->patchJson('/api/v1/user/restaurants/cart/items/'.$response->json('itemId'), [
+    $this->patchJson('/api/v1/user/restaurants/carts/'.$response->json('cartId').'/items/'.$response->json('itemId'), [
         'quantity' => 4,
     ])->assertOk();
 

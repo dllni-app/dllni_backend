@@ -24,6 +24,10 @@ final class PlatformCoupon extends Model
     public const DISCOUNT_FIXED = 'fixed';
     public const DISCOUNT_PERCENTAGE = 'percentage';
 
+    public const FUNDING_PLATFORM = 'platform';
+    public const FUNDING_SHARED = 'shared';
+    public const FUNDING_MERCHANT = 'merchant';
+
     protected $fillable = [
         'code',
         'title_ar',
@@ -35,6 +39,11 @@ final class PlatformCoupon extends Model
         'discount_value',
         'max_discount_amount',
         'min_order_amount',
+        'funding_type',
+        'platform_funding_percent',
+        'merchant_funding_percent',
+        'max_platform_funding_amount',
+        'cap_platform_funding_to_revenue',
         'audience_type',
         'total_usage_limit',
         'per_user_usage_limit',
@@ -50,6 +59,30 @@ final class PlatformCoupon extends Model
     {
         static::saving(function (self $coupon): void {
             $coupon->code = Str::upper(trim($coupon->code));
+
+            $fundingType = in_array($coupon->funding_type, [
+                self::FUNDING_PLATFORM,
+                self::FUNDING_SHARED,
+                self::FUNDING_MERCHANT,
+            ], true) ? $coupon->funding_type : self::FUNDING_PLATFORM;
+
+            $coupon->funding_type = $fundingType;
+
+            if ($fundingType === self::FUNDING_PLATFORM) {
+                $coupon->platform_funding_percent = 100;
+                $coupon->merchant_funding_percent = 0;
+            } elseif ($fundingType === self::FUNDING_MERCHANT) {
+                $coupon->platform_funding_percent = 0;
+                $coupon->merchant_funding_percent = 100;
+            } else {
+                $platformPercent = max(0.0, min(100.0, (float) $coupon->platform_funding_percent));
+                $coupon->platform_funding_percent = round($platformPercent, 2);
+                $coupon->merchant_funding_percent = round(100 - $platformPercent, 2);
+            }
+
+            if ($coupon->max_platform_funding_amount !== null) {
+                $coupon->max_platform_funding_amount = max(0.0, (float) $coupon->max_platform_funding_amount);
+            }
         });
     }
 
@@ -112,6 +145,10 @@ final class PlatformCoupon extends Model
             'discount_value' => 'decimal:2',
             'max_discount_amount' => 'decimal:2',
             'min_order_amount' => 'decimal:2',
+            'platform_funding_percent' => 'decimal:2',
+            'merchant_funding_percent' => 'decimal:2',
+            'max_platform_funding_amount' => 'decimal:2',
+            'cap_platform_funding_to_revenue' => 'boolean',
             'total_usage_limit' => 'integer',
             'per_user_usage_limit' => 'integer',
             'used_count' => 'integer',

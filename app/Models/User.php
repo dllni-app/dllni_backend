@@ -86,27 +86,6 @@ final class User extends Authenticatable implements FilamentUser, HasMedia
         ];
     }
 
-    protected static function booted(): void
-    {
-        static::updated(function (self $user): void {
-            $moduleType = $user->getRawOriginal('module_type');
-
-            if (! $user->wasChanged('name') || $moduleType !== UserModuleType::CleaningWorker->value) {
-                return;
-            }
-
-            $worker = $user->worker;
-
-            if (! $worker || $worker->first_name === $user->name) {
-                return;
-            }
-
-            $worker->forceFill([
-                'first_name' => $user->name,
-            ])->saveQuietly();
-        });
-    }
-
     public function worker(): HasOne
     {
         return $this->hasOne(Worker::class);
@@ -220,10 +199,20 @@ final class User extends Authenticatable implements FilamentUser, HasMedia
     public function canAccessPanel(Panel $panel): bool
     {
         if ($panel->getId() === 'company') {
-            return $this->hasAnyRole([
-                'delivery_company_admin',
-                'delivery_company_staff',
-            ]);
+            if ($this->hasRole('delivery_company_admin')) {
+                return \Modules\Delivery\Models\DeliveryCompany::query()
+                    ->where('owner_user_id', $this->id)
+                    ->exists();
+            }
+
+            if ($this->hasRole('delivery_company_staff')) {
+                return \Modules\Delivery\Models\DeliveryCompanyStaff::query()
+                    ->where('user_id', $this->id)
+                    ->where('is_active', true)
+                    ->exists();
+            }
+
+            return false;
         }
 
         return $this->hasAnyRole([
@@ -239,5 +228,26 @@ final class User extends Authenticatable implements FilamentUser, HasMedia
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection('primary-image')->singleFile();
+    }
+
+    protected static function booted(): void
+    {
+        self::updated(function (self $user): void {
+            $moduleType = $user->getRawOriginal('module_type');
+
+            if (! $user->wasChanged('name') || $moduleType !== UserModuleType::CleaningWorker->value) {
+                return;
+            }
+
+            $worker = $user->worker;
+
+            if (! $worker || $worker->first_name === $user->name) {
+                return;
+            }
+
+            $worker->forceFill([
+                'first_name' => $user->name,
+            ])->saveQuietly();
+        });
     }
 }

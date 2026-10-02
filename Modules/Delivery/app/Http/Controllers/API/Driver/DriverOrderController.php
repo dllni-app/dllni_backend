@@ -75,6 +75,51 @@ final class DriverOrderController
         ]);
     }
 
+    public function deliveryFailed(\Illuminate\Http\Request $request, DeliveryOrder $order): JsonResponse
+    {
+        /** @var DeliveryDriver $driver */
+        $driver = $request->attributes->get('deliveryDriver');
+        $validated = $request->validate([
+            'reasonCode' => ['required', 'string', 'in:CUSTOMER_UNAVAILABLE,CUSTOMER_REFUSED,WRONG_ADDRESS,PAYMENT_ISSUE,UNSAFE_LOCATION,OTHER'],
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        if ($validated['reasonCode'] === 'OTHER' && blank($validated['reason'] ?? null)) {
+            return response()->json(['message' => 'A reason is required when reasonCode is OTHER.'], 422);
+        }
+
+        try {
+            $updated = $this->deliveryOrderService->reportDeliveryFailure(
+                $order,
+                (int) $driver->id,
+                (string) $validated['reasonCode'],
+                isset($validated['reason']) ? (string) $validated['reason'] : null,
+            );
+        } catch (InvalidArgumentException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
+
+        return response()->json([
+            'data' => DeliveryOrderResource::make($updated->load(['assignmentAttempts', 'events'])),
+        ]);
+    }
+
+    public function returnedToMerchant(\Illuminate\Http\Request $request, DeliveryOrder $order): JsonResponse
+    {
+        /** @var DeliveryDriver $driver */
+        $driver = $request->attributes->get('deliveryDriver');
+
+        try {
+            $updated = $this->deliveryOrderService->confirmReturnedToMerchant($order, (int) $driver->id);
+        } catch (InvalidArgumentException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
+
+        return response()->json([
+            'data' => DeliveryOrderResource::make($updated->load(['assignmentAttempts', 'events'])),
+        ]);
+    }
+
     public function deliver(\Illuminate\Http\Request $request, DeliveryOrder $order): JsonResponse
     {
         /** @var DeliveryDriver $driver */

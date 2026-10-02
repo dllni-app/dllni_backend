@@ -32,7 +32,6 @@ final class DatabaseSeeder extends Seeder
 
             AdminUserSeeder::class,
             VerifiedUserSeeder::class,
-            RequestedTestUsersSeeder::class,
 
             BaselineConfigurationSeeder::class,
         ]);
@@ -60,6 +59,7 @@ final class DatabaseSeeder extends Seeder
     private function demoSeeders(): array
     {
         return [
+            RequestedTestUsersSeeder::class,
             DeliveryModuleDataSeeder::class,
             MandoubDeliveryTestUserSeeder::class,
             MandoubPrimaryOfferScenarioSeeder::class,

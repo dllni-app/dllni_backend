@@ -17,7 +17,7 @@ it('generates overdue completion alert for restaurant orders', function (): void
 
     $exists = SystemAlert::query()
         ->where('booking_id', $order->id)
-        ->where('booking_type', Order::class)
+        ->where('booking_type', 'restaurant_order')
         ->where('alert_type', 'overdue_completion')
         ->exists();
 

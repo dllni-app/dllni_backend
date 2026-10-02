@@ -180,8 +180,8 @@ final class WorkerForm
                             ->minLength(8)
                             ->dehydrated(false),
                     ]),
-                ...($includeCleaningQualifications ? [Section::make('Special-service qualifications')
-                    ->description('Only qualified workers can receive services and controlled equipment selected here.')
+                ...($includeCleaningQualifications ? [Section::make(__('cleaning_admin.workers.sections.special_qualifications'))
+                    ->description(__('cleaning_admin.workers.fields.special_qualifications_help'))
                     ->columns(2)
                     ->visible(fn (string $operation): bool => $operation === 'edit')
                     ->schema([
@@ -190,13 +190,13 @@ final class WorkerForm
                             ->multiple()
                             ->searchable()
                             ->preload()
-                            ->label('Approved special services'),
+                            ->label(__('cleaning_admin.workers.fields.approved_special_services')),
                         Select::make('cleaningEquipmentAuthorizations')
                             ->relationship('cleaningEquipmentAuthorizations', 'name')
                             ->multiple()
                             ->searchable()
                             ->preload()
-                            ->label('Authorized equipment'),
+                            ->label(__('cleaning_admin.workers.fields.authorized_equipment')),
                     ])] : []),
             ]);
     }

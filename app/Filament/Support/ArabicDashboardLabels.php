@@ -107,7 +107,7 @@ final class ArabicDashboardLabels
     public static function permissionName(string $permission, ?string $slug = null): string
     {
         if (filled($slug)) {
-            return trim((string) $slug);
+            return mb_trim((string) $slug);
         }
 
         [$resource, $action] = self::permissionParts($permission);
@@ -117,7 +117,7 @@ final class ArabicDashboardLabels
             return $resourceLabel;
         }
 
-        return trim(self::permissionActionLabel($action).' '.$resourceLabel);
+        return mb_trim(self::permissionActionLabel($action).' '.$resourceLabel);
     }
 
     public static function permissionSectionName(string $permission, ?string $group = null): string
@@ -144,14 +144,14 @@ final class ArabicDashboardLabels
             || str_starts_with($permission, 'ro.')
             || str_starts_with($resource, 'restaurant')
         ) {
-            return 'قسم المطاعم';
+            return AdminNavigationGroup::restaurants();
         }
 
         if (
             str_starts_with($resource, 'delivery_')
             || str_starts_with($permission, 'delivery_')
         ) {
-            return 'التوصيل';
+            return AdminNavigationGroup::delivery();
         }
 
         if (
@@ -159,17 +159,17 @@ final class ArabicDashboardLabels
             || str_starts_with($resource, 'store_')
             || str_starts_with($resource, 'supermarket_')
         ) {
-            return 'قسم المتاجر';
+            return AdminNavigationGroup::supermarkets();
         }
 
         if (
             in_array($resource, self::CleaningPermissionResources, true)
             || str_starts_with($resource, 'cleaning_')
         ) {
-            return 'عمليات التنظيف';
+            return AdminNavigationGroup::cleaning();
         }
 
-        return 'الأقسام العامة';
+        return AdminNavigationGroup::general();
     }
 
     /**
@@ -178,11 +178,11 @@ final class ArabicDashboardLabels
     public static function permissionMainSectionOrder(): array
     {
         return [
-            'قسم المطاعم',
-            'قسم المتاجر',
-            'عمليات التنظيف',
-            'التوصيل',
-            'الأقسام العامة',
+            AdminNavigationGroup::delivery(),
+            AdminNavigationGroup::restaurants(),
+            AdminNavigationGroup::supermarkets(),
+            AdminNavigationGroup::cleaning(),
+            AdminNavigationGroup::general(),
         ];
     }
 
@@ -211,7 +211,7 @@ final class ArabicDashboardLabels
         }
 
         if (str_starts_with($permission, 'ro.')) {
-            return [self::normalizePermissionResource(substr($permission, 3)), null];
+            return [self::normalizePermissionResource(mb_substr($permission, 3)), null];
         }
 
         return [self::normalizePermissionResource($permission), null];
@@ -222,7 +222,7 @@ final class ArabicDashboardLabels
         $resource = str_replace('.', '_', $resource);
 
         if (str_starts_with($resource, 'sm_')) {
-            $resource = substr($resource, 3);
+            $resource = mb_substr($resource, 3);
         }
 
         return $resource;

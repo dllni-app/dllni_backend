@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\UserModuleType;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -12,11 +13,20 @@ use Modules\Resturants\Models\Restaurant;
 describe('Category Image Upload', function (): void {
     beforeEach(function (): void {
         Storage::fake('local');
-        Sanctum::actingAs(User::factory()->create());
+
+        $owner = User::factory()->create([
+            'module_type' => UserModuleType::RestaurantSeller->value,
+        ]);
+
+        $this->restaurant = Restaurant::factory()->create([
+            'user_id' => $owner->id,
+        ]);
+
+        Sanctum::actingAs($owner);
     });
 
     it('uploads image when creating a category', function (): void {
-        $restaurant = Restaurant::factory()->create();
+        $restaurant = $this->restaurant;
         $image = UploadedFile::fake()->image('category.jpg', 100, 100);
 
         $response = $this->postJson('/api/v1/categories', [
@@ -34,7 +44,7 @@ describe('Category Image Upload', function (): void {
     });
 
     it('uploads image when updating a category', function (): void {
-        $restaurant = Restaurant::factory()->create();
+        $restaurant = $this->restaurant;
         $category = Category::factory()->create(['restaurant_id' => $restaurant->id]);
 
         $image = UploadedFile::fake()->image('updated-category.jpg', 150, 150);
@@ -52,7 +62,7 @@ describe('Category Image Upload', function (): void {
     });
 
     it('validates image file type', function (): void {
-        $restaurant = Restaurant::factory()->create();
+        $restaurant = $this->restaurant;
         $invalidFile = UploadedFile::fake()->create('document.pdf', 100);
 
         $response = $this->postJson('/api/v1/categories', [
@@ -66,7 +76,7 @@ describe('Category Image Upload', function (): void {
     });
 
     it('validates image file size', function (): void {
-        $restaurant = Restaurant::factory()->create();
+        $restaurant = $this->restaurant;
         // Create a file larger than 2048KB
         $largeFile = UploadedFile::fake()->create('large.jpg', 3000);
 
@@ -81,7 +91,7 @@ describe('Category Image Upload', function (): void {
     });
 
     it('allows supported image formats', function (): void {
-        $restaurant = Restaurant::factory()->create();
+        $restaurant = $this->restaurant;
         $supportedFormats = ['jpeg', 'jpg', 'png', 'gif', 'webp'];
 
         foreach ($supportedFormats as $format) {
@@ -99,7 +109,7 @@ describe('Category Image Upload', function (): void {
     });
 
     it('returns image URL in category resource', function (): void {
-        $restaurant = Restaurant::factory()->create();
+        $restaurant = $this->restaurant;
         $category = Category::factory()->create(['restaurant_id' => $restaurant->id]);
 
         $image = UploadedFile::fake()->image('category.jpg', 100, 100);
@@ -115,7 +125,7 @@ describe('Category Image Upload', function (): void {
     });
 
     it('handles category without image gracefully', function (): void {
-        $restaurant = Restaurant::factory()->create();
+        $restaurant = $this->restaurant;
         $category = Category::factory()->create(['restaurant_id' => $restaurant->id]);
 
         $response = $this->getJson("/api/v1/categories/{$category->id}");
@@ -125,7 +135,7 @@ describe('Category Image Upload', function (): void {
     });
 
     it('updates only image without changing other fields', function (): void {
-        $restaurant = Restaurant::factory()->create();
+        $restaurant = $this->restaurant;
         $category = Category::factory()->create([
             'restaurant_id' => $restaurant->id,
             'name' => 'Original Name',
@@ -148,7 +158,7 @@ describe('Category Image Upload', function (): void {
     });
 
     it('replaces previous image when updating', function (): void {
-        $restaurant = Restaurant::factory()->create();
+        $restaurant = $this->restaurant;
         $category = Category::factory()->create(['restaurant_id' => $restaurant->id]);
 
         $firstImage = UploadedFile::fake()->image('first.jpg', 100, 100);

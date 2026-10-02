@@ -16,16 +16,20 @@ use Modules\Supermarket\Http\Resources\SmCouponResource;
 use Modules\Supermarket\Models\SmCoupon;
 use Modules\Supermarket\Models\SmOrder;
 use Modules\Supermarket\Services\SmCouponService;
+use Modules\Supermarket\Services\StoreOwnerContextService;
 
 final class SmCouponController
 {
     public function __construct(
-        private SmCouponService $service
+        private SmCouponService $service,
+        private StoreOwnerContextService $context,
     ) {}
 
     public function index(SmCouponFilterRequest $request): AnonymousResourceCollection
     {
-        $coupons = SmCoupon::getQuery()->paginate($request->get('perPage', 20));
+        $coupons = SmCoupon::getQuery()
+            ->where('store_id', $this->context->ownedStore()->id)
+            ->paginate($request->get('perPage', 20));
 
         return SmCouponResource::collection($coupons);
     }
@@ -39,11 +43,15 @@ final class SmCouponController
 
     public function show(SmCoupon $smCoupon): SmCouponResource
     {
+        $this->context->store((int) $smCoupon->store_id);
+
         return SmCouponResource::make($smCoupon->load('store'));
     }
 
     public function update(SmCouponRequest $request, SmCoupon $smCoupon): SmCouponResource
     {
+        $this->context->store((int) $smCoupon->store_id);
+
         $coupon = $this->service->update(SmCouponData::from($request->validated()), $smCoupon);
 
         return SmCouponResource::make($coupon->load('store'));
@@ -51,6 +59,7 @@ final class SmCouponController
 
     public function destroy(SmCoupon $smCoupon): Response
     {
+        $this->context->store((int) $smCoupon->store_id);
         $smCoupon->delete();
 
         return response()->noContent();
@@ -58,7 +67,7 @@ final class SmCouponController
 
     public function weeklyAnalysis(SmCouponWeeklyAnalysisRequest $request): JsonResponse
     {
-        $storeId = $request->integer('storeId');
+        $storeId = (int) $this->context->ownedStore()->id;
 
         $endDate = Carbon::now()->endOfDay();
         $startDate = Carbon::now()->subDays(6)->startOfDay();

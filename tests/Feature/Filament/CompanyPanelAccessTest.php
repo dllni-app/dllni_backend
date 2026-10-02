@@ -6,6 +6,8 @@ use App\Filament\Company\Pages\CompanyDashboard;
 use App\Filament\Company\Pages\DeliveryFinancialPage;
 use App\Filament\Company\Pages\DeliveryNotificationsPage;
 use App\Filament\Company\Pages\DeliveryReportsPage;
+use App\Filament\Company\Resources\DeliveryCompanySettings\DeliveryCompanySettingsResource;
+use App\Filament\Company\Resources\DeliveryCompanyStaff\DeliveryCompanyStaffResource;
 use App\Filament\Company\Resources\DeliveryDisputes\DeliveryDisputeResource;
 use App\Filament\Company\Resources\DeliveryDrivers\DeliveryDriverResource;
 use App\Filament\Company\Resources\DeliveryOrders\DeliveryOrderResource;
@@ -17,7 +19,10 @@ use Livewire\Livewire;
 use Modules\Delivery\Database\Seeders\DeliveryPermissionsSeeder;
 use Modules\Delivery\Jobs\DispatchDeliveryOrderJob;
 use Modules\Delivery\Models\DeliveryCompany;
+use Modules\Delivery\Models\DeliveryCompanyStaff;
 use Modules\Delivery\Models\DeliveryDriver;
+use Modules\Delivery\Models\DeliveryFinancialAccount;
+use Modules\Delivery\Models\DeliveryFinancialTransaction;
 use Modules\Delivery\Models\DeliveryOrder;
 use Modules\Delivery\Services\DeliveryOrderService;
 use Modules\Delivery\Services\DriverManagementService;
@@ -65,6 +70,12 @@ it('allows delivery company admin to access the company panel and order pages', 
         ->assertSuccessful();
 
     $this->get(DeliveryDriverResource::getUrl('index', panel: 'company'))
+        ->assertSuccessful();
+
+    $this->get(DeliveryCompanyStaffResource::getUrl('index', panel: 'company'))
+        ->assertSuccessful();
+
+    $this->get(DeliveryCompanySettingsResource::getUrl('index', panel: 'company'))
         ->assertSuccessful();
 
     $this->get(DeliveryFinancialPage::getUrl(panel: 'company'))
@@ -157,7 +168,7 @@ it('creates an order through the company create page using DeliveryOrderService'
         ->first();
 
     expect($order)->not->toBeNull()
-        ->and($order->status)->toBe('dispatching');
+        ->and($order->status)->toBe('searching_for_driver');
 
     Queue::assertPushed(DispatchDeliveryOrderJob::class);
 });
@@ -229,4 +240,119 @@ it('cancels a stopped order through DeliveryOrderService', function (): void {
     expect($cancelled->status)->toBe('cancelled')
         ->and($cancelled->cancel_reason)->toBe('Customer requested cancellation')
         ->and($cancelled->cancelled_at)->not->toBeNull();
+});
+
+it('rejects generic cancellation after pickup and keeps the driver busy', function (): void {
+    $company = DeliveryCompany::factory()->create();
+    $driver = DeliveryDriver::factory()->create([
+        'company_id' => $company->id,
+        'availability_status' => 'busy',
+    ]);
+    $order = DeliveryOrder::factory()->create([
+        'company_id' => $company->id,
+        'driver_id' => $driver->id,
+        'status' => 'picked_up',
+        'picked_up_at' => now(),
+    ]);
+
+    expect(fn () => app(DeliveryOrderService::class)->cancel($order, 'Customer unavailable'))
+        ->toThrow(InvalidArgumentException::class);
+
+    expect($order->fresh()->status)->toBe('picked_up')
+        ->and($driver->fresh()->availability_status)->toBe('busy');
+});
+
+it('prevents suspending or deactivating a driver with an active order', function (): void {
+    $company = DeliveryCompany::factory()->create();
+    $driver = DeliveryDriver::factory()->create(['company_id' => $company->id]);
+    DeliveryOrder::factory()->create([
+        'company_id' => $company->id,
+        'driver_id' => $driver->id,
+        'status' => 'accepted',
+    ]);
+
+    $service = app(DriverManagementService::class);
+
+    expect(fn () => $service->suspend($driver, 'manual review'))
+        ->toThrow(InvalidArgumentException::class);
+    expect(fn () => $service->deactivate($driver))
+        ->toThrow(InvalidArgumentException::class);
+
+    expect($driver->fresh()->is_suspended)->toBeFalse()
+        ->and($driver->fresh()->is_active)->toBeTrue();
+});
+
+it('denies company panel access to inactive company staff memberships', function (): void {
+    $company = DeliveryCompany::factory()->create();
+    $user = User::factory()->create();
+    $user->assignRole('delivery_company_staff');
+    DeliveryCompanyStaff::query()->create([
+        'company_id' => $company->id,
+        'user_id' => $user->id,
+        'role_key' => 'operations',
+        'is_active' => false,
+    ]);
+
+    expect($user->fresh()->canAccessPanel(filament()->getPanel('company')))->toBeFalse();
+});
+
+it('shows driver financial summary on the company driver details page', function (): void {
+    $company = DeliveryCompany::factory()->create();
+    $admin = createCompanyAdminUser($company);
+    $driver = DeliveryDriver::factory()->create(['company_id' => $company->id]);
+
+    DeliveryFinancialAccount::query()->create([
+        'owner_type' => DeliveryDriver::class,
+        'owner_id' => $driver->id,
+        'currency' => 'SYP',
+        'current_balance' => 12500,
+        'financial_limit' => 0,
+        'is_suspended' => false,
+    ]);
+
+    $this->actingAs($admin);
+
+    $this->get(DeliveryDriverResource::getUrl('view', ['record' => $driver], panel: 'company'))
+        ->assertSuccessful()
+        ->assertSee(__('delivery_company.drivers.sections.financial'))
+        ->assertSee(__('delivery_company.drivers.fields.financial_balance'))
+        ->assertSee('SYP');
+});
+
+it('paginates and exports company financial transactions using the active filters', function (): void {
+    $company = DeliveryCompany::factory()->create();
+    $admin = createCompanyAdminUser($company);
+    $account = app(FinancialLedgerService::class)->accountForCompany($company);
+
+    foreach (range(1, 30) as $index) {
+        DeliveryFinancialTransaction::query()->create([
+            'account_id' => $account->id,
+            'transaction_type' => 'manual_adjustment_debit',
+            'direction' => 'debit',
+            'amount' => 100 + $index,
+            'balance_before' => $index * 100,
+            'balance_after' => ($index * 100) + 100 + $index,
+            'note' => 'Test transaction '.$index,
+            'created_by_user_id' => $admin->id,
+            'created_at' => now()->subMinutes($index),
+            'updated_at' => now()->subMinutes($index),
+        ]);
+    }
+
+    $this->actingAs($admin);
+    Filament::setCurrentPanel('company');
+
+    $component = Livewire::test(DeliveryFinancialPage::class);
+
+    expect($component->instance()->transactions()->total())->toBe(30)
+        ->and(count($component->instance()->transactions()->items()))->toBe(25);
+
+    $component->set('perPage', 50);
+
+    expect($component->instance()->transactions()->total())->toBe(30)
+        ->and(count($component->instance()->transactions()->items()))->toBe(30);
+
+    $component
+        ->call('exportCsv')
+        ->assertFileDownloaded();
 });

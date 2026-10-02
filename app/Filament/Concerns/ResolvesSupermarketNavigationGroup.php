@@ -10,6 +10,6 @@ trait ResolvesSupermarketNavigationGroup
 {
     public static function getNavigationGroup(): string|UnitEnum|null
     {
-        return __('supermarket_admin.navigation.group');
+        return \App\Filament\Support\AdminNavigationGroup::supermarkets();
     }
 }

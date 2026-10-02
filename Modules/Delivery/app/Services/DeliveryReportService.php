@@ -38,6 +38,7 @@ final class DeliveryReportService
 
         $statusCounts = DeliveryOrder::query()
             ->where('company_id', $companyId)
+            ->where('created_at', '>=', $from)
             ->selectRaw('status, COUNT(*) as total')
             ->groupBy('status')
             ->pluck('total', 'status')
@@ -75,15 +76,18 @@ final class DeliveryReportService
 
         $orderIds = DeliveryOrder::query()
             ->where('company_id', $companyId)
+            ->where('created_at', '>=', $from)
             ->select('id');
 
         $disputesCount = Dispute::query()
             ->where('booking_type', 'delivery_order')
+            ->where('created_at', '>=', $from)
             ->whereIn('booking_id', $orderIds)
             ->count();
 
         $openDisputesCount = Dispute::query()
             ->where('booking_type', 'delivery_order')
+            ->where('created_at', '>=', $from)
             ->whereIn('booking_id', $orderIds)
             ->whereIn('status', ['open', 'under_review'])
             ->count();

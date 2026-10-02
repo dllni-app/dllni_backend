@@ -82,7 +82,8 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () use (
         Route::post('generate-image', [AppProductAiController::class, 'generateImage'])->name('sm-products.ai.generate-image');
     });
 
-    Route::apiResource('restaurants', RestaurantController::class);
+    Route::apiResource('restaurants', RestaurantController::class)
+        ->only(['index']);
 
     Route::apiResource('inventory-items', InventoryItemController::class)
         ->middleware($warehousePermission);
@@ -98,6 +99,7 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () use (
         ->middleware($ordersPermission)
         ->name('orders.invoice');
     Route::apiResource('orders', OrderController::class)
+        ->only(['index', 'show'])
         ->middleware($ordersPermission);
     Route::apiResource('offers', OfferController::class)
         ->middleware($offersPermission);

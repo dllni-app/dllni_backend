@@ -28,6 +28,9 @@ it('sends created lifecycle notifications with a customer target role when a cle
         'gender_preference' => 'any',
     ]);
 
+    Bus::assertDispatched(NotifyEligibleWorkersNewOrderJob::class);
+    Bus::assertNotDispatchedSync(NotifyEligibleWorkersNewOrderJob::class);
+
     Notification::assertSentTo(
         $customer,
         BookingLifecycleNotification::class,

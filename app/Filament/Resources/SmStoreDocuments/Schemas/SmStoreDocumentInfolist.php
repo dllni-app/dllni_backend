@@ -25,6 +25,7 @@ final class SmStoreDocumentInfolist
                             ->formatStateUsing(fn (?string $state) => $state ? __('supermarket_admin.enums.verification_status.'.$state) : '—')
                             ->badge(),
                         TextEntry::make('verified_at')->label(__('supermarket_admin.form.verified_at'))->dateTime('Y-m-d H:i')->placeholder('—'),
+                        TextEntry::make('expires_at')->label('تاريخ انتهاء الوثيقة')->dateTime('Y-m-d H:i')->placeholder('بدون انتهاء'),
                         TextEntry::make('rejection_reason')->label(__('supermarket_admin.form.rejection_reason'))->placeholder('—'),
                     ])
                     ->columns(2),

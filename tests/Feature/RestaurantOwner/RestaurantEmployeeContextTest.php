@@ -6,6 +6,7 @@ use App\Enums\UserModuleType;
 use App\Models\User;
 use Laravel\Sanctum\Sanctum;
 use Modules\Resturants\Models\Restaurant;
+use Spatie\Permission\Models\Permission;
 
 beforeEach(function () {
     $this->owner = User::factory()->create([
@@ -21,12 +22,18 @@ beforeEach(function () {
 });
 
 it('links a newly created employee to the restaurant context', function () {
+    $warehousePermission = Permission::query()->firstOrCreate([
+        'name' => 'ro.warehouse',
+        'guard_name' => 'web',
+    ]);
+
     $this->postJson('/api/v1/restaurant-owner/employees', [
         'name' => 'Inventory Employee',
         'email' => 'inventory.employee@example.com',
         'phone' => '+963944000222',
         'password' => 'password123',
         'isActive' => true,
+        'permissionIds' => [$warehousePermission->id],
     ])->assertCreated();
 
     $employee = User::query()

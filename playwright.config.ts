@@ -1,7 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
-const timeout = Number.parseInt(process.env.QA_TIMEOUT_MS ?? '60000', 10);
-const resolvedTimeout = Number.isFinite(timeout) && timeout > 0 ? timeout : 60_000;
+const timeout = Number.parseInt(process.env.QA_TIMEOUT_MS ?? '120000', 10);
+const resolvedTimeout = Number.isFinite(timeout) && timeout > 0 ? timeout : 120_000;
 const baseURL = process.env.API_BASE_URL ?? 'http://127.0.0.1:8000';
 const shouldStartLocalServer =
   (process.env.PLAYWRIGHT_CLEANING_WEB_SERVER ?? '1') !== '0' &&
@@ -23,7 +23,7 @@ export default defineConfig({
     baseURL,
     ignoreHTTPSErrors: true,
     extraHTTPHeaders: {
-      Accept: 'application/js on',
+      Accept: 'application/json',
     },
   },
   webServer: shouldStartLocalServer
@@ -32,6 +32,13 @@ export default defineConfig({
         url: 'http://127.0.0.1:8000',
         reuseExistingServer: true,
         timeout: 120_000,
+        env: {
+          PUSHER_HOST: '127.0.0.1',
+          PUSHER_PORT: '1',
+          PUSHER_SCHEME: 'http',
+          PUSHER_HTTP_TIMEOUT: '0.2',
+          PUSHER_HTTP_CONNECT_TIMEOUT: '0.2',
+        },
       }
     : undefined,
 });

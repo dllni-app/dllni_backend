@@ -10,6 +10,65 @@ use Throwable;
 
 final class SmSemanticProductSearchService
 {
+    public function batchSearch(array $queries): ?array
+    {
+        $baseUrl = (string) config('services.dallelni_search.products_base_url');
+        $authToken = (string) config('services.dallelni_search.auth_token');
+        $timeout = (int) config('services.dallelni_search.timeout', 10);
+
+        if ($queries === []) {
+            return [];
+        }
+        if ($baseUrl === '' || $authToken === '') {
+            return null;
+        }
+
+        try {
+            $response = Http::timeout($timeout)
+                ->acceptJson()
+                ->withHeaders(['auth-token' => $authToken])
+                ->post(mb_rtrim($baseUrl, '/').'/search/batch', ['queries' => $queries])
+                ->throw();
+
+            $rows = $response->json('results');
+            if (! is_array($rows)) {
+                return [];
+            }
+
+            $normalized = [];
+            foreach ($rows as $row) {
+                if (! is_array($row) || ! is_string($row['key'] ?? null)) {
+                    continue;
+                }
+
+                $items = [];
+                foreach (($row['results'] ?? []) as $item) {
+                    if (! is_array($item)) {
+                        continue;
+                    }
+                    $id = $item['product_id'] ?? $item['id'] ?? null;
+                    if (! is_numeric($id)) {
+                        continue;
+                    }
+                    $score = $item['score'] ?? null;
+                    $items[] = [
+                        'id' => (int) $id,
+                        'score' => is_numeric($score) ? (float) $score : null,
+                    ];
+                }
+                $normalized[$row['key']] = $items;
+            }
+
+            return $normalized;
+        } catch (Throwable $exception) {
+            Log::warning('Semantic product batch search request failed.', [
+                'message' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
     /**
      * @param  array<string, mixed>  $payload
      * @return array<int, array{id: int, score: float|null}>|null

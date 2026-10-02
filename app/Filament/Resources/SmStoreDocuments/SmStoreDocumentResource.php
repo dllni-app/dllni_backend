@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\SmStoreDocuments;
 
+use App\Filament\Concerns\AuthorizesPlatformAdminResource;
 use App\Filament\Concerns\ResolvesSupermarketNavigationGroup;
 use App\Filament\Resources\SmStoreDocuments\Pages\EditSmStoreDocument;
 use App\Filament\Resources\SmStoreDocuments\Pages\ListSmStoreDocuments;
@@ -16,10 +17,12 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use Modules\Supermarket\Models\SmStoreDocument;
 
 final class SmStoreDocumentResource extends Resource
 {
+    use AuthorizesPlatformAdminResource;
     use ResolvesSupermarketNavigationGroup;
 
     protected static ?string $model = SmStoreDocument::class;
@@ -28,13 +31,28 @@ final class SmStoreDocumentResource extends Resource
 
     protected static ?string $navigationLabel = null;
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 5;
 
     protected static bool $shouldRegisterNavigation = false;
+
+    public static function getNavigationGroup(): ?string
+    {
+        return \App\Filament\Support\AdminNavigationGroup::supermarkets();
+    }
 
     public static function getNavigationLabel(): string
     {
         return __('supermarket_admin.store_documents');
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('admin_resources.supermarket_document.singular');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('admin_resources.supermarket_document.plural');
     }
 
     public static function getNavigationTooltip(): ?string
@@ -57,17 +75,33 @@ final class SmStoreDocumentResource extends Resource
         return SmStoreDocumentsTable::configure($table);
     }
 
-    public static function getPages(): array
+    public static function canViewAny(): bool
     {
-        return [
-            'index' => ListSmStoreDocuments::route('/'),
-            'view' => ViewSmStoreDocument::route('/{record}'),
-            'edit' => EditSmStoreDocument::route('/{record}/edit'),
-        ];
+        return self::dashboardAllowed('supermarket_stores.view');
+    }
+
+    public static function canView(Model $record): bool
+    {
+        return self::dashboardAllowed('supermarket_stores.view');
     }
 
     public static function canCreate(): bool
     {
         return false;
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return self::dashboardAllowed('supermarket_stores.update');
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return false;
+    }
+
+    public static function getPages(): array
+    {
+        return ['index' => ListSmStoreDocuments::route('/'), 'view' => ViewSmStoreDocument::route('/{record}'), 'edit' => EditSmStoreDocument::route('/{record}/edit')];
     }
 }

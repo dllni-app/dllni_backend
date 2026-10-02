@@ -205,3 +205,58 @@ it('excludes unavailable products or inactive restaurants', function (): void {
     $response->assertOk();
     expect($response->json('latestOrderedProducts'))->toBeArray()->toBeEmpty();
 });
+
+
+it('returns products from the latest order only', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $restaurant = Restaurant::factory()->create(['is_active' => true]);
+
+    $olderProduct = Product::factory()->create([
+        'restaurant_id' => $restaurant->id,
+        'name' => 'Older dish',
+        'is_available' => true,
+    ]);
+    $latestProduct = Product::factory()->create([
+        'restaurant_id' => $restaurant->id,
+        'name' => 'Latest dish',
+        'is_available' => true,
+    ]);
+
+    $olderOrder = Order::factory()->create([
+        'user_id' => $user->id,
+        'restaurant_id' => $restaurant->id,
+        'status' => OrderStatus::Completed,
+        'created_at' => now()->subDay(),
+    ]);
+    OrderItem::create([
+        'order_id' => $olderOrder->id,
+        'product_id' => $olderProduct->id,
+        'quantity' => 1,
+        'unit_price' => 10,
+        'total_price' => 10,
+    ]);
+
+    $latestOrder = Order::factory()->create([
+        'user_id' => $user->id,
+        'restaurant_id' => $restaurant->id,
+        'status' => OrderStatus::Completed,
+        'created_at' => now(),
+    ]);
+    OrderItem::create([
+        'order_id' => $latestOrder->id,
+        'product_id' => $latestProduct->id,
+        'quantity' => 1,
+        'unit_price' => 12,
+        'total_price' => 12,
+    ]);
+
+    $response = $this->getJson('/api/v1/user/restaurants/home/latest-ordered-products');
+
+    $response->assertOk();
+    expect($response->json('latestOrderedProducts'))->toHaveCount(1);
+    $response->assertJsonPath('latestOrderedProducts.0.productId', $latestProduct->id);
+    expect(collect($response->json('latestOrderedProducts'))->pluck('productId'))
+        ->not->toContain($olderProduct->id);
+});

@@ -21,6 +21,9 @@ final class SmOrderItem extends Model
         'unit_price',
         'total_price',
         'product_name',
+        'modifier_snapshot',
+        'substitute_product_id',
+        'note',
     ];
 
     public function order(): BelongsTo
@@ -33,11 +36,18 @@ final class SmOrderItem extends Model
         return $this->belongsTo(SmProduct::class, 'product_id');
     }
 
+    public function substituteProduct(): BelongsTo
+    {
+        return $this->belongsTo(SmProduct::class, 'substitute_product_id');
+    }
+
     protected function casts(): array
     {
         return [
             'unit_price' => 'integer',
             'total_price' => 'integer',
+            'modifier_snapshot' => 'array',
+            'substitute_product_id' => 'integer',
         ];
     }
 }

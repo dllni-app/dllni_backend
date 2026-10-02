@@ -866,9 +866,9 @@ final class RestaurantSeeder extends Seeder
                         default => 5,
                     },
                     'comment' => match ($index) {
-                        0 => 'Great taste and fast pickup.',
-                        1 => 'Good value, will order again.',
-                        default => 'Loved the flavors!',
+                        0 => 'طعم ممتاز وتجهيز سريع للطلب.',
+                        1 => 'جودة جيدة مقابل السعر وسأطلب مرة أخرى.',
+                        default => 'النكهات رائعة جداً.',
                     },
                     'updated_at' => now(),
                     'created_at' => $order->created_at ?? now(),

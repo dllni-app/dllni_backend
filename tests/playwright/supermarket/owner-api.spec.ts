@@ -14,10 +14,13 @@ async function createPendingOrderViaUserFlow(
     },
   });
   expect([200, 201]).toContain(addResponse.status());
+  const addBody = await addResponse.json();
+  const cartId = Number(addBody?.data?.id);
+  expect(cartId).toBeGreaterThan(0);
 
-  const orderResponse = await roleRequests.user.post('/api/v1/user/supermarket/orders', {
+  const orderResponse = await roleRequests.user.post(`/api/v1/user/supermarket/carts/${cartId}/orders`, {
     data: {
-      fulfillmentType: 'delivery',
+      fulfillmentType: 'pickup',
       receiveMode: 'immediate',
       note: 'Owner flow pending order seed',
     },
@@ -72,7 +75,6 @@ test.describe('Supermarket Owner API (Playwright request contexts)', () => {
   });
 
   test('OWN-SM-06: owner can accept a pending order', async ({ roleRequests, seed }) => {
-    test.fail(true, 'Known backend regression: accept transition returns 400 for freshly pending orders in API mode.');
     const orderId = await createPendingOrderViaUserFlow(roleRequests, seed.fixtures.products.available);
 
     const acceptResponse = await roleRequests.store_owner.post(`/api/v1/store-owner/orders/${orderId}/accept`);
@@ -95,7 +97,6 @@ test.describe('Supermarket Owner API (Playwright request contexts)', () => {
   });
 
   test('OWN-SM-08: owner can reject a pending order with valid reason/type', async ({ roleRequests, seed }) => {
-    test.fail(true, 'Known backend regression: reject transition returns 400 for freshly pending orders in API mode.');
     const orderId = await createPendingOrderViaUserFlow(roleRequests, seed.fixtures.products.available);
 
     const rejectResponse = await roleRequests.store_owner.post(`/api/v1/store-owner/orders/${orderId}/reject`, {
@@ -125,15 +126,16 @@ test.describe('Supermarket Owner API (Playwright request contexts)', () => {
     expect(body?.errors?.reason?.[0]).toBeTruthy();
   });
 
-  test('OWN-SM-10: owner can hand over ready-for-pickup order to courier', async ({ roleRequests, seed }) => {
+  test('OWN-SM-10: owner can confirm handover to an assigned courier', async ({ roleRequests, seed }) => {
     const orderId = seed.fixtures.orders.ready_for_pickup;
 
     const response = await roleRequests.store_owner.post(`/api/v1/store-owner/orders/${orderId}/courier-handover`);
     expect(response.status()).toBe(200);
 
     const body = await response.json();
-    expect(body?.data?.status).toBe('picked_up');
-    expect(body?.data?.pickedUpAt).toBeTruthy();
+    expect(body?.data?.status).toBe('ready_for_pickup');
+    expect(body?.data?.storeHandoverConfirmedAt).toBeTruthy();
+    expect(body?.data?.pickedUpAt).toBeNull();
   });
 
   test('OWN-SM-11: handover rejects non-ready orders', async ({ roleRequests, seed }) => {

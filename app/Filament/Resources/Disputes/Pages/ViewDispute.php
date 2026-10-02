@@ -113,7 +113,7 @@ final class ViewDispute extends ViewRecord
                     } catch (Throwable $exception) {
                         Notification::make()
                             ->title(__('dispute_finance.action.error_title'))
-                            ->body($exception->getMessage())
+                            ->body(\App\Filament\Support\AdminExceptionMessage::forUser($exception))
                             ->danger()
                             ->send();
                     }

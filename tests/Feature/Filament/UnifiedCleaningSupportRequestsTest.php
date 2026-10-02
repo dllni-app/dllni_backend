@@ -8,14 +8,16 @@ use App\Enums\UserModuleType;
 use App\Filament\Resources\Disputes\DisputeResource;
 use App\Filament\Resources\SosAlerts\SosAlertResource;
 use App\Filament\Resources\SosAlerts\Tables\SosAlertsTable;
+use App\Filament\Resources\SupportCases\SupportCaseResource;
 use App\Models\SosAlert;
 use App\Models\User;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Supermarket\Models\SmOrder;
 
-it('registers one cleaning support interface in the dashboard navigation', function (): void {
-    expect(SosAlertResource::shouldRegisterNavigation())->toBeTrue()
-        ->and(SosAlertResource::getNavigationLabel())->toBe('النزاعات والشكاوى')
-        ->and(DisputeResource::shouldRegisterNavigation())->toBeFalse();
+it('keeps legacy cleaning support resources out of navigation in favor of the unified support interface', function (): void {
+    expect(SosAlertResource::shouldRegisterNavigation())->toBeFalse()
+        ->and(DisputeResource::shouldRegisterNavigation())->toBeFalse()
+        ->and(SupportCaseResource::getNavigationLabel())->toBe('البلاغات والنزاعات');
 });
 
 it('shows cleaning requests from users and cleaning workers in one interface', function (): void {
@@ -47,10 +49,11 @@ it('shows cleaning requests from users and cleaning workers in one interface', f
         'triggered_at' => now(),
     ]);
 
+    $otherBooking = SmOrder::factory()->create(['customer_id' => $customer->id]);
     $otherModuleRequest = SosAlert::query()->create([
         'user_id' => $customer->id,
-        'booking_id' => 999999,
-        'booking_type' => 'other_module',
+        'booking_id' => $otherBooking->id,
+        'booking_type' => SmOrder::class,
         'emergency_type' => EmergencyType::SevereConflict->value,
         'message' => 'Request outside the cleaning apps.',
         'source' => 'booking',

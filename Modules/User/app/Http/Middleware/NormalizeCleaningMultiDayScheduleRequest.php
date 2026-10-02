@@ -48,45 +48,54 @@ final class NormalizeCleaningMultiDayScheduleRequest
             'hours' => round((float) $session['hours'], 2),
         ], (array) data_get($validated, 'schedule.sessions', []));
 
-        usort($sessions, static fn (array $a, array $b): int => strcmp($a['date'].' '.$a['time'], $b['date'].' '.$b['time']));
-
+        // Validate against the original client order so error keys keep pointing
+        // at the submitted session index. Aggregate related schedule errors before
+        // canonical sorting instead of failing on the first issue only.
+        $validationErrors = [];
         $slots = [];
         foreach ($sessions as $index => $session) {
             $key = $session['date'].' '.$session['time'];
             if (isset($slots[$key])) {
-                throw ValidationException::withMessages([
-                    "schedule.sessions.{$index}.time" => ['Duplicate event session date/time is not allowed.'],
-                ]);
+                $validationErrors["schedule.sessions.{$index}.time"] = ['Duplicate event session date/time is not allowed.'];
+
+                continue;
             }
             $slots[$key] = true;
         }
 
         $mode = (string) data_get($validated, 'schedule.mode', count($sessions) > 1 ? 'multi_day' : 'single_day');
         if ($mode === 'single_day' && count($sessions) !== 1) {
-            throw ValidationException::withMessages([
-                'schedule.mode' => ['single_day schedule must contain exactly one session.'],
-            ]);
+            $validationErrors['schedule.mode'] = ['single_day schedule must contain exactly one session.'];
         }
         if ($mode === 'multi_day' && count($sessions) < 2) {
-            throw ValidationException::withMessages([
-                'schedule.mode' => ['multi_day schedule must contain at least two sessions.'],
-            ]);
+            $validationErrors['schedule.mode'] = ['multi_day schedule must contain at least two sessions.'];
         }
 
-        $first = $sessions[0];
-        $propertyDetails = $request->input('propertyDetails', []);
-        $propertyDetails = is_array($propertyDetails) ? $propertyDetails : [];
-        // Keep the legacy propertyDetails.hours value within the existing one-day
-        // validation contract. The canonical aggregate duration is derived from
-        // schedule.sessions and persisted after the booking is created/updated.
-        $propertyDetails['hours'] = $first['hours'];
+        if ($validationErrors !== []) {
+            throw ValidationException::withMessages($validationErrors);
+        }
 
-        $request->merge([
+        usort($sessions, static fn (array $a, array $b): int => strcmp($a['date'].' '.$a['time'], $b['date'].' '.$b['time']));
+
+        $first = $sessions[0];
+        $merge = [
             'schedule' => ['mode' => $mode, 'sessions' => $sessions],
             'scheduledDate' => $first['date'],
             'scheduledTime' => $first['time'],
-            'propertyDetails' => $propertyDetails,
-        ]);
+        ];
+
+        // Store/estimate requests still need the legacy one-day hours field.
+        // PATCH requests must stay partial: injecting propertyDetails.hours here
+        // makes UserCleaningOrderUpdateRequest treat a schedule-only edit as a
+        // full event-details replacement and incorrectly require every event field.
+        if (! $request->isMethod('PATCH')) {
+            $propertyDetails = $request->input('propertyDetails', []);
+            $propertyDetails = is_array($propertyDetails) ? $propertyDetails : [];
+            $propertyDetails['hours'] = $first['hours'];
+            $merge['propertyDetails'] = $propertyDetails;
+        }
+
+        $request->merge($merge);
 
         return $next($request);
     }

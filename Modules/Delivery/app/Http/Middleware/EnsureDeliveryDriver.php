@@ -28,6 +28,18 @@ final class EnsureDeliveryDriver
             abort(Response::HTTP_FORBIDDEN);
         }
 
+        if (! $driver->is_active || $driver->is_suspended) {
+            return response()->json([
+                'message' => 'This delivery driver account is inactive or suspended.',
+            ], Response::HTTP_FORBIDDEN);
+        }
+
+        if (! $driver->company?->is_active || $driver->company?->is_suspended) {
+            return response()->json([
+                'message' => 'This delivery company is inactive or suspended.',
+            ], Response::HTTP_FORBIDDEN);
+        }
+
         $request->attributes->set('deliveryDriver', $driver);
 
         return $next($request);

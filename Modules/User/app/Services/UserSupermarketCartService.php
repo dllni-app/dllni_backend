@@ -10,6 +10,7 @@ use Illuminate\Validation\ValidationException;
 use Modules\Supermarket\Models\SmCart;
 use Modules\Supermarket\Models\SmCartItem;
 use Modules\Supermarket\Models\SmProduct;
+use Modules\Supermarket\Models\SmModifier;
 use Modules\Supermarket\Models\SmStore;
 
 final class UserSupermarketCartService
@@ -97,10 +98,16 @@ final class UserSupermarketCartService
     /**
      * @return array<string, mixed>
      */
-    public function addItem(int $userId, int $productId, int $quantity): array
-    {
-        return DB::transaction(function () use ($userId, $productId, $quantity): array {
-            $product = SmProduct::query()->findOrFail($productId);
+    public function addItem(
+        int $userId,
+        int $productId,
+        int $quantity,
+        array $modifierIds = [],
+        ?int $substituteProductId = null,
+        ?string $note = null,
+    ): array {
+        return DB::transaction(function () use ($userId, $productId, $quantity, $modifierIds, $substituteProductId, $note): array {
+            $product = SmProduct::query()->with(['modifierGroups.modifiers'])->findOrFail($productId);
 
             if (! $product->store_id) {
                 throw ValidationException::withMessages([
@@ -114,19 +121,44 @@ final class UserSupermarketCartService
                 ]);
             }
 
-            $cart = $this->normalizeCart($this->resolveStoreCart($userId, (int) $product->store_id));
-            $unitPrice = (float) ($product->discounted_price ?? $product->price ?? 0);
+            $normalizedModifierIds = array_values(array_unique(array_map('intval', $modifierIds)));
+            sort($normalizedModifierIds);
+            $normalizedNote = is_string($note) && trim($note) !== '' ? trim($note) : null;
+            $modifierTotal = $this->validateAndPriceModifiers($product, $normalizedModifierIds);
+            $this->validateSubstituteProduct($product, $substituteProductId);
 
-            $item = SmCartItem::query()
+            $cart = $this->normalizeCart($this->resolveStoreCart($userId, (int) $product->store_id));
+            $unitPrice = (float) ($product->discounted_price ?? $product->price ?? 0) + $modifierTotal;
+
+            $productItems = SmCartItem::query()
                 ->where('cart_id', $cart->id)
                 ->where('product_id', $product->id)
                 ->lockForUpdate()
-                ->first();
+                ->get();
+            $currentProductQuantity = (int) $productItems->sum('quantity');
+            if ($product->stock_quantity !== null &&
+                $currentProductQuantity + $quantity > (int) $product->stock_quantity) {
+                throw ValidationException::withMessages([
+                    'quantity' => ['الكمية المطلوبة تتجاوز المخزون المتاح حالياً.'],
+                ]);
+            }
+
+            $item = $productItems->first(function (SmCartItem $candidate) use ($normalizedModifierIds, $substituteProductId, $normalizedNote): bool {
+                $candidateModifierIds = array_values(array_map('intval', $candidate->modifier_ids ?? []));
+                sort($candidateModifierIds);
+
+                return $candidateModifierIds === $normalizedModifierIds
+                    && (int) ($candidate->substitute_product_id ?? 0) === (int) ($substituteProductId ?? 0)
+                    && ($candidate->note ?: null) === $normalizedNote;
+            });
 
             if ($item) {
                 $item->update([
                     'quantity' => (int) $item->quantity + $quantity,
                     'unit_price' => $unitPrice,
+                    'modifier_ids' => $normalizedModifierIds,
+                    'substitute_product_id' => $substituteProductId,
+                    'note' => $normalizedNote,
                 ]);
             } else {
                 $item = SmCartItem::create([
@@ -134,6 +166,9 @@ final class UserSupermarketCartService
                     'product_id' => $product->id,
                     'quantity' => $quantity,
                     'unit_price' => $unitPrice,
+                    'modifier_ids' => $normalizedModifierIds,
+                    'substitute_product_id' => $substituteProductId,
+                    'note' => $normalizedNote,
                 ]);
             }
 
@@ -222,11 +257,34 @@ final class UserSupermarketCartService
                 ->whereKey($itemId)
                 ->where('cart_id', $cartId)
                 ->whereHas('cart', fn ($q) => $q->where('user_id', $userId))
-                ->with(['product', 'cart.store'])
+                ->with(['product.modifierGroups.modifiers', 'cart.store'])
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $unitPrice = (float) ($item->product->discounted_price ?? $item->product->price ?? 0);
+            $product = $item->product;
+            if (! $product || ! $product->is_available) {
+                throw ValidationException::withMessages([
+                    'productId' => ['The selected product is not available.'],
+                ]);
+            }
+
+            $otherQuantity = (int) SmCartItem::query()
+                ->where('cart_id', $cartId)
+                ->where('product_id', $product->id)
+                ->where('id', '!=', $itemId)
+                ->sum('quantity');
+            if ($product->stock_quantity !== null &&
+                $otherQuantity + $quantity > (int) $product->stock_quantity) {
+                throw ValidationException::withMessages([
+                    'quantity' => ['الكمية المطلوبة تتجاوز المخزون المتاح حالياً.'],
+                ]);
+            }
+
+            $modifierIds = array_values(array_unique(array_map('intval', $item->modifier_ids ?? [])));
+            sort($modifierIds);
+            $modifierTotal = $this->validateAndPriceModifiers($product, $modifierIds);
+            $this->validateSubstituteProduct($product, $item->substitute_product_id);
+            $unitPrice = (float) ($product->discounted_price ?? $product->price ?? 0) + $modifierTotal;
             $item->update([
                 'quantity' => $quantity,
                 'unit_price' => $unitPrice,
@@ -340,11 +398,12 @@ final class UserSupermarketCartService
                 ->lockForUpdate()
                 ->get();
 
-            foreach ($items->groupBy('product_id') as $productId => $group) {
+            foreach ($items->groupBy(fn (SmCartItem $item): string => $this->cartItemSignature($item)) as $group) {
                 /** @var SmCartItem $keeper */
                 $keeper = $group->first();
                 $mergedQuantity = (int) $group->sum(fn (SmCartItem $item): int => max(1, (int) $item->quantity));
-                $unitPrice = (float) ($keeper->product?->discounted_price ?? $keeper->product?->price ?? $keeper->unit_price ?? 0);
+                $basePrice = (float) ($keeper->product?->discounted_price ?? $keeper->product?->price ?? $keeper->unit_price ?? 0);
+                $unitPrice = $basePrice + $this->modifierTotalForItem($keeper);
 
                 foreach ($group->slice(1) as $item) {
                     $item->delete();
@@ -362,11 +421,16 @@ final class UserSupermarketCartService
 
     private function moveOrMergeItem(SmCartItem $item, SmCart $targetCart): void
     {
+        $signature = $this->cartItemSignature($item);
         $existing = SmCartItem::query()
             ->where('cart_id', $targetCart->id)
             ->where('product_id', $item->product_id)
             ->lockForUpdate()
-            ->first();
+            ->get()
+            ->first(
+                fn (SmCartItem $candidate): bool =>
+                    $this->cartItemSignature($candidate) === $signature
+            );
 
         if ($existing !== null) {
             $existing->update([
@@ -379,6 +443,33 @@ final class UserSupermarketCartService
         }
 
         $item->update(['cart_id' => $targetCart->id]);
+    }
+
+    private function cartItemSignature(SmCartItem $item): string
+    {
+        $modifierIds = array_values(array_unique(array_map('intval', $item->modifier_ids ?? [])));
+        sort($modifierIds);
+
+        return implode('|', [
+            (string) $item->product_id,
+            json_encode($modifierIds, JSON_THROW_ON_ERROR),
+            (string) ($item->substitute_product_id ?? 0),
+            trim((string) ($item->note ?? '')),
+        ]);
+    }
+
+    private function modifierTotalForItem(SmCartItem $item): float
+    {
+        $modifierIds = array_values(array_unique(array_map('intval', $item->modifier_ids ?? [])));
+        if ($modifierIds === [] || ! $item->product) {
+            return 0.0;
+        }
+
+        return (float) $item->product->modifierGroups
+            ->flatMap(fn ($group) => $group->modifiers)
+            ->where('is_available', true)
+            ->whereIn('id', $modifierIds)
+            ->sum('price');
     }
 
     /**
@@ -398,6 +489,7 @@ final class UserSupermarketCartService
             'productsCount' => 0,
             'amounts' => [
                 'subtotal' => 0.0,
+                'discount' => 0.0,
                 'total' => 0.0,
             ],
         ];
@@ -418,6 +510,12 @@ final class UserSupermarketCartService
 
         $mappedItems = $items->map(fn (SmCartItem $item): array => $this->itemPayload($item))->values();
         $subtotal = (float) $mappedItems->sum('totalPrice');
+        $discount = (float) $mappedItems->sum(
+            fn (array $item): float => max(
+                0.0,
+                (float) ($item['originalTotalPrice'] ?? $item['totalPrice']) - (float) $item['totalPrice'],
+            ),
+        );
         $store = $cart->relationLoaded('store') ? $cart->store : null;
 
         if ($store === null) {
@@ -439,6 +537,7 @@ final class UserSupermarketCartService
             'productsCount' => (int) $mappedItems->sum('quantity'),
             'amounts' => [
                 'subtotal' => round($subtotal, 2),
+                'discount' => round($discount, 2),
                 'total' => round($subtotal, 2),
             ],
         ];
@@ -453,6 +552,14 @@ final class UserSupermarketCartService
         $productImages = $this->productImages($product);
         $options = $this->productOptionsPayload($product);
         $merchant = $this->merchantPayload($product?->store, $product?->store_id !== null ? (int) $product->store_id : null);
+        $quantity = (int) $item->quantity;
+        $unitPrice = (float) ($item->unit_price ?? 0);
+        $finalProductPrice = (float) ($product?->discounted_price ?? $product?->price ?? $unitPrice);
+        $originalProductPrice = (float) ($product?->price ?? $finalProductPrice);
+        $modifierAmount = max(0.0, $unitPrice - $finalProductPrice);
+        $originalUnitPrice = $originalProductPrice + $modifierAmount;
+        $totalPrice = round($unitPrice * $quantity, 2);
+        $originalTotalPrice = round($originalUnitPrice * $quantity, 2);
 
         return [
             'id' => $item->id,
@@ -465,11 +572,25 @@ final class UserSupermarketCartService
             'primaryImage' => $productImages['primaryImageUrl'],
             'images' => $productImages['imageUrls'],
             'imageUrls' => $productImages['imageUrls'],
-            'quantity' => (int) $item->quantity,
-            'unitPrice' => (float) ($item->unit_price ?? 0),
-            'totalPrice' => round((float) ($item->unit_price ?? 0) * (int) $item->quantity, 2),
-            'modifierIds' => [],
-            'modifiers' => [],
+            'quantity' => $quantity,
+            'unitPrice' => $unitPrice,
+            'totalPrice' => $totalPrice,
+            'originalUnitPrice' => round($originalUnitPrice, 2),
+            'originalTotalPrice' => $originalTotalPrice,
+            'productPrice' => round($finalProductPrice, 2),
+            'originalProductPrice' => round($originalProductPrice, 2),
+            'hasDiscount' => $originalUnitPrice > $unitPrice,
+            'modifierIds' => $item->modifier_ids ?? [],
+            'modifiers' => SmModifier::query()
+                ->whereIn('id', $item->modifier_ids ?? [])
+                ->get()
+                ->map(fn (SmModifier $modifier): array => [
+                    'id' => $modifier->id,
+                    'name' => $modifier->name,
+                    'price' => (float) $modifier->price,
+                ])->values()->all(),
+            'substituteProductId' => $item->substitute_product_id,
+            'note' => $item->note,
             'additions' => $options,
             'options' => $options,
             'modifierGroups' => $options,
@@ -599,6 +720,62 @@ final class UserSupermarketCartService
     /**
      * @return array<int, array<string, mixed>>
      */
+    private function validateAndPriceModifiers(SmProduct $product, array $modifierIds): float
+    {
+        $selected = collect($modifierIds);
+        $price = 0.0;
+
+        foreach ($product->modifierGroups as $group) {
+            if (! $group->is_active) {
+                continue;
+            }
+            $available = $group->modifiers->where('is_available', true);
+            $selectedForGroup = $available->whereIn('id', $selected)->values();
+            $count = $selectedForGroup->count();
+            $min = max(0, (int) $group->min_selections);
+            $max = max($min, (int) $group->max_selections);
+
+            if ($group->is_required && $count < max(1, $min)) {
+                throw ValidationException::withMessages([
+                    'modifierIds' => ["يرجى اختيار الخيارات المطلوبة لمجموعة {$group->name}."],
+                ]);
+            }
+            if ($count < $min || ($max > 0 && $count > $max)) {
+                throw ValidationException::withMessages([
+                    'modifierIds' => ["عدد الخيارات المحدد لمجموعة {$group->name} غير صالح."],
+                ]);
+            }
+            $price += (float) $selectedForGroup->sum('price');
+        }
+
+        $allowedIds = $product->modifierGroups
+            ->flatMap(fn ($group) => $group->modifiers->where('is_available', true)->pluck('id'))
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        if (array_diff($modifierIds, $allowedIds) !== []) {
+            throw ValidationException::withMessages([
+                'modifierIds' => ['أحد الخيارات المحددة غير متاح لهذا المنتج.'],
+            ]);
+        }
+
+        return $price;
+    }
+
+    private function validateSubstituteProduct(SmProduct $product, ?int $substituteProductId): void
+    {
+        if ($substituteProductId === null) {
+            return;
+        }
+
+        $substitute = SmProduct::query()->find($substituteProductId);
+        if (! $substitute || ! $substitute->is_available || (int) $substitute->store_id !== (int) $product->store_id) {
+            throw ValidationException::withMessages([
+                'substituteProductId' => ['المنتج البديل المحدد غير متاح من نفس المتجر.'],
+            ]);
+        }
+    }
+
     private function productOptionsPayload(?SmProduct $product): array
     {
         if ($product === null || ! $product->relationLoaded('modifierGroups')) {

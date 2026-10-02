@@ -28,90 +28,108 @@ final class CleaningSpecialServiceResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSparkles;
 
-    protected static ?int $navigationSort = 23;
+    protected static ?int $navigationSort = 12;
 
     public static function getNavigationGroup(): ?string
     {
-        return __('cleaning_admin.nav_groups.operations');
+        return \App\Filament\Support\AdminNavigationGroup::cleaning();
     }
 
     public static function getNavigationLabel(): string
     {
-        return 'Special Cleaning Services';
+        return __('cleaning_special_services.navigation');
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('cleaning_special_services.model');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('cleaning_special_services.navigation');
     }
 
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('name')->required()->maxLength(255),
+            TextInput::make('name')->label(__('cleaning_special_services.fields.name'))->required()->maxLength(255),
             Select::make('cleaning_special_service_category_id')
-                ->label('Category')
+                ->label(__('cleaning_special_services.fields.category'))
                 ->relationship('category', 'name')
                 ->searchable()
                 ->preload(),
-            TextInput::make('description')->columnSpanFull(),
+            TextInput::make('description')->label(__('cleaning_special_services.fields.description'))->columnSpanFull(),
             FileUpload::make('image_path')
-                ->label(app()->isLocale('ar') ? 'صورة الخدمة' : 'Service Image')
+                ->label(__('cleaning_special_services.fields.image'))
                 ->disk('public')
                 ->directory('cleaning-special-services')
                 ->image()
                 ->imageEditor()
                 ->maxSize(5120)
-                ->helperText(app()->isLocale('ar')
-                    ? 'ارفع صورة واضحة للخدمة لا يتجاوز حجمها 5 ميغابايت.'
-                    : 'Upload a clear service image up to 5 MB.'),
+                ->helperText(__('cleaning_special_services.fields.image_help')),
             TextInput::make('image_url')
-                ->label(app()->isLocale('ar') ? 'رابط صورة خارجي احتياطي' : 'Fallback External Image URL')
+                ->label(__('cleaning_special_services.fields.fallback_image_url'))
                 ->url()
                 ->maxLength(2048)
-                ->helperText(app()->isLocale('ar')
-                    ? 'اختياري للتوافق مع الصور القديمة. الصورة المرفوعة لها الأولوية.'
-                    : 'Optional legacy fallback. An uploaded image takes precedence.'),
-            Select::make('pricing_unit')->required()->options([
-                'piece' => 'Piece',
-                'sqm' => 'Square meter',
-                'linear_meter' => 'Linear meter',
-                'device' => 'Device',
-                'sofa' => 'Sofa',
-                'chair' => 'Chair',
-                'carpet' => 'Carpet',
-                'solar_panel' => 'Solar panel',
+                ->helperText(__('cleaning_special_services.fields.fallback_image_help')),
+            Select::make('pricing_unit')->label(__('cleaning_special_services.fields.pricing_unit'))->required()->options([
+                'piece' => __('cleaning_special_services.pricing_units.piece'),
+                'sqm' => __('cleaning_special_services.pricing_units.sqm'),
+                'linear_meter' => __('cleaning_special_services.pricing_units.linear_meter'),
+                'device' => __('cleaning_special_services.pricing_units.device'),
+                'sofa' => __('cleaning_special_services.pricing_units.sofa'),
+                'chair' => __('cleaning_special_services.pricing_units.chair'),
+                'carpet' => __('cleaning_special_services.pricing_units.carpet'),
+                'solar_panel' => __('cleaning_special_services.pricing_units.solar_panel'),
             ]),
-            Select::make('input_type')->required()->options([
-                'quantity' => 'Quantity',
-                'decimal' => 'Decimal measurement',
-                'area' => 'Area',
-                'length' => 'Length',
+            Select::make('input_type')->label(__('cleaning_special_services.fields.input_type'))->required()->options([
+                'quantity' => __('cleaning_special_services.input_types.quantity'),
+                'decimal' => __('cleaning_special_services.input_types.decimal'),
+                'area' => __('cleaning_special_services.input_types.area'),
+                'length' => __('cleaning_special_services.input_types.length'),
             ])->default('quantity'),
-            TextInput::make('unit_code')->maxLength(32),
-            TextInput::make('base_unit_price')->numeric()->minValue(0)->required(),
-            Toggle::make('supports_dirtiness')->default(true),
+            TextInput::make('unit_code')->label(__('cleaning_special_services.fields.unit_code'))->maxLength(32),
+            TextInput::make('base_unit_price')->label(__('cleaning_special_services.fields.base_unit_price'))->numeric()->minValue(0)->required(),
+            Toggle::make('supports_dirtiness')->label(__('cleaning_special_services.fields.supports_dirtiness'))->default(true),
             Select::make('dirtinessLevels')
                 ->relationship('dirtinessLevels', 'name')
                 ->multiple()
                 ->searchable()
                 ->preload()
-                ->label('Allowed dirtiness levels'),
-            Select::make('gender_constraint')->options([
-                'male' => 'Male worker',
-                'female' => 'Female worker',
+                ->label(__('cleaning_special_services.fields.dirtiness_levels')),
+            Select::make('gender_constraint')->label(__('cleaning_special_services.fields.gender_constraint'))->options([
+                'male' => __('cleaning_special_services.gender_constraints.male'),
+                'female' => __('cleaning_special_services.gender_constraints.female'),
             ])->nullable(),
-            TextInput::make('estimated_duration_minutes')->numeric()->minValue(1)->required()->default(60)->suffix('min'),
-            Select::make('worker_pay_mode')->required()->options(['flat'=>'Flat','percentage'=>'Percentage','per_unit'=>'Per unit'])->default('percentage'),
-            TextInput::make('worker_pay_value')->numeric()->minValue(0)->required()->default(0),
-            Select::make('operating_cost_mode')->required()->options(['flat'=>'Flat','percentage'=>'Percentage','per_unit'=>'Per unit'])->default('flat'),
-            TextInput::make('operating_cost_value')->numeric()->minValue(0)->required()->default(0),
-            Select::make('travel_fee_mode')->required()->options(['flat'=>'Flat','percentage'=>'Percentage','per_km'=>'Per km'])->default('flat'),
-            TextInput::make('travel_fee_value')->numeric()->minValue(0)->required()->default(0),
-            Toggle::make('requires_before_image')->label('Require before image')->default(false),
-            Toggle::make('requires_after_image')->label('Require after image')->default(false),
-            Toggle::make('is_active')->default(true),
+            TextInput::make('estimated_duration_minutes')->label(__('cleaning_special_services.fields.duration'))->numeric()->minValue(1)->required()->default(60)->suffix(__('cleaning_special_services.fields.duration_short')),
+            Select::make('worker_pay_mode')->label(__('cleaning_special_services.fields.worker_pay_mode'))->required()->options([
+                'flat' => __('cleaning_special_services.pay_modes.flat'),
+                'percentage' => __('cleaning_special_services.pay_modes.percentage'),
+                'per_unit' => __('cleaning_special_services.pay_modes.per_unit'),
+            ])->default('percentage'),
+            TextInput::make('worker_pay_value')->label(__('cleaning_special_services.fields.worker_pay_value'))->numeric()->minValue(0)->required()->default(0),
+            Select::make('operating_cost_mode')->label(__('cleaning_special_services.fields.operating_cost_mode'))->required()->options([
+                'flat' => __('cleaning_special_services.pay_modes.flat'),
+                'percentage' => __('cleaning_special_services.pay_modes.percentage'),
+                'per_unit' => __('cleaning_special_services.pay_modes.per_unit'),
+            ])->default('flat'),
+            TextInput::make('operating_cost_value')->label(__('cleaning_special_services.fields.operating_cost_value'))->numeric()->minValue(0)->required()->default(0),
+            Select::make('travel_fee_mode')->label(__('cleaning_special_services.fields.travel_fee_mode'))->required()->options([
+                'flat' => __('cleaning_special_services.pay_modes.flat'),
+                'percentage' => __('cleaning_special_services.pay_modes.percentage'),
+                'per_km' => __('cleaning_special_services.pay_modes.per_km'),
+            ])->default('flat'),
+            TextInput::make('travel_fee_value')->label(__('cleaning_special_services.fields.travel_fee_value'))->numeric()->minValue(0)->required()->default(0),
+            Toggle::make('requires_before_image')->label(__('cleaning_special_services.fields.requires_before_image'))->default(false),
+            Toggle::make('requires_after_image')->label(__('cleaning_special_services.fields.requires_after_image'))->default(false),
+            Toggle::make('is_active')->label(__('cleaning_special_services.fields.is_active'))->default(true),
             Select::make('equipment')
                 ->relationship('equipment', 'name')
                 ->multiple()
                 ->searchable()
                 ->preload()
-                ->label('Required Equipment'),
+                ->label(__('cleaning_special_services.fields.equipment')),
         ])->columns(2);
     }
 
@@ -119,19 +137,19 @@ final class CleaningSpecialServiceResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('name')->searchable()->sortable(),
-                TextColumn::make('pricing_unit')->badge()->sortable(),
-                TextColumn::make('category.name')->label('Category')->placeholder('—')->sortable(),
-                TextColumn::make('estimated_duration_minutes')->label('Duration')->suffix(' min')->sortable(),
-                TextColumn::make('base_unit_price')->money(config('app.currency', 'SYP'))->sortable(),
+                TextColumn::make('name')->label(__('cleaning_special_services.fields.name'))->searchable()->sortable(),
+                TextColumn::make('pricing_unit')->label(__('cleaning_special_services.fields.pricing_unit'))->badge()->formatStateUsing(fn (string $state): string => __('cleaning_special_services.pricing_units.'.$state))->sortable(),
+                TextColumn::make('category.name')->label(__('cleaning_special_services.fields.category'))->placeholder('—')->sortable(),
+                TextColumn::make('estimated_duration_minutes')->label(__('cleaning_special_services.fields.duration'))->suffix(' '.__('cleaning_special_services.fields.duration_short'))->sortable(),
+                TextColumn::make('base_unit_price')->label(__('cleaning_special_services.fields.base_unit_price'))->money(config('app.currency', 'SYP'))->sortable(),
                 TextColumn::make('equipment.name')
-                    ->label('Equipment')
+                    ->label(__('cleaning_special_services.fields.equipment'))
                     ->listWithLineBreaks()
                     ->limitList(3)
                     ->toggleable(),
-                IconColumn::make('is_active')->boolean(),
+                IconColumn::make('is_active')->label(__('cleaning_special_services.fields.is_active'))->boolean(),
             ])
-            ->filters([TernaryFilter::make('is_active')])
+            ->filters([TernaryFilter::make('is_active')->label(__('cleaning_special_services.fields.is_active'))])
             ->defaultSort('name');
     }
 

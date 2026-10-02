@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Modules\User\Http\Controllers\API;
 
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Modules\Supermarket\Http\Resources\SmStoreResource;
 use Modules\User\Http\Requests\UserFavoritesIndexRequest;
+use Modules\User\Http\Resources\UserSupermarketStoreResource;
 use Modules\User\Services\UserFavoriteService;
 
 final class UserSupermarketStoreFavoritesIndexController
@@ -18,6 +18,6 @@ final class UserSupermarketStoreFavoritesIndexController
             $request->integer('perPage', 20),
         );
 
-        return SmStoreResource::collection($stores);
+        return UserSupermarketStoreResource::collection($stores);
     }
 }

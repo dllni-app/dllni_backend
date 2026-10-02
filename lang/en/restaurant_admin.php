@@ -225,6 +225,29 @@ return [
             'completed' => 'Completed',
             'cancelled' => 'Cancelled',
         ],
+        'availability_mode' => [
+            'available' => 'Available',
+            'sold_out_today' => 'Sold out today',
+            'manual_unavailable' => 'Manually unavailable',
+        ],
+        'discount_type' => [
+            'percentage' => 'Percentage',
+            'fixed_amount' => 'Fixed amount',
+        ],
+        'offer_urgency' => [
+            'active' => 'Active',
+            'expired' => 'Expired',
+            'limited_time' => 'Limited time',
+            'ending_soon' => 'Ending soon',
+            'todays_offer' => 'Today\'s offer',
+        ],
+        'inventory_unit' => [
+            'kg' => 'Kilogram',
+            'g' => 'Gram',
+            'l' => 'Liter',
+            'ml' => 'Milliliter',
+            'piece' => 'Piece',
+        ],
         'dispute_status' => [
             'open' => 'Open',
             'under_review' => 'Under review',
@@ -327,5 +350,8 @@ return [
         'created_title' => 'New restaurant order',
         'created_body' => 'A new order (:order) was created.',
         'view' => 'View order',
+        'system_alert_title' => 'System alert',
+        'system_alert_order_body' => 'Order :order requires attention.',
+        'system_alert_generic_body' => 'A system alert requires attention.',
     ],
 ];

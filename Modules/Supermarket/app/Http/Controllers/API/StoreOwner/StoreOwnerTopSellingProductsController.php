@@ -32,6 +32,7 @@ final class StoreOwnerTopSellingProductsController
                 'name' => (string) $store->name,
             ],
             'topProducts' => $performance['topProducts'],
+            'settlement' => $performance['settlement'],
             'offersImpact' => $performance['offersImpact'],
             'bestOfferPerformance' => $performance['bestOfferPerformance'],
         ]);

@@ -1,0 +1,62 @@
+<?php
+
+declare(strict_types=1);
+
+return [
+    'navigation' => 'الخدمات الخاصة',
+    'model' => 'خدمة تنظيف خاصة',
+    'fields' => [
+        'name' => 'اسم الخدمة',
+        'description' => 'الوصف',
+        'category' => 'الفئة',
+        'image' => 'صورة الخدمة',
+        'fallback_image_url' => 'رابط صورة خارجي احتياطي',
+        'fallback_image_help' => 'اختياري للتوافق مع الصور القديمة. الصورة المرفوعة لها الأولوية.',
+        'image_help' => 'ارفع صورة واضحة للخدمة لا يتجاوز حجمها 5 ميغابايت.',
+        'pricing_unit' => 'وحدة التسعير',
+        'input_type' => 'نوع القياس',
+        'unit_code' => 'رمز الوحدة',
+        'base_unit_price' => 'سعر الوحدة الأساسي',
+        'supports_dirtiness' => 'يدعم تحديد مستوى الاتساخ',
+        'dirtiness_levels' => 'مستويات الاتساخ المسموح بها',
+        'gender_constraint' => 'جنس العامل المطلوب',
+        'duration' => 'المدة التقديرية',
+        'worker_pay_mode' => 'طريقة احتساب أجرة العامل',
+        'worker_pay_value' => 'قيمة أجرة العامل',
+        'operating_cost_mode' => 'طريقة احتساب تكلفة التشغيل',
+        'operating_cost_value' => 'قيمة تكلفة التشغيل',
+        'travel_fee_mode' => 'طريقة احتساب أجرة التنقل',
+        'travel_fee_value' => 'قيمة أجرة التنقل',
+        'requires_before_image' => 'يتطلب صورة قبل التنفيذ',
+        'requires_after_image' => 'يتطلب صورة بعد التنفيذ',
+        'is_active' => 'الخدمة متاحة',
+        'equipment' => 'المعدات المطلوبة',
+        'duration_short' => 'دقيقة',
+    ],
+    'pricing_units' => [
+        'piece' => 'قطعة',
+        'sqm' => 'متر مربع',
+        'linear_meter' => 'متر طولي',
+        'device' => 'جهاز',
+        'sofa' => 'كنبة',
+        'chair' => 'كرسي',
+        'carpet' => 'سجادة',
+        'solar_panel' => 'لوح شمسي',
+    ],
+    'input_types' => [
+        'quantity' => 'عدد القطع',
+        'decimal' => 'قياس عشري',
+        'area' => 'المساحة',
+        'length' => 'الطول',
+    ],
+    'gender_constraints' => [
+        'male' => 'عامل',
+        'female' => 'عاملة',
+    ],
+    'pay_modes' => [
+        'flat' => 'مبلغ ثابت',
+        'percentage' => 'نسبة مئوية',
+        'per_unit' => 'لكل وحدة',
+        'per_km' => 'لكل كيلومتر',
+    ],
+];

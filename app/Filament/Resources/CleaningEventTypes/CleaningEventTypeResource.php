@@ -25,31 +25,50 @@ use Modules\Cleaning\Models\CleaningEventType;
 final class CleaningEventTypeResource extends Resource
 {
     protected static ?string $model = CleaningEventType::class;
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCalendarDays;
-    protected static ?int $navigationSort = 29;
 
-    public static function getNavigationGroup(): ?string { return __('cleaning_admin.nav_groups.settings'); }
-    public static function getNavigationLabel(): string { return 'Cleaning Event Types'; }
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCalendarDays;
+
+    protected static ?int $navigationSort = 25;
+
+    public static function getNavigationGroup(): ?string
+    {
+        return \App\Filament\Support\AdminNavigationGroup::cleaning();
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return __('cleaning_catalog.materials.event_types');
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('cleaning_catalog.materials.singulars.event_type');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('cleaning_catalog.materials.event_types');
+    }
 
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('name')->required()->maxLength(255),
-            TextInput::make('slug')->required()->maxLength(255)->unique(ignoreRecord: true),
-            TextInput::make('sort_order')->numeric()->minValue(0)->default(0),
-            Toggle::make('is_active')->default(true),
-            Select::make('specialServices')->relationship('specialServices', 'name')->multiple()->searchable()->preload()->label('Available special services')->columnSpanFull(),
-            Repeater::make('fields')->relationship()->label('Dynamic form fields')->schema([
-                TextInput::make('label')->required()->maxLength(255),
-                TextInput::make('key')->required()->maxLength(64),
-                Select::make('field_type')->required()->options([
-                    'text' => 'Text', 'textarea' => 'Long text', 'number' => 'Number',
-                    'yes_no' => 'Yes / No', 'single_select' => 'Single select', 'multi_select' => 'Multi select',
+            TextInput::make('name')->label(__('cleaning_catalog.materials.fields.name'))->required()->maxLength(255),
+            TextInput::make('slug')->label(__('cleaning_catalog.materials.fields.slug'))->required()->maxLength(255)->unique(ignoreRecord: true),
+            TextInput::make('sort_order')->label(__('cleaning_catalog.materials.fields.sort_order'))->numeric()->minValue(0)->default(0),
+            Toggle::make('is_active')->label(__('cleaning_catalog.materials.fields.is_active'))->default(true),
+            Select::make('specialServices')->relationship('specialServices', 'name')->multiple()->searchable()->preload()->label(__('cleaning_catalog.materials.fields.available_services'))->columnSpanFull(),
+            Repeater::make('fields')->relationship()->label(__('cleaning_catalog.materials.fields.dynamic_fields'))->schema([
+                TextInput::make('label')->label(__('cleaning_catalog.materials.fields.field_label'))->required()->maxLength(255),
+                TextInput::make('key')->label(__('cleaning_catalog.materials.fields.field_key'))->required()->maxLength(64),
+                Select::make('field_type')->label(__('cleaning_catalog.materials.fields.field_type'))->required()->options([
+                    'text' => __('cleaning_catalog.materials.options.text'), 'textarea' => __('cleaning_catalog.materials.options.textarea'), 'number' => __('cleaning_catalog.materials.options.number'),
+                    'yes_no' => __('cleaning_catalog.materials.options.yes_no'), 'single_select' => __('cleaning_catalog.materials.options.single_select'), 'multi_select' => __('cleaning_catalog.materials.options.multi_select'),
                 ]),
-                TagsInput::make('options')->helperText('Required only for select fields.'),
-                TextInput::make('sort_order')->numeric()->minValue(0)->default(0),
-                Toggle::make('is_required')->default(false),
-                Toggle::make('is_active')->default(true),
+                TagsInput::make('options')->label(__('cleaning_catalog.materials.fields.options'))->helperText(__('cleaning_catalog.materials.fields.options_help')),
+                TextInput::make('sort_order')->label(__('cleaning_catalog.materials.fields.sort_order'))->numeric()->minValue(0)->default(0),
+                Toggle::make('is_required')->label(__('cleaning_catalog.materials.fields.is_required'))->default(false),
+                Toggle::make('is_active')->label(__('cleaning_catalog.materials.fields.is_active'))->default(true),
             ])->columns(3)->collapsible()->orderColumn('sort_order')->columnSpanFull(),
         ])->columns(2);
     }
@@ -57,12 +76,12 @@ final class CleaningEventTypeResource extends Resource
     public static function table(Table $table): Table
     {
         return $table->columns([
-            TextColumn::make('name')->searchable()->sortable(),
-            TextColumn::make('slug')->searchable(),
-            TextColumn::make('fields_count')->counts('fields')->label('Fields')->sortable(),
-            TextColumn::make('special_services_count')->counts('specialServices')->label('Services')->sortable(),
-            TextColumn::make('sort_order')->sortable(),
-            IconColumn::make('is_active')->boolean(),
+            TextColumn::make('name')->label(__('cleaning_catalog.materials.fields.name'))->searchable()->sortable(),
+            TextColumn::make('slug')->label(__('cleaning_catalog.materials.fields.slug'))->searchable(),
+            TextColumn::make('fields_count')->counts('fields')->label(__('cleaning_catalog.materials.fields.field_count'))->sortable(),
+            TextColumn::make('special_services_count')->counts('specialServices')->label(__('cleaning_catalog.materials.fields.services'))->sortable(),
+            TextColumn::make('sort_order')->label(__('cleaning_catalog.materials.fields.sort_order'))->sortable(),
+            IconColumn::make('is_active')->label(__('cleaning_catalog.materials.fields.is_active'))->boolean(),
         ])->defaultSort('sort_order');
     }
 
@@ -71,9 +90,30 @@ final class CleaningEventTypeResource extends Resource
         return ['index' => ListCleaningEventTypes::route('/'), 'create' => CreateCleaningEventType::route('/create'), 'edit' => EditCleaningEventType::route('/{record}/edit')];
     }
 
-    public static function canViewAny(): bool { return self::allowed('pricing.view'); }
-    public static function canCreate(): bool { return self::allowed('pricing.create'); }
-    public static function canEdit(Model $record): bool { return self::allowed('pricing.update'); }
-    public static function canDelete(Model $record): bool { return false; }
-    private static function allowed(string $permission): bool { $user = auth()->user(); return $user !== null && ($user->hasAnyRole(['admin', 'Super Admin']) || $user->can($permission)); }
+    public static function canViewAny(): bool
+    {
+        return self::allowed('pricing.view');
+    }
+
+    public static function canCreate(): bool
+    {
+        return self::allowed('pricing.create');
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return self::allowed('pricing.update');
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return false;
+    }
+
+    private static function allowed(string $permission): bool
+    {
+        $user = auth()->user();
+
+        return $user !== null && ($user->hasAnyRole(['admin', 'Super Admin']) || $user->can($permission));
+    }
 }

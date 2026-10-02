@@ -30,4 +30,17 @@ enum PermissionGroup: string
     case DeliveryDisputes = 'delivery_disputes';
     case DeliveryFinancial = 'delivery_financial';
     case DeliveryReports = 'delivery_reports';
+
+    case RestaurantOrders = 'restaurant_orders';
+    case Restaurants = 'restaurants';
+    case RestaurantDisputes = 'restaurant_disputes';
+    case RestaurantCatalog = 'restaurant_catalog';
+
+    case SupermarketOrders = 'supermarket_orders';
+    case SupermarketStores = 'supermarket_stores';
+    case SupermarketCatalog = 'supermarket_catalog';
+    case SupermarketDisputes = 'supermarket_disputes';
+
+    case PlatformDeliveryOperations = 'platform_delivery_operations';
+    case PlatformFinance = 'platform_finance';
 }

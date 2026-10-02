@@ -60,6 +60,10 @@ final class DeliveryDriverPolicy
 
     private function belongsToUserCompany(User $user, DeliveryDriver $deliveryDriver): bool
     {
+        if ($user->hasAnyRole(['admin', 'Super Admin'])) {
+            return true;
+        }
+
         $companyId = app(DeliveryCompanyContextService::class)->companyIdForUser($user);
 
         return (int) $deliveryDriver->company_id === $companyId;

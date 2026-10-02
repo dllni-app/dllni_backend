@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Modules\User\Http\Controllers\API;
 
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Modules\Resturants\Http\Resources\RestaurantResource;
 use Modules\User\Http\Requests\UserFavoritesIndexRequest;
+use Modules\User\Http\Resources\UserRestaurantResource;
 use Modules\User\Services\UserFavoriteService;
 
 final class UserRestaurantFavoritesIndexController
@@ -18,6 +18,6 @@ final class UserRestaurantFavoritesIndexController
             $request->integer('perPage', 20),
         );
 
-        return RestaurantResource::collection($restaurants);
+        return UserRestaurantResource::collection($restaurants);
     }
 }

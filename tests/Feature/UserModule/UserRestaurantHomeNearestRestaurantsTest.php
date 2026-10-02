@@ -22,7 +22,8 @@ it('returns nearest restaurants with cuisines, delivery window, and discount bad
         'latitude' => 33.5138,
         'longitude' => 36.2765,
         'average_rating' => 4.5,
-        'estimated_preparation_time' => 25,
+        'estimated_preparation_time_min' => 20,
+        'estimated_preparation_time_max' => 40,
     ]);
     $restaurant->cuisineTypes()->attach($italian->id);
 

@@ -215,7 +215,7 @@ final class WorkerDepositActions
         } catch (Throwable $exception) {
             Notification::make()
                 ->title(__('cleaning_admin.workers.finance.error'))
-                ->body($exception->getMessage())
+                ->body(\App\Filament\Support\AdminExceptionMessage::forUser($exception))
                 ->danger()
                 ->send();
         }

@@ -36,23 +36,23 @@ final class DeliveryModuleDataSeeder extends Seeder
     {
         $owner = $this->upsertUser(
             email: 'delivery.owner@dllni.sy',
-            name: 'Delivery Owner',
+            name: 'مؤيد العلي',
             phone: '+963944700001',
             moduleType: null,
         );
 
         $staff = $this->upsertUser(
             email: 'delivery.staff@dllni.sy',
-            name: 'Delivery Staff',
+            name: 'لؤي الحمد',
             phone: '+963944700002',
             moduleType: null,
         );
 
         $drivers = [
-            $this->upsertUser('delivery.driver1@dllni.sy', 'Driver One', '+963944700101', UserModuleType::DeliveryDriver),
-            $this->upsertUser('delivery.driver2@dllni.sy', 'Driver Two', '+963944700102', UserModuleType::DeliveryDriver),
-            $this->upsertUser('delivery.driver3@dllni.sy', 'Driver Three', '+963944700103', UserModuleType::DeliveryDriver),
-            $this->upsertUser('delivery.driver4@dllni.sy', 'Driver Four', '+963944700104', UserModuleType::DeliveryDriver),
+            $this->upsertUser('delivery.driver1@dllni.sy', 'كريم خليل', '+963944700101', UserModuleType::DeliveryDriver),
+            $this->upsertUser('delivery.driver2@dllni.sy', 'رامي شاهين', '+963944700102', UserModuleType::DeliveryDriver),
+            $this->upsertUser('delivery.driver3@dllni.sy', 'عمر بركات', '+963944700103', UserModuleType::DeliveryDriver),
+            $this->upsertUser('delivery.driver4@dllni.sy', 'رنا مصطفى', '+963944700104', UserModuleType::DeliveryDriver),
         ];
 
         $this->assignRoleIfExists($owner, 'delivery_company_admin');
@@ -61,11 +61,11 @@ final class DeliveryModuleDataSeeder extends Seeder
         $company = DeliveryCompany::updateOrCreate(
             ['owner_user_id' => $owner->id],
             [
-                'name' => 'Dllni Fast Delivery',
-                'legal_name' => 'Dllni Fast Delivery LLC',
+                'name' => 'دليلني للتوصيل السريع',
+                'legal_name' => 'شركة دليلني لخدمات التوصيل',
                 'phone' => '+963211123456',
                 'email' => 'ops@dllni-delivery.sy',
-                'address' => 'Aleppo, Syria',
+                'address' => 'حلب، العزيزية، سوريا',
                 'latitude' => 36.20210411,
                 'longitude' => 37.13426044,
                 'is_active' => true,
@@ -94,6 +94,78 @@ final class DeliveryModuleDataSeeder extends Seeder
         $this->seedFinancial($company, $owner, $driverModels, $orders);
         $this->seedDisputesAndTrustLogs($driverModels, $orders);
         $this->seedDriverNotifications($driverModels, $orders);
+        $this->seedSecondaryCompany();
+    }
+
+    private function seedSecondaryCompany(): void
+    {
+        $owner = $this->upsertUser(
+            email: 'delivery.owner.shahba@dllni.sy',
+            name: 'إياد الأحمد',
+            phone: '+963944700020',
+            moduleType: null,
+        );
+        $driverUser = $this->upsertUser(
+            email: 'delivery.driver5@dllni.sy',
+            name: 'هبة مصطفى',
+            phone: '+963944700105',
+            moduleType: UserModuleType::DeliveryDriver,
+        );
+
+        $this->assignRoleIfExists($owner, 'delivery_company_admin');
+
+        $company = DeliveryCompany::updateOrCreate(
+            ['owner_user_id' => $owner->id],
+            [
+                'name' => 'سعاة الشهباء',
+                'legal_name' => 'شركة سعاة الشهباء للتوصيل',
+                'phone' => '+963211123457',
+                'email' => 'ops@shahba-delivery.sy',
+                'address' => 'حلب، الموكامبو، سوريا',
+                'latitude' => 36.20751200,
+                'longitude' => 37.14523800,
+                'is_active' => true,
+                'is_suspended' => false,
+                'suspension_reason' => null,
+                'suspended_until' => null,
+                'financial_limit' => 250000,
+            ],
+        );
+
+        DeliveryCompanyStaff::updateOrCreate(
+            ['company_id' => $company->id, 'user_id' => $owner->id],
+            ['role_key' => 'admin', 'is_active' => true],
+        );
+
+        DeliveryDriver::updateOrCreate(
+            ['user_id' => $driverUser->id],
+            [
+                'company_id' => $company->id,
+                'first_name' => 'هبة',
+                'phone' => $driverUser->phone,
+                'vehicle_type' => 'motorbike',
+                'plate_number' => 'ALE-2201',
+                'availability_status' => DeliveryDriverAvailabilityStatus::Available->value,
+                'is_active' => true,
+                'is_suspended' => false,
+                'suspended_until' => null,
+                'suspension_reason' => null,
+                'trust_score' => 94,
+                'open_disputes_count' => 0,
+                'last_seen_at' => now()->subMinutes(4),
+            ],
+        );
+
+        DeliveryFinancialAccount::updateOrCreate(
+            ['owner_type' => DeliveryCompany::class, 'owner_id' => $company->id, 'currency' => 'SYP'],
+            [
+                'current_balance' => 82000,
+                'financial_limit' => 250000,
+                'is_suspended' => false,
+                'suspension_reason' => null,
+                'suspended_at' => null,
+            ],
+        );
     }
 
     private function upsertUser(string $email, string $name, string $phone, ?UserModuleType $moduleType): User
@@ -128,10 +200,10 @@ final class DeliveryModuleDataSeeder extends Seeder
     private function seedDrivers(DeliveryCompany $company, array $users): array
     {
         $dataset = [
-            ['first_name' => 'Kareem', 'vehicle_type' => 'motorbike', 'plate_number' => 'ALE-1001', 'status' => DeliveryDriverAvailabilityStatus::Available->value, 'trust_score' => 96],
-            ['first_name' => 'Lina', 'vehicle_type' => 'car', 'plate_number' => 'ALE-1002', 'status' => DeliveryDriverAvailabilityStatus::Busy->value, 'trust_score' => 88],
-            ['first_name' => 'Omar', 'vehicle_type' => 'motorbike', 'plate_number' => 'ALE-1003', 'status' => DeliveryDriverAvailabilityStatus::Offline->value, 'trust_score' => 73],
-            ['first_name' => 'Rama', 'vehicle_type' => 'car', 'plate_number' => 'ALE-1004', 'status' => DeliveryDriverAvailabilityStatus::Available->value, 'trust_score' => 99],
+            ['first_name' => 'كريم', 'vehicle_type' => 'motorbike', 'plate_number' => 'ALE-1001', 'status' => DeliveryDriverAvailabilityStatus::Available->value, 'trust_score' => 96],
+            ['first_name' => 'رامي', 'vehicle_type' => 'car', 'plate_number' => 'ALE-1002', 'status' => DeliveryDriverAvailabilityStatus::Busy->value, 'trust_score' => 88],
+            ['first_name' => 'عمر', 'vehicle_type' => 'motorbike', 'plate_number' => 'ALE-1003', 'status' => DeliveryDriverAvailabilityStatus::Offline->value, 'trust_score' => 73],
+            ['first_name' => 'رنا', 'vehicle_type' => 'car', 'plate_number' => 'ALE-1004', 'status' => DeliveryDriverAvailabilityStatus::Available->value, 'trust_score' => 99],
         ];
 
         $drivers = [];
@@ -177,6 +249,28 @@ final class DeliveryModuleDataSeeder extends Seeder
         ];
 
         $orders = [];
+        $customerNames = ['ليان إبراهيم', 'سامر الحسن', 'نور الدين شاهين', 'ريما خليل', 'محمد زيدان'];
+        $pickupAddresses = [
+            'حلب، الجميلية، شارع بارون',
+            'حلب، العزيزية، شارع إسكندرون',
+            'حلب، الفرقان، شارع النيل',
+            'حلب، الشهباء، شارع تشرين',
+            'حلب، الحمدانية، شارع المدارس',
+        ];
+        $dropoffAddresses = [
+            'حلب، السليمانية، شارع فيصل',
+            'حلب، الموكامبو، شارع زكي الأرسوزي',
+            'حلب، المحافظة، شارع القوتلي',
+            'حلب، الميدان، شارع السعد',
+            'حلب، صلاح الدين، شارع 15',
+        ];
+        $customerNotes = [
+            'يرجى الاتصال عند الوصول وتسليم الطلب إلى المستلم مباشرة.',
+            'المبنى مقابل الصيدلية، الطابق الثاني.',
+            'الطلب محفوظ بعناية؛ يرجى إبقاؤه مستقيماً.',
+            'يمكن التسليم عند المدخل الشرقي للمبنى.',
+            'يرجى الاتصال قبل الوصول بخمس دقائق.',
+        ];
         foreach ($rows as $index => $row) {
             $createdAt = now()->subDays(5 - $index);
             $acceptedAt = in_array($row['status'], [DeliveryOrderStatus::Completed->value, DeliveryOrderStatus::InProgress->value, DeliveryOrderStatus::Cancelled->value], true) ? $createdAt->copy()->addMinutes(8) : null;
@@ -193,13 +287,13 @@ final class DeliveryModuleDataSeeder extends Seeder
                     'company_id' => $company->id,
                     'driver_id' => $row['driver']?->id,
                     'created_by_user_id' => $owner->id,
-                    'customer_name' => 'Customer '.($index + 1),
+                    'customer_name' => $customerNames[$index],
                     'customer_phone' => '+9639448880'.($index + 1),
-                    'customer_notes' => 'Handle with care. Seeded delivery order #'.($index + 1),
-                    'pickup_address' => 'Aleppo, Pickup District '.($index + 1),
+                    'customer_notes' => $customerNotes[$index],
+                    'pickup_address' => $pickupAddresses[$index],
                     'pickup_latitude' => 36.20000000 + ($index * 0.01),
                     'pickup_longitude' => 37.13000000 + ($index * 0.01),
-                    'dropoff_address' => 'Aleppo, Dropoff District '.($index + 1),
+                    'dropoff_address' => $dropoffAddresses[$index],
                     'dropoff_latitude' => 36.21000000 + ($index * 0.01),
                     'dropoff_longitude' => 37.14000000 + ($index * 0.01),
                     'distance_km' => 3.2 + $index,
@@ -213,8 +307,8 @@ final class DeliveryModuleDataSeeder extends Seeder
                     'completed_at' => $completedAt,
                     'cancelled_at' => $cancelledAt,
                     'stopped_at' => $stoppedAt,
-                    'cancel_reason' => $row['status'] === DeliveryOrderStatus::Cancelled->value ? 'Customer requested cancellation' : null,
-                    'stop_reason' => $row['status'] === DeliveryOrderStatus::Stopped->value ? 'No available nearby driver before timeout' : null,
+                    'cancel_reason' => $row['status'] === DeliveryOrderStatus::Cancelled->value ? 'طلب العميل إلغاء التوصيل قبل استلام الشحنة.' : null,
+                    'stop_reason' => $row['status'] === DeliveryOrderStatus::Stopped->value ? 'لم يتوفر مندوب قريب خلال المهلة المحددة.' : null,
                 ],
             );
 
@@ -254,7 +348,7 @@ final class DeliveryModuleDataSeeder extends Seeder
                 'offered_at' => now()->subHours(8),
                 'expires_at' => now()->subHours(8)->addMinutes(2),
                 'responded_at' => now()->subHours(8)->addMinute(),
-                'reject_reason' => 'Heavy traffic',
+                'reject_reason' => 'ازدحام مروري كثيف في منطقة الاستلام.',
             ],
         );
 
@@ -289,7 +383,7 @@ final class DeliveryModuleDataSeeder extends Seeder
                     'actor_type' => User::class,
                     'actor_id' => $order->created_by_user_id,
                     'from_status' => null,
-                    'note' => 'Order created',
+                    'note' => 'تم إنشاء طلب التوصيل.',
                     'payload' => ['source' => 'seeder'],
                 ],
             );
@@ -301,7 +395,7 @@ final class DeliveryModuleDataSeeder extends Seeder
                         'actor_type' => DeliveryDriver::class,
                         'actor_id' => $order->driver_id,
                         'from_status' => DeliveryOrderStatus::Offered->value,
-                        'note' => 'Driver accepted assignment',
+                        'note' => 'قبل المندوب إسناد الطلب.',
                         'payload' => ['source' => 'seeder'],
                     ],
                 );
@@ -313,7 +407,7 @@ final class DeliveryModuleDataSeeder extends Seeder
                     'actor_type' => DeliveryDriver::class,
                     'actor_id' => $order->driver_id,
                     'from_status' => $order->accepted_at !== null ? DeliveryOrderStatus::Accepted->value : DeliveryOrderStatus::Dispatching->value,
-                    'note' => 'Order transitioned to '.$order->status,
+                    'note' => 'تغيرت حالة الطلب إلى '.$order->status,
                     'payload' => ['source' => 'seeder', 'currentStatus' => $order->status],
                 ],
             );
@@ -325,12 +419,17 @@ final class DeliveryModuleDataSeeder extends Seeder
      */
     private function seedLocations(array $drivers): void
     {
+        $referenceTime = now()->startOfDay();
+
         foreach ($drivers as $index => $driver) {
             DeliveryDriverLocation::updateOrCreate(
-                ['driver_id' => $driver->id, 'recorded_at' => now()->subMinutes(10 + $index)],
                 [
+                    'driver_id' => $driver->id,
                     'latitude' => 36.21010000 + ($index * 0.002),
                     'longitude' => 37.14120000 + ($index * 0.002),
+                ],
+                [
+                    'recorded_at' => $referenceTime->copy()->subMinutes(10 + $index),
                     'accuracy' => 4.5 + $index,
                     'speed' => 18.2 + $index,
                     'heading' => 180 + ($index * 10),
@@ -338,10 +437,13 @@ final class DeliveryModuleDataSeeder extends Seeder
             );
 
             DeliveryDriverLocation::updateOrCreate(
-                ['driver_id' => $driver->id, 'recorded_at' => now()->subMinutes(2 + $index)],
                 [
+                    'driver_id' => $driver->id,
                     'latitude' => 36.21110000 + ($index * 0.002),
                     'longitude' => 37.14210000 + ($index * 0.002),
+                ],
+                [
+                    'recorded_at' => $referenceTime->copy()->subMinutes(2 + $index),
                     'accuracy' => 3.2 + $index,
                     'speed' => 22.5 + $index,
                     'heading' => 210 + ($index * 8),
@@ -396,7 +498,7 @@ final class DeliveryModuleDataSeeder extends Seeder
                 'before' => 160000,
                 'after' => 147500,
                 'reference_id' => $orders[0]->id,
-                'note' => 'Delivery fee charged for completed order',
+                'note' => 'تسجيل أجرة التوصيل للطلب المكتمل.',
             ],
             [
                 'type' => DeliveryFinancialTransactionType::CollectionCredit->value,
@@ -405,7 +507,7 @@ final class DeliveryModuleDataSeeder extends Seeder
                 'before' => 147500,
                 'after' => 153000,
                 'reference_id' => $orders[0]->id,
-                'note' => 'Cash collection settled',
+                'note' => 'تسوية المبلغ المحصل نقداً من العميل.',
             ],
             [
                 'type' => DeliveryFinancialTransactionType::ManualAdjustmentDebit->value,
@@ -414,7 +516,7 @@ final class DeliveryModuleDataSeeder extends Seeder
                 'before' => 153000,
                 'after' => 145000,
                 'reference_id' => $orders[3]->id,
-                'note' => 'Manual correction',
+                'note' => 'تسوية مالية إدارية للطلب المتوقف.',
             ],
         ];
 
@@ -449,7 +551,7 @@ final class DeliveryModuleDataSeeder extends Seeder
                 [
                     'booking_id' => $orders[4]->id,
                     'booking_type' => 'delivery_order',
-                    'description' => 'Driver reported customer unavailable and cancellation dispute was raised.',
+                    'description' => 'أفاد المندوب بتعذر الوصول إلى المستلم، وطلب العميل مراجعة رسوم الإلغاء قبل إغلاق الطلب.',
                     'category' => DisputeCategory::Other->value,
                     'status' => DisputeStatus::UnderReview->value,
                     'resolution' => DisputeResolution::Dismissed->value,
@@ -486,9 +588,9 @@ final class DeliveryModuleDataSeeder extends Seeder
                         'type' => 'delivery_order_update',
                         'category' => 'orders',
                         'priority' => $index % 2 === 0 ? 'high' : 'normal',
-                        'title' => 'Order update',
-                        'body' => 'Delivery order '.$orders[min($index, count($orders) - 1)]->order_number.' status changed.',
-                        'message' => 'Delivery order status changed',
+                        'title' => 'تحديث على طلب التوصيل',
+                        'body' => 'تم تحديث حالة الطلب '.$orders[min($index, count($orders) - 1)]->order_number.'.',
+                        'message' => 'تم تحديث حالة طلب التوصيل',
                         'orderId' => $orders[min($index, count($orders) - 1)]->id,
                     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                 ],

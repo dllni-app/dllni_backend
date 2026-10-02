@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\RestaurantDisputes;
 
+use App\Filament\Concerns\AuthorizesPlatformAdminResource;
 use App\Filament\Resources\RestaurantDisputes\Pages\EditRestaurantOrderDispute;
 use App\Filament\Resources\RestaurantDisputes\Pages\ListRestaurantOrderDisputes;
 use App\Filament\Resources\RestaurantDisputes\Pages\ViewRestaurantOrderDispute;
@@ -15,20 +16,35 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use Modules\Resturants\Models\RestaurantOrderDispute;
-use UnitEnum;
 
 final class RestaurantOrderDisputeResource extends Resource
 {
+    use AuthorizesPlatformAdminResource;
+
     protected static ?string $model = RestaurantOrderDispute::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedExclamationTriangle;
 
     protected static ?string $navigationLabel = 'نزاعات المطاعم';
 
-    protected static string|UnitEnum|null $navigationGroup = 'قسم المطاعم';
-
     protected static ?int $navigationSort = 4;
+
+    public static function getNavigationGroup(): ?string
+    {
+        return \App\Filament\Support\AdminNavigationGroup::restaurants();
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('admin_resources.restaurant_dispute.singular');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('admin_resources.restaurant_dispute.plural');
+    }
 
     public static function getNavigationTooltip(): ?string
     {
@@ -48,6 +64,31 @@ final class RestaurantOrderDisputeResource extends Resource
     public static function table(Table $table): Table
     {
         return RestaurantOrderDisputesTable::configure($table);
+    }
+
+    public static function canViewAny(): bool
+    {
+        return self::dashboardAllowed('restaurant_disputes.view');
+    }
+
+    public static function canView(Model $record): bool
+    {
+        return self::dashboardAllowed('restaurant_disputes.view');
+    }
+
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return self::dashboardAllowed('restaurant_disputes.update');
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return false;
     }
 
     public static function getRelations(): array

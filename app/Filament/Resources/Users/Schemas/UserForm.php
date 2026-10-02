@@ -38,6 +38,7 @@ final class UserForm
                         ])
                         ->all())
                     ->searchable()
+                    ->preload()
                     ->required()
                     ->dehydrated(true),
                 TextInput::make('password')

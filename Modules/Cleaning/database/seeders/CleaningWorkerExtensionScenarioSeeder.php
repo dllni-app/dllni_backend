@@ -29,7 +29,7 @@ final class CleaningWorkerExtensionScenarioSeeder extends Seeder
         $customer = User::updateOrCreate(
             ['email' => 'cleaning.extension.customer@dllni.sy'],
             [
-                'name' => 'Cleaning Extension Customer',
+                'name' => 'يزن الخطيب',
                 'phone' => '+963944300001',
                 'password' => bcrypt('password'),
                 'email_verified_at' => now(),
@@ -100,15 +100,15 @@ final class CleaningWorkerExtensionScenarioSeeder extends Seeder
                 'status' => $status,
                 'property_type' => $row['property_type'],
                 'property_details' => [
-                    'location_name' => $isOffice ? 'Seeded Office' : 'Seeded Apartment',
-                    'address' => 'Aleppo Seeded Address',
+                    'location_name' => $isOffice ? 'مكتب تجريبي في الجميلية' : 'شقة تجريبية في العزيزية',
+                    'address' => 'حلب، الجميلية، قرب ساحة سعد الله الجابري',
                     'bedrooms' => $isOffice ? 0 : 2,
                     'rooms' => $isOffice ? 4 : 3,
                     'bathrooms' => $isOffice ? 2 : 1,
                     'kitchens' => 1,
                     'living_room_size' => 'medium',
                 ],
-                'cleaning_services' => ['Deep cleaning'],
+                'cleaning_services' => ['تنظيف عميق'],
                 'estimated_sqm' => $isOffice ? 120 : 90,
                 'estimated_hours' => $isOffice ? 4 : 3,
                 'scheduled_date' => $date,
@@ -137,7 +137,7 @@ final class CleaningWorkerExtensionScenarioSeeder extends Seeder
             ['booking_id' => $booking->id, 'booking_type' => 'cleaning_booking'],
             [
                 'customer_response' => CleaningTimeWarningResponse::ExtendTime->value,
-                'customer_message' => 'Seeded extension request.',
+                'customer_message' => 'أرغب في تمديد مدة الخدمة لإكمال بقية العمل.',
                 'worker_response' => null,
                 'sent_at' => now()->subMinutes(30),
                 'customer_responded_at' => now()->subMinutes(25),

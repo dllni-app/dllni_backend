@@ -48,6 +48,9 @@ final class SmProductResource extends JsonResource
             'categoryId' => $this->category_id,
             'category' => SmCategoryResource::make($this->whenLoaded('category')),
             'masterProductId' => $this->master_product_id,
+            'packageQuantity' => $this->relationLoaded('masterProduct') ? $this->masterProduct?->package_quantity : null,
+            'packageUnit' => $this->relationLoaded('masterProduct') ? $this->masterProduct?->package_unit : null,
+            'sellMode' => $this->relationLoaded('masterProduct') ? $this->masterProduct?->sell_mode : null,
             'name' => $this->name,
             'barcode' => $this->barcode,
             'score' => array_key_exists('semantic_score', $attributes)
@@ -76,6 +79,7 @@ final class SmProductResource extends JsonResource
                     'minSelections' => (int) $group->min_selections,
                     'maxSelections' => (int) $group->max_selections,
                     'sortOrder' => (int) $group->sort_order,
+                    'isActive' => (bool) $group->is_active,
                     'modifiers' => $group->modifiers
                         ->values()
                         ->map(fn ($modifier): array => [

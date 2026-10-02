@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Notifications\Cleaning\NewOrderRequestNotification;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Modules\Cleaning\Models\CleaningBooking;
 
 it('does not force cleaning new-order notifications onto the push queue', function (): void {
@@ -10,5 +11,5 @@ it('does not force cleaning new-order notifications onto the push queue', functi
 
     $notification = new NewOrderRequestNotification($booking);
 
-    expect($notification->queue)->toBeNull();
+    expect($notification)->not->toBeInstanceOf(ShouldQueue::class);
 });

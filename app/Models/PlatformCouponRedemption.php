@@ -19,7 +19,14 @@ final class PlatformCouponRedemption extends Model
         'coupon_code',
         'subtotal',
         'discount_amount',
+        'funding_type',
+        'platform_funded_amount',
+        'merchant_funded_amount',
+        'funding_snapshot',
         'redeemed_at',
+        'reversed_at',
+        'reversed_by_user_id',
+        'reversal_reason',
     ];
 
     public function coupon(): BelongsTo
@@ -32,6 +39,11 @@ final class PlatformCouponRedemption extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function reversedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reversed_by_user_id');
+    }
+
     public function order(): MorphTo
     {
         return $this->morphTo();
@@ -42,7 +54,11 @@ final class PlatformCouponRedemption extends Model
         return [
             'subtotal' => 'decimal:2',
             'discount_amount' => 'decimal:2',
+            'platform_funded_amount' => 'decimal:2',
+            'merchant_funded_amount' => 'decimal:2',
+            'funding_snapshot' => 'array',
             'redeemed_at' => 'datetime',
+            'reversed_at' => 'datetime',
         ];
     }
 }

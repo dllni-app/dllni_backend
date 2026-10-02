@@ -25,8 +25,10 @@ final class Product extends Model implements HasMedia
     protected $fillable = [
         'restaurant_id',
         'category_id',
+        'item_type',
         'name',
         'description',
+        'search_tags',
         'price',
         'discounted_price',
         'is_available',
@@ -175,8 +177,10 @@ final class Product extends Model implements HasMedia
     protected function casts(): array
     {
         return [
-            'price' => 'integer',
-            'discounted_price' => 'integer',
+            'item_type' => 'string',
+            'search_tags' => 'array',
+            'price' => 'decimal:2',
+            'discounted_price' => 'decimal:2',
             'is_available' => 'boolean',
             'unavailable_until' => 'datetime',
             'availability_note' => 'string',

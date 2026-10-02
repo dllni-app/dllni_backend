@@ -107,3 +107,36 @@ it('forbids generic order detail access to another restaurant for restaurant sel
     $this->getJson("/api/v1/orders/{$otherOrder->id}")
         ->assertForbidden();
 });
+
+it('forbids accepting and rejecting orders from another restaurant', function () {
+    $otherOrder = Order::factory()->create([
+        'restaurant_id' => Restaurant::factory()->create()->id,
+        'status' => OrderStatus::Pending->value,
+    ]);
+
+    $this->postJson("/api/v1/orders/{$otherOrder->id}/accept", [])
+        ->assertForbidden();
+
+    $this->postJson("/api/v1/orders/{$otherOrder->id}/reject", [
+        'reason' => 'out_of_stock',
+    ])->assertForbidden();
+
+    expect($otherOrder->refresh()->status)->toBe(OrderStatus::Pending);
+});
+
+it('rejects assigning an order to a user who is not active staff of the restaurant', function () {
+    $order = Order::factory()->create([
+        'restaurant_id' => $this->restaurant->id,
+        'status' => OrderStatus::Pending->value,
+    ]);
+    $unrelatedUser = User::factory()->create();
+
+    $this->postJson("/api/v1/orders/{$order->id}/accept", [
+        'assignedEmployeeId' => $unrelatedUser->id,
+    ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('assignedEmployeeId');
+
+    expect($order->refresh()->status)->toBe(OrderStatus::Pending);
+});
+

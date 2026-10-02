@@ -7,11 +7,11 @@ namespace Modules\User\Services;
 use App\Models\Worker;
 use Illuminate\Support\Arr;
 use InvalidArgumentException;
-use Modules\Cleaning\Services\CleaningPricingCalculator;
+use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Services\CleaningMaterialQuoteService;
 use Modules\Cleaning\Services\CleaningOpenTimeBillingService;
+use Modules\Cleaning\Services\CleaningPricingCalculator;
 use Modules\Cleaning\Services\CleaningSpecialServiceQuoteService;
-use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Support\CleaningFinancialDefaults;
 use Modules\Cleaning\Support\CleaningRuntimeSettings;
 
@@ -183,6 +183,7 @@ final class UserCleaningOrderEstimationService
         ?array $serviceIds = null,
         bool $requestMaterials = false,
         array $specialServices = [],
+        int $workerCount = 1,
     ): array {
         $input = $this->pricingSnapshotInput(
             $propertyType,
@@ -226,7 +227,12 @@ final class UserCleaningOrderEstimationService
             : 0.0;
 
         if ($input['preferredWorkerId'] === null) {
-            $pricing = $this->pricingCalculator->provisional($basePrice, $addonsTotal, $includedAdminMarginBase);
+            $pricing = $this->pricingCalculator->provisional(
+                $basePrice,
+                $addonsTotal,
+                $includedAdminMarginBase,
+                $workerCount,
+            );
         } else {
             $worker = Worker::query()->find($input['preferredWorkerId']);
             if (! $worker) {
@@ -314,7 +320,7 @@ final class UserCleaningOrderEstimationService
         $basePrice = (float) $openTime['preliminaryAmount'];
 
         if ($preferredWorkerId === null) {
-            $pricing = $this->pricingCalculator->provisional($basePrice, 0.0);
+            $pricing = $this->pricingCalculator->provisional($basePrice, 0.0, 0.0, $workerCount);
         } else {
             $worker = Worker::query()->find($preferredWorkerId);
             if (! $worker) {
@@ -392,7 +398,7 @@ final class UserCleaningOrderEstimationService
         $addonsTotal = (float) $materialQuote['total'] + (float) $specialServiceQuote['total'];
 
         if ($input['preferredWorkerId'] === null) {
-            $pricing = $this->pricingCalculator->provisional($basePrice, $addonsTotal);
+            $pricing = $this->pricingCalculator->provisional($basePrice, $addonsTotal, 0.0, $normalizedWorkers);
         } else {
             $worker = Worker::query()->find($input['preferredWorkerId']);
             if (! $worker) {

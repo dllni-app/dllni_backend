@@ -192,6 +192,93 @@ it('filters supermarket stores by openNow', function (): void {
     }
 });
 
+
+it('filters supermarket stores by featured flag', function (): void {
+    $featured = SmStore::factory()->create([
+        'name' => 'Featured Store',
+        'is_active' => true,
+        'is_featured' => true,
+        'suspension_until' => null,
+    ]);
+
+    $regular = SmStore::factory()->create([
+        'name' => 'Regular Store',
+        'is_active' => true,
+        'is_featured' => false,
+        'suspension_until' => null,
+    ]);
+
+    $response = $this->getJson('/api/v1/user/supermarket/stores?filter[isFeatured]=1');
+
+    $response->assertOk();
+    $ids = collect($response->json('data'))->pluck('id')->all();
+    expect($ids)->toContain($featured->id);
+    expect($ids)->not->toContain($regular->id);
+});
+
+it('filters supermarket stores by minimum average rating', function (): void {
+    $highRated = SmStore::factory()->create([
+        'name' => 'High Rated Store',
+        'is_active' => true,
+        'average_rating' => 4.5,
+        'suspension_until' => null,
+    ]);
+
+    $lowRated = SmStore::factory()->create([
+        'name' => 'Low Rated Store',
+        'is_active' => true,
+        'average_rating' => 3.5,
+        'suspension_until' => null,
+    ]);
+
+    $response = $this->getJson('/api/v1/user/supermarket/stores?filter[averageRatingMin]=4');
+
+    $response->assertOk();
+    $ids = collect($response->json('data'))->pluck('id')->all();
+    expect($ids)->toContain($highRated->id);
+    expect($ids)->not->toContain($lowRated->id);
+});
+
+it('accepts the browse filters together', function (): void {
+    CarbonImmutable::setTestNow('2026-06-15 14:00:00');
+
+    try {
+        $matching = SmStore::factory()->create([
+            'name' => 'Matching Filter Store',
+            'is_active' => true,
+            'is_featured' => true,
+            'average_rating' => 4.8,
+            'suspension_until' => null,
+        ]);
+
+        SmStoreHours::create([
+            'store_id' => $matching->id,
+            'day_of_week' => mb_strtolower(now()->englishDayOfWeek),
+            'open_time' => '08:00:00',
+            'close_time' => '22:00:00',
+            'is_closed' => false,
+        ]);
+
+        SmStore::factory()->create([
+            'name' => 'Non Matching Filter Store',
+            'is_active' => true,
+            'is_featured' => false,
+            'average_rating' => 3.0,
+            'suspension_until' => null,
+        ]);
+
+        $response = $this->getJson(
+            '/api/v1/user/supermarket/stores?filter[openNow]=1&filter[isFeatured]=1&filter[averageRatingMin]=4'
+        );
+
+        $response->assertOk();
+        $ids = collect($response->json('data'))->pluck('id')->all();
+        expect($ids)->toContain($matching->id);
+    } finally {
+        CarbonImmutable::setTestNow();
+    }
+});
+
 it('includes isFavorited and highestOfferDiscountValue in store browse response', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);

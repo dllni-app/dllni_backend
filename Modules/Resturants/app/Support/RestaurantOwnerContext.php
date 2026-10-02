@@ -36,7 +36,11 @@ final class RestaurantOwnerContext
             throw new AuthorizationException('Unauthenticated.');
         }
 
-        if ($user->module_type !== UserModuleType::RestaurantSeller) {
+        $moduleType = array_key_exists('module_type', $user->getAttributes())
+            ? $user->module_type
+            : null;
+
+        if ($moduleType !== UserModuleType::RestaurantSeller) {
             throw new AuthorizationException('This endpoint is for restaurant sellers only.');
         }
 

@@ -104,6 +104,10 @@ return [
             'priority' => 'high',
             'channels' => ['database', 'push'],
             'templates' => [
+                'ar' => [
+                    'title' => 'تم تعيين عامل',
+                    'body' => 'تم تعيين عامل للحجز رقم :booking_number.',
+                ],
                 'en' => [
                     'title' => 'Worker assigned',
                     'body' => 'A worker has been assigned to booking :booking_number.',
@@ -117,6 +121,10 @@ return [
             'priority' => 'high',
             'channels' => ['database', 'push'],
             'templates' => [
+                'ar' => [
+                    'title' => 'تم تأكيد العامل',
+                    'body' => 'أكد العامل حجز التنظيف رقم :booking_number.',
+                ],
                 'en' => [
                     'title' => 'Worker confirmed',
                     'body' => 'A worker confirmed booking :booking_number.',
@@ -165,8 +173,8 @@ return [
             'channels' => ['database', 'push'],
             'templates' => [
                 'ar' => [
-                    'title' => 'Ø±ÙØ¶ Ø§Ù„Ø¹Ø§Ù…Ù„ Ø§Ù„Ù…Ø®ØµØµ Ø§Ù„Ø·Ù„Ø¨',
-                    'body' => 'Ø±ÙØ¶ Ø§Ù„Ø¹Ø§Ù…Ù„ Ø§Ù„Ù…Ø®ØµØµ Ø§Ù„Ø·Ù„Ø¨. Ø§ÙØªØ­ Ø§Ù„ØªØ·Ø¨ÙŠÙ‚ Ù„ØªØ­ÙˆÙŠÙ„Ù‡ Ø¥Ù„Ù‰ Ø·Ù„Ø¨ Ø¹Ø§Ù… Ø£Ùˆ Ø¥Ù„ØºØ§Ø¦Ù‡ Ø¨Ø¯ÙˆÙ† Ø±Ø³ÙˆÙ….',
+                    'title' => 'رفض العامل المخصص الطلب',
+                    'body' => 'رفض العامل المخصص الطلب. افتح التطبيق لتحويله إلى طلب عام أو إلغائه بدون رسوم.',
                 ],
                 'en' => [
                     'title' => 'Preferred worker declined',
@@ -181,6 +189,10 @@ return [
             'priority' => 'high',
             'channels' => ['database', 'push'],
             'templates' => [
+                'ar' => [
+                    'title' => 'العامل في الطريق',
+                    'body' => 'بدأ العامل التوجه إلى حجز التنظيف رقم :booking_number.',
+                ],
                 'en' => [
                     'title' => 'Worker is on the way',
                     'body' => 'The worker started travel for booking :booking_number.',
@@ -194,6 +206,10 @@ return [
             'priority' => 'high',
             'channels' => ['database', 'push'],
             'templates' => [
+                'ar' => [
+                    'title' => 'وصل العامل',
+                    'body' => 'وصل العامل إلى موقع حجز التنظيف رقم :booking_number.',
+                ],
                 'en' => [
                     'title' => 'Worker arrived',
                     'body' => 'The worker arrived for booking :booking_number.',
@@ -207,6 +223,10 @@ return [
             'priority' => 'high',
             'channels' => ['database', 'push'],
             'templates' => [
+                'ar' => [
+                    'title' => 'تم تأكيد بدء العمل',
+                    'body' => 'أكد العميل بدء العمل لحجز التنظيف رقم :booking_number.',
+                ],
                 'en' => [
                     'title' => 'Arrival verified',
                     'body' => 'Customer verified start for booking :booking_number.',
@@ -220,6 +240,10 @@ return [
             'priority' => 'high',
             'channels' => ['database', 'push'],
             'templates' => [
+                'ar' => [
+                    'title' => 'طلب تأكيد الإكمال',
+                    'body' => 'طلب العامل تأكيد إكمال حجز التنظيف رقم :booking_number.',
+                ],
                 'en' => [
                     'title' => 'Completion requested',
                     'body' => 'Worker requested completion confirmation for booking :booking_number.',
@@ -233,6 +257,10 @@ return [
             'priority' => 'high',
             'channels' => ['database', 'push'],
             'templates' => [
+                'ar' => [
+                    'title' => 'تم تأكيد الإكمال',
+                    'body' => 'أكد العميل إكمال حجز التنظيف رقم :booking_number.',
+                ],
                 'en' => [
                     'title' => 'Completion approved',
                     'body' => 'Customer approved completion for booking :booking_number.',
@@ -246,6 +274,10 @@ return [
             'priority' => 'high',
             'channels' => ['database', 'push'],
             'templates' => [
+                'ar' => [
+                    'title' => 'تم رفض الإكمال',
+                    'body' => 'رفض العميل إكمال حجز التنظيف رقم :booking_number.',
+                ],
                 'en' => [
                     'title' => 'Completion rejected',
                     'body' => 'Customer rejected completion for booking :booking_number.',
@@ -259,6 +291,10 @@ return [
             'priority' => 'high',
             'channels' => ['database', 'push'],
             'templates' => [
+                'ar' => [
+                    'title' => 'طلب تمديد وقت',
+                    'body' => 'طلب العميل وقتاً إضافياً لحجز التنظيف رقم :booking_number.',
+                ],
                 'en' => [
                     'title' => 'Time extension requested',
                     'body' => 'Customer requested more time for booking :booking_number.',
@@ -272,9 +308,30 @@ return [
             'priority' => 'high',
             'channels' => ['database', 'push'],
             'templates' => [
+                'ar' => [
+                    'title' => 'تم إلغاء الطلب',
+                    'body' => 'تم إلغاء حجز التنظيف رقم :booking_number.',
+                ],
                 'en' => [
                     'title' => 'Order cancelled',
                     'body' => 'Cleaning booking :booking_number was cancelled.',
+                ],
+            ],
+        ],
+        'cleaning.booking.admin_cancelled' => [
+            'legacy_type' => 'admin_cancelled',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'تم إلغاء الحجز',
+                    'body' => 'تم إلغاء الحجز رقم :booking_number من قبل الإدارة.',
+                ],
+                'en' => [
+                    'title' => 'Booking cancelled',
+                    'body' => 'Booking :booking_number was cancelled by the administration.',
                 ],
             ],
         ],
@@ -666,6 +723,40 @@ return [
                 'en' => [
                     'title' => 'Order delivered',
                     'body' => 'Order :order_number was delivered to the recipient.',
+                ],
+            ],
+        ],
+        'delivery.order.delivery_failed' => [
+            'legacy_type' => 'delivery_order_delivery_failed',
+            'module' => 'delivery',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'تعذر تسليم الطلب',
+                    'body' => 'تعذر تسليم الطلب :order_number وبدأت إعادته إلى المتجر.',
+                ],
+                'en' => [
+                    'title' => 'Delivery failed',
+                    'body' => 'Delivery of order :order_number failed and the return to merchant has started.',
+                ],
+            ],
+        ],
+        'delivery.order.returned_to_merchant' => [
+            'legacy_type' => 'delivery_order_returned_to_merchant',
+            'module' => 'delivery',
+            'category' => 'orders',
+            'priority' => 'normal',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'تمت إعادة الطلب للمتجر',
+                    'body' => 'تمت إعادة الطلب :order_number إلى المتجر بعد تعذر التسليم.',
+                ],
+                'en' => [
+                    'title' => 'Order returned to merchant',
+                    'body' => 'Order :order_number was returned to the merchant after a failed delivery.',
                 ],
             ],
         ],

@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\Schema;
 final class CleaningWorkersSeeder extends Seeder
 {
     private const string DemoCredential = 'pass'.'word';
+
     private const int DefaultDepositBalance = 1_000_000;
 
     /**
@@ -30,11 +31,11 @@ final class CleaningWorkersSeeder extends Seeder
     private array $workers = [
         [
             'email' => 'cleaning.worker@dllni.sy',
-            'name' => 'Cleaning Worker',
+            'name' => 'ماهر الدرويش',
             'phone' => '+963944100001',
-            'first_name' => 'Cleaning',
+            'first_name' => 'ماهر',
             'gender' => GenderPreference::Male->value,
-            'bio' => 'Cleaning worker for API testing.',
+            'bio' => 'عامل تنظيف بخبرة في الشقق والمكاتب ضمن أحياء حلب.',
             'home_address' => 'حلب - الحمدانية - شارع القدس',
             'home_latitude' => 36.1795,
             'home_longitude' => 37.1082,
@@ -59,11 +60,11 @@ final class CleaningWorkersSeeder extends Seeder
         ],
         [
             'email' => 'cleaning.worker2@dllni.sy',
-            'name' => 'Cleaning Worker 2',
+            'name' => 'سمر العلي',
             'phone' => '+963944100004',
-            'first_name' => 'Lina',
+            'first_name' => 'سمر',
             'gender' => GenderPreference::Female->value,
-            'bio' => 'Experienced cleaning worker for apartments and offices.',
+            'bio' => 'عاملة تنظيف بخبرة في الشقق والمكاتب ضمن أحياء حلب.',
             'home_address' => 'حلب - الأشرفية - شارع الحديقة',
             'home_latitude' => 36.2308,
             'home_longitude' => 37.1279,
@@ -88,11 +89,11 @@ final class CleaningWorkersSeeder extends Seeder
         ],
         [
             'email' => 'cleaning.worker3@dllni.sy',
-            'name' => 'Cleaning Worker 3',
+            'name' => 'عمر بركات',
             'phone' => '+963944100005',
-            'first_name' => 'Omar',
+            'first_name' => 'عمر',
             'gender' => GenderPreference::Male->value,
-            'bio' => 'Available for deep cleaning and one-time bookings.',
+            'bio' => 'متاح للتنظيف العميق وتجهيز المنازل قبل المناسبات.',
             'home_address' => 'حلب - السريان الجديدة - شارع تشرين',
             'home_latitude' => 36.2168,
             'home_longitude' => 37.1317,
@@ -127,6 +128,19 @@ final class CleaningWorkersSeeder extends Seeder
         foreach ($this->workers as $index => $workerData) {
             $this->seedWorker($workerData, $index === 0);
         }
+    }
+
+    private static function defaultWorkingHours(): array
+    {
+        return [
+            'sunday' => ['available' => false, 'data' => []],
+            'monday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
+            'tuesday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
+            'wednesday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
+            'thursday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
+            'friday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
+            'saturday' => ['available' => true, 'data' => [['10:00' => '16:00']]],
+        ];
     }
 
     /**
@@ -257,18 +271,5 @@ final class CleaningWorkersSeeder extends Seeder
             $workerData['avatar'],
             "cleaning-worker-user-{$user->id}-primary"
         );
-    }
-
-    private static function defaultWorkingHours(): array
-    {
-        return [
-            'sunday' => ['available' => false, 'data' => []],
-            'monday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
-            'tuesday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
-            'wednesday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
-            'thursday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
-            'friday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
-            'saturday' => ['available' => true, 'data' => [['10:00' => '16:00']]],
-        ];
     }
 }

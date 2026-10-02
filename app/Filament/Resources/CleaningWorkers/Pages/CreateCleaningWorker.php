@@ -62,7 +62,7 @@ final class CreateCleaningWorker extends CreateRecord
                 );
             } catch (InvalidArgumentException $exception) {
                 throw ValidationException::withMessages([
-                    'data.initial_financial_transaction_amount' => $exception->getMessage(),
+                    'data.initial_financial_transaction_amount' => \App\Filament\Support\AdminExceptionMessage::forUser($exception),
                 ]);
             }
 

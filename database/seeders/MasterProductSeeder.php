@@ -7,8 +7,8 @@ namespace Database\Seeders;
 use App\Enums\MasterProductUnit;
 use App\Models\MasterProduct;
 use App\Models\MasterProductAlias;
-use Illuminate\Database\Seeder;
 use Database\Seeders\Support\SeederMedia;
+use Illuminate\Database\Seeder;
 
 final class MasterProductSeeder extends Seeder
 {
@@ -37,6 +37,11 @@ final class MasterProductSeeder extends Seeder
             ['id' => 20, 'name' => 'مربى فراولة', 'barcode' => '6289009000004', 'unit' => MasterProductUnit::Gram, 'brand' => 'الصفدي', 'description' => 'مربى فراولة 450غ', 'is_active' => true, 'aliases' => ['مربى'], 'image_url' => 'https://images.unsplash.com/photo-1532634896-26909d0d1f4c?auto=format&fit=crop&w=900&q=80'],
             ['id' => 21, 'name' => 'شاي أحمر', 'barcode' => '6289009000005', 'unit' => MasterProductUnit::Pack, 'brand' => 'الصفدي', 'description' => 'شاي أحمر سائب', 'is_active' => true, 'aliases' => ['شاي'], 'image_url' => 'https://images.unsplash.com/photo-1544787219-7f47ccb76574?auto=format&fit=crop&w=900&q=80'],
             ['id' => 22, 'name' => 'زبدة طبيعية', 'barcode' => '6289009000006', 'unit' => MasterProductUnit::Gram, 'brand' => 'المراعي', 'description' => 'زبدة طبيعية 200غ', 'is_active' => true, 'aliases' => ['زبدة'], 'image_url' => 'https://images.unsplash.com/photo-1589985270826-4b7bb135bc9d?auto=format&fit=crop&w=900&q=80'],
+            ['id' => 23, 'name' => 'معكرونة لازانيا', 'barcode' => '6289100000001', 'unit' => MasterProductUnit::Gram, 'package_quantity' => 500, 'brand' => 'العلالي', 'description' => 'شرائح معكرونة لازانيا 500غ', 'is_active' => true, 'aliases' => ['لازانيا', 'شرائح لازانيا', 'مكرونة لازانيا'], 'image_url' => 'https://images.unsplash.com/photo-1556761223-4c4282c73f77?auto=format&fit=crop&w=900&q=80'],
+            ['id' => 24, 'name' => 'لحم مفروم', 'barcode' => '6289100000002', 'unit' => MasterProductUnit::Kilogram, 'package_quantity' => 1, 'brand' => 'محلي', 'description' => 'لحم بقري مفروم', 'is_active' => true, 'aliases' => ['لحمة مفرومة', 'لحم مفروم'], 'image_url' => 'https://images.unsplash.com/photo-1603048297172-c92544798d5a?auto=format&fit=crop&w=900&q=80'],
+            ['id' => 25, 'name' => 'صلصة طماطم', 'barcode' => '6289100000003', 'unit' => MasterProductUnit::Gram, 'package_quantity' => 680, 'brand' => 'الحدائق', 'description' => 'صلصة طماطم للطبخ 680غ', 'is_active' => true, 'aliases' => ['صلصة بندورة', 'صلصة طماطم'], 'image_url' => 'https://images.unsplash.com/photo-1472476443507-c7a5948772fc?auto=format&fit=crop&w=900&q=80'],
+            ['id' => 26, 'name' => 'بصل يابس', 'barcode' => '6289100000004', 'unit' => MasterProductUnit::Kilogram, 'package_quantity' => 1, 'brand' => 'محلي', 'description' => 'بصل يابس 1 كغ', 'is_active' => true, 'aliases' => ['بصل'], 'image_url' => 'https://images.unsplash.com/photo-1508747703725-719777637510?auto=format&fit=crop&w=900&q=80'],
+            ['id' => 27, 'name' => 'طحين أبيض', 'barcode' => '6289100000005', 'unit' => MasterProductUnit::Kilogram, 'package_quantity' => 1, 'brand' => 'الأسرة', 'description' => 'طحين أبيض 1 كغ', 'is_active' => true, 'aliases' => ['طحين', 'دقيق'], 'image_url' => 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=900&q=80'],
         ];
 
         foreach ($products as $data) {
@@ -51,6 +56,12 @@ final class MasterProductSeeder extends Seeder
                     'name' => $data['name'],
                     'barcode' => $data['barcode'],
                     'unit' => $data['unit']->value,
+                    'package_quantity' => $data['package_quantity'] ?? match ($data['unit']) {
+                        MasterProductUnit::Kilogram, MasterProductUnit::Liter, MasterProductUnit::Piece, MasterProductUnit::Pack => 1,
+                        default => null,
+                    },
+                    'package_unit' => $data['unit']->value,
+                    'sell_mode' => 'package',
                     'brand' => $data['brand'],
                     'description' => $data['description'],
                     'is_active' => $data['is_active'],
@@ -61,7 +72,7 @@ final class MasterProductSeeder extends Seeder
                 $product,
                 MasterProduct::IMAGE_COLLECTION,
                 $imageUrl,
-                'master-product-' . $product->id
+                'master-product-'.$product->id
             );
 
             foreach ($aliases as $alias) {

@@ -26,9 +26,13 @@ final class ProductController
 
     public function index(ProductFilterRequest $request): AnonymousResourceCollection
     {
-        $restaurantId = $request->filled('filter.restaurantId')
-            ? (int) $request->input('filter.restaurantId')
-            : $this->ownerContext->restaurantId();
+        $restaurantId = $this->ownerContext->restaurantId();
+        $request->merge([
+            'filter' => [
+                ...$request->input('filter', []),
+                'restaurantId' => $restaurantId,
+            ],
+        ]);
 
         $products = Product::getQuery()
             ->where('restaurant_id', $restaurantId)

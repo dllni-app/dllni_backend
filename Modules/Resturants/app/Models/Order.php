@@ -6,6 +6,7 @@ namespace Modules\Resturants\Models;
 
 use App\Models\CancellationPolicy;
 use App\Models\PlatformCoupon;
+use App\Models\SupportCase;
 use App\Models\User;
 use Database\Factories\OrderFactory;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
@@ -48,6 +49,16 @@ final class Order extends Model
         'discount_amount',
         'tax_amount',
         'service_fee',
+        'merchant_gross_amount',
+        'commission_amount',
+        'merchant_net_amount',
+        'coupon_platform_funded_amount',
+        'coupon_merchant_funded_amount',
+        'platform_gross_revenue',
+        'platform_coupon_cost',
+        'platform_net_revenue',
+        'financial_snapshot',
+        'financial_reversed_at',
         'total_amount',
         'cancellation_fee_amount',
         'cancellation_policy_snapshot',
@@ -138,6 +149,13 @@ final class Order extends Model
         return $this->hasMany(RestaurantCustomerReview::class);
     }
 
+    public function supportCases(): HasMany
+    {
+        return $this->hasMany(SupportCase::class, 'booking_id')
+            ->whereIn('booking_type', [self::class, 'restaurant_order'])
+            ->oldest('created_at');
+    }
+
     public function systemAlerts(): MorphMany
     {
         return $this->morphMany(\App\Models\SystemAlert::class, 'booking', 'booking_type', 'booking_id');
@@ -163,12 +181,22 @@ final class Order extends Model
             'ready_for_pickup_at' => 'datetime',
             'picked_up_at' => 'datetime',
             'customer_pickup_confirmed_at' => 'datetime',
-            'subtotal' => 'integer',
-            'discount_amount' => 'integer',
-            'tax_amount' => 'integer',
-            'service_fee' => 'integer',
-            'total_amount' => 'integer',
-            'cancellation_fee_amount' => 'integer',
+            'subtotal' => 'decimal:2',
+            'discount_amount' => 'decimal:2',
+            'tax_amount' => 'decimal:2',
+            'service_fee' => 'decimal:2',
+            'merchant_gross_amount' => 'decimal:2',
+            'commission_amount' => 'decimal:2',
+            'merchant_net_amount' => 'decimal:2',
+            'coupon_platform_funded_amount' => 'decimal:2',
+            'coupon_merchant_funded_amount' => 'decimal:2',
+            'platform_gross_revenue' => 'decimal:2',
+            'platform_coupon_cost' => 'decimal:2',
+            'platform_net_revenue' => 'decimal:2',
+            'financial_snapshot' => 'array',
+            'financial_reversed_at' => 'datetime',
+            'total_amount' => 'decimal:2',
+            'cancellation_fee_amount' => 'decimal:2',
             'cancellation_policy_snapshot' => 'array',
             'accepted_at' => 'datetime',
             'estimated_ready_at' => 'datetime',

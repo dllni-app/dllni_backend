@@ -45,10 +45,13 @@ final class SmOrderResource extends JsonResource
             'estimatedReadyAt' => $this->estimated_ready_at?->toIso8601String(),
             'readyForPickupAt' => $this->ready_for_pickup_at?->toDateTimeString(),
             'pickedUpAt' => $this->picked_up_at?->toDateTimeString(),
+            'storeHandoverConfirmedAt' => $this->store_handover_confirmed_at?->toDateTimeString(),
+            'storeHandoverConfirmedByUserId' => $this->store_handover_confirmed_by_user_id,
             'customerPickupConfirmedAt' => $this->customer_pickup_confirmed_at?->toDateTimeString(),
             'subtotal' => $this->subtotal,
             'discountAmount' => $this->discount_amount,
             'serviceFee' => $this->service_fee,
+            'deliveryFee' => $this->delivery_fee,
             'totalAmount' => $this->total_amount,
             'cancellationFeeAmount' => $this->cancellation_fee_amount,
             'cancellationPolicySnapshot' => $this->cancellation_policy_snapshot,
@@ -64,6 +67,93 @@ final class SmOrderResource extends JsonResource
             'createdAt' => $this->created_at?->toDateTimeString(),
             'updatedAt' => $this->updated_at?->toDateTimeString(),
         ];
+    }
+
+    private static function presentationStatus(?string $internalStatus): ?string
+    {
+        return match ($internalStatus) {
+            SmOrderStatus::PickedUp->value => 'out_for_delivery',
+            SmOrderStatus::Completed->value => 'delivered',
+            default => $internalStatus,
+        };
+    }
+
+    private static function statusLabelAr(?string $status): ?string
+    {
+        if ($status === null || $status === '') {
+            return null;
+        }
+
+        return [
+            SmOrderStatus::Pending->value => 'بانتظار القبول',
+            SmOrderStatus::Accepted->value => 'تم قبول الطلب',
+            SmOrderStatus::Preparing->value => 'قيد التحضير',
+            SmOrderStatus::ReadyForPickup->value => 'جاهز للاستلام',
+            SmOrderStatus::PickedUp->value => 'قيد التسليم',
+            SmOrderStatus::Completed->value => 'تم التسليم',
+            SmOrderStatus::Cancelled->value => 'ملغي',
+            'out_for_delivery' => 'قيد التسليم',
+            'delivered' => 'تم التسليم',
+        ][$status] ?? $status;
+    }
+
+    private static function isoDate(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return Carbon::parse($value)->utc()->toJSON();
+    }
+
+    private static function timeText(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $date = Carbon::parse($value)->timezone(config('app.timezone'));
+        $suffix = $date->format('A') === 'AM' ? 'ص' : 'م';
+
+        return $date->format('g:i').' '.$suffix;
+    }
+
+    private static function minutesText(?int $minutes): ?string
+    {
+        return $minutes === null ? null : $minutes.' دقيقة';
+    }
+
+    private static function cleanUtf8Text(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $value = mb_trim($value);
+        if ($value === '') {
+            return null;
+        }
+
+        if (str_contains($value, "\u{FFFD}") || ! mb_check_encoding($value, 'UTF-8')) {
+            return null;
+        }
+
+        if (preg_match('/[ØÙ]/u', $value) === 1) {
+            foreach (['Windows-1252', 'ISO-8859-1'] as $encoding) {
+                $repaired = mb_convert_encoding($value, $encoding, 'UTF-8');
+                if (
+                    mb_check_encoding($repaired, 'UTF-8')
+                    && preg_match('/[\x{0600}-\x{06FF}]/u', $repaired) === 1
+                ) {
+                    $value = $repaired;
+                    break;
+                }
+            }
+        }
+
+        $value = mb_trim($value);
+
+        return $value === '' ? null : $value;
     }
 
     private function orderDetailsPayload(): array
@@ -127,92 +217,5 @@ final class SmOrderResource extends JsonResource
         $statusLog = $this->resource->statusLogs()->where('to_status', $completedStatus)->latest('created_at')->first();
 
         return $statusLog?->created_at ? Carbon::parse($statusLog->created_at) : null;
-    }
-
-    private static function presentationStatus(?string $internalStatus): ?string
-    {
-        return match ($internalStatus) {
-            SmOrderStatus::PickedUp->value => 'out_for_delivery',
-            SmOrderStatus::Completed->value => 'delivered',
-            default => $internalStatus,
-        };
-    }
-
-    private static function statusLabelAr(?string $status): ?string
-    {
-        if ($status === null || $status === '') {
-            return null;
-        }
-
-        return [
-            SmOrderStatus::Pending->value => 'بانتظار القبول',
-            SmOrderStatus::Accepted->value => 'تم قبول الطلب',
-            SmOrderStatus::Preparing->value => 'قيد التحضير',
-            SmOrderStatus::ReadyForPickup->value => 'جاهز للاستلام',
-            SmOrderStatus::PickedUp->value => 'قيد التسليم',
-            SmOrderStatus::Completed->value => 'تم التسليم',
-            SmOrderStatus::Cancelled->value => 'ملغي',
-            'out_for_delivery' => 'قيد التسليم',
-            'delivered' => 'تم التسليم',
-        ][$status] ?? $status;
-    }
-
-    private static function isoDate(mixed $value): ?string
-    {
-        if ($value === null || $value === '') {
-            return null;
-        }
-
-        return Carbon::parse($value)->utc()->toJSON();
-    }
-
-    private static function timeText(mixed $value): ?string
-    {
-        if ($value === null || $value === '') {
-            return null;
-        }
-
-        $date = Carbon::parse($value)->timezone(config('app.timezone'));
-        $suffix = $date->format('A') === 'AM' ? 'ص' : 'م';
-
-        return $date->format('g:i').' '.$suffix;
-    }
-
-    private static function minutesText(?int $minutes): ?string
-    {
-        return $minutes === null ? null : $minutes.' دقيقة';
-    }
-
-    private static function cleanUtf8Text(?string $value): ?string
-    {
-        if ($value === null) {
-            return null;
-        }
-
-        $value = trim($value);
-        if ($value === '') {
-            return null;
-        }
-
-        if (str_contains($value, "\u{FFFD}") || ! mb_check_encoding($value, 'UTF-8')) {
-            return null;
-        }
-
-        if (preg_match('/[ØÙ]/u', $value) === 1) {
-            foreach (['Windows-1252', 'ISO-8859-1'] as $encoding) {
-                $repaired = mb_convert_encoding($value, $encoding, 'UTF-8');
-                if (
-                    mb_check_encoding($repaired, 'UTF-8')
-                    && preg_match('/[\x{0600}-\x{06FF}]/u', $repaired) === 1
-                ) {
-                    $value = $repaired;
-                    break;
-                }
-            }
-        }
-
-        $value = trim($value);
-
-        return $value === '' ? null : $value;
     }
 }

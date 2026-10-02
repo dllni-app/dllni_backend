@@ -201,26 +201,6 @@ final class DeliveryNotificationService
         $this->notifyCompanyUsers($order->company, 'delivery.order.stopped', $context, $extraData);
     }
 
-    private function notifyAssignedDriver(DeliveryOrder $order, string $canonicalType): void
-    {
-        $order->loadMissing('driver.user');
-        $driverUser = $order->driver?->user;
-
-        if (! $driverUser instanceof User) {
-            return;
-        }
-
-        $driverUser->notify(new DeliveryCanonicalNotification(
-            canonicalType: $canonicalType,
-            templateContext: ['order_number' => $order->order_number],
-            extraData: [
-                'orderId' => $order->id,
-                'orderNumber' => $order->order_number,
-                'deepLinkTarget' => 'delivery_order_details',
-            ],
-        ));
-    }
-
     public function notifyDisputeOpened(DeliveryOrder $order, \App\Models\Dispute $dispute): void
     {
         $context = [
@@ -261,6 +241,16 @@ final class DeliveryNotificationService
     public function notifyOrderDelivered(DeliveryOrder $order): void
     {
         $this->notifyOrderLifecycle($order, 'delivery.order.delivered');
+    }
+
+    public function notifyOrderDeliveryFailed(DeliveryOrder $order): void
+    {
+        $this->notifyOrderLifecycle($order, 'delivery.order.delivery_failed');
+    }
+
+    public function notifyOrderReturnedToMerchant(DeliveryOrder $order): void
+    {
+        $this->notifyOrderLifecycle($order, 'delivery.order.returned_to_merchant');
     }
 
     public function notifyDisputeRejected(DeliveryOrder $order, \App\Models\Dispute $dispute): void
@@ -397,6 +387,26 @@ final class DeliveryNotificationService
         $canonicalType = $data['canonical_type'] ?? $data['canonicalType'] ?? null;
 
         return is_string($canonicalType) && str_starts_with($canonicalType, 'delivery.');
+    }
+
+    private function notifyAssignedDriver(DeliveryOrder $order, string $canonicalType): void
+    {
+        $order->loadMissing('driver.user');
+        $driverUser = $order->driver?->user;
+
+        if (! $driverUser instanceof User) {
+            return;
+        }
+
+        $driverUser->notify(new DeliveryCanonicalNotification(
+            canonicalType: $canonicalType,
+            templateContext: ['order_number' => $order->order_number],
+            extraData: [
+                'orderId' => $order->id,
+                'orderNumber' => $order->order_number,
+                'deepLinkTarget' => 'delivery_order_details',
+            ],
+        ));
     }
 
     private function notifyOrderLifecycle(DeliveryOrder $order, string $canonicalType): void

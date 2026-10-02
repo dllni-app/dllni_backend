@@ -137,12 +137,13 @@ test.describe('Supermarket User API (Playwright request contexts)', () => {
   });
 
   test('USR-SM-13: user cart show returns empty list on fresh seed', async ({ roleRequests }) => {
-    const showResponse = await roleRequests.user.get('/api/v1/user/supermarket/cart');
+    const showResponse = await roleRequests.user.get('/api/v1/user/supermarket/carts');
     expect(showResponse.status()).toBe(200);
 
     const showBody = await showResponse.json();
-    const items = (showBody?.data?.items ?? []) as unknown[];
-    expect(items).toHaveLength(0);
+    const carts = (showBody?.data ?? []) as Array<{ items?: unknown[] }>;
+    expect(carts.length).toBeGreaterThan(0);
+    expect(carts[0]?.items ?? []).toHaveLength(0);
   });
 
   test('USR-SM-14/15/16: cart add, update, and delete lifecycle works', async ({ roleRequests, seed }) => {
@@ -155,24 +156,26 @@ test.describe('Supermarket User API (Playwright request contexts)', () => {
     expect([200, 201]).toContain(addResponse.status());
 
     const addBody = await addResponse.json();
+    const cartId = Number(addBody?.data?.id);
     const itemId = Number(addBody?.data?.items?.[0]?.id);
+    expect(cartId).toBeGreaterThan(0);
     expect(itemId).toBeGreaterThan(0);
 
-    const updateResponse = await roleRequests.user.patch(`/api/v1/user/supermarket/cart/items/${itemId}`, {
+    const updateResponse = await roleRequests.user.patch(`/api/v1/user/supermarket/carts/${cartId}/items/${itemId}`, {
       data: { quantity: 3 },
     });
     expect(updateResponse.status()).toBe(200);
     const updateBody = await updateResponse.json();
     expect(Number(updateBody?.data?.items?.[0]?.quantity)).toBe(3);
 
-    const deleteResponse = await roleRequests.user.delete(`/api/v1/user/supermarket/cart/items/${itemId}`);
+    const deleteResponse = await roleRequests.user.delete(`/api/v1/user/supermarket/carts/${cartId}/items/${itemId}`);
     expect([200, 204]).toContain(deleteResponse.status());
 
-    const showResponse = await roleRequests.user.get('/api/v1/user/supermarket/cart');
+    const showResponse = await roleRequests.user.get('/api/v1/user/supermarket/carts');
     expect(showResponse.status()).toBe(200);
     const showBody = await showResponse.json();
-    const items = (showBody?.data?.items ?? []) as unknown[];
-    expect(items).toHaveLength(0);
+    const carts = (showBody?.data ?? []) as unknown[];
+    expect(carts).toHaveLength(0);
   });
 
   test('USR-SM-19/20: user can place an order and fetch tracking payload', async ({ roleRequests, seed }) => {
@@ -183,10 +186,13 @@ test.describe('Supermarket User API (Playwright request contexts)', () => {
       },
     });
     expect([200, 201]).toContain(addResponse.status());
+    const addBody = await addResponse.json();
+    const cartId = Number(addBody?.data?.id);
+    expect(cartId).toBeGreaterThan(0);
 
-    const orderResponse = await roleRequests.user.post('/api/v1/user/supermarket/orders', {
+    const orderResponse = await roleRequests.user.post(`/api/v1/user/supermarket/carts/${cartId}/orders`, {
       data: {
-        fulfillmentType: 'delivery',
+        fulfillmentType: 'pickup',
         receiveMode: 'immediate',
         note: 'Playwright API-first order',
       },
@@ -207,9 +213,15 @@ test.describe('Supermarket User API (Playwright request contexts)', () => {
   });
 
   test('USR-SM-17: placing order with empty cart is rejected', async ({ roleRequests }) => {
-    const response = await roleRequests.user.post('/api/v1/user/supermarket/orders', {
+    const cartsResponse = await roleRequests.user.get('/api/v1/user/supermarket/carts');
+    expect(cartsResponse.status()).toBe(200);
+    const cartsBody = await cartsResponse.json();
+    const cartId = Number(cartsBody?.data?.[0]?.id);
+    expect(cartId).toBeGreaterThan(0);
+
+    const response = await roleRequests.user.post(`/api/v1/user/supermarket/carts/${cartId}/orders`, {
       data: {
-        fulfillmentType: 'delivery',
+        fulfillmentType: 'pickup',
         receiveMode: 'immediate',
         note: 'Should fail due to empty cart',
       },
@@ -304,10 +316,10 @@ test.describe('Supermarket User API (Playwright request contexts)', () => {
   });
 
   test('USR-SM-24: protected endpoints reject missing token', async ({ roleRequests }) => {
-    const cartResponse = await roleRequests.guest.get('/api/v1/user/supermarket/cart');
+    const cartResponse = await roleRequests.guest.get('/api/v1/user/supermarket/carts');
     expect(cartResponse.status()).toBe(401);
 
-    const orderResponse = await roleRequests.guest.post('/api/v1/user/supermarket/orders', {
+    const orderResponse = await roleRequests.guest.post('/api/v1/user/supermarket/carts/1/orders', {
       data: {
         fulfillmentType: 'delivery',
         receiveMode: 'immediate',
@@ -325,9 +337,15 @@ test.describe('Supermarket User API (Playwright request contexts)', () => {
   });
 
   test('USR-SM-25: checkout preview rejects empty cart', async ({ roleRequests }) => {
-    const response = await roleRequests.user.post('/api/v1/user/supermarket/checkout/preview', {
+    const cartsResponse = await roleRequests.user.get('/api/v1/user/supermarket/carts');
+    expect(cartsResponse.status()).toBe(200);
+    const cartsBody = await cartsResponse.json();
+    const cartId = Number(cartsBody?.data?.[0]?.id);
+    expect(cartId).toBeGreaterThan(0);
+
+    const response = await roleRequests.user.post(`/api/v1/user/supermarket/carts/${cartId}/checkout/preview`, {
       data: {
-        fulfillmentType: 'delivery',
+        fulfillmentType: 'pickup',
         receiveMode: 'immediate',
       },
     });

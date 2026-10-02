@@ -18,8 +18,11 @@ use Illuminate\Validation\ValidationException;
 final class UserAuthController
 {
     private const INVALID_CREDENTIALS_MESSAGE = 'رقم الهاتف أو كلمة المرور غير صحيحة.';
+
     private const ACCOUNT_NOT_ACTIVE_MESSAGE = 'الحساب غير مفعل حالياً. يرجى التواصل مع الدعم.';
+
     private const MODULE_ACCESS_DENIED_MESSAGE = 'هذا الحساب غير مصرح له بتسجيل الدخول إلى هذا التطبيق.';
+
     private const LOGOUT_SUCCESS_MESSAGE = 'تم تسجيل الخروج بنجاح.';
 
     public function login(UserLoginRequest $request): JsonResponse
@@ -34,9 +37,16 @@ final class UserAuthController
             $this->throwValidationError('phone', self::ACCOUNT_NOT_ACTIVE_MESSAGE);
         }
 
-        $requestedModuleType = UserModuleType::from($request->validated('module'));
-        if ($user->module_type !== $requestedModuleType) {
-            $this->throwValidationError('phone', self::MODULE_ACCESS_DENIED_MESSAGE);
+        $requestedModule = $request->validated('module');
+        if ($requestedModule === 'user') {
+            if ($user->module_type !== null) {
+                $this->throwValidationError('phone', self::MODULE_ACCESS_DENIED_MESSAGE);
+            }
+        } else {
+            $requestedModuleType = UserModuleType::from($requestedModule);
+            if ($user->module_type !== $requestedModuleType) {
+                $this->throwValidationError('phone', self::MODULE_ACCESS_DENIED_MESSAGE);
+            }
         }
 
         $fcmToken = $request->validated('fcmToken');

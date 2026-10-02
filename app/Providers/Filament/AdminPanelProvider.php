@@ -10,6 +10,7 @@ use App\Support\Filament\AlnadhaTheme;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Navigation\NavigationGroup;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\View\PanelsRenderHook;
@@ -47,6 +48,13 @@ final class AdminPanelProvider extends PanelProvider
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
+            ->navigationGroups([
+                NavigationGroup::make(\App\Filament\Support\AdminNavigationGroup::delivery()),
+                NavigationGroup::make(\App\Filament\Support\AdminNavigationGroup::restaurants()),
+                NavigationGroup::make(\App\Filament\Support\AdminNavigationGroup::supermarkets()),
+                NavigationGroup::make(\App\Filament\Support\AdminNavigationGroup::cleaning()),
+                NavigationGroup::make(\App\Filament\Support\AdminNavigationGroup::general()),
+            ])
             ->renderHook(
                 PanelsRenderHook::HEAD_START,
                 fn (): HtmlString => $this->forceLatinDigitsScript(),

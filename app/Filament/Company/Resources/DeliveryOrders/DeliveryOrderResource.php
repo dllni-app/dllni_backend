@@ -69,7 +69,7 @@ final class DeliveryOrderResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return self::companyScopedQuery(
-            parent::getEloquentQuery()->with(['driver', 'events', 'assignmentAttempts.driver']),
+            parent::getEloquentQuery()->with(['driver.latestLocation', 'events', 'assignmentAttempts.driver', 'source']),
         );
     }
 

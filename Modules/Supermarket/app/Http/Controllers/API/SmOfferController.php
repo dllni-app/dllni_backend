@@ -15,17 +15,20 @@ use Modules\Supermarket\Http\Requests\SmOfferRequests\SmOfferFilterRequest;
 use Modules\Supermarket\Http\Resources\SmOfferResource;
 use Modules\Supermarket\Models\SmOffer;
 use Modules\Supermarket\Services\SmOfferService;
+use Modules\Supermarket\Services\StoreOwnerContextService;
 
 final class SmOfferController
 {
     public function __construct(
         private SmOfferService $service,
-        private ActivityLogService $activityLogService
+        private ActivityLogService $activityLogService,
+        private StoreOwnerContextService $context,
     ) {}
 
     public function index(SmOfferFilterRequest $request): AnonymousResourceCollection
     {
         $offers = SmOffer::getQuery()
+            ->where('store_id', $this->context->ownedStore()->id)
             ->withAnalyticsCounts()
             ->paginate($request->get('perPage', 20));
 
@@ -48,11 +51,14 @@ final class SmOfferController
 
     public function show(SmOffer $smOffer): SmOfferResource
     {
+        $this->context->store((int) $smOffer->store_id);
+
         return SmOfferResource::make($this->resolveOfferWithCounts($smOffer->id));
     }
 
     public function update(SmOfferRequest $request, SmOffer $smOffer): SmOfferResource
     {
+        $this->context->store((int) $smOffer->store_id);
         $validated = $request->validated();
         $offerProducts = $validated['offerProducts'] ?? null;
         $offer = $this->service->update(
@@ -66,6 +72,7 @@ final class SmOfferController
 
     public function destroy(SmOffer $smOffer): Response
     {
+        $this->context->store((int) $smOffer->store_id);
         $offerName = $smOffer->name;
         $storeId = (int) $smOffer->store_id;
         $smOffer->delete();
@@ -77,6 +84,7 @@ final class SmOfferController
     private function resolveOfferWithCounts(int $offerId): SmOffer
     {
         return SmOffer::query()
+            ->where('store_id', $this->context->ownedStore()->id)
             ->with('store')
             ->withAnalyticsCounts()
             ->findOrFail($offerId);

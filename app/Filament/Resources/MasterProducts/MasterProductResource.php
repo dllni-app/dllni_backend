@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\MasterProducts;
 
+use App\Filament\Concerns\AuthorizesPlatformAdminResource;
 use App\Filament\Concerns\ResolvesSupermarketNavigationGroup;
 use App\Filament\Resources\MasterProducts\Pages\CreateMasterProduct;
 use App\Filament\Resources\MasterProducts\Pages\EditMasterProduct;
@@ -18,10 +19,12 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 final class MasterProductResource extends Resource
 {
+    use AuthorizesPlatformAdminResource;
     use ResolvesSupermarketNavigationGroup;
 
     protected static ?string $model = MasterProduct::class;
@@ -30,13 +33,28 @@ final class MasterProductResource extends Resource
 
     protected static ?string $navigationLabel = null;
 
-    protected static ?int $navigationSort = 7;
+    protected static ?int $navigationSort = 10;
 
     protected static bool $shouldRegisterNavigation = true;
+
+    public static function getNavigationGroup(): ?string
+    {
+        return \App\Filament\Support\AdminNavigationGroup::supermarkets();
+    }
 
     public static function getNavigationLabel(): string
     {
         return __('supermarket_admin.master_products');
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('admin_resources.master_product.singular');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('admin_resources.master_product.plural');
     }
 
     public static function getNavigationTooltip(): ?string
@@ -59,6 +77,36 @@ final class MasterProductResource extends Resource
         return MasterProductsTable::configure($table);
     }
 
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->with(['category', 'aliases', 'media', 'storeProducts.store']);
+    }
+
+    public static function canViewAny(): bool
+    {
+        return self::dashboardAllowed('supermarket_catalog.view');
+    }
+
+    public static function canView(Model $record): bool
+    {
+        return self::dashboardAllowed('supermarket_catalog.view');
+    }
+
+    public static function canCreate(): bool
+    {
+        return self::dashboardAllowed('supermarket_catalog.create');
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return self::dashboardAllowed('supermarket_catalog.update');
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return self::dashboardAllowed('supermarket_catalog.delete');
+    }
+
     public static function getPages(): array
     {
         return [
@@ -71,10 +119,6 @@ final class MasterProductResource extends Resource
 
     public static function getRecordTitle(?Model $record): ?string
     {
-        if (! $record instanceof MasterProduct) {
-            return null;
-        }
-
-        return $record->name;
+        return $record instanceof MasterProduct ? $record->name : null;
     }
 }

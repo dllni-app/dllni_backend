@@ -293,7 +293,7 @@ final class SmProductsSearchController
 
         return $items
             ->filter(function (SmProduct $product) use ($tokens): bool {
-                $score = $product->getAttribute('semantic_score');
+                $score = $product->getAttributes()['semantic_score'] ?? null;
                 $numericScore = is_numeric($score) ? (float) $score : 0.0;
 
                 if ($numericScore >= self::SEMANTIC_STRONG_SCORE_THRESHOLD) {

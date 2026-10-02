@@ -27,7 +27,7 @@ final class DeliveryCompanyResource extends Resource
 
     public static function getNavigationGroup(): ?string
     {
-        return __('delivery_admin.nav_group');
+        return \App\Filament\Support\AdminNavigationGroup::delivery();
     }
 
     public static function getNavigationLabel(): string

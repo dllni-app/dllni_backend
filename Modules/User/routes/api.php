@@ -42,6 +42,7 @@ use Modules\User\Http\Controllers\API\SmProductSimilarSearchController;
 use Modules\User\Http\Controllers\API\SmProductsSearchController;
 use Modules\User\Http\Controllers\API\SmStoreShowController;
 use Modules\User\Http\Controllers\API\SmStoresIndexController;
+use Modules\User\Http\Controllers\API\UserAccountDestroyController;
 use Modules\User\Http\Controllers\API\UserAccountPasswordController;
 use Modules\User\Http\Controllers\API\UserAccountShowController;
 use Modules\User\Http\Controllers\API\UserAccountUpdateController;
@@ -54,6 +55,7 @@ use Modules\User\Http\Controllers\API\UserAddressStoreController;
 use Modules\User\Http\Controllers\API\UserAddressUpdateController;
 use Modules\User\Http\Controllers\API\UserCleaningBannersController;
 use Modules\User\Http\Controllers\API\UserCleaningCancellationFeeController;
+use Modules\User\Http\Controllers\API\UserCleaningOpenTimeController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderCancelController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderCompletionConfirmController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderCompletionExtendTimeController;
@@ -63,8 +65,6 @@ use Modules\User\Http\Controllers\API\UserCleaningOrderEstimateSizeController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderReviewController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderRoomAssignmentsController;
 use Modules\User\Http\Controllers\API\UserCleaningOrdersController;
-use Modules\User\Http\Controllers\API\UserCleaningOpenTimeController;
-use Modules\User\Http\Controllers\API\UserCleaningScheduleChangeController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderShowController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderSosController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderStartVerificationConfirmController;
@@ -72,6 +72,7 @@ use Modules\User\Http\Controllers\API\UserCleaningOrderStoreController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderUpdateController;
 use Modules\User\Http\Controllers\API\UserCleaningPreferredWorkerRejectionDecisionController;
 use Modules\User\Http\Controllers\API\UserCleaningPreviousWorkersController;
+use Modules\User\Http\Controllers\API\UserCleaningScheduleChangeController;
 use Modules\User\Http\Controllers\API\UserCouponAvailabilityCheckController;
 use Modules\User\Http\Controllers\API\UserMarketingOfferShowController;
 use Modules\User\Http\Controllers\API\UserMarketingOffersIndexController;
@@ -115,6 +116,7 @@ use Modules\User\Http\Controllers\API\UserRestaurantOrderStoreController;
 use Modules\User\Http\Controllers\API\UserRestaurantProductsByCategoryController;
 use Modules\User\Http\Controllers\API\UserRestaurantProductsSearchController;
 use Modules\User\Http\Controllers\API\UserRestaurantProductsWithOffersController;
+use Modules\User\Http\Controllers\API\UserSmartSearchController;
 use Modules\User\Http\Controllers\API\UserSosController;
 use Modules\User\Http\Controllers\API\UserSupermarketCartDestroyController;
 use Modules\User\Http\Controllers\API\UserSupermarketCartItemDestroyController;
@@ -201,6 +203,7 @@ Route::prefix('v1/user')->group(function (): void {
     Route::middleware(['auth:sanctum'])->group(function (): void {
 
         Route::post('products/normalize-text', UserNormalizeProductTextController::class);
+        Route::post('smart-search', UserSmartSearchController::class);
         Route::get('me', MeController::class);
 
         Route::post('coupons/check', UserCouponAvailabilityCheckController::class);
@@ -208,6 +211,7 @@ Route::prefix('v1/user')->group(function (): void {
         Route::get('account', UserAccountShowController::class);
         Route::patch('account', UserAccountUpdateController::class);
         Route::put('account/password', UserAccountPasswordController::class);
+        Route::delete('account', UserAccountDestroyController::class);
 
         Route::get('notifications', UserNotificationsIndexController::class);
         Route::patch('notifications/read-all', UserNotificationsMarkAllAsReadController::class);

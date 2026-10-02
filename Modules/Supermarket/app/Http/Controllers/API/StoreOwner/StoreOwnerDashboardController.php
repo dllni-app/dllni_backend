@@ -42,10 +42,14 @@ final class StoreOwnerDashboardController
             ->whereNotIn('status', [SmOrderStatus::Completed, SmOrderStatus::Cancelled])
             ->count();
 
-        // Total sales (completed orders only)
-        $totalSales = (float) (clone $todayOrdersQuery)
-            ->where('status', SmOrderStatus::Completed)
-            ->sum('total_amount');
+        // Customer sales and merchant settlement (completed orders only).
+        $completedTodayQuery = (clone $todayOrdersQuery)->where('status', SmOrderStatus::Completed);
+        $totalSales = (float) (clone $completedTodayQuery)->sum('total_amount');
+        $merchantGrossSales = (float) (clone $completedTodayQuery)->sum('merchant_gross_amount');
+        $merchantNetSales = (float) (clone $completedTodayQuery)->sum('merchant_net_amount');
+        $platformCommission = (float) (clone $completedTodayQuery)->sum('commission_amount');
+        $merchantCouponFunding = (float) (clone $completedTodayQuery)->sum('coupon_merchant_funded_amount');
+        $unsnapshottedOrders = (clone $completedTodayQuery)->whereNull('financial_snapshot')->count();
 
         // Get yesterday's total sales for comparison
         $yesterday = Carbon::yesterday();
@@ -86,6 +90,11 @@ final class StoreOwnerDashboardController
                 'pendingOrders' => $pendingOrdersCount,
                 'totalSales' => $totalSales,
                 'salesPercentageChange' => (float) round($salesPercentageChange, 2),
+                'merchantGrossSales' => $merchantGrossSales,
+                'merchantNetSales' => $merchantNetSales,
+                'platformCommission' => $platformCommission,
+                'merchantCouponFunding' => $merchantCouponFunding,
+                'unsnapshottedOrders' => $unsnapshottedOrders,
             ],
         ]);
     }

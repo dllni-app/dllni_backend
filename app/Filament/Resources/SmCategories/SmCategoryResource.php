@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\SmCategories;
 
+use App\Filament\Concerns\AuthorizesPlatformAdminResource;
 use App\Filament\Concerns\ResolvesSupermarketNavigationGroup;
 use App\Filament\Resources\SmCategories\Pages\CreateSmCategory;
 use App\Filament\Resources\SmCategories\Pages\EditSmCategory;
@@ -22,6 +23,7 @@ use Modules\Supermarket\Models\SmCategory;
 
 final class SmCategoryResource extends Resource
 {
+    use AuthorizesPlatformAdminResource;
     use ResolvesSupermarketNavigationGroup;
 
     protected static ?string $model = SmCategory::class;
@@ -30,13 +32,28 @@ final class SmCategoryResource extends Resource
 
     protected static ?string $navigationLabel = null;
 
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 8;
 
     protected static bool $shouldRegisterNavigation = true;
+
+    public static function getNavigationGroup(): ?string
+    {
+        return \App\Filament\Support\AdminNavigationGroup::supermarkets();
+    }
 
     public static function getNavigationLabel(): string
     {
         return __('supermarket_admin.categories');
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('admin_resources.supermarket_category.singular');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('admin_resources.supermarket_category.plural');
     }
 
     public static function getNavigationTooltip(): ?string
@@ -59,22 +76,38 @@ final class SmCategoryResource extends Resource
         return SmCategoriesTable::configure($table);
     }
 
+    public static function canViewAny(): bool
+    {
+        return self::dashboardAllowed('supermarket_catalog.view');
+    }
+
+    public static function canView(Model $record): bool
+    {
+        return self::dashboardAllowed('supermarket_catalog.view');
+    }
+
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return false;
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return false;
+    }
+
     public static function getPages(): array
     {
-        return [
-            'index' => ListSmCategories::route('/'),
-            'create' => CreateSmCategory::route('/create'),
-            'view' => ViewSmCategory::route('/{record}'),
-            'edit' => EditSmCategory::route('/{record}/edit'),
-        ];
+        return ['index' => ListSmCategories::route('/'), 'create' => CreateSmCategory::route('/create'), 'view' => ViewSmCategory::route('/{record}'), 'edit' => EditSmCategory::route('/{record}/edit')];
     }
 
     public static function getRecordTitle(?Model $record): ?string
     {
-        if (! $record instanceof SmCategory) {
-            return null;
-        }
-
-        return $record->name;
+        return $record instanceof SmCategory ? $record->name : null;
     }
 }
