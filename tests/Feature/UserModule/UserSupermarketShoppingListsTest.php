@@ -160,9 +160,9 @@ it('adds list items to the supermarket cart for a store', function (): void {
     $addToCartResponse = $this->postJson("/api/v1/user/supermarket/shopping-lists/{$listId}/add-to-cart", []);
 
     $addToCartResponse->assertCreated()
-        ->assertJsonPath('data.merchantGroups.0.merchant.id', $store->id);
+        ->assertJsonPath('data.merchant.id', $store->id);
 
-    $items = $addToCartResponse->json('data.merchantGroups.0.items');
+    $items = $addToCartResponse->json('data.items');
     expect($items)->toHaveCount(1)
         ->and($items[0]['quantity'])->toBe(2);
 });
