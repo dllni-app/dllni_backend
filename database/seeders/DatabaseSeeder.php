@@ -9,6 +9,8 @@ use Database\Seeders\Permissions\SupermarketOwnerEmployeePermissionsSeeder;
 use Illuminate\Database\Seeder;
 use Modules\Cleaning\Database\Seeders\CleaningBannerSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningBookingSeeder;
+use Modules\Cleaning\Database\Seeders\CleaningCatalogScenarioSeeder;
+use Modules\Cleaning\Database\Seeders\CleaningOperationalScenarioSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningWorkerArabicDataSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningWorkerExtensionScenarioSeeder;
 use Modules\Cleaning\Database\Seeders\EventBookingSeeder;
@@ -26,8 +28,7 @@ final class DatabaseSeeder extends Seeder
         $this->call([
             DashboardPermissionsSeeder::class,
             DeliveryPermissionsSeeder::class,
-            RestaurantOwnerEmployeePermissionsSeeder::class,
-            SupermarketOwnerEmployeePermissionsSeeder::class,
+            RestaurantOwnerEmployeePermissionsSeeder::class,            SupermarketOwnerEmployeePermissionsSeeder::class,
             TeamRoleTemplatesSeeder::class,
 
             AdminUserSeeder::class,
@@ -61,8 +62,7 @@ final class DatabaseSeeder extends Seeder
         return [
             RequestedTestUsersSeeder::class,
             DeliveryModuleDataSeeder::class,
-            MandoubDeliveryTestUserSeeder::class,
-            MandoubPrimaryOfferScenarioSeeder::class,
+            MandoubDeliveryTestUserSeeder::class,            MandoubPrimaryOfferScenarioSeeder::class,
             CleaningWorkersSeeder::class,
             CleaningWorkerAndSellerSeeder::class,
             WorkerUserSeeder::class,
@@ -72,10 +72,12 @@ final class DatabaseSeeder extends Seeder
             WorkerFinancialTypeScenarioSeeder::class,
             CleaningBannerSeeder::class,
             RestaurantSeeder::class,
+            CleaningCatalogScenarioSeeder::class,
             CleaningBookingSeeder::class,
             CleaningWorkerArabicDataSeeder::class,
             CleaningWorkerExtensionScenarioSeeder::class,
             EventBookingSeeder::class,
+            CleaningOperationalScenarioSeeder::class,
             SupermarketDatabaseSeeder::class,
             MarketingOfferSeeder::class,
             UserAppScenarioSeeder::class,
