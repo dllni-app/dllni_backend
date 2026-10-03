@@ -338,6 +338,56 @@ final class CleaningBookingSessionLifecycleService
         });
     }
 
+    public function cancelRemainingSessions(
+        CleaningBooking $booking,
+        string $actorRole,
+        ?string $reason,
+        float $cancellationFee = 0.0,
+    ): CleaningBooking {
+        return DB::transaction(function () use ($booking, $actorRole, $reason, $cancellationFee): CleaningBooking {
+            $lockedBooking = CleaningBooking::query()
+                ->whereKey($booking->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $cancelledAt = now();
+            $sessions = CleaningBookingSession::query()
+                ->where('cleaning_booking_id', $lockedBooking->id)
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($sessions as $session) {
+                if ($session->isTerminal()) {
+                    continue;
+                }
+
+                CleaningBookingSessionWorkerAssignment::query()
+                    ->where('cleaning_booking_session_id', $session->id)
+                    ->whereIn('status', CleaningBookingWorkerAssignmentStatus::activeValues())
+                    ->update([
+                        'status' => CleaningBookingWorkerAssignmentStatus::Cancelled->value,
+                        'updated_at' => $cancelledAt,
+                    ]);
+
+                $session->forceFill([
+                    'status' => CleaningBookingSessionStatus::Cancelled,
+                    'cancelled_at' => $cancelledAt,
+                    'cancellation_reason' => $reason,
+                    'cancelled_by_role' => $actorRole,
+                    'cancellation_fee' => max(0.0, $cancellationFee),
+                ])->save();
+            }
+
+            $lockedBooking->forceFill([
+                'cancellation_fee' => max(0.0, $cancellationFee),
+            ])->saveQuietly();
+
+            $this->syncParentStatus($lockedBooking);
+
+            return $lockedBooking->fresh() ?? $lockedBooking;
+        });
+    }
+
     public function confirmCompletion(
         CleaningBooking $booking,
         CleaningBookingSession $session,
