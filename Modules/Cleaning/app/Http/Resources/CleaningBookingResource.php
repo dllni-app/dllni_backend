@@ -12,6 +12,7 @@ use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingRoom;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
 use Modules\Cleaning\Services\CleaningExtendedTimePricingService;
 use Modules\Cleaning\Services\CleaningOrderUrgencyService;
 use Modules\Cleaning\Services\WorkerOrderSolvencyService;
@@ -60,6 +61,9 @@ final class CleaningBookingResource extends JsonResource
         $details = is_array($this->property_details) ? $this->property_details : [];
         $globalOrderStatus = $this->status?->value ?? $this->status;
         $myAssignmentModel = $this->currentWorkerAssignment($request);
+        $hasCurrentWorkerSessionAcceptance = $myAssignmentModel === null
+            && (string) $globalOrderStatus === CleaningBookingStatus::Pending->value
+            && $this->hasCurrentWorkerActiveSessionAssignment($request);
         $workerOffer = $this->currentWorkerOffer($request, $myAssignmentModel);
         $pendingCompletionAssignments = $this->pendingCustomerCompletionAssignments();
         $pendingCompletionAssignment = $pendingCompletionAssignments[0] ?? null;
@@ -68,7 +72,11 @@ final class CleaningBookingResource extends JsonResource
             ? $this->serializeWorkerAssignment($myAssignmentModel)
             : $workerOffer;
         $orderStatus = $this->responseStatusForRequest($myAssignmentModel, (string) $globalOrderStatus);
-        $workerOrderStatus = $this->workerOrderStatus($myAssignmentModel, (string) $globalOrderStatus);
+        $workerOrderStatus = $this->workerOrderStatus(
+            $myAssignmentModel,
+            (string) $globalOrderStatus,
+            $hasCurrentWorkerSessionAcceptance,
+        );
         $team = $this->workerAcceptanceSummary();
         $workerLifecycleSummary = $this->workerLifecycleSummary();
         $address = $this->addressPayload($details);
@@ -544,8 +552,25 @@ final class CleaningBookingResource extends JsonResource
         }, $assignments));
     }
 
-    private function workerOrderStatus(?CleaningBookingWorkerAssignment $assignment, string $globalStatus): string
+    private function hasCurrentWorkerActiveSessionAssignment(Request $request): bool
     {
+        $workerId = $request->user()?->worker?->id;
+        if ($workerId === null) {
+            return false;
+        }
+
+        return CleaningBookingSessionWorkerAssignment::query()
+            ->where('worker_id', (int) $workerId)
+            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::activeValues())
+            ->whereHas('session', fn ($query) => $query->where('cleaning_booking_id', $this->id))
+            ->exists();
+    }
+
+    private function workerOrderStatus(
+        ?CleaningBookingWorkerAssignment $assignment,
+        string $globalStatus,
+        bool $hasCurrentWorkerSessionAcceptance = false,
+    ): string {
         if (in_array($globalStatus, [
             CleaningBookingStatus::Cancelled->value,
             CleaningBookingStatus::Completed->value,
@@ -554,7 +579,18 @@ final class CleaningBookingResource extends JsonResource
             return $globalStatus;
         }
 
-        return $assignment instanceof CleaningBookingWorkerAssignment ? $this->assignmentStatusForResponse($assignment) : $globalStatus;
+        if ($assignment instanceof CleaningBookingWorkerAssignment) {
+            return $this->assignmentStatusForResponse($assignment);
+        }
+
+        if (
+            $globalStatus === CleaningBookingStatus::Pending->value
+            && $hasCurrentWorkerSessionAcceptance
+        ) {
+            return CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value;
+        }
+
+        return $globalStatus;
     }
 
     private function responseStatusForRequest(?CleaningBookingWorkerAssignment $assignment, string $globalStatus): string
