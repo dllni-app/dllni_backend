@@ -126,6 +126,31 @@ it('rejects partial acceptance for a multi-day event through the public API', fu
     expect($first->workerAssignments()->count())->toBe(0);
 });
 
+
+it('reports session acceptance as the current worker order status while the parent stays pending', function (): void {
+    $worker = makeSessionWorker();
+    $booking = makeSessionBooking();
+
+    makeExecutionSession($booking, 1, now()->addDay()->toDateString(), '10:00', 1.0);
+    makeExecutionSession($booking, 2, now()->addDays(2)->toDateString(), '10:00', 1.0);
+    makeExecutionSession($booking, 3, now()->addDays(3)->toDateString(), '10:00', 1.0);
+
+    Sanctum::actingAs($worker->user);
+
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/sessions/accept-all")
+        ->assertOk()
+        ->assertJsonPath('data.acceptance.allAccepted', true);
+
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")
+        ->assertOk()
+        ->assertJsonPath('data.status', CleaningBookingStatus::Pending->value)
+        ->assertJsonPath('data.globalStatus', CleaningBookingStatus::Pending->value)
+        ->assertJsonPath(
+            'data.worker_order_status',
+            'accepted_waiting_for_order_start',
+        );
+});
+
 function makeSessionWorker(): Worker
 {
     $workingHours = [];
