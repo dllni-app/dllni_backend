@@ -145,12 +145,18 @@ final class CleaningBookingSchedulePresenter
         $isCustomerView = ! $viewerWorker instanceof Worker;
         $hasMyActiveAssignment = $myAssignment instanceof CleaningBookingSessionWorkerAssignment
             && $myAssignment->isActive();
+        $myAssignmentStatus = $myAssignment instanceof CleaningBookingSessionWorkerAssignment
+            ? ($myAssignment->status?->value ?? (string) $myAssignment->status)
+            : null;
         $canStartTravel = $hasMyActiveAssignment
-            && in_array($status, [
-                CleaningBookingSessionStatus::Scheduled->value,
-                CleaningBookingSessionStatus::WorkerAssigned->value,
+            && in_array($myAssignmentStatus, [
+                \Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus::Accepted->value,
+                \Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
             ], true)
-            && $myAssignment->started_travel_at === null;
+            && $myAssignment->started_travel_at === null
+            && $myAssignment->arrived_at === null
+            && $myAssignment->work_started_at === null
+            && ! $session->isTerminal();
         $canArrive = $hasMyActiveAssignment
             && $myAssignment->started_travel_at !== null
             && $myAssignment->arrived_at === null
