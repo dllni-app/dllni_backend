@@ -22,7 +22,9 @@ final class CleaningBookingOperationalResource extends JsonResource
         $payload['materials'] = $this->materialsPayload();
         $payload['materialKit'] = $this->materialKitPayload();
         $payload['specialServices'] = $this->specialServicesPayload();
-        $payload['openTime'] = app(CleaningOpenTimeBillingService::class)->presentation($this->resource);
+        $payload['openTime'] = (string) ($this->booking_kind ?? '') === 'open_time'
+            ? app(CleaningOpenTimeBillingService::class)->presentation($this->resource)
+            : null;
         // Operational clients use this envelope to gate additive v2 fields
         // while still reading the legacy booking payload above.
         $payload['schemaVersion'] = 2;
