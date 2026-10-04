@@ -50,5 +50,6 @@ it('returns worker avatar and Arabic cleaning labels in booking payloads', funct
         ->assertJsonPath('data.propertyDetails.cleaning_mode_label', 'تنظيف عميق')
         ->assertJsonPath('data.propertyDetails.living_room_size_label', 'كبيرة')
         ->assertJsonPath('data.roomAssignments.0.roomTypeLabel', 'غرفة نوم')
-        ->assertJsonPath('data.roomAssignments.0.roomSizeLabel', 'كبيرة');
+        ->assertJsonPath('data.roomAssignments.0.roomSizeLabel', 'كبيرة')
+        ->assertJsonPath('data.openTime', null);
 });
