@@ -63,6 +63,43 @@ it('keeps the complete customer schedule while forbidding an unrelated customer'
         ->assertForbidden();
 });
 
+it('keeps a dispatched single-session booking schedule readable when session eligibility is stricter than the legacy offer', function (): void {
+    $customer = User::factory()->create(['is_active' => true]);
+    $worker = makeVisibilityWorker();
+    $booking = makeVisibilityBooking(
+        $customer,
+        CleaningBookingStatus::Pending,
+        propertyType: 'villa',
+    );
+    makeVisibilitySession(
+        $booking,
+        1,
+        now()->addDay()->toDateString(),
+        CleaningBookingSessionStatus::Scheduled,
+    );
+
+    $workingHours = [];
+    foreach (['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as $day) {
+        $workingHours[$day] = [
+            'available' => false,
+            'data' => [],
+        ];
+    }
+    $worker->forceFill(['default_working_hours' => $workingHours])->save();
+
+    Sanctum::actingAs($worker->user);
+
+    $listResponse = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
+    $listResponse->assertOk();
+    expect(collect($listResponse->json('data'))->pluck('id'))->toContain($booking->id);
+
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/schedule")
+        ->assertOk()
+        ->assertJsonPath('data.schedule.bookingDaysCount', 1)
+        ->assertJsonPath('data.schedule.daysCount', 0)
+        ->assertJsonCount(0, 'data.schedule.sessions');
+});
+
 it('returns only assigned event days and resolves nextSession from the worker-visible scope', function (): void {
     $customer = User::factory()->create(['is_active' => true]);
     $worker = makeVisibilityWorker();
@@ -312,17 +349,23 @@ function makeVisibilityBooking(
     User $customer,
     CleaningBookingStatus $status,
     int $requiredWorkers = 1,
+    string $propertyType = 'event_assistance',
 ): CleaningBooking {
     return CleaningBooking::factory()->create([
         'customer_id' => $customer->id,
-        'property_type' => 'event_assistance',
-        'property_details' => [
-            'event_type' => 'birthday',
-            'guest_count' => 25,
-            'venue_type' => 'house',
-            'custom_service' => 'Event support',
-            'hours' => 4,
-        ],
+        'property_type' => $propertyType,
+        'property_details' => $propertyType === 'event_assistance'
+            ? [
+                'event_type' => 'birthday',
+                'guest_count' => 25,
+                'venue_type' => 'house',
+                'custom_service' => 'Event support',
+                'hours' => 4,
+            ]
+            : [
+                'cleaning_mode' => 'deep',
+                'rooms' => 2,
+            ],
         'status' => $status->value,
         'worker_id' => null,
         'preferred_worker_id' => null,
