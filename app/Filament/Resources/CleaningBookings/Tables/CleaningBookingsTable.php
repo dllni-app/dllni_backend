@@ -195,12 +195,12 @@ final class CleaningBookingsTable
                                 ->label('العامل')
                                 ->options(fn (?CleaningBooking $record): array => self::activeWorkerOptions($record))
                                 ->disableOptionWhen(fn (mixed $value): bool => str_starts_with((string) $value, 'disabled:'))
-                                ->helperText('تظهر جميع العمال. العامل غير المؤهل يبقى ظاهراً مع سبب المشكلة، ولا يمكن اختياره. يتم تجاهل ساعات وأوقات الدوام في الإسناد اليدوي.')
                                 ->searchable()
                                 ->required(),
                             CheckboxList::make('room_ids')
                                 ->label('الغرف')
                                 ->options(fn (?CleaningBooking $record): array => self::roomOptions($record))
+                                ->disableOptionWhen(fn (mixed $value): bool => str_starts_with((string) $value, 'disabled:'))
                                 ->columns(2)
                                 ->visible(fn (?CleaningBooking $record): bool => $record !== null
                                     && ! self::isEventAssistance($record)
@@ -280,6 +280,7 @@ final class CleaningBookingsTable
                             CheckboxList::make('room_ids')
                                 ->label('الغرف')
                                 ->options(fn (?CleaningBooking $record): array => self::roomOptions($record))
+                                ->disableOptionWhen(fn (mixed $value): bool => str_starts_with((string) $value, 'disabled:'))
                                 ->columns(2)
                                 ->required(),
                         ])
@@ -704,11 +705,20 @@ final class CleaningBookingsTable
             return [];
         }
 
-        $workers = Worker::query()
+        $genderPreference = $record->gender_preference instanceof BackedEnum
+            ? $record->gender_preference->value
+            : (string) ($record->gender_preference ?? 'any');
+
+        $workersQuery = Worker::query()
             ->with('user')
             ->orderByDesc('trust_score')
-            ->orderBy('first_name')
-            ->get();
+            ->orderBy('first_name');
+
+        if (in_array($genderPreference, ['male', 'female'], true)) {
+            $workersQuery->where('gender', $genderPreference);
+        }
+
+        $workers = $workersQuery->get();
 
         $acceptedWorkerIds = $record->acceptedWorkerAssignments()
             ->pluck('worker_id')
@@ -723,10 +733,6 @@ final class CleaningBookingsTable
                 ->map(static fn ($id): int => (int) $id)
                 ->all();
         }
-
-        $genderPreference = $record->gender_preference instanceof BackedEnum
-            ? $record->gender_preference->value
-            : (string) ($record->gender_preference ?? 'any');
 
         $assignmentMode = $record->assignment_mode instanceof BackedEnum
             ? $record->assignment_mode->value
@@ -791,11 +797,11 @@ final class CleaningBookingsTable
         }
 
         if ($worker->home_address === null || mb_trim((string) $worker->home_address) === '') {
-            $issues[] = 'عنوان المنزل غير مكتمل';
+            $issues[] = 'عنوان نقطة الانطلاق غير مكتمل';
         }
 
         if ($worker->home_latitude === null || $worker->home_longitude === null) {
-            $issues[] = 'إحداثيات المنزل غير مكتملة';
+            $issues[] = 'إحداثيات نقطة الانطلاق غير مكتملة';
         }
 
         if (in_array($genderPreference, ['male', 'female'], true) && $worker->gender !== $genderPreference) {
@@ -860,7 +866,13 @@ final class CleaningBookingsTable
             ? $record->rooms
             : $record->rooms()->with('assignedWorker.user')->orderBy('id')->get();
 
-        return $rooms->mapWithKeys(fn ($room): array => [$room->id => self::roomLabel($room)])->all();
+        return $rooms->mapWithKeys(function ($room): array {
+            $key = $room->assigned_worker_id !== null
+                ? 'disabled:'.(string) $room->id
+                : (string) $room->id;
+
+            return [$key => self::roomLabel($room)];
+        })->all();
     }
 
     private static function roomLabel(object $room): string
