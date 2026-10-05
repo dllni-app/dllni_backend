@@ -16,6 +16,7 @@ final class CleaningBookingWorkerSessionVisibilityService
 {
     public function __construct(
         private readonly CleaningBookingSessionAcceptanceService $acceptanceService,
+        private readonly WorkerOrderSolvencyService $legacySolvencyService,
     ) {}
 
     public function canViewBooking(CleaningBooking $booking, Worker $worker): bool
@@ -27,6 +28,18 @@ final class CleaningBookingWorkerSessionVisibilityService
         }
 
         if ($this->visibleSessionsFrom($booking, $worker, $sessions)->isNotEmpty()) {
+            return true;
+        }
+
+        // The cleaning worker app still accepts ordinary one-visit bookings
+        // through the parent booking endpoint. A persisted compatibility
+        // session must therefore not make the read-only schedule endpoint more
+        // restrictive than the legacy booking that was already dispatched to
+        // this worker. Keep multi-session products on the stricter session gate.
+        if (
+            $sessions->count() === 1
+            && $this->canViewLegacySingleSessionBooking($booking, $worker)
+        ) {
             return true;
         }
 
@@ -149,6 +162,32 @@ final class CleaningBookingWorkerSessionVisibilityService
         ], true)
             && ! $session->isTerminal()
             && $session->remainingWorkerCount() > 0;
+    }
+
+    private function canViewLegacySingleSessionBooking(CleaningBooking $booking, Worker $worker): bool
+    {
+        if ($this->canViewLegacyBooking($booking, $worker)) {
+            return true;
+        }
+
+        $status = $booking->status instanceof \BackedEnum
+            ? $booking->status->value
+            : (string) $booking->status;
+
+        if ($status !== 'pending') {
+            return false;
+        }
+
+        $isDispatchedToCurrentWorker = CleaningBooking::query()
+            ->whereKey($booking->id)
+            ->forCurrentWorker(true)
+            ->exists();
+
+        if (! $isDispatchedToCurrentWorker) {
+            return false;
+        }
+
+        return $this->legacySolvencyService->canWorkerReceiveBooking($worker, $booking);
     }
 
     private function canViewLegacyBooking(CleaningBooking $booking, Worker $worker): bool
