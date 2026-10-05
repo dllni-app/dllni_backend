@@ -107,3 +107,131 @@ textarea {
     background: rgb(66 196 182 / 0.16);
     color: #9ce3dc;
 }
+
+/* -------------------------------------------------------------------------
+ | Mobile / tablet hardening
+ | Keep Filament drawers, tables, forms and embedded maps inside the viewport.
+ | ---------------------------------------------------------------------- */
+@media (max-width: 1023px) {
+    html,
+    body {
+        max-width: 100%;
+        overflow-x: hidden;
+    }
+
+    .fi-layout,
+    .fi-main,
+    .fi-page,
+    .fi-page-content,
+    .fi-section,
+    .fi-section-content,
+    .fi-ta,
+    .fi-fo {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    /*
+     * Leaflet/OpenStreetMap embeds can create their own stacking contexts.
+     * Keep the mobile sidebar and its backdrop above every page widget.
+     */
+    .fi-sidebar {
+        z-index: 100 !important;
+        width: min(22rem, calc(100vw - 1rem)) !important;
+        max-width: calc(100vw - 1rem) !important;
+        box-shadow: 0 0 2rem rgb(15 23 42 / 0.22);
+    }
+
+    .fi-sidebar-nav {
+        max-width: 100%;
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+
+    .fi-sidebar-close-overlay,
+    .fi-sidebar-overlay {
+        z-index: 90 !important;
+    }
+
+    .fi-sidebar-item-btn {
+        min-width: 0;
+    }
+
+    .fi-sidebar-item-label {
+        min-width: 0;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        line-height: 1.55;
+    }
+
+    .fi-main iframe,
+    .fi-main .leaflet-container,
+    .fi-page iframe,
+    .fi-page .leaflet-container {
+        position: relative;
+        z-index: 0 !important;
+        max-width: 100% !important;
+    }
+
+    .fi-ta-ctn,
+    .fi-ta-content,
+    .fi-section-content-ctn {
+        max-width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .fi-ta-table {
+        width: max-content;
+        min-width: 100%;
+    }
+
+    .fi-header,
+    .fi-header-actions,
+    .fi-ac,
+    .fi-fo-actions,
+    .fi-section-header {
+        min-width: 0;
+        max-width: 100%;
+        flex-wrap: wrap;
+    }
+
+    .fi-header-actions > *,
+    .fi-ac > *,
+    .fi-fo-actions > * {
+        max-width: 100%;
+    }
+
+    .fi-modal-window {
+        width: calc(100vw - 1rem) !important;
+        max-width: calc(100vw - 1rem) !important;
+        margin-inline: auto;
+    }
+
+    iframe[title*='OpenStreetMap'] {
+        height: 16rem !important;
+    }
+}
+
+@media (max-width: 640px) {
+    .fi-main {
+        padding-inline: 0 !important;
+    }
+
+    .fi-page {
+        padding-inline: 0.75rem;
+    }
+
+    .fi-section-header,
+    .fi-section-content-ctn,
+    .fi-ta-header,
+    .fi-ta-content,
+    .fi-fo-component-ctn {
+        min-width: 0;
+    }
+
+    .fi-btn {
+        max-width: 100%;
+    }
+}
