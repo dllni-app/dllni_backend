@@ -194,7 +194,7 @@ final class CleaningBookingsTable
                             Select::make('worker_id')
                                 ->label('العامل')
                                 ->options(fn (?CleaningBooking $record): array => self::activeWorkerOptions($record))
-                                ->helperText('تظهر فقط قائمة العمال المتاحين والمناسبين لهذا الحجز.')
+                                ->helperText('تظهر فقط قائمة العمال النشطين والمناسبين لهذا الحجز.')
                                 ->searchable()
                                 ->required(),
                             CheckboxList::make('room_ids')
@@ -384,10 +384,6 @@ final class CleaningBookingsTable
     {
         if ($worker->user === null || ! (bool) $worker->user->is_active) {
             throw new InvalidArgumentException('Worker user account is inactive.');
-        }
-
-        if (! $worker->isAvailableForBooking($booking)) {
-            throw new InvalidArgumentException('Worker is not available at booking schedule.');
         }
 
         if (
@@ -745,7 +741,6 @@ final class CleaningBookingsTable
             ->orderByDesc('trust_score')
             ->orderBy('first_name')
             ->get()
-            ->filter(fn (Worker $worker): bool => $worker->isAvailableForBooking($record))
             ->mapWithKeys(fn (Worker $worker): array => [$worker->id => self::workerLabel($worker)])
             ->all();
     }
