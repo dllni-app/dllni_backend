@@ -499,10 +499,6 @@ final class CleaningBookingsTable
             throw new InvalidArgumentException('Worker user account is inactive.');
         }
 
-        if (! $worker->isAvailableForBooking($booking)) {
-            throw new InvalidArgumentException('Worker is not available at booking schedule.');
-        }
-
         if (
             $booking->neighborhood_id !== null
             && ! Worker::query()
@@ -847,7 +843,6 @@ final class CleaningBookingsTable
             ->orderByDesc('trust_score')
             ->orderBy('first_name')
             ->get()
-            ->filter(fn (Worker $worker): bool => $worker->isAvailableForBooking($record))
             ->mapWithKeys(fn (Worker $worker): array => [$worker->id => self::workerLabel($worker)])
             ->all();
     }
