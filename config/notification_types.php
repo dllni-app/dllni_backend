@@ -12,6 +12,40 @@ return [
         'delivery' => '/images/notifications/delivery.svg',
     ],
     'types' => [
+        'cleaning.neighborhood.created' => [
+            'legacy_type' => 'cleaning_neighborhood_created',
+            'module' => 'cleaning',
+            'category' => 'system',
+            'priority' => 'normal',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'حي جديد متاح للعمل',
+                    'body' => 'تمت إضافة حي ":neighborhood_name" إلى مناطق الخدمة. يمكنك تحديث مناطق عملك إذا رغبت.',
+                ],
+                'en' => [
+                    'title' => 'New work neighborhood available',
+                    'body' => 'The neighborhood ":neighborhood_name" was added to the service areas. You can update your work areas if you wish.',
+                ],
+            ],
+        ],
+        'cleaning.worker.trust_changed' => [
+            'legacy_type' => 'cleaning_worker_trust_changed',
+            'module' => 'cleaning',
+            'category' => 'system',
+            'priority' => 'normal',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'تم تحديث نقاط الثقة',
+                    'body' => 'تم تعديل نقاط الثقة من :score_before إلى :score_after (:delta).',
+                ],
+                'en' => [
+                    'title' => 'Trust score updated',
+                    'body' => 'Your trust score changed from :score_before to :score_after (:delta).',
+                ],
+            ],
+        ],
         'cleaning.booking.new_order_request' => [
             'legacy_type' => 'new_order',
             'module' => 'cleaning',
