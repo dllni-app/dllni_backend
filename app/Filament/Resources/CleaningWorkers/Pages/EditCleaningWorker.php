@@ -13,6 +13,7 @@ use App\Models\WorkerTrustLog;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\ViewAction;
 use Filament\Resources\Pages\EditRecord;
+use Modules\Cleaning\Services\CleaningWorkerNotificationService;
 
 final class EditCleaningWorker extends EditRecord
 {
@@ -78,5 +79,11 @@ final class EditCleaningWorker extends EditRecord
             'score_before' => $this->trustScoreBeforeSave,
             'score_after' => $scoreAfter,
         ]);
+
+        app(CleaningWorkerNotificationService::class)->notifyTrustScoreChanged(
+            worker: $this->record,
+            scoreBefore: $this->trustScoreBeforeSave,
+            scoreAfter: $scoreAfter,
+        );
     }
 }
