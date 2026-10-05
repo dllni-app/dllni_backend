@@ -194,7 +194,8 @@ final class CleaningBookingsTable
                             Select::make('worker_id')
                                 ->label('العامل')
                                 ->options(fn (?CleaningBooking $record): array => self::activeWorkerOptions($record))
-                                ->helperText('تظهر فقط قائمة العمال النشطين والمناسبين لهذا الحجز.')
+                                ->disableOptionWhen(fn (mixed $value): bool => str_starts_with((string) $value, 'disabled:'))
+                                ->helperText('تظهر جميع العمال. العامل غير المؤهل يبقى ظاهراً مع سبب المشكلة، ولا يمكن اختياره. يتم تجاهل ساعات وأوقات الدوام في الإسناد اليدوي.')
                                 ->searchable()
                                 ->required(),
                             CheckboxList::make('room_ids')
@@ -703,46 +704,121 @@ final class CleaningBookingsTable
             return [];
         }
 
-        $query = Worker::query()
+        $workers = Worker::query()
             ->with('user')
-            ->activeAvailable()
-            ->whereHas('user', fn (Builder $userQuery): Builder => $userQuery->where('is_active', true))
-            ->whereNotNull('home_address')
-            ->where('home_address', '!=', '')
-            ->whereNotNull('home_latitude')
-            ->whereNotNull('home_longitude');
+            ->orderByDesc('trust_score')
+            ->orderBy('first_name')
+            ->get();
+
+        $acceptedWorkerIds = $record->acceptedWorkerAssignments()
+            ->pluck('worker_id')
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
+
+        $coveredWorkerIds = null;
+        if ($record->neighborhood_id !== null) {
+            $coveredWorkerIds = Worker::query()
+                ->coversNeighborhood((int) $record->neighborhood_id)
+                ->pluck('id')
+                ->map(static fn ($id): int => (int) $id)
+                ->all();
+        }
 
         $genderPreference = $record->gender_preference instanceof BackedEnum
             ? $record->gender_preference->value
             : (string) ($record->gender_preference ?? 'any');
-        if (in_array($genderPreference, ['male', 'female'], true)) {
-            $query->where('gender', $genderPreference);
-        }
-
-        if ($record->neighborhood_id !== null) {
-            $query->coversNeighborhood((int) $record->neighborhood_id);
-        }
 
         $assignmentMode = $record->assignment_mode instanceof BackedEnum
             ? $record->assignment_mode->value
             : $record->assignment_mode;
         $isPreferredWorkerBooking = $assignmentMode === CleaningAssignmentMode::PreferredWorker->value
             || ($assignmentMode === null && $record->preferred_worker_id !== null && max(1, (int) ($record->number_of_workers ?? 1)) === 1);
-        if ($isPreferredWorkerBooking && $record->preferred_worker_id !== null) {
-            $query->whereKey((int) $record->preferred_worker_id);
+
+        $options = [];
+
+        foreach ($workers as $worker) {
+            $issues = self::workerEligibilityIssues(
+                record: $record,
+                worker: $worker,
+                acceptedWorkerIds: $acceptedWorkerIds,
+                coveredWorkerIds: $coveredWorkerIds,
+                genderPreference: $genderPreference,
+                isPreferredWorkerBooking: $isPreferredWorkerBooking,
+            );
+
+            $label = self::workerLabel($worker);
+
+            if ($issues === []) {
+                $options[(string) $worker->id] = $label.' — متاح';
+                continue;
+            }
+
+            $options['disabled:'.$worker->id] = $label.' — غير قابل للاختيار: '.implode('، ', $issues);
         }
 
-        $acceptedWorkerIds = $record->acceptedWorkerAssignments()->pluck('worker_id')->map(static fn ($id): int => (int) $id)->all();
-        if ($acceptedWorkerIds !== []) {
-            $query->whereNotIn('id', $acceptedWorkerIds);
+        return $options;
+    }
+
+    /**
+     * @param  array<int, int>  $acceptedWorkerIds
+     * @param  array<int, int>|null  $coveredWorkerIds
+     * @return array<int, string>
+     */
+    private static function workerEligibilityIssues(
+        CleaningBooking $record,
+        Worker $worker,
+        array $acceptedWorkerIds,
+        ?array $coveredWorkerIds,
+        string $genderPreference,
+        bool $isPreferredWorkerBooking,
+    ): array {
+        $issues = [];
+
+        if (! (bool) $worker->is_active) {
+            $issues[] = 'العامل غير نشط';
         }
 
-        return $query
-            ->orderByDesc('trust_score')
-            ->orderBy('first_name')
-            ->get()
-            ->mapWithKeys(fn (Worker $worker): array => [$worker->id => self::workerLabel($worker)])
-            ->all();
+        if ((bool) $worker->is_suspended) {
+            $issues[] = 'العامل موقوف';
+        }
+
+        if ($worker->security_deposit_status !== null && (string) $worker->security_deposit_status !== 'active') {
+            $issues[] = 'الحساب المالي للعامل مقيّد';
+        }
+
+        if ($worker->user === null || ! (bool) $worker->user->is_active) {
+            $issues[] = 'حساب المستخدم غير نشط';
+        }
+
+        if ($worker->home_address === null || mb_trim((string) $worker->home_address) === '') {
+            $issues[] = 'عنوان المنزل غير مكتمل';
+        }
+
+        if ($worker->home_latitude === null || $worker->home_longitude === null) {
+            $issues[] = 'إحداثيات المنزل غير مكتملة';
+        }
+
+        if (in_array($genderPreference, ['male', 'female'], true) && $worker->gender !== $genderPreference) {
+            $issues[] = 'الجنس لا يطابق متطلبات الحجز';
+        }
+
+        if ($coveredWorkerIds !== null && ! in_array((int) $worker->id, $coveredWorkerIds, true)) {
+            $issues[] = 'لا يغطي حي هذا الحجز';
+        }
+
+        if (in_array((int) $worker->id, $acceptedWorkerIds, true)) {
+            $issues[] = 'مضاف مسبقاً إلى هذا الحجز';
+        }
+
+        if (
+            $isPreferredWorkerBooking
+            && $record->preferred_worker_id !== null
+            && (int) $record->preferred_worker_id !== (int) $worker->id
+        ) {
+            $issues[] = 'الحجز مخصص لعامل آخر';
+        }
+
+        return array_values(array_unique($issues));
     }
 
     private static function acceptedWorkerOptions(?CleaningBooking $record): array
@@ -789,10 +865,47 @@ final class CleaningBookingsTable
 
     private static function roomLabel(object $room): string
     {
-        $label = (string) ($room->display_label ?? $room->room_key ?? 'غرفة غير معروفة');
+        $roomType = match (mb_strtolower((string) ($room->room_type ?? ''))) {
+            'living_room' => 'غرفة الجلوس',
+            'bedroom' => 'غرفة النوم',
+            'bathroom' => 'الحمام',
+            'corridor' => 'الممر',
+            'kitchen' => 'المطبخ',
+            'shed' => 'المستودع',
+            'balcony' => 'الشرفة',
+            'toilet' => 'دورة المياه',
+            default => 'غرفة',
+        };
+
+        $roomSize = match (mb_strtolower((string) ($room->room_size ?? ''))) {
+            'small' => 'صغير',
+            'medium' => 'متوسط',
+            'large' => 'كبير',
+            default => '',
+        };
+
+        $roomNumber = null;
+        foreach ([(string) ($room->room_key ?? ''), (string) ($room->display_label ?? '')] as $candidate) {
+            if (preg_match('/(\\d+)/', $candidate, $matches) === 1) {
+                $roomNumber = (int) $matches[1];
+                break;
+            }
+        }
+
+        $parts = [$roomType];
+
+        if ($roomNumber !== null) {
+            $parts[] = (string) $roomNumber;
+        }
+
+        if ($roomSize !== '') {
+            $parts[] = $roomSize;
+        }
+
+        $label = implode(' - ', $parts);
         $assignedWorker = $room->assignedWorker?->first_name ?? $room->assignedWorker?->user?->name;
 
-        return filled($assignedWorker) ? sprintf('%s - %s', $label, $assignedWorker) : $label;
+        return filled($assignedWorker) ? sprintf('%s - %s', $assignedWorker, $label) : $label;
     }
 
     private static function workerLabel(Worker $worker): string
