@@ -11,6 +11,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\DB;
+use Modules\Cleaning\Services\CleaningWorkerNotificationService;
 
 final class AdjustWorkerTrustScoreAction
 {
@@ -68,6 +69,13 @@ final class AdjustWorkerTrustScoreAction
                         'score_after' => $scoreAfter,
                     ]);
                 });
+
+                app(CleaningWorkerNotificationService::class)->notifyTrustScoreChanged(
+                    worker: $record,
+                    scoreBefore: $scoreBefore,
+                    scoreAfter: $scoreAfter,
+                    reason: $reason,
+                );
 
                 Notification::make()
                     ->title('تم تحديث نقاط الثقة')
