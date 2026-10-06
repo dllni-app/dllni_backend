@@ -110,6 +110,11 @@ trait CleaningBookingFilterQuery
                         ->where('worker_id', $worker->id)
                         ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
                 })
+                ->orWhereHas('sessions.workerAssignments', function (Builder $assignments) use ($worker): void {
+                    $assignments
+                        ->where('worker_id', $worker->id)
+                        ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
+                })
                 ->orWhere(function (Builder $preferred) use ($worker, $canReceiveNewRequests): void {
                     if (! $canReceiveNewRequests) {
                         $preferred->where('id', -1);
@@ -171,6 +176,11 @@ trait CleaningBookingFilterQuery
         return $query->where(function (Builder $assigned) use ($worker): void {
             $assigned->where('worker_id', $worker->id)
                 ->orWhereHas('workerAssignments', function (Builder $assignments) use ($worker): void {
+                    $assignments
+                        ->where('worker_id', $worker->id)
+                        ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
+                })
+                ->orWhereHas('sessions.workerAssignments', function (Builder $assignments) use ($worker): void {
                     $assignments
                         ->where('worker_id', $worker->id)
                         ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
