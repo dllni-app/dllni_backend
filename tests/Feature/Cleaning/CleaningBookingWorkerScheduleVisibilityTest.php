@@ -63,7 +63,7 @@ it('keeps the complete customer schedule while forbidding an unrelated customer'
         ->assertForbidden();
 });
 
-it('keeps a dispatched single-session booking schedule readable when session eligibility is stricter than the legacy offer', function (): void {
+it('keeps a pending single-session booking readable when session eligibility is stricter than legacy booking visibility', function (): void {
     $customer = User::factory()->create(['is_active' => true]);
     $worker = makeVisibilityWorker();
     $booking = makeVisibilityBooking(
@@ -78,20 +78,15 @@ it('keeps a dispatched single-session booking schedule readable when session eli
         CleaningBookingSessionStatus::Scheduled,
     );
 
-    $workingHours = [];
-    foreach (['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as $day) {
-        $workingHours[$day] = [
-            'available' => false,
-            'data' => [],
-        ];
-    }
-    $worker->forceFill(['default_working_hours' => $workingHours])->save();
+    // Reproduce the production failure class: the booking details are still
+    // readable as a pending legacy offer, while the persisted child session is
+    // not currently acceptable under the stricter session eligibility rules.
+    $worker->forceFill(['is_suspended' => true])->save();
 
     Sanctum::actingAs($worker->user);
 
-    $listResponse = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
-    $listResponse->assertOk();
-    expect(collect($listResponse->json('data'))->pluck('id'))->toContain($booking->id);
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")
+        ->assertOk();
 
     $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/schedule")
         ->assertOk()
