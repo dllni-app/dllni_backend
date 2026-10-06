@@ -144,6 +144,29 @@ final class CleaningBookingSessionLifecycleController
         );
     }
 
+    public function rejectCompletion(
+        Request $request,
+        CleaningBooking $cleaning_booking,
+        CleaningBookingSession $cleaning_booking_session,
+    ): JsonResponse {
+        $validated = $request->validate([
+            'reason' => ['sometimes', 'nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $session = $this->lifecycle->rejectCompletion(
+                $cleaning_booking,
+                $cleaning_booking_session,
+                (int) Auth::id(),
+                isset($validated['reason']) ? (string) $validated['reason'] : null,
+            );
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
+        }
+
+        return $this->payload($cleaning_booking, $session);
+    }
+
     public function confirmCompletion(
         CleaningBooking $cleaning_booking,
         CleaningBookingSession $cleaning_booking_session,
