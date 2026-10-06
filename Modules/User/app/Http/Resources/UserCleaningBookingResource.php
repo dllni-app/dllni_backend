@@ -72,7 +72,9 @@ final class UserCleaningBookingResource extends JsonResource
         $canEdit = $this->canEdit();
         $materials = $this->materialsPayload();
         $specialServices = $this->specialServicesPayload();
-        $openTime = app(CleaningOpenTimeBillingService::class)->presentation($this->resource);
+        $openTime = (string) ($this->booking_kind ?? 'standard') === 'open_time'
+            ? app(CleaningOpenTimeBillingService::class)->presentation($this->resource)
+            : null;
 
         $payload['bookingEstimatedHours'] = $bookingEstimatedHours;
         $payload['bookingTotalHours'] = $bookingTotalHours;
