@@ -6,6 +6,7 @@ namespace Modules\User\Http\Controllers\API;
 
 use Illuminate\Http\JsonResponse;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Services\CleaningBookingSessionLifecycleService;
 use Modules\Cleaning\Services\CleaningBookingWorkerSecurityCodeService;
 use Modules\User\Http\Requests\UserCleaningOrderStartVerificationConfirmRequest;
@@ -30,7 +31,7 @@ final class UserCleaningOrderStartVerificationConfirmController
             $code,
         );
 
-        $updated = $matchedSession instanceof \Modules\Cleaning\Models\CleaningBookingSession
+        $updated = $matchedSession instanceof CleaningBookingSession
             ? ($model->fresh() ?? $model)
             : $service->confirmForCustomer($model, $code);
         $updated->load(['worker.user', 'workerAssignments.worker.user', 'rooms.assignedWorker.user', 'timeWarnings', 'disputes', 'addons', 'billingPolicy']);
