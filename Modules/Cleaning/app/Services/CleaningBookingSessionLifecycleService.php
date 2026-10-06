@@ -560,6 +560,7 @@ final class CleaningBookingSessionLifecycleService
             now()->toIso8601String(),
             $status,
             null,
+            (int) $session->id,
         ));
     }
 
