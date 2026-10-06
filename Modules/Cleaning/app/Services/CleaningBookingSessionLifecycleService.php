@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Services;
 
 use App\Models\Worker;
+use App\Support\Broadcast\BroadcastAfterResponse;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +14,8 @@ use InvalidArgumentException;
 use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
+use Modules\Cleaning\Events\CompletionDecisionMade;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
@@ -444,7 +447,7 @@ final class CleaningBookingSessionLifecycleService
     ): CleaningBookingSession {
         $this->assertCustomerOwnsBooking($booking, $customerId);
 
-        return DB::transaction(function () use ($booking, $session): CleaningBookingSession {
+        $updatedSession = DB::transaction(function () use ($booking, $session): CleaningBookingSession {
             $locked = $this->lockSession($booking, $session);
             if ($locked->status === CleaningBookingSessionStatus::Completed) {
                 return $this->freshSession($locked);
@@ -514,6 +517,50 @@ final class CleaningBookingSessionLifecycleService
 
             return $this->freshSession($locked);
         });
+
+        $this->broadcastCompletionConfirmed($booking, $updatedSession);
+
+        return $updatedSession;
+    }
+
+    private function broadcastCompletionConfirmed(
+        CleaningBooking $booking,
+        CleaningBookingSession $session,
+    ): void {
+        $freshBooking = $booking->fresh() ?? $booking;
+        $status = $freshBooking->status instanceof CleaningBookingStatus
+            ? $freshBooking->status->value
+            : (string) $freshBooking->status;
+        $sessionStatus = $session->status instanceof CleaningBookingSessionStatus
+            ? $session->status->value
+            : (string) $session->status;
+        $workerId = CleaningBookingSessionWorkerAssignment::query()
+            ->where('cleaning_booking_session_id', $session->id)
+            ->where('status', CleaningBookingWorkerAssignmentStatus::Completed->value)
+            ->orderBy('id')
+            ->value('worker_id');
+
+        BroadcastAfterResponse::send(new CleaningBookingTrackingUpdated(
+            (int) $freshBooking->id,
+            [
+                'cleaningBookingId' => (int) $freshBooking->id,
+                'bookingId' => (int) $freshBooking->id,
+                'status' => $status,
+                'sessionId' => (int) $session->id,
+                'sessionStatus' => $sessionStatus,
+                'decision' => 'approved',
+                'updatedAt' => now()->toIso8601String(),
+            ],
+        ));
+        BroadcastAfterResponse::send(new CompletionDecisionMade(
+            (int) $freshBooking->id,
+            is_numeric($workerId) ? (int) $workerId : null,
+            'approved',
+            null,
+            now()->toIso8601String(),
+            $status,
+            null,
+        ));
     }
 
     private function finalizeOpenTimeSession(
