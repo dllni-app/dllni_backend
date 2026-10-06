@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 use App\Models\User;
 use App\Models\Worker;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingRoom;
 use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
@@ -246,4 +248,67 @@ it('does not show converted preferred-worker booking again to the worker who rej
 
     expect(collect($response->json('data'))->pluck('id'))
         ->not->toContain($booking->id);
+});
+
+
+it('returns partially completed assigned bookings when a legacy room uses system assignment source', function (): void {
+    $workerUser = User::factory()->create(['email' => 'legacy-room-source-worker@example.com']);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
+    $customer = User::factory()->create(['email' => 'legacy-room-source-customer@example.com']);
+
+    $booking = CleaningBooking::factory()->create([
+        'customer_id' => $customer->id,
+        'worker_id' => $worker->id,
+        'status' => CleaningBookingStatus::PartiallyCompleted->value,
+        'number_of_workers' => 1,
+    ]);
+
+    CleaningBookingWorkerAssignment::query()->create([
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $worker->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
+        'accepted_at' => now()->subHour(),
+        'room_count' => 1,
+        'rooms_weight' => 1,
+        'service_share_amount' => 1000,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 0,
+        'worker_amount' => 1000,
+        'currency' => 'SYP',
+    ]);
+
+    DB::table('cleaning_booking_rooms')->insert([
+        'cleaning_booking_id' => $booking->id,
+        'room_key' => 'legacy.system.room.1',
+        'room_type' => 'bedroom',
+        'room_size' => 'small',
+        'display_label' => 'Legacy room',
+        'weight' => 1,
+        'planned_worker_slot' => 1,
+        'planned_preferred_worker_id' => null,
+        'assigned_worker_id' => $worker->id,
+        'assignment_source' => 'system',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $legacyRoom = CleaningBookingRoom::query()
+        ->where('cleaning_booking_id', $booking->id)
+        ->firstOrFail();
+
+    expect($legacyRoom->assignment_source?->value)->toBe('auto');
+
+    Sanctum::actingAs($workerUser);
+
+    $response = getJson(
+        '/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[assignedToCurrentWorker]=1&filter[status]=partially_completed&perPage=10&page=1'
+    );
+
+    $response->assertOk();
+
+    $item = collect($response->json('data'))
+        ->firstWhere('id', $booking->id);
+
+    expect($item)->not->toBeNull()
+        ->and(data_get($item, 'roomAssignments.0.assignmentSource'))->toBe('auto');
 });
