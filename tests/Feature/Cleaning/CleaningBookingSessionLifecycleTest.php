@@ -69,7 +69,9 @@ it('runs one event day through its own lifecycle without completing future days'
         ->assertJsonPath('data.schedule.completedDaysCount', 1)
         ->assertJsonPath('data.schedule.remainingDaysCount', 1)
         ->assertJsonPath('data.schedule.sessions.0.status', CleaningBookingSessionStatus::Completed->value)
-        ->assertJsonPath('data.schedule.sessions.1.id', $second->id);
+        ->assertJsonPath('data.schedule.sessions.1.id', $second->id)
+        ->assertJsonPath('data.reviewTarget.sessionId', $first->id)
+        ->assertJsonPath('data.reviewTarget.workerIds.0', $worker->id);
 
     expect($first->fresh()->status)->toBe(CleaningBookingSessionStatus::Completed)
         ->and($firstAssignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::Completed)
