@@ -77,6 +77,36 @@ it('runs one event day through its own lifecycle without completing future days'
         ->and($second->fresh()->status)->toBe(CleaningBookingSessionStatus::WorkerAssigned);
 });
 
+it('accepts a session security code through the legacy customer booking verification endpoint', function (): void {
+    [$customer, $workerUser, $worker, $booking] = makeLifecycleScenario();
+    $session = makeLifecycleSession($booking, 1, now()->addDay()->toDateString(), '10:00');
+    $assignment = makeLifecycleAssignment($session, $worker);
+
+    Sanctum::actingAs($workerUser);
+
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}/start-travel")
+        ->assertOk();
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}/arrive")
+        ->assertOk();
+
+    $securityCode = (string) $this->getJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}/security-code",
+    )->assertOk()->json('data.securityCode');
+
+    Sanctum::actingAs($customer);
+
+    $this->postJson("/api/v1/user/cleaning/orders/{$booking->id}/start-verification/confirm", [
+        'code' => $securityCode,
+    ])->assertOk();
+
+    expect($session->fresh()->status)
+        ->toBe(CleaningBookingSessionStatus::AwaitingWorkerStartConfirmation)
+        ->and($assignment->fresh()->status)
+        ->toBe(CleaningBookingWorkerAssignmentStatus::StartApproved)
+        ->and($assignment->fresh()->start_approved_at)
+        ->not->toBeNull();
+});
+
 it('completes the parent only when the final required event session is completed', function (): void {
     [$customer, , $worker, $booking] = makeLifecycleScenario();
     $first = makeLifecycleSession($booking, 1, now()->addDay()->toDateString(), '10:00');
