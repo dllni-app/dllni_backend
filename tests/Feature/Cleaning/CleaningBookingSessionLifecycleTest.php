@@ -107,6 +107,45 @@ it('accepts a session security code through the legacy customer booking verifica
         ->not->toBeNull();
 });
 
+it('confirms the pending child session through the legacy customer completion endpoint without completing future sessions', function (): void {
+    [$customer, $workerUser, $worker, $booking] = makeLifecycleScenario();
+    $first = makeLifecycleSession($booking, 1, now()->addDay()->toDateString(), '10:00');
+    $second = makeLifecycleSession($booking, 2, now()->addDays(2)->toDateString(), '10:00');
+    $firstAssignment = makeLifecycleAssignment($first, $worker);
+    makeLifecycleAssignment($second, $worker);
+
+    $first->forceFill([
+        'status' => CleaningBookingSessionStatus::AwaitingCustomerCompletion,
+        'work_started_at' => now()->subHours(2),
+        'work_finished_at' => now()->subMinute(),
+    ])->save();
+    $firstAssignment->forceFill([
+        'status' => CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion,
+        'started_travel_at' => now()->subHours(3),
+        'arrived_at' => now()->subHours(2),
+        'start_approved_at' => now()->subHours(2),
+        'work_started_at' => now()->subHours(2),
+        'work_finished_at' => now()->subMinute(),
+    ])->save();
+    $booking->forceFill([
+        'status' => CleaningBookingStatus::AwaitingCustomerCompletion,
+    ])->save();
+
+    Sanctum::actingAs($customer);
+
+    $this->postJson("/api/v1/user/cleaning/orders/{$booking->id}/completion/confirm")
+        ->assertOk();
+
+    expect($first->fresh()->status)
+        ->toBe(CleaningBookingSessionStatus::Completed)
+        ->and($firstAssignment->fresh()->status)
+        ->toBe(CleaningBookingWorkerAssignmentStatus::Completed)
+        ->and($second->fresh()->status)
+        ->toBe(CleaningBookingSessionStatus::WorkerAssigned)
+        ->and($booking->fresh()->status)
+        ->toBe(CleaningBookingStatus::WorkerAssigned);
+});
+
 it('completes the parent only when the final required event session is completed', function (): void {
     [$customer, , $worker, $booking] = makeLifecycleScenario();
     $first = makeLifecycleSession($booking, 1, now()->addDay()->toDateString(), '10:00');
