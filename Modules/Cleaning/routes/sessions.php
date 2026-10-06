@@ -91,6 +91,11 @@ Route::prefix('v1')
         )->name('cleaning-bookings.sessions.completion.confirm');
 
         Route::post(
+            'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/completion/reject',
+            [CleaningBookingSessionLifecycleController::class, 'rejectCompletion'],
+        )->name('cleaning-bookings.sessions.completion.reject');
+
+        Route::post(
             'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/cancel',
             [CleaningBookingSessionLifecycleController::class, 'cancel'],
         )->name('cleaning-bookings.sessions.cancel');
