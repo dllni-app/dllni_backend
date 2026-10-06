@@ -16,7 +16,6 @@ final class CleaningBookingWorkerSessionVisibilityService
 {
     public function __construct(
         private readonly CleaningBookingSessionAcceptanceService $acceptanceService,
-        private readonly WorkerOrderSolvencyService $legacySolvencyService,
     ) {}
 
     public function canViewBooking(CleaningBooking $booking, Worker $worker): bool
@@ -174,20 +173,13 @@ final class CleaningBookingWorkerSessionVisibilityService
             ? $booking->status->value
             : (string) $booking->status;
 
-        if ($status !== 'pending') {
-            return false;
-        }
-
-        $isDispatchedToCurrentWorker = CleaningBooking::query()
-            ->whereKey($booking->id)
-            ->forCurrentWorker(true)
-            ->exists();
-
-        if (! $isDispatchedToCurrentWorker) {
-            return false;
-        }
-
-        return $this->legacySolvencyService->canWorkerReceiveBooking($worker, $booking);
+        // Keep the single-session schedule authorization consistent with the
+        // worker booking-details endpoint. The worker app may receive/load a
+        // pending one-visit booking through the legacy booking flow before the
+        // persisted compatibility session passes every session-level
+        // eligibility rule. Acceptance itself still performs the authoritative
+        // worker/financial/conflict validation.
+        return $status === 'pending' && ! $booking->isTeamFulfilled();
     }
 
     private function canViewLegacyBooking(CleaningBooking $booking, Worker $worker): bool
