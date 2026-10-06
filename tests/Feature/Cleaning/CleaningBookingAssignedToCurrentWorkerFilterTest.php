@@ -6,9 +6,12 @@ use App\Models\User;
 use App\Models\Worker;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningAssignmentMode;
+use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingSession;
+use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 
 use function Pest\Laravel\getJson;
@@ -86,6 +89,89 @@ it('shows accepted pending multi-worker bookings in the current worker orders fi
         ->toContain($acceptedPendingBooking->id)
         ->not->toContain($newUnacceptedBooking->id)
         ->not->toContain($otherWorkerBooking->id);
+});
+
+it('keeps a multi-session booking discoverable after restart when the worker is assigned only through session assignments', function (): void {
+    $workerUser = User::factory()->create(['email' => 'session-assigned-filter-worker@example.com']);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
+    $customer = User::factory()->create(['email' => 'session-assigned-filter-customer@example.com']);
+
+    $booking = CleaningBooking::factory()->create([
+        'customer_id' => $customer->id,
+        'worker_id' => null,
+        'preferred_worker_id' => null,
+        'status' => CleaningBookingStatus::AwaitingStartVerification->value,
+        'number_of_workers' => 1,
+        'scheduled_date' => now()->addDay()->toDateString(),
+        'scheduled_time' => '09:00',
+    ]);
+
+    $sessions = collect([
+        [1, CleaningBookingSessionStatus::AwaitingStartVerification, now()->addDay()->toDateString()],
+        [2, CleaningBookingSessionStatus::WorkerAssigned, now()->addDays(2)->toDateString()],
+        [3, CleaningBookingSessionStatus::WorkerAssigned, now()->addDays(3)->toDateString()],
+    ])->map(function (array $row) use ($booking, $worker): CleaningBookingSession {
+        [$sequence, $status, $date] = $row;
+        $session = CleaningBookingSession::query()->create([
+            'cleaning_booking_id' => $booking->id,
+            'sequence' => $sequence,
+            'session_type' => 'event_day',
+            'calculation_mode' => 'hours',
+            'scheduled_date' => $date,
+            'scheduled_time' => '09:00',
+            'duration_hours' => 2,
+            'required_workers' => 1,
+            'coverage_status' => 'fully_covered',
+            'status' => $status->value,
+            'base_price' => 1000,
+            'addons_total' => 0,
+            'materials_total' => 0,
+            'special_services_total' => 0,
+            'travel_fee' => 0,
+            'admin_margin_amount' => 0,
+            'extension_fee_total' => 0,
+            'cancellation_fee' => 0,
+            'total_price' => 1000,
+            'is_pricing_final' => true,
+        ]);
+
+        CleaningBookingSessionWorkerAssignment::query()->create([
+            'cleaning_booking_session_id' => $session->id,
+            'worker_id' => $worker->id,
+            'status' => $sequence === 1
+                ? CleaningBookingWorkerAssignmentStatus::AwaitingStartVerification->value
+                : CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
+            'accepted_at' => now()->subHour(),
+            'started_travel_at' => $sequence === 1 ? now()->subMinutes(30) : null,
+            'arrived_at' => $sequence === 1 ? now()->subMinutes(10) : null,
+            'service_share_amount' => 900,
+            'travel_fee' => 0,
+            'admin_margin_amount' => 100,
+            'worker_amount' => 900,
+            'currency' => 'SYP',
+        ]);
+
+        return $session;
+    });
+
+    expect($booking->workerAssignments()->exists())->toBeFalse();
+
+    Sanctum::actingAs($workerUser);
+
+    $response = getJson(
+        '/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[assignedToCurrentWorker]=1&filter[status]=awaiting_start_verification'
+    );
+
+    $response->assertOk();
+    expect(collect($response->json('data'))->pluck('id'))->toContain($booking->id);
+
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/schedule")
+        ->assertOk()
+        ->assertJsonPath('data.schedule.bookingDaysCount', 3)
+        ->assertJsonPath('data.schedule.daysCount', 3)
+        ->assertJsonCount(3, 'data.schedule.sessions');
+
+    expect($sessions)->toHaveCount(3);
 });
 
 it('does not show preferred-worker decision-required booking again to the worker who rejected it', function (): void {
