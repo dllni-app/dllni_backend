@@ -10,9 +10,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Http\Requests\CleaningBookingSosRequest;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
+use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
 use Modules\Cleaning\Services\CleaningBookingSchedulePresenter;
 use Modules\Cleaning\Services\CleaningBookingSessionAttendanceService;
 use Modules\Cleaning\Services\CleaningBookingSessionCancellationService;
@@ -329,6 +331,16 @@ final class CleaningBookingSessionLifecycleController
         $schedule = $viewerWorker instanceof Worker
             ? $this->workerSchedules->present($freshBooking, $viewerWorker, $session)
             : $this->presenter->present($freshBooking);
+        $reviewWorkerIds = CleaningBookingSessionWorkerAssignment::query()
+            ->where('cleaning_booking_session_id', $session->id)
+            ->where('status', CleaningBookingWorkerAssignmentStatus::Completed->value)
+            ->orderBy('id')
+            ->pluck('worker_id')
+            ->map(static fn (mixed $workerId): int => (int) $workerId)
+            ->filter(static fn (int $workerId): bool => $workerId > 0)
+            ->unique()
+            ->values()
+            ->all();
 
         return response()->json([
             'success' => true,
@@ -340,6 +352,10 @@ final class CleaningBookingSessionLifecycleController
                 'totalPrice' => (float) $freshBooking->total_price,
                 'currency' => (string) config('app.currency', 'SYP'),
                 'schedule' => $schedule,
+                'reviewTarget' => [
+                    'sessionId' => (int) $session->id,
+                    'workerIds' => $reviewWorkerIds,
+                ],
             ],
             'sessionId' => (int) $session->id,
         ]);
