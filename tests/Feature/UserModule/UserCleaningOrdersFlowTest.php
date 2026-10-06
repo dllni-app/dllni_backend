@@ -15,12 +15,14 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBillingMode;
+use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Enums\ServiceCategory;
 use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Models\CleaningService;
 use Modules\Cleaning\Services\CleaningPricingCalculator;
@@ -344,6 +346,7 @@ it('shows own cleaning order and returns not found for another user order', func
     $response = getJson("/api/v1/user/cleaning/orders/{$mine->id}")
         ->assertOk()
         ->assertJsonPath('data.id', $mine->id)
+        ->assertJsonPath('data.openTime', null)
         ->assertJsonPath('data.extendedTimeRanges.1.startMinutes', 16)
         ->assertJsonPath('data.extendedTimeRanges.1.endMinutes', 30);
 
@@ -351,6 +354,56 @@ it('shows own cleaning order and returns not found for another user order', func
 
     getJson("/api/v1/user/cleaning/orders/{$other->id}")
         ->assertNotFound();
+});
+
+it('does not report a multi-session booking completed while a current session remains', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $booking = CleaningBooking::factory()->create([
+        'customer_id' => $user->id,
+        'status' => CleaningBookingStatus::Completed->value,
+        'property_type' => 'studio',
+    ]);
+
+    $baseSession = [
+        'cleaning_booking_id' => $booking->id,
+        'session_type' => 'scheduled_cleaning',
+        'calculation_mode' => 'hours',
+        'duration_hours' => 2,
+        'required_workers' => 1,
+        'coverage_status' => 'fully_covered',
+        'base_price' => 1000,
+        'addons_total' => 0,
+        'materials_total' => 0,
+        'special_services_total' => 0,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 0,
+        'extension_fee_total' => 0,
+        'cancellation_fee' => 0,
+        'total_price' => 1000,
+        'is_pricing_final' => true,
+    ];
+
+    CleaningBookingSession::query()->create($baseSession + [
+        'sequence' => 1,
+        'scheduled_date' => now()->subDay()->toDateString(),
+        'scheduled_time' => '09:00',
+        'status' => CleaningBookingSessionStatus::Completed->value,
+        'work_started_at' => now()->subDay()->setTime(9, 0),
+        'work_finished_at' => now()->subDay()->setTime(11, 0),
+    ]);
+    CleaningBookingSession::query()->create($baseSession + [
+        'sequence' => 2,
+        'scheduled_date' => now()->addDay()->toDateString(),
+        'scheduled_time' => '09:00',
+        'status' => CleaningBookingSessionStatus::WorkerAssigned->value,
+    ]);
+
+    getJson("/api/v1/user/cleaning/orders/{$booking->id}")
+        ->assertOk()
+        ->assertJsonPath('data.status', CleaningBookingStatus::WorkerAssigned->value)
+        ->assertJsonPath('data.globalStatus', CleaningBookingStatus::WorkerAssigned->value);
 });
 
 it('updates a pending cleaning order schedule', function (): void {
