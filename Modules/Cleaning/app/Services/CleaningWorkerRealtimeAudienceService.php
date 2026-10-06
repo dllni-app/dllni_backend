@@ -43,6 +43,19 @@ final class CleaningWorkerRealtimeAudienceService
                 ->map(static fn (mixed $workerId): int => (int) $workerId)
         );
 
+        $workerIds = $workerIds->merge(
+            DB::table('cleaning_booking_session_worker_assignments as assignments')
+                ->join(
+                    'cleaning_booking_sessions as sessions',
+                    'sessions.id',
+                    '=',
+                    'assignments.cleaning_booking_session_id',
+                )
+                ->where('sessions.cleaning_booking_id', $cleaningBookingId)
+                ->pluck('assignments.worker_id')
+                ->map(static fn (mixed $workerId): int => (int) $workerId)
+        );
+
         $notifiedUserIds = DB::table('notifications')
             ->where('type', NewOrderRequestNotification::class)
             ->where('notifiable_type', (new User())->getMorphClass())
