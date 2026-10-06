@@ -66,6 +66,7 @@ it('runs one event day through its own lifecycle without completing future days'
 
     $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/sessions/{$first->id}/completion/confirm")
         ->assertOk()
+        ->assertJsonPath('data.status', CleaningBookingStatus::WorkerAssigned->value)
         ->assertJsonPath('data.schedule.completedDaysCount', 1)
         ->assertJsonPath('data.schedule.remainingDaysCount', 1)
         ->assertJsonPath('data.schedule.sessions.0.status', CleaningBookingSessionStatus::Completed->value)
