@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Models;
 
 use App\Models\Worker;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -47,7 +48,42 @@ final class CleaningBookingRoom extends Model
         return [
             'weight' => 'decimal:2',
             'planned_worker_slot' => 'integer',
-            'assignment_source' => CleaningBookingRoomAssignmentSource::class,
         ];
+    }
+
+    protected function assignmentSource(): Attribute
+    {
+        return Attribute::make(
+            get: static function (mixed $value): ?CleaningBookingRoomAssignmentSource {
+                if ($value === null || $value === '') {
+                    return null;
+                }
+
+                if ($value instanceof CleaningBookingRoomAssignmentSource) {
+                    return $value;
+                }
+
+                // Older production rows used "system" for automatic room
+                // assignment. The current enum calls the same source "auto".
+                if ((string) $value === 'system') {
+                    return CleaningBookingRoomAssignmentSource::Auto;
+                }
+
+                return CleaningBookingRoomAssignmentSource::from((string) $value);
+            },
+            set: static function (mixed $value): ?string {
+                if ($value === null || $value === '') {
+                    return null;
+                }
+
+                if ($value instanceof CleaningBookingRoomAssignmentSource) {
+                    return $value->value;
+                }
+
+                return (string) $value === 'system'
+                    ? CleaningBookingRoomAssignmentSource::Auto->value
+                    : CleaningBookingRoomAssignmentSource::from((string) $value)->value;
+            },
+        );
     }
 }
