@@ -734,8 +734,15 @@ final class CleaningBookingSessionLifecycleService
             $code = mb_str_pad((string) random_int(0, 9999), self::SECURITY_CODE_LENGTH, '0', STR_PAD_LEFT);
             $hash = $this->securityCodeHash($code);
 
+            $siblingSessionIds = CleaningBookingSession::query()
+                ->where('cleaning_booking_id', $session->cleaning_booking_id)
+                ->where('status', '!=', CleaningBookingSessionStatus::Superseded->value)
+                ->pluck('id')
+                ->map(static fn (mixed $id): int => (int) $id)
+                ->all();
+
             $exists = DB::table('booking_security_codes')
-                ->where('booking_id', $session->id)
+                ->whereIn('booking_id', $siblingSessionIds)
                 ->where('booking_type', $session->getMorphClass())
                 ->where('code_hash', $hash)
                 ->whereNull('consumed_at')
