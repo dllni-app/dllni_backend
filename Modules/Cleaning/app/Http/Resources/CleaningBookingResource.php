@@ -7,10 +7,12 @@ namespace Modules\Cleaning\Http\Resources;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Arr;
+use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingRoom;
+use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
 use Modules\Cleaning\Services\CleaningExtendedTimePricingService;
@@ -59,7 +61,7 @@ final class CleaningBookingResource extends JsonResource
     public function toArray(Request $request): array
     {
         $details = is_array($this->property_details) ? $this->property_details : [];
-        $globalOrderStatus = $this->status?->value ?? $this->status;
+        $globalOrderStatus = $this->effectiveGlobalOrderStatus();
         $myAssignmentModel = $this->currentWorkerAssignment($request);
         $hasCurrentWorkerSessionAcceptance = $myAssignmentModel === null
             && (string) $globalOrderStatus === CleaningBookingStatus::Pending->value
@@ -564,6 +566,56 @@ final class CleaningBookingResource extends JsonResource
             ->whereIn('status', CleaningBookingWorkerAssignmentStatus::activeValues())
             ->whereHas('session', fn ($query) => $query->where('cleaning_booking_id', $this->id))
             ->exists();
+    }
+
+    private function effectiveGlobalOrderStatus(): string
+    {
+        $stored = $this->status instanceof CleaningBookingStatus
+            ? $this->status->value
+            : (string) $this->status;
+
+        $statuses = CleaningBookingSession::query()
+            ->where('cleaning_booking_id', $this->id)
+            ->where('status', '!=', CleaningBookingSessionStatus::Superseded->value)
+            ->orderBy('sequence')
+            ->pluck('status')
+            ->map(static fn (mixed $status): string => $status instanceof CleaningBookingSessionStatus
+                ? $status->value
+                : (string) $status);
+
+        if ($statuses->isEmpty()) {
+            return $stored;
+        }
+
+        $terminal = [
+            CleaningBookingSessionStatus::Completed->value,
+            CleaningBookingSessionStatus::Cancelled->value,
+            CleaningBookingSessionStatus::Skipped->value,
+        ];
+
+        if ($statuses->every(static fn (string $status): bool => in_array($status, $terminal, true))) {
+            return $statuses->contains(CleaningBookingSessionStatus::Completed->value)
+                ? CleaningBookingStatus::Completed->value
+                : CleaningBookingStatus::Cancelled->value;
+        }
+
+        return match (true) {
+            $statuses->contains(CleaningBookingSessionStatus::UnderDispute->value) =>
+                CleaningBookingStatus::UnderDispute->value,
+            $statuses->contains(CleaningBookingSessionStatus::TimeExtensionRequested->value) =>
+                CleaningBookingStatus::TimeExtensionRequested->value,
+            $statuses->contains(CleaningBookingSessionStatus::AwaitingCustomerCompletion->value) =>
+                CleaningBookingStatus::AwaitingCustomerCompletion->value,
+            $statuses->contains(CleaningBookingSessionStatus::InProgress->value) =>
+                CleaningBookingStatus::InProgress->value,
+            $statuses->contains(CleaningBookingSessionStatus::AwaitingStartVerification->value) =>
+                CleaningBookingStatus::AwaitingStartVerification->value,
+            $statuses->contains(CleaningBookingSessionStatus::AwaitingWorkerStartConfirmation->value) =>
+                CleaningBookingStatus::AwaitingWorkerStartConfirmation->value,
+            $statuses->contains(CleaningBookingSessionStatus::WorkerAssigned->value) =>
+                CleaningBookingStatus::WorkerAssigned->value,
+            default => CleaningBookingStatus::Pending->value,
+        };
     }
 
     private function workerOrderStatus(
