@@ -141,6 +141,55 @@ final class CleaningBookingSessionLifecycleService
         });
     }
 
+    public function confirmMatchingSecurityCodeForBooking(
+        CleaningBooking $booking,
+        int $customerId,
+        string $code,
+    ): ?CleaningBookingSession {
+        $this->assertCustomerOwnsBooking($booking, $customerId);
+
+        $sessionIds = CleaningBookingSession::query()
+            ->where('cleaning_booking_id', $booking->id)
+            ->where('status', '!=', CleaningBookingSessionStatus::Superseded->value)
+            ->pluck('id')
+            ->map(static fn (mixed $id): int => (int) $id)
+            ->filter(static fn (int $id): bool => $id > 0)
+            ->values();
+
+        if ($sessionIds->isEmpty()) {
+            return null;
+        }
+
+        $providedHash = $this->securityCodeHash($code);
+        $sessionMorph = (new CleaningBookingSession())->getMorphClass();
+        $record = DB::table('booking_security_codes')
+            ->whereIn('booking_id', $sessionIds->all())
+            ->where('booking_type', $sessionMorph)
+            ->where(function ($query) use ($providedHash, $code): void {
+                $query->where('code_hash', $providedHash)
+                    ->orWhere(function ($legacy) use ($code): void {
+                        $legacy->whereNull('code_hash')->where('code', $code);
+                    });
+            })
+            ->orderByRaw('consumed_at is null desc')
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $record) {
+            return null;
+        }
+
+        $session = CleaningBookingSession::query()
+            ->where('cleaning_booking_id', $booking->id)
+            ->find((int) $record->booking_id);
+
+        if (! $session instanceof CleaningBookingSession) {
+            return null;
+        }
+
+        return $this->confirmSecurityCode($booking, $session, $customerId, $code);
+    }
+
     public function confirmSecurityCode(
         CleaningBooking $booking,
         CleaningBookingSession $session,
