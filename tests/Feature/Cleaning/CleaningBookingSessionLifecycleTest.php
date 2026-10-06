@@ -4,13 +4,102 @@ declare(strict_types=1);
 
 use App\Models\User;
 use App\Models\Worker;
+use Illuminate\Support\Facades\Event;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Modules\Cleaning\Events\ArrivalVerified;
+use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
+use Modules\Cleaning\Events\CompletionDecisionMade;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
+
+it('broadcasts the session start approval immediately after the customer verifies the code', function (): void {
+    Event::fake([ArrivalVerified::class, CleaningBookingTrackingUpdated::class]);
+
+    [$customer, $workerUser, $worker, $booking] = makeLifecycleScenario();
+    $session = makeLifecycleSession($booking, 1, now()->addDay()->toDateString(), '10:00');
+    makeLifecycleAssignment($session, $worker);
+
+    Sanctum::actingAs($workerUser);
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}/start-travel")
+        ->assertOk();
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}/arrive")
+        ->assertOk();
+    $securityCode = (string) $this->getJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}/security-code",
+    )->assertOk()->json('data.securityCode');
+
+    Sanctum::actingAs($customer);
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}/start-verification/confirm",
+        ['code' => $securityCode],
+    )->assertOk();
+
+    Event::assertDispatched(ArrivalVerified::class, function (ArrivalVerified $event) use ($booking, $session, $worker): bool {
+        return $event->cleaningBookingId === $booking->id
+            && $event->workerId === $worker->id
+            && $event->sessionId === $session->id;
+    });
+    Event::assertDispatched(CleaningBookingTrackingUpdated::class, function (CleaningBookingTrackingUpdated $event) use ($booking, $session): bool {
+        return $event->cleaningBookingId === $booking->id
+            && (int) ($event->tracking['sessionId'] ?? 0) === $session->id
+            && ($event->tracking['sessionStatus'] ?? null) === CleaningBookingSessionStatus::AwaitingWorkerStartConfirmation->value;
+    });
+});
+
+it('rejects completion for only the selected session and broadcasts the decision to its worker', function (): void {
+    Event::fake([CleaningBookingTrackingUpdated::class, CompletionDecisionMade::class]);
+
+    [$customer, , $worker, $booking] = makeLifecycleScenario();
+    $first = makeLifecycleSession($booking, 1, now()->addDay()->toDateString(), '10:00');
+    $second = makeLifecycleSession($booking, 2, now()->addDays(2)->toDateString(), '10:00');
+    $assignment = makeLifecycleAssignment($first, $worker);
+
+    $first->forceFill([
+        'status' => CleaningBookingSessionStatus::AwaitingCustomerCompletion,
+        'work_started_at' => now()->subHours(2),
+        'work_finished_at' => now()->subMinute(),
+        'payment_status' => 'ready',
+    ])->save();
+    $assignment->forceFill([
+        'status' => CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion,
+        'started_travel_at' => now()->subHours(3),
+        'arrived_at' => now()->subHours(2),
+        'start_approved_at' => now()->subHours(2),
+        'work_started_at' => now()->subHours(2),
+        'work_finished_at' => now()->subMinute(),
+        'worker_completion_message' => 'done',
+    ])->save();
+    $booking->forceFill([
+        'status' => CleaningBookingStatus::AwaitingCustomerCompletion,
+    ])->save();
+
+    Sanctum::actingAs($customer);
+
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/sessions/{$first->id}/completion/reject",
+        ['reason' => 'بحاجة إلى متابعة'],
+    )
+        ->assertOk()
+        ->assertJsonPath('data.schedule.sessions.0.status', CleaningBookingSessionStatus::InProgress->value)
+        ->assertJsonPath('data.schedule.sessions.1.id', $second->id);
+
+    expect($first->fresh()->status)->toBe(CleaningBookingSessionStatus::InProgress)
+        ->and($assignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::InProgress)
+        ->and($assignment->fresh()->work_finished_at)->toBeNull()
+        ->and($second->fresh()->status)->toBe(CleaningBookingSessionStatus::WorkerAssigned)
+        ->and($booking->fresh()->status)->toBe(CleaningBookingStatus::InProgress);
+
+    Event::assertDispatched(CompletionDecisionMade::class, function (CompletionDecisionMade $event) use ($booking, $first, $worker): bool {
+        return $event->cleaningBookingId === $booking->id
+            && $event->workerId === $worker->id
+            && $event->sessionId === $first->id
+            && $event->decision === 'rejected';
+    });
+});
 
 it('runs one event day through its own lifecycle without completing future days', function (): void {
     [$customer, $workerUser, $worker, $booking] = makeLifecycleScenario();
@@ -108,6 +197,45 @@ it('accepts a session security code through the legacy customer booking verifica
         ->toBe(CleaningBookingWorkerAssignmentStatus::StartApproved)
         ->and($assignment->fresh()->start_approved_at)
         ->not->toBeNull();
+});
+
+it('rejects the pending child session through the legacy customer completion endpoint', function (): void {
+    [$customer, , $worker, $booking] = makeLifecycleScenario();
+    $first = makeLifecycleSession($booking, 1, now()->addDay()->toDateString(), '10:00');
+    $second = makeLifecycleSession($booking, 2, now()->addDays(2)->toDateString(), '10:00');
+    $assignment = makeLifecycleAssignment($first, $worker);
+
+    $first->forceFill([
+        'status' => CleaningBookingSessionStatus::AwaitingCustomerCompletion,
+        'work_started_at' => now()->subHours(2),
+        'work_finished_at' => now()->subMinute(),
+    ])->save();
+    $assignment->forceFill([
+        'status' => CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion,
+        'started_travel_at' => now()->subHours(3),
+        'arrived_at' => now()->subHours(2),
+        'start_approved_at' => now()->subHours(2),
+        'work_started_at' => now()->subHours(2),
+        'work_finished_at' => now()->subMinute(),
+    ])->save();
+    $booking->forceFill([
+        'status' => CleaningBookingStatus::AwaitingCustomerCompletion,
+    ])->save();
+
+    Sanctum::actingAs($customer);
+
+    $this->postJson("/api/v1/user/cleaning/orders/{$booking->id}/completion/reject", [
+        'reason' => 'أكمل بعض التفاصيل',
+    ])->assertOk();
+
+    expect($first->fresh()->status)
+        ->toBe(CleaningBookingSessionStatus::InProgress)
+        ->and($assignment->fresh()->status)
+        ->toBe(CleaningBookingWorkerAssignmentStatus::InProgress)
+        ->and($second->fresh()->status)
+        ->toBe(CleaningBookingSessionStatus::WorkerAssigned)
+        ->and($booking->fresh()->status)
+        ->toBe(CleaningBookingStatus::InProgress);
 });
 
 it('confirms the pending child session through the legacy customer completion endpoint without completing future sessions', function (): void {
