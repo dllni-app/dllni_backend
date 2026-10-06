@@ -574,6 +574,13 @@ final class CleaningBookingResource extends JsonResource
             ? $this->status->value
             : (string) $this->status;
 
+        // Only completed parents need this defensive reconciliation. Normal
+        // lifecycle mutations already keep active parent states synchronized,
+        // and avoiding a session query for every list row prevents an N+1.
+        if ($stored !== CleaningBookingStatus::Completed->value) {
+            return $stored;
+        }
+
         $statuses = CleaningBookingSession::query()
             ->where('cleaning_booking_id', $this->id)
             ->where('status', '!=', CleaningBookingSessionStatus::Superseded->value)
