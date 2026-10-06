@@ -14,6 +14,7 @@ use InvalidArgumentException;
 use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Modules\Cleaning\Events\ArrivalVerified;
 use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Events\CompletionDecisionMade;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -32,6 +33,7 @@ final class CleaningBookingSessionLifecycleService
     public function __construct(
         private readonly DepositService $depositService,
         private readonly CleaningBookingSessionWorkerPricingService $pricingService,
+        private readonly CleaningLifecycleNotificationService $lifecycleNotifications,
     ) {}
 
     public function startTravel(
@@ -201,7 +203,15 @@ final class CleaningBookingSessionLifecycleService
     ): CleaningBookingSession {
         $this->assertCustomerOwnsBooking($booking, $customerId);
 
-        return DB::transaction(function () use ($booking, $session, $code): CleaningBookingSession {
+        $verifiedWorkerId = null;
+        $verifiedNow = false;
+        $updatedSession = DB::transaction(function () use (
+            $booking,
+            $session,
+            $code,
+            &$verifiedWorkerId,
+            &$verifiedNow,
+        ): CleaningBookingSession {
             $locked = $this->lockSession($booking, $session);
             $this->assertSessionNotTerminal($locked);
             $providedHash = $this->securityCodeHash($code);
@@ -238,6 +248,7 @@ final class CleaningBookingSessionLifecycleService
             }
 
             $workerId = (int) ($record->worker_id ?? 0);
+            $verifiedWorkerId = $workerId > 0 ? $workerId : null;
             $assignment = CleaningBookingSessionWorkerAssignment::query()
                 ->where('cleaning_booking_session_id', $locked->id)
                 ->where('worker_id', $workerId)
@@ -252,6 +263,7 @@ final class CleaningBookingSessionLifecycleService
             }
 
             $verifiedAt = now();
+            $verifiedNow = true;
             $assignment->forceFill([
                 'status' => CleaningBookingWorkerAssignmentStatus::StartApproved,
                 'start_approved_at' => $assignment->start_approved_at ?? $verifiedAt,
@@ -286,6 +298,58 @@ final class CleaningBookingSessionLifecycleService
 
             return $this->freshSession($locked);
         });
+
+        if ($verifiedNow && $verifiedWorkerId !== null) {
+            $this->broadcastStartVerified(
+                $booking,
+                $updatedSession,
+                $verifiedWorkerId,
+            );
+        }
+
+        return $updatedSession;
+    }
+
+    private function broadcastStartVerified(
+        CleaningBooking $booking,
+        CleaningBookingSession $session,
+        int $workerId,
+    ): void {
+        $freshBooking = $booking->fresh() ?? $booking;
+        $parentStatus = $freshBooking->status instanceof CleaningBookingStatus
+            ? $freshBooking->status->value
+            : (string) $freshBooking->status;
+        $sessionStatus = $session->status instanceof CleaningBookingSessionStatus
+            ? $session->status->value
+            : (string) $session->status;
+        $assignment = CleaningBookingSessionWorkerAssignment::query()
+            ->where('cleaning_booking_session_id', $session->id)
+            ->where('worker_id', $workerId)
+            ->first();
+        $arrivedAt = $assignment?->arrived_at?->toIso8601String()
+            ?? $session->arrived_at?->toIso8601String()
+            ?? now()->toIso8601String();
+
+        BroadcastAfterResponse::send(new ArrivalVerified(
+            (int) $freshBooking->id,
+            $workerId,
+            $arrivedAt,
+            $parentStatus,
+            (int) $session->id,
+        ));
+        BroadcastAfterResponse::send(new CleaningBookingTrackingUpdated(
+            (int) $freshBooking->id,
+            [
+                'cleaningBookingId' => (int) $freshBooking->id,
+                'bookingId' => (int) $freshBooking->id,
+                'status' => $parentStatus,
+                'sessionId' => (int) $session->id,
+                'sessionStatus' => $sessionStatus,
+                'workerId' => $workerId,
+                'startApprovedAt' => $assignment?->start_approved_at?->toIso8601String(),
+                'updatedAt' => now()->toIso8601String(),
+            ],
+        ));
     }
 
     public function startWork(
@@ -388,6 +452,162 @@ final class CleaningBookingSessionLifecycleService
 
             return $this->freshSession($locked);
         });
+    }
+
+    public function rejectCompletion(
+        CleaningBooking $booking,
+        CleaningBookingSession $session,
+        int $customerId,
+        ?string $message = null,
+    ): CleaningBookingSession {
+        $this->assertCustomerOwnsBooking($booking, $customerId);
+
+        $workerIds = [];
+        $updatedSession = DB::transaction(function () use (
+            $booking,
+            $session,
+            $message,
+            &$workerIds,
+        ): CleaningBookingSession {
+            $locked = $this->lockSession($booking, $session);
+            $this->assertSessionNotTerminal($locked);
+
+            if ($locked->status !== CleaningBookingSessionStatus::AwaitingCustomerCompletion) {
+                throw new InvalidArgumentException(
+                    'Session must be awaiting customer completion confirmation.',
+                );
+            }
+
+            $assignments = CleaningBookingSessionWorkerAssignment::query()
+                ->where('cleaning_booking_session_id', $locked->id)
+                ->whereIn('status', [
+                    CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion->value,
+                    CleaningBookingWorkerAssignmentStatus::TimeExtensionRequested->value,
+                ])
+                ->lockForUpdate()
+                ->get();
+
+            $workerIds = $assignments
+                ->pluck('worker_id')
+                ->map(static fn (mixed $workerId): int => (int) $workerId)
+                ->filter(static fn (int $workerId): bool => $workerId > 0)
+                ->unique()
+                ->values()
+                ->all();
+
+            foreach ($assignments as $assignment) {
+                $assignment->forceFill([
+                    'status' => CleaningBookingWorkerAssignmentStatus::InProgress,
+                    'work_finished_at' => null,
+                    'worker_completion_message' => null,
+                ])->save();
+            }
+
+            $locked->forceFill([
+                'status' => CleaningBookingSessionStatus::InProgress,
+                'work_finished_at' => null,
+                'payment_status' => 'pending',
+                'payment_settled_at' => null,
+            ])->save();
+
+            $booking->forceFill([
+                'customer_completion_rejection_message' => $this->nullableTrimmed($message),
+                'completion_rejected_at' => now(),
+                'work_finished_at' => null,
+            ])->saveQuietly();
+
+            $this->syncParentStatus($booking);
+
+            return $this->freshSession($locked);
+        });
+
+        $this->broadcastCompletionRejected(
+            $booking,
+            $updatedSession,
+            $workerIds,
+            $this->nullableTrimmed($message),
+        );
+
+        return $updatedSession;
+    }
+
+    /**
+     * @param array<int,int> $workerIds
+     */
+    private function broadcastCompletionRejected(
+        CleaningBooking $booking,
+        CleaningBookingSession $session,
+        array $workerIds,
+        ?string $message,
+    ): void {
+        $freshBooking = $booking->fresh() ?? $booking;
+        $parentStatus = $freshBooking->status instanceof CleaningBookingStatus
+            ? $freshBooking->status->value
+            : (string) $freshBooking->status;
+        $sessionStatus = $session->status instanceof CleaningBookingSessionStatus
+            ? $session->status->value
+            : (string) $session->status;
+        $decidedAt = now()->toIso8601String();
+
+        BroadcastAfterResponse::send(new CleaningBookingTrackingUpdated(
+            (int) $freshBooking->id,
+            [
+                'cleaningBookingId' => (int) $freshBooking->id,
+                'bookingId' => (int) $freshBooking->id,
+                'status' => $parentStatus,
+                'sessionId' => (int) $session->id,
+                'sessionStatus' => $sessionStatus,
+                'decision' => 'rejected',
+                'message' => $message,
+                'updatedAt' => $decidedAt,
+            ],
+        ));
+
+        if ($workerIds === []) {
+            BroadcastAfterResponse::send(new CompletionDecisionMade(
+                (int) $freshBooking->id,
+                null,
+                'rejected',
+                $message,
+                $decidedAt,
+                $parentStatus,
+                null,
+                (int) $session->id,
+            ));
+
+            return;
+        }
+
+        foreach ($workerIds as $workerId) {
+            BroadcastAfterResponse::send(new CompletionDecisionMade(
+                (int) $freshBooking->id,
+                $workerId,
+                'rejected',
+                $message,
+                $decidedAt,
+                $parentStatus,
+                null,
+                (int) $session->id,
+            ));
+
+            $this->lifecycleNotifications->notifyWorkerById(
+                booking: $freshBooking,
+                workerId: $workerId,
+                canonicalType: 'cleaning.booking.completion_rejected',
+                action: 'completion_rejected',
+                actorRole: 'customer',
+                fromStatus: CleaningBookingStatus::AwaitingCustomerCompletion->value,
+                occurredAt: $decidedAt,
+                extraData: [
+                    'sessionId' => (int) $session->id,
+                    'sessionStatus' => $sessionStatus,
+                    'message' => $message,
+                ],
+                templateContext: [
+                    'session_number' => (int) $session->sequence,
+                ],
+            );
+        }
     }
 
     public function cancelRemainingSessions(
