@@ -32,7 +32,7 @@ final class CleaningBookingScheduleController
         $viewerWorker = ! $isCustomer && $worker instanceof Worker ? $worker : null;
 
         if (! $isCustomer && ! $viewerWorker instanceof Worker) {
-            abort(403, 'You are not allowed to view this cleaning booking schedule.');
+            abort(403, 'User must have an associated worker.');
         }
 
         if (
