@@ -42,6 +42,7 @@ final class Worker extends Model implements HasMedia
         'gender',
         'birthday',
         'preferred_work_type',
+        'preferred_work_types',
         'bio',
         'average_rating',
         'total_completed_jobs',
@@ -185,6 +186,7 @@ final class Worker extends Model implements HasMedia
             'cancellation_rate' => 'decimal:2',
             'birthday' => 'date',
             'preferred_work_type' => WorkerPreferredWorkType::class,
+            'preferred_work_types' => 'array',
             'home_latitude' => 'decimal:8',
             'home_longitude' => 'decimal:8',
             'is_active' => 'boolean',
@@ -196,6 +198,33 @@ final class Worker extends Model implements HasMedia
             'default_working_hours' => 'array',
             'security_deposit_status' => 'string',
         ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function preferredWorkTypes(): array
+    {
+        $stored = is_array($this->preferred_work_types) ? $this->preferred_work_types : [];
+        $stored = array_values(array_unique(array_filter(
+            array_map(static fn (mixed $value): string => mb_strtolower(mb_trim((string) $value)), $stored),
+            static fn (string $value): bool => in_array($value, WorkerPreferredWorkType::selectableValues(), true),
+        )));
+
+        if ($stored !== []) {
+            return $stored;
+        }
+
+        $legacy = $this->preferred_work_type instanceof WorkerPreferredWorkType
+            ? $this->preferred_work_type
+            : WorkerPreferredWorkType::tryFrom((string) ($this->preferred_work_type ?? WorkerPreferredWorkType::Cleaning->value));
+
+        return match ($legacy) {
+            WorkerPreferredWorkType::Events => [WorkerPreferredWorkType::Events->value],
+            WorkerPreferredWorkType::Hourly => [WorkerPreferredWorkType::Hourly->value],
+            WorkerPreferredWorkType::Both => [WorkerPreferredWorkType::Cleaning->value, WorkerPreferredWorkType::Events->value],
+            default => [WorkerPreferredWorkType::Cleaning->value],
+        };
     }
 
     /**
