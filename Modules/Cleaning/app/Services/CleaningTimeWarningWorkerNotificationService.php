@@ -60,6 +60,9 @@ final class CleaningTimeWarningWorkerNotificationService
         $bookingType = $booking instanceof EventBooking ? 'event_booking' : 'cleaning_booking';
         $extraData = [
             'warningId' => $warning->id,
+            'sessionId' => $warning->cleaning_booking_session_id !== null
+                ? (int) $warning->cleaning_booking_session_id
+                : null,
             'assignmentId' => $assignmentId,
             'workerId' => $workerId,
             'message' => $message,
@@ -72,6 +75,9 @@ final class CleaningTimeWarningWorkerNotificationService
         ];
         $templateContext = [
             'warningId' => $warning->id,
+            'sessionId' => $warning->cleaning_booking_session_id !== null
+                ? (int) $warning->cleaning_booking_session_id
+                : null,
             'assignmentId' => $assignmentId,
             'bookingType' => $bookingType,
         ];
