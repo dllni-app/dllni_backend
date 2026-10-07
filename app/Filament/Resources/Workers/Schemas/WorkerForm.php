@@ -37,10 +37,11 @@ final class WorkerForm
                                 'female' => __('cleaning_admin.workers.gender_options.female'),
                             ])
                             ->nullable(),
-                        Select::make('preferred_work_type')
+                        Select::make('preferred_work_types')
                             ->label(__('cleaning_admin.workers.fields.preferred_work_type'))
                             ->options(WorkerPreferredWorkType::options())
-                            ->default(WorkerPreferredWorkType::Both->value)
+                            ->multiple()
+                            ->default([WorkerPreferredWorkType::Cleaning->value])
                             ->validationMessages(['required' => __('validation.required')])
                             ->required(),
                         FileUpload::make('avatar_upload')
