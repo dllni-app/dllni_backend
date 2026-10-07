@@ -287,3 +287,85 @@ it('does not dispatch a multi-day event when the worker conflicts on only one ev
     Notification::assertNotSentTo($workerUser, NewOrderRequestNotification::class);
     Event::assertNotDispatched(CleaningBookingCreated::class);
 });
+
+
+it('dispatches hourly worker bookings only to workers that selected hourly work', function (): void {
+    Notification::fake();
+    Event::fake([CleaningBookingCreated::class]);
+
+    CleaningDepositSetting::query()->create([
+        'minimum_deposit_amount' => 0,
+        'default_max_negative_balance' => 100000,
+        'restriction_threshold_percent' => 80,
+        'allowance_warning_threshold_percent' => 10,
+        'is_enabled' => true,
+        'trust_reject_after_accept_penalty' => 10,
+        'trust_minimum_for_dispatch' => 0,
+    ]);
+
+    $scheduledAt = now()->addDay()->setTime(15, 0);
+    $dayKey = mb_strtolower($scheduledAt->format('l'));
+    $neighborhood = CleaningNeighborhood::factory()->create();
+
+    $makeWorker = function (string $email, array $types) use ($dayKey, $neighborhood): array {
+        $user = User::factory()->create(['email' => $email, 'is_active' => true]);
+        $worker = Worker::factory()->create([
+            'user_id' => $user->id,
+            'trust_score' => 100,
+            'is_active' => true,
+            'is_suspended' => false,
+            'preferred_work_types' => $types,
+            'home_address' => (string) $neighborhood->name_ar,
+            'home_latitude' => 36.2000,
+            'home_longitude' => 37.1500,
+            'default_working_hours' => [
+                $dayKey => [
+                    'available' => true,
+                    'data' => [['14:00' => '18:00']],
+                ],
+            ],
+        ]);
+        $worker->zones()->create([
+            'neighborhood_id' => $neighborhood->id,
+            'name' => (string) $neighborhood->name_ar,
+            'is_active' => true,
+        ]);
+        CleaningWorkerDeposit::query()->create([
+            'worker_id' => $worker->id,
+            'current_balance' => 100000,
+            'deposited_total' => 100000,
+            'withdrawn_total' => 0,
+            'minimum_required' => 0,
+            'max_negative_balance' => 100000,
+        ]);
+
+        return [$user, $worker];
+    };
+
+    [$hourlyUser] = $makeWorker('hourly-dispatch-worker@example.com', ['hourly']);
+    [$cleaningUser] = $makeWorker('cleaning-dispatch-worker@example.com', ['cleaning']);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => null,
+        'preferred_worker_id' => null,
+        'status' => CleaningBookingStatus::Pending->value,
+        'gender_preference' => 'any',
+        'property_type' => 'apartment',
+        'booking_kind' => 'open_time',
+        'neighborhood_id' => $neighborhood->id,
+        'neighborhood_name' => (string) $neighborhood->name_ar,
+        'address_latitude' => 36.2100,
+        'address_longitude' => 37.1600,
+        'scheduled_date' => $scheduledAt->toDateString(),
+        'scheduled_time' => $scheduledAt->format('H:i'),
+        'base_price' => 45000,
+        'addons_total' => 0,
+        'total_price' => 45000,
+        'number_of_workers' => 1,
+    ]);
+
+    (new NotifyEligibleWorkersNewOrderJob((int) $booking->id))->handle();
+
+    Notification::assertSentTo($hourlyUser, NewOrderRequestNotification::class);
+    Notification::assertNotSentTo($cleaningUser, NewOrderRequestNotification::class);
+});
