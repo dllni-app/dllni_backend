@@ -289,6 +289,10 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
         DepositService $depositService,
         WorkerBookingScheduleConflictService $scheduleConflictService,
     ): bool {
+        if (! $this->workerAcceptsBookingType($worker, $booking)) {
+            return false;
+        }
+
         if (
             $worker->user === null
             || ! (bool) $worker->user->is_active
@@ -321,6 +325,21 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
         $scheduleConflictService->forgetWorker($worker);
 
         return ! $scheduleConflictService->hasConflict($worker, $booking);
+    }
+
+    private function workerAcceptsBookingType(Worker $worker, CleaningBooking $booking): bool
+    {
+        $types = $worker->preferredWorkTypes();
+
+        if ((string) ($booking->booking_kind ?? 'standard') === 'open_time') {
+            return in_array('hourly', $types, true);
+        }
+
+        if ((string) $booking->property_type === 'event_assistance') {
+            return in_array('events', $types, true);
+        }
+
+        return in_array('cleaning', $types, true);
     }
 
     private function bookingDateTime(CleaningBooking $booking): ?Carbon
@@ -395,6 +414,11 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             'scheduled_time' => (string) $booking->scheduled_time,
             'propertyType' => (string) $booking->property_type,
             'property_type' => (string) $booking->property_type,
+            'type' => (string) ($booking->booking_kind ?? 'standard') === 'open_time'
+                ? 'hourly_worker'
+                : ((string) $booking->property_type === 'event_assistance' ? 'events' : 'cleaning'),
+            'bookingKind' => (string) ($booking->booking_kind ?? 'standard'),
+            'booking_kind' => (string) ($booking->booking_kind ?? 'standard'),
             'neighborhoodId' => $booking->neighborhood_id,
             'neighborhood_id' => $booking->neighborhood_id,
             'neighborhoodName' => $booking->neighborhood_name,
