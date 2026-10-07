@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Models\User;
 use App\Models\Worker;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
@@ -15,6 +16,7 @@ use Modules\Cleaning\Events\CompletionDecisionMade;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
+use Modules\Cleaning\Models\CleaningTimeWarning;
 
 it('broadcasts the session start approval immediately after the customer verifies the code', function (): void {
     Event::fake([ArrivalVerified::class, CleaningBookingTrackingUpdated::class]);
@@ -275,6 +277,82 @@ it('confirms the pending child session through the legacy customer completion en
         ->toBe(CleaningBookingSessionStatus::WorkerAssigned)
         ->and($booking->fresh()->status)
         ->toBe(CleaningBookingStatus::WorkerAssigned);
+});
+
+it('routes a customer time-extension request to the selected child session and lets its worker accept it', function (): void {
+    Queue::fake();
+
+    [$customer, $workerUser, $worker, $booking] = makeLifecycleScenario();
+    $first = makeLifecycleSession($booking, 1, now()->addDay()->toDateString(), '10:00');
+    $second = makeLifecycleSession($booking, 2, now()->addDays(2)->toDateString(), '10:00');
+    $assignment = makeLifecycleAssignment($first, $worker);
+    makeLifecycleAssignment($second, $worker);
+
+    $first->forceFill([
+        'status' => CleaningBookingSessionStatus::AwaitingCustomerCompletion,
+        'work_started_at' => now()->subHours(2),
+        'work_finished_at' => now()->subMinute(),
+        'payment_status' => 'ready',
+    ])->save();
+    $assignment->forceFill([
+        'status' => CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion,
+        'started_travel_at' => now()->subHours(3),
+        'arrived_at' => now()->subHours(2),
+        'start_approved_at' => now()->subHours(2),
+        'work_started_at' => now()->subHours(2),
+        'work_finished_at' => now()->subMinute(),
+    ])->save();
+    $booking->forceFill([
+        'status' => CleaningBookingStatus::AwaitingCustomerCompletion,
+    ])->save();
+
+    Sanctum::actingAs($customer);
+
+    $this->postJson("/api/v1/user/cleaning/orders/{$booking->id}/completion/extend-time", [
+        'additionalMinutes' => 30,
+        'sessionId' => $first->id,
+        'workerId' => $worker->id,
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.status', CleaningBookingStatus::TimeExtensionRequested->value);
+
+    $warning = CleaningTimeWarning::query()
+        ->where('booking_id', $booking->id)
+        ->where('cleaning_booking_session_id', $first->id)
+        ->latest('id')
+        ->firstOrFail();
+
+    expect($first->fresh()->status)
+        ->toBe(CleaningBookingSessionStatus::TimeExtensionRequested)
+        ->and($assignment->fresh()->status)
+        ->toBe(CleaningBookingWorkerAssignmentStatus::TimeExtensionRequested)
+        ->and($second->fresh()->status)
+        ->toBe(CleaningBookingSessionStatus::WorkerAssigned)
+        ->and($booking->fresh()->status)
+        ->toBe(CleaningBookingStatus::TimeExtensionRequested)
+        ->and((int) $warning->worker_id)
+        ->toBe($worker->id);
+
+    Sanctum::actingAs($workerUser);
+
+    $this->postJson("/api/v1/cleaning-time-warnings/{$warning->id}/accept")
+        ->assertOk()
+        ->assertJsonPath('sessionId', $first->id);
+
+    expect($first->fresh()->status)
+        ->toBe(CleaningBookingSessionStatus::InProgress)
+        ->and($first->fresh()->work_finished_at)
+        ->toBeNull()
+        ->and($assignment->fresh()->status)
+        ->toBe(CleaningBookingWorkerAssignmentStatus::InProgress)
+        ->and($assignment->fresh()->work_finished_at)
+        ->toBeNull()
+        ->and($second->fresh()->status)
+        ->toBe(CleaningBookingSessionStatus::WorkerAssigned)
+        ->and($booking->fresh()->status)
+        ->toBe(CleaningBookingStatus::InProgress)
+        ->and($warning->fresh()->worker_responded_at)
+        ->not->toBeNull();
 });
 
 it('completes the parent only when the final required event session is completed', function (): void {
