@@ -54,8 +54,16 @@ final class WorkerAccountProfileController
         if (array_key_exists('birthday', $validated)) {
             $workerUpdates['birthday'] = $validated['birthday'];
         }
-        if (array_key_exists('preferred_work_type', $validated)) {
-            $workerUpdates['preferred_work_type'] = $validated['preferred_work_type'];
+        if (array_key_exists('preferred_work_types', $validated)) {
+            $types = array_values($validated['preferred_work_types']);
+            $workerUpdates['preferred_work_types'] = $types;
+            // Keep the old scalar populated for backwards compatibility only.
+            $workerUpdates['preferred_work_type'] = $types[0] ?? 'cleaning';
+        } elseif (array_key_exists('preferred_work_type', $validated)) {
+            $legacy = (string) $validated['preferred_work_type'];
+            $types = $legacy === 'both' ? ['cleaning', 'events'] : [$legacy];
+            $workerUpdates['preferred_work_type'] = $types[0] ?? 'cleaning';
+            $workerUpdates['preferred_work_types'] = $types;
         }
         if (array_key_exists('isActive', $validated)) {
             $workerUpdates['is_active'] = (bool) $validated['isActive'];
