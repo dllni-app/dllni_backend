@@ -65,8 +65,8 @@ final class CleaningTimeWarningService
                 'price_applied_at' => $warning->price_applied_at ?? now(),
             ]);
 
-            if ($warning->cleaning_booking_session_id !== null) {
-                $session = $this->lockedWarningSession($warning, $booking);
+            $session = $this->resolveWarningSession($warning, $booking);
+            if ($session instanceof CleaningBookingSession) {
                 $sessionAssignment = $this->warningSessionAssignment(
                     $warning,
                     $session,
@@ -74,7 +74,7 @@ final class CleaningTimeWarningService
 
                 if (! $sessionAssignment instanceof CleaningBookingSessionWorkerAssignment) {
                     throw new InvalidArgumentException(
-                        'Extension request worker assignment is invalid for this session.',
+                        'تعذر ربط طلب التمديد بالعامل في هذه الجلسة. حدّث الطلب وحاول مرة أخرى.',
                     );
                 }
 
@@ -210,8 +210,8 @@ final class CleaningTimeWarningService
                 return $warning->fresh(['booking']);
             }
 
-            if ($warning->cleaning_booking_session_id !== null) {
-                $session = $this->lockedWarningSession($warning, $booking);
+            $session = $this->resolveWarningSession($warning, $booking);
+            if ($session instanceof CleaningBookingSession) {
                 $sessionAssignment = $this->warningSessionAssignment(
                     $warning,
                     $session,
@@ -219,7 +219,7 @@ final class CleaningTimeWarningService
 
                 if (! $sessionAssignment instanceof CleaningBookingSessionWorkerAssignment) {
                     throw new InvalidArgumentException(
-                        'Extension request worker assignment is invalid for this session.',
+                        'تعذر ربط طلب التمديد بالعامل في هذه الجلسة. حدّث الطلب وحاول مرة أخرى.',
                     );
                 }
 
@@ -297,6 +297,56 @@ final class CleaningTimeWarningService
         throw new InvalidArgumentException('Extension request booking is invalid.');
     }
 
+    private function resolveWarningSession(
+        CleaningTimeWarning $warning,
+        CleaningBooking $booking,
+    ): ?CleaningBookingSession {
+        if ($warning->cleaning_booking_session_id !== null) {
+            return $this->lockedWarningSession($warning, $booking);
+        }
+
+        if ($warning->worker_id === null || ! $booking->sessions()->exists()) {
+            return null;
+        }
+
+        $priorityStatuses = [
+            CleaningBookingSessionStatus::TimeExtensionRequested->value,
+            CleaningBookingSessionStatus::AwaitingCustomerCompletion->value,
+        ];
+
+        foreach ($priorityStatuses as $status) {
+            $sessions = CleaningBookingSession::query()
+                ->where('cleaning_booking_id', $booking->id)
+                ->where('status', $status)
+                ->whereHas('workerAssignments', function ($query) use ($warning): void {
+                    $query
+                        ->where('worker_id', $warning->worker_id)
+                        ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
+                })
+                ->lockForUpdate()
+                ->get();
+
+            if ($sessions->count() === 1) {
+                /** @var CleaningBookingSession $session */
+                $session = $sessions->first();
+
+                $warning->forceFill([
+                    'cleaning_booking_session_id' => $session->id,
+                ])->save();
+
+                return $session;
+            }
+
+            if ($sessions->count() > 1) {
+                throw new InvalidArgumentException(
+                    'تعذر تحديد الجلسة المرتبطة بطلب التمديد. حدّث الطلب وحاول مرة أخرى.',
+                );
+            }
+        }
+
+        return null;
+    }
+
     private function lockedWarningSession(
         CleaningTimeWarning $warning,
         CleaningBooking $booking,
@@ -304,7 +354,7 @@ final class CleaningTimeWarningService
         $sessionId = $warning->cleaning_booking_session_id;
 
         if ($sessionId === null) {
-            throw new InvalidArgumentException('Extension request session is missing.');
+            throw new InvalidArgumentException('جلسة طلب التمديد غير محددة.');
         }
 
         $session = CleaningBookingSession::query()
@@ -314,7 +364,7 @@ final class CleaningTimeWarningService
 
         if (! $session instanceof CleaningBookingSession) {
             throw new InvalidArgumentException(
-                'Extension request session is invalid for this booking.',
+                'جلسة طلب التمديد لا تتبع لهذا الطلب.',
             );
         }
 
