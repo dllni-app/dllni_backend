@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Events\ServiceExtensionRequested;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
@@ -23,6 +24,37 @@ beforeEach(function () {
         'is_active' => true,
         'is_default' => true,
     ]);
+});
+
+it('broadcasts targeted extension requests only to the assigned worker channel', function (): void {
+    $targeted = new ServiceExtensionRequested(
+        warningId: 10,
+        cleaningBookingId: 20,
+        workerId: 30,
+        requestedMinutes: 45,
+        additionalAmount: 5000,
+        currency: 'SYP',
+        sessionId: 40,
+    );
+
+    expect(array_map(
+        static fn ($channel): string => $channel->name,
+        $targeted->broadcastOn(),
+    ))->toBe(['private-cleaning-worker.30']);
+
+    $legacy = new ServiceExtensionRequested(
+        warningId: 11,
+        cleaningBookingId: 21,
+        workerId: null,
+        requestedMinutes: 30,
+        additionalAmount: null,
+        currency: null,
+    );
+
+    expect(array_map(
+        static fn ($channel): string => $channel->name,
+        $legacy->broadcastOn(),
+    ))->toBe(['private-cleaning-booking.21']);
 });
 
 it('accepts an extension request', function () {
