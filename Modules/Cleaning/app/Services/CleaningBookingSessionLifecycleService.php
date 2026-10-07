@@ -14,12 +14,14 @@ use InvalidArgumentException;
 use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Modules\Cleaning\Enums\CleaningTimeWarningResponse;
 use Modules\Cleaning\Events\ArrivalVerified;
 use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Events\CompletionDecisionMade;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
+use Modules\Cleaning\Models\CleaningTimeWarning;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 final class CleaningBookingSessionLifecycleService
@@ -33,6 +35,7 @@ final class CleaningBookingSessionLifecycleService
     public function __construct(
         private readonly DepositService $depositService,
         private readonly CleaningBookingSessionWorkerPricingService $pricingService,
+        private readonly CleaningExtendedTimePricingService $extensionPricingService,
         private readonly CleaningLifecycleNotificationService $lifecycleNotifications,
     ) {}
 
@@ -452,6 +455,171 @@ final class CleaningBookingSessionLifecycleService
 
             return $this->freshSession($locked);
         });
+    }
+
+    /**
+     * @return array{booking:CleaningBooking,session:CleaningBookingSession,extensionPricing:array<string,mixed>,warning:CleaningTimeWarning}
+     */
+    public function requestExtension(
+        CleaningBooking $booking,
+        CleaningBookingSession $session,
+        int $customerId,
+        int $additionalMinutes,
+        ?string $customerMessage = null,
+        ?int $workerId = null,
+    ): array {
+        $this->assertCustomerOwnsBooking($booking, $customerId);
+
+        $fromStatus = $booking->status instanceof CleaningBookingStatus
+            ? $booking->status->value
+            : (string) $booking->status;
+        $extensionPricing = $this->extensionPricingService->quoteForBooking(
+            $booking,
+            $additionalMinutes,
+        );
+        $decisionWorkerId = null;
+
+        $result = DB::transaction(function () use (
+            $booking,
+            $session,
+            $additionalMinutes,
+            $customerMessage,
+            $workerId,
+            $extensionPricing,
+            &$decisionWorkerId,
+        ): array {
+            $locked = $this->lockSession($booking, $session);
+
+            if ($locked->status !== CleaningBookingSessionStatus::AwaitingCustomerCompletion) {
+                throw ValidationException::withMessages([
+                    'status' => ['Session is not waiting for completion confirmation.'],
+                ]);
+            }
+
+            $assignmentQuery = CleaningBookingSessionWorkerAssignment::query()
+                ->where('cleaning_booking_session_id', $locked->id)
+                ->where(
+                    'status',
+                    CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion->value,
+                );
+
+            if ($workerId !== null) {
+                $assignmentQuery->where('worker_id', $workerId);
+            }
+
+            $assignment = $assignmentQuery
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->first();
+
+            if (! $assignment instanceof CleaningBookingSessionWorkerAssignment) {
+                throw ValidationException::withMessages([
+                    'workerId' => ['No worker is waiting for completion confirmation for this session.'],
+                ]);
+            }
+
+            $decisionWorkerId = (int) $assignment->worker_id;
+
+            $warning = CleaningTimeWarning::query()->create([
+                'booking_id' => $booking->id,
+                'booking_type' => $booking->getMorphClass(),
+                'cleaning_booking_session_id' => $locked->id,
+                'worker_id' => $decisionWorkerId,
+                'customer_response' => CleaningTimeWarningResponse::ExtendTime->value,
+                'customer_message' => $customerMessage,
+                'worker_response' => null,
+                'sent_at' => now(),
+                'customer_responded_at' => now(),
+                'worker_responded_at' => null,
+                'additional_minutes' => $additionalMinutes,
+                'quoted_base_amount' => $extensionPricing['baseAmount'],
+                'quoted_admin_margin_amount' => $extensionPricing['adminMargin'],
+                'quoted_amount' => $extensionPricing['calculatedExtensionPrice'],
+                'quoted_currency' => $extensionPricing['currency'],
+                'price_applied_at' => null,
+                'worker_reject_message' => null,
+            ]);
+
+            $assignment->forceFill([
+                'status' => CleaningBookingWorkerAssignmentStatus::TimeExtensionRequested,
+            ])->save();
+
+            $locked->forceFill([
+                'status' => CleaningBookingSessionStatus::TimeExtensionRequested,
+            ])->save();
+
+            $this->syncParentStatus($booking);
+
+            return [
+                'session' => $this->freshSession($locked),
+                'warning' => $warning->fresh(['booking', 'session']),
+            ];
+        });
+
+        $updatedBooking = $booking->fresh() ?? $booking;
+        $updatedSession = $result['session'];
+        $warning = $result['warning'];
+        $parentStatus = $updatedBooking->status instanceof CleaningBookingStatus
+            ? $updatedBooking->status->value
+            : (string) $updatedBooking->status;
+        $sessionStatus = $updatedSession->status instanceof CleaningBookingSessionStatus
+            ? $updatedSession->status->value
+            : (string) $updatedSession->status;
+        $occurredAt = now()->toIso8601String();
+
+        BroadcastAfterResponse::send(new CleaningBookingTrackingUpdated(
+            (int) $updatedBooking->id,
+            [
+                'cleaningBookingId' => (int) $updatedBooking->id,
+                'bookingId' => (int) $updatedBooking->id,
+                'status' => $parentStatus,
+                'sessionId' => (int) $updatedSession->id,
+                'sessionStatus' => $sessionStatus,
+                'workerId' => $decisionWorkerId,
+                'warningId' => (int) $warning->id,
+                'decision' => 'extension_requested',
+                'updatedAt' => $occurredAt,
+            ],
+        ));
+
+        BroadcastAfterResponse::send(new CompletionDecisionMade(
+            (int) $updatedBooking->id,
+            $decisionWorkerId,
+            'extension_requested',
+            $customerMessage,
+            $occurredAt,
+            $parentStatus,
+            (int) $warning->id,
+            (int) $updatedSession->id,
+        ));
+
+        if ($decisionWorkerId !== null) {
+            $this->lifecycleNotifications->notifyWorkerById(
+                booking: $updatedBooking,
+                workerId: $decisionWorkerId,
+                canonicalType: 'cleaning.booking.time_extension_requested',
+                action: 'time_extension_requested',
+                actorRole: 'customer',
+                fromStatus: $fromStatus,
+                occurredAt: $occurredAt,
+                extraData: [
+                    'warningId' => (int) $warning->id,
+                    'sessionId' => (int) $updatedSession->id,
+                    'sessionStatus' => $sessionStatus,
+                ],
+                templateContext: [
+                    'warningId' => (int) $warning->id,
+                    'session_number' => (int) $updatedSession->sequence,
+                ],
+            );
+        }
+
+        return [
+            'booking' => $updatedBooking,
+            'session' => $updatedSession,
+            'extensionPricing' => $extensionPricing,
+            'warning' => $warning,
+        ];
     }
 
     public function rejectCompletion(
@@ -948,7 +1116,7 @@ final class CleaningBookingSessionLifecycleService
         }
     }
 
-    private function syncParentStatus(CleaningBooking $booking): void
+    public function syncParentStatus(CleaningBooking $booking): void
     {
         $sessions = CleaningBookingSession::query()
             ->where('cleaning_booking_id', $booking->id)
