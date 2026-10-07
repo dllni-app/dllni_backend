@@ -27,6 +27,9 @@ final class CleaningTimeWarningObserver
                 $timeWarning->quoted_base_amount !== null ? (float) $timeWarning->quoted_base_amount : null,
                 $timeWarning->quoted_admin_margin_amount !== null ? (float) $timeWarning->quoted_admin_margin_amount : null,
                 $timeWarning->quoted_amount !== null ? (float) $timeWarning->quoted_amount : null,
+                $timeWarning->cleaning_booking_session_id !== null
+                    ? (int) $timeWarning->cleaning_booking_session_id
+                    : null,
             ));
         }
 
