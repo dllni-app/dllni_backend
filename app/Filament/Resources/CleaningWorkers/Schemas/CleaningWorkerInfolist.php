@@ -243,11 +243,9 @@ final class CleaningWorkerInfolist
 
     private static function preferredWorkTypeLabel(Worker $worker): string
     {
-        $value = $worker->preferred_work_type instanceof WorkerPreferredWorkType
-            ? $worker->preferred_work_type->value
-            : (is_string($worker->preferred_work_type) ? $worker->preferred_work_type : WorkerPreferredWorkType::Both->value);
-
-        return WorkerPreferredWorkType::options()[$value] ?? $value;
+        return collect($worker->preferredWorkTypes())
+            ->map(fn (string $value): string => WorkerPreferredWorkType::options()[$value] ?? $value)
+            ->implode('، ');
     }
 
     /**
