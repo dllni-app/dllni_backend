@@ -559,6 +559,29 @@ it('updates worker preferred work type from worker profile', function () {
     expect($response->json('data.preferred_work_type'))->toBe('cleaning');
 });
 
+it('updates multiple worker work types from worker profile', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-profile-multi-preference@example.com']);
+    $worker = Worker::factory()->financiallyEligible()->create([
+        'user_id' => $workerUser->id,
+        'preferred_work_type' => WorkerPreferredWorkType::Cleaning,
+        'is_active' => true,
+        'home_address' => 'Worker Home',
+        'home_latitude' => 33.4,
+        'home_longitude' => 36.2,
+    ]);
+    Sanctum::actingAs($workerUser);
+
+    $response = $this->putJson('/api/v1/cleaning/worker/account/profile', [
+        'preferred_work_types' => ['cleaning', 'hourly'],
+    ]);
+
+    $response->assertOk();
+    expect($response->json('data.preferredWorkTypes'))->toBe(['cleaning', 'hourly']);
+
+    $worker->refresh();
+    expect($worker->preferredWorkTypes())->toBe(['cleaning', 'hourly']);
+});
+
 it('rejects invalid worker preferred work type from worker profile', function () {
     $workerUser = User::factory()->create(['email' => 'worker-profile-preference-invalid@example.com']);
     Worker::factory()->financiallyEligible()->create([
