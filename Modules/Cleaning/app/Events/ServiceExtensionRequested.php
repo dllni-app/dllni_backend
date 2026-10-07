@@ -65,7 +65,7 @@ final class ServiceExtensionRequested implements ShouldBroadcastNow
             'totalAmount' => $this->totalAmount ?? $this->additionalAmount,
             'additionalAmount' => $this->additionalAmount ?? $this->totalAmount,
             'currency' => $this->currency,
-            'version' => 2,
+            'version' => 1,
         ];
     }
 }
