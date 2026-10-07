@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Http\Controllers\API;
 
 use App\Enums\GenderPreference;
-use App\Enums\WorkerPreferredWorkType;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\JsonResponse;
@@ -281,18 +280,36 @@ final class WorkerHomepageController
 
     private function newOrdersCandidateQuery(object $worker, Carbon $today): Builder
     {
+        $preferredWorkTypes = $worker->preferredWorkTypes();
+
         return CleaningBooking::query()
             ->where('status', CleaningBookingStatus::Pending)
             ->whereDate('scheduled_date', '>=', $today)
             ->where(fn ($q) => $q->whereNull('worker_id')->orWhere('worker_id', $worker->id))
-            ->when(
-                $this->preferredWorkType($worker) === WorkerPreferredWorkType::Cleaning,
-                fn (Builder $query): Builder => $query->where('property_type', '!=', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
-            )
-            ->when(
-                $this->preferredWorkType($worker) === WorkerPreferredWorkType::Events,
-                fn (Builder $query): Builder => $query->where('property_type', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
-            )
+            ->where(function (Builder $typeQuery) use ($preferredWorkTypes): void {
+                $hasType = false;
+                if (in_array('cleaning', $preferredWorkTypes, true)) {
+                    $hasType = true;
+                    $typeQuery->orWhere(function (Builder $cleaning): void {
+                        $cleaning->where('booking_kind', '!=', 'open_time')
+                            ->where('property_type', '!=', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE);
+                    });
+                }
+                if (in_array('events', $preferredWorkTypes, true)) {
+                    $hasType = true;
+                    $typeQuery->orWhere(function (Builder $events): void {
+                        $events->where('booking_kind', '!=', 'open_time')
+                            ->where('property_type', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE);
+                    });
+                }
+                if (in_array('hourly', $preferredWorkTypes, true)) {
+                    $hasType = true;
+                    $typeQuery->orWhere('booking_kind', 'open_time');
+                }
+                if (! $hasType) {
+                    $typeQuery->where('id', -1);
+                }
+            })
             ->whereDoesntHave('workerAssignments', fn (Builder $assignments) => $assignments
                 ->where('worker_id', $worker->id)
                 ->whereIn('status', self::ACCEPTED_ASSIGNMENT_STATUSES))
@@ -355,13 +372,6 @@ final class WorkerHomepageController
         }
 
         return max(0.0, $this->bookingGrossAmount($booking, $workerId));
-    }
-
-    private function preferredWorkType(object $worker): WorkerPreferredWorkType
-    {
-        return $worker->preferred_work_type instanceof WorkerPreferredWorkType
-            ? $worker->preferred_work_type
-            : WorkerPreferredWorkType::tryFrom((string) ($worker->preferred_work_type ?? WorkerPreferredWorkType::Both->value)) ?? WorkerPreferredWorkType::Both;
     }
 
     private function bookingAdminAmount(CleaningBooking $booking, int $workerId): float
