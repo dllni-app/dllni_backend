@@ -140,3 +140,87 @@ it('counts pending cleaning bookings without neighborhood on worker homepage', f
     $response->assertOk();
     expect($response->json('newOrdersCount'))->toBe(1);
 });
+
+
+it('returns hourly bookings only to workers that selected hourly work', function (): void {
+    $workerUser = User::factory()->create(['email' => 'hourly-visibility-worker@example.com']);
+    Worker::factory()->financiallyEligible()->create([
+        'user_id' => $workerUser->id,
+        'preferred_work_type' => WorkerPreferredWorkType::Cleaning,
+        'preferred_work_types' => ['hourly'],
+        'is_active' => true,
+        'is_suspended' => false,
+    ]);
+    Sanctum::actingAs($workerUser);
+
+    $billingPolicy = eventVisibilityBillingPolicy();
+    $hourlyBooking = CleaningBooking::factory()->create([
+        'worker_id' => null,
+        'preferred_worker_id' => null,
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::Pending,
+        'gender_preference' => 'any',
+        'property_type' => 'apartment',
+        'booking_kind' => 'open_time',
+        'neighborhood_id' => null,
+        'neighborhood_name' => null,
+        'scheduled_date' => now()->addDay()->format('Y-m-d'),
+    ]);
+    CleaningBooking::factory()->create([
+        'worker_id' => null,
+        'preferred_worker_id' => null,
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::Pending,
+        'gender_preference' => 'any',
+        'property_type' => 'apartment',
+        'booking_kind' => 'standard',
+        'neighborhood_id' => null,
+        'neighborhood_name' => null,
+        'scheduled_date' => now()->addDay()->format('Y-m-d'),
+    ]);
+
+    $response = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
+
+    $response->assertOk();
+    $ids = collect($response->json('data'))->pluck('id')->all();
+    expect($ids)->toContain($hourlyBooking->id);
+    expect($response->json('data.0.type'))->toBe('hourly_worker');
+    expect($response->json('data.0.bookingKind'))->toBe('open_time');
+});
+
+it('supports multiple worker specialties when counting new orders', function (): void {
+    $workerUser = User::factory()->create(['email' => 'multi-specialty-worker@example.com']);
+    Worker::factory()->financiallyEligible()->create([
+        'user_id' => $workerUser->id,
+        'preferred_work_type' => WorkerPreferredWorkType::Cleaning,
+        'preferred_work_types' => ['cleaning', 'hourly'],
+        'is_active' => true,
+        'is_suspended' => false,
+    ]);
+    Sanctum::actingAs($workerUser);
+
+    $billingPolicy = eventVisibilityBillingPolicy();
+    foreach ([
+        ['property_type' => 'apartment', 'booking_kind' => 'standard'],
+        ['property_type' => 'apartment', 'booking_kind' => 'open_time'],
+        ['property_type' => 'event_assistance', 'booking_kind' => 'standard'],
+    ] as $type) {
+        CleaningBooking::factory()->create([
+            'worker_id' => null,
+            'preferred_worker_id' => null,
+            'billing_policy_id' => $billingPolicy->id,
+            'status' => CleaningBookingStatus::Pending,
+            'gender_preference' => 'any',
+            'property_type' => $type['property_type'],
+            'booking_kind' => $type['booking_kind'],
+            'neighborhood_id' => null,
+            'neighborhood_name' => null,
+            'scheduled_date' => now()->addDay()->format('Y-m-d'),
+        ]);
+    }
+
+    $response = $this->getJson('/api/v1/cleaning/worker/homepage');
+
+    $response->assertOk();
+    expect($response->json('newOrdersCount'))->toBe(2);
+});
