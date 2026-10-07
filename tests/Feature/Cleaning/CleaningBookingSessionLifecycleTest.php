@@ -337,7 +337,7 @@ it('routes a customer time-extension request to the selected child session and l
 
     $this->postJson("/api/v1/cleaning-time-warnings/{$warning->id}/accept")
         ->assertOk()
-        ->assertJsonPath('sessionId', $first->id);
+        ->assertJsonPath('data.sessionId', $first->id);
 
     expect($first->fresh()->status)
         ->toBe(CleaningBookingSessionStatus::InProgress)
