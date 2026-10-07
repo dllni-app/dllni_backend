@@ -134,33 +134,43 @@ final class CleaningTimeWarningController
         $worker = auth()->user()?->worker;
 
         if (! $worker) {
-            abort(403, 'User must have an associated worker.');
+            abort(403, 'لا يوجد حساب عامل مرتبط بالمستخدم الحالي.');
         }
 
         $booking = $warning->booking;
 
         if ($warning->booking_type === 'event_booking') {
             if ($warning->worker_id === null || (int) $warning->worker_id !== (int) $worker->id) {
-                abort(403, 'Extension request is not for your worker assignment.');
+                abort(403, 'طلب التمديد مخصص لعامل آخر.');
             }
 
             if (! $booking instanceof EventBooking) {
-                abort(403, 'Extension request is not for your booking.');
+                abort(403, 'طلب التمديد غير مرتبط بهذا الطلب.');
             }
 
             return;
         }
 
         if ($warning->booking_type !== 'cleaning_booking') {
-            abort(403, 'Extension request is not for a cleaning booking.');
+            abort(403, 'طلب التمديد غير صالح لخدمة التنظيف.');
         }
 
-        if ($warning->worker_id !== null && (int) $warning->worker_id !== (int) $worker->id) {
-            abort(403, 'Extension request is not for your worker assignment.');
+        if (! $booking instanceof CleaningBooking) {
+            abort(403, 'طلب التمديد غير مرتبط بطلب تنظيف صالح.');
         }
 
-        if (! $booking instanceof CleaningBooking || ! $this->warningBelongsToWorker($warning, $booking, $worker->id)) {
-            abort(403, 'Extension request is not for your booking.');
+        if ($warning->worker_id !== null) {
+            if ((int) $warning->worker_id !== (int) $worker->id) {
+                abort(403, 'طلب التمديد مخصص لعامل آخر.');
+            }
+
+            // The warning's worker_id is assigned by the backend from the
+            // completion/session assignment, so it is the authoritative target.
+            return;
+        }
+
+        if (! $this->warningBelongsToWorker($warning, $booking, $worker->id)) {
+            abort(403, 'هذا العامل غير مرتبط بطلب التمديد الحالي.');
         }
     }
 
@@ -184,9 +194,19 @@ final class CleaningTimeWarningController
             return true;
         }
 
-        return $booking->workerAssignments()
+        if ($booking->workerAssignments()
             ->where('worker_id', $workerId)
             ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
+            ->exists()) {
+            return true;
+        }
+
+        return $booking->sessions()
+            ->whereHas('workerAssignments', function (Builder $assignmentQuery) use ($workerId): void {
+                $assignmentQuery
+                    ->where('worker_id', $workerId)
+                    ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
+            })
             ->exists();
     }
 
