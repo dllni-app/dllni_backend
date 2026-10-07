@@ -136,9 +136,11 @@ final class WorkerInfolist
                                     ->label(__('cleaning_admin.workers.fields.birthday'))
                                     ->date('Y-m-d')
                                     ->placeholder('-'),
-                                TextEntry::make('preferred_work_type')
+                                TextEntry::make('preferred_work_types')
                                     ->label(__('cleaning_admin.workers.fields.preferred_work_type'))
-                                    ->state(fn (Worker $record): string => self::formatPreferredWorkType($record->preferred_work_type ?? null))
+                                    ->state(fn (Worker $record): string => collect($record->preferredWorkTypes())
+                                        ->map(fn (string $value): string => WorkerPreferredWorkType::options()[$value] ?? $value)
+                                        ->implode('، '))
                                     ->placeholder('-'),
                                 TextEntry::make('bio')
                                     ->label(__('cleaning_admin.workers.fields.bio'))
@@ -287,15 +289,6 @@ final class WorkerInfolist
         }
 
         return __('cleaning_admin.workers.gender_options.'.$value) ?: $value;
-    }
-
-    private static function formatPreferredWorkType(mixed $state): string
-    {
-        $value = $state instanceof WorkerPreferredWorkType
-            ? $state->value
-            : (is_string($state) ? $state : WorkerPreferredWorkType::Both->value);
-
-        return WorkerPreferredWorkType::options()[$value] ?? $value;
     }
 
     /**
