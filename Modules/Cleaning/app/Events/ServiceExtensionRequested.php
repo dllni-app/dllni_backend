@@ -32,15 +32,16 @@ final class ServiceExtensionRequested implements ShouldBroadcastNow
      */
     public function broadcastOn(): array
     {
-        $channels = [
-            new PrivateChannel('cleaning-booking.' . $this->cleaningBookingId),
-        ];
-
         if ($this->workerId !== null) {
-            $channels[] = new PrivateChannel('cleaning-worker.' . $this->workerId);
+            return [
+                new PrivateChannel('cleaning-worker.' . $this->workerId),
+            ];
         }
 
-        return $channels;
+        // Legacy fallback for warnings that are not explicitly targeted.
+        return [
+            new PrivateChannel('cleaning-booking.' . $this->cleaningBookingId),
+        ];
     }
 
     public function broadcastAs(): string
