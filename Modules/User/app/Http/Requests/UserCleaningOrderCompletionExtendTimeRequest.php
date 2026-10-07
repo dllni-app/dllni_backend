@@ -25,6 +25,8 @@ final class UserCleaningOrderCompletionExtendTimeRequest extends FormRequest
             'worker_id' => ['nullable', 'integer', 'exists:workers,id'],
             'assignmentId' => ['nullable', 'integer', 'exists:cleaning_booking_worker_assignments,id'],
             'assignment_id' => ['nullable', 'integer', 'exists:cleaning_booking_worker_assignments,id'],
+            'sessionId' => ['nullable', 'integer', 'exists:cleaning_booking_sessions,id'],
+            'session_id' => ['nullable', 'integer', 'exists:cleaning_booking_sessions,id'],
         ];
     }
 
@@ -53,5 +55,12 @@ final class UserCleaningOrderCompletionExtendTimeRequest extends FormRequest
         $assignmentId = $this->validated('assignmentId') ?? $this->validated('assignment_id');
 
         return is_numeric($assignmentId) ? (int) $assignmentId : null;
+    }
+
+    public function targetSessionId(): ?int
+    {
+        $sessionId = $this->validated('sessionId') ?? $this->validated('session_id');
+
+        return is_numeric($sessionId) ? (int) $sessionId : null;
     }
 }
