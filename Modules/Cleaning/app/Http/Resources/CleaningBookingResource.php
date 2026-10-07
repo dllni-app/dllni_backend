@@ -90,7 +90,12 @@ final class CleaningBookingResource extends JsonResource
             ? $this->finishedSnapshot($pendingCompletionAssignment->worker_finished_property_rooms, 'room')
             : $this->finishedSnapshot($this->worker_finished_property_rooms, 'room');
         $urgency = app(CleaningOrderUrgencyService::class);
-        $baseTitle = ($this->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE ? 'طلب مناسبة' : 'طلب تنظيف').' #'.$this->booking_number;
+        $baseTitle = match (true) {
+            (string) ($this->booking_kind ?? 'standard') === 'open_time' => 'طلب عامل بالساعة',
+            $this->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE => 'طلب مناسبة',
+            default => 'طلب تنظيف',
+        };
+        $baseTitle .= ' #'.$this->booking_number;
         $displayTitle = $urgency->displayTitle($baseTitle, $this->scheduled_date);
         $isHotOrder = $urgency->isHotOrder($this->scheduled_date);
         $bookingHours = (float) ($this->total_hours ?? 0);
@@ -169,7 +174,10 @@ final class CleaningBookingResource extends JsonResource
             'order_status_label' => $this->label($globalOrderStatus),
             'worker_order_status' => $workerOrderStatus,
             'worker_order_status_label' => $this->label($workerOrderStatus),
-            'type' => $this->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE ? 'events' : 'cleaning',
+            'type' => (string) ($this->booking_kind ?? 'standard') === 'open_time'
+                ? 'hourly_worker'
+                : ($this->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE ? 'events' : 'cleaning'),
+            'bookingKind' => (string) ($this->booking_kind ?? 'standard'),
             'required_workers_count' => $team['required'],
             'accepted_workers_count' => $team['accepted'],
             'pending_workers_count' => $team['remaining'],
@@ -817,10 +825,11 @@ final class CleaningBookingResource extends JsonResource
         $hours = $assignment instanceof CleaningBookingWorkerAssignment
             ? (float) ($this->workerDurationHours($assignment) ?? 0)
             : ($totalHours > 0 ? $totalHours : $estimatedHours);
-        if ($start === null || $hours <= 0) return ['timerStartAt' => $start?->toIso8601String(), 'expectedFinishAt' => null, 'durationHours' => $hours > 0 ? $hours : null, 'remainingWorkSeconds' => 0, 'overdueWorkSeconds' => 0, 'isWorkOverdue' => false, 'shouldShowWorkTimer' => false, 'source' => ['startField' => null, 'durationField' => null]];
+        if ($start === null || $hours <= 0) return ['timerStartAt' => $start?->toIso8601String(), 'expectedFinishAt' => null, 'durationHours' => $hours > 0 ? $hours : null, 'elapsedWorkSeconds' => 0, 'remainingWorkSeconds' => 0, 'overdueWorkSeconds' => 0, 'isWorkOverdue' => false, 'shouldShowWorkTimer' => false, 'source' => ['startField' => null, 'durationField' => null]];
         $expected = $start->copy()->addSeconds((int) round($hours * 3600));
         $diff = now()->diffInSeconds($expected, false);
         $show = in_array($status, [CleaningBookingStatus::InProgress->value, CleaningBookingStatus::TimeExtensionRequested->value], true);
-        return ['timerStartAt' => $start->toIso8601String(), 'expectedFinishAt' => $expected->toIso8601String(), 'durationHours' => $hours, 'remainingWorkSeconds' => $show ? max(0, $diff) : 0, 'overdueWorkSeconds' => $show ? max(0, -$diff) : 0, 'isWorkOverdue' => $show && $diff < 0, 'shouldShowWorkTimer' => $show, 'source' => ['startField' => $assignment?->work_started_at !== null ? 'assignment.work_started_at' : ($this->work_started_at !== null ? 'work_started_at' : 'arrived_at'), 'durationField' => $assignment instanceof CleaningBookingWorkerAssignment ? 'worker_total_hours' : ($totalHours > 0 ? 'total_hours' : 'estimated_hours')]];
+        $elapsed = max(0, $start->diffInSeconds(now(), false));
+        return ['timerStartAt' => $start->toIso8601String(), 'expectedFinishAt' => $expected->toIso8601String(), 'durationHours' => $hours, 'elapsedWorkSeconds' => $elapsed, 'remainingWorkSeconds' => $show ? max(0, $diff) : 0, 'overdueWorkSeconds' => $show ? max(0, -$diff) : 0, 'isWorkOverdue' => $show && $diff < 0, 'shouldShowWorkTimer' => $show, 'source' => ['startField' => $assignment?->work_started_at !== null ? 'assignment.work_started_at' : ($this->work_started_at !== null ? 'work_started_at' : 'arrived_at'), 'durationField' => $assignment instanceof CleaningBookingWorkerAssignment ? 'worker_total_hours' : ($totalHours > 0 ? 'total_hours' : 'estimated_hours')]];
     }
 }
