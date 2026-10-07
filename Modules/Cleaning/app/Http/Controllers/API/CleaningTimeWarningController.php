@@ -31,7 +31,7 @@ final class CleaningTimeWarningController
     public function index(CleaningTimeWarningFilterRequest $request): AnonymousResourceCollection
     {
         $warnings = CleaningTimeWarning::getQuery()
-            ->with(['booking', 'session']);
+            ->with(['booking']);
 
         $filters = (array) $request->input('filter', []);
         $worker = $request->user()?->worker;
@@ -78,7 +78,7 @@ final class CleaningTimeWarningController
 
     public function show(CleaningTimeWarning $cleaning_time_warning): CleaningTimeWarningResource
     {
-        $cleaning_time_warning->load(['booking', 'session']);
+        $cleaning_time_warning->load(['booking']);
 
         return CleaningTimeWarningResource::make($cleaning_time_warning);
     }
@@ -103,7 +103,7 @@ final class CleaningTimeWarningController
             $this->workerNotificationService->accepted($warning, $fromStatus);
         }
 
-        return CleaningTimeWarningResource::make($warning->load(['booking', 'session']));
+        return CleaningTimeWarningResource::make($warning->load(['booking']));
     }
 
     /** @throws Throwable */
