@@ -31,7 +31,7 @@ final class CleaningTimeWarningController
     public function index(CleaningTimeWarningFilterRequest $request): AnonymousResourceCollection
     {
         $warnings = CleaningTimeWarning::getQuery()
-            ->with(['booking']);
+            ->with(['booking', 'session']);
 
         $filters = (array) $request->input('filter', []);
         $worker = $request->user()?->worker;
@@ -48,6 +48,11 @@ final class CleaningTimeWarningController
                         ->whereHasMorph('booking', [CleaningBooking::class], function (Builder $bookingQuery) use ($worker): void {
                             $bookingQuery->where('worker_id', $worker->id)
                                 ->orWhereHas('workerAssignments', function (Builder $assignmentQuery) use ($worker): void {
+                                    $assignmentQuery
+                                        ->where('worker_id', $worker->id)
+                                        ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
+                                })
+                                ->orWhereHas('sessions.workerAssignments', function (Builder $assignmentQuery) use ($worker): void {
                                     $assignmentQuery
                                         ->where('worker_id', $worker->id)
                                         ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
@@ -73,7 +78,7 @@ final class CleaningTimeWarningController
 
     public function show(CleaningTimeWarning $cleaning_time_warning): CleaningTimeWarningResource
     {
-        $cleaning_time_warning->load(['booking']);
+        $cleaning_time_warning->load(['booking', 'session']);
 
         return CleaningTimeWarningResource::make($cleaning_time_warning);
     }
@@ -98,7 +103,7 @@ final class CleaningTimeWarningController
             $this->workerNotificationService->accepted($warning, $fromStatus);
         }
 
-        return CleaningTimeWarningResource::make($warning->load(['booking']));
+        return CleaningTimeWarningResource::make($warning->load(['booking', 'session']));
     }
 
     /** @throws Throwable */
@@ -154,13 +159,27 @@ final class CleaningTimeWarningController
             abort(403, 'Extension request is not for your worker assignment.');
         }
 
-        if (! $booking instanceof CleaningBooking || ! $this->warningBelongsToWorker($booking, $worker->id)) {
+        if (! $booking instanceof CleaningBooking || ! $this->warningBelongsToWorker($warning, $booking, $worker->id)) {
             abort(403, 'Extension request is not for your booking.');
         }
     }
 
-    private function warningBelongsToWorker(CleaningBooking $booking, int $workerId): bool
-    {
+    private function warningBelongsToWorker(
+        CleaningTimeWarning $warning,
+        CleaningBooking $booking,
+        int $workerId,
+    ): bool {
+        if ($warning->cleaning_booking_session_id !== null) {
+            return $booking->sessions()
+                ->whereKey((int) $warning->cleaning_booking_session_id)
+                ->whereHas('workerAssignments', function (Builder $assignmentQuery) use ($workerId): void {
+                    $assignmentQuery
+                        ->where('worker_id', $workerId)
+                        ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
+                })
+                ->exists();
+        }
+
         if ($booking->worker_id === $workerId) {
             return true;
         }
