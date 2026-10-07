@@ -289,6 +289,10 @@ final class CleaningBookingObserver
     /** @param array<string, mixed> $propertyDetails */
     private function resolveBaseOrderTitle(CleaningBooking $booking, array $propertyDetails): string
     {
+        if ((string) ($booking->booking_kind ?? 'standard') === 'open_time') {
+            return 'طلب عامل بالساعة '.($booking->booking_number ?: '');
+        }
+
         foreach (['original_order_title', 'order_title', 'title', 'customService', 'custom_service', 'location_name', 'address'] as $key) {
             $value = $propertyDetails[$key] ?? null;
             if (is_string($value) && mb_trim($value) !== '') {
