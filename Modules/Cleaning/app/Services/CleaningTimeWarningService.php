@@ -133,7 +133,7 @@ final class CleaningTimeWarningService
 
                 $this->sessionLifecycle->syncParentStatus($booking);
 
-                return $warning->fresh(['booking', 'session']);
+                return $warning->fresh(['booking']);
             }
 
             $assignment = $this->warningAssignment($warning, $booking);
@@ -234,7 +234,7 @@ final class CleaningTimeWarningService
 
                 $this->sessionLifecycle->syncParentStatus($booking);
 
-                return $warning->fresh(['booking', 'session']);
+                return $warning->fresh(['booking']);
             }
 
             $assignment = $this->warningAssignment($warning, $booking);
