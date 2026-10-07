@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Traits\FilterQueries;
 
 use App\Enums\GenderPreference;
-use App\Enums\WorkerPreferredWorkType;
 use Illuminate\Database\Eloquent\Builder;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
@@ -99,11 +98,9 @@ trait CleaningBookingFilterQuery
         $worker->loadMissing('deposit');
         $canReceiveNewRequests = app(DepositService::class)->isWorkerEligibleForNewRequests($worker);
 
-        $preferredWorkType = $worker->preferred_work_type instanceof WorkerPreferredWorkType
-            ? $worker->preferred_work_type
-            : WorkerPreferredWorkType::tryFrom((string) ($worker->preferred_work_type ?? WorkerPreferredWorkType::Both->value)) ?? WorkerPreferredWorkType::Both;
+        $preferredWorkTypes = $worker->preferredWorkTypes();
 
-        return $query->where(function (Builder $q) use ($worker, $preferredWorkType, $canReceiveNewRequests): void {
+        return $query->where(function (Builder $q) use ($worker, $preferredWorkTypes, $canReceiveNewRequests): void {
             $q->where('worker_id', $worker->id)
                 ->orWhereHas('workerAssignments', function (Builder $assignments) use ($worker): void {
                     $assignments
@@ -127,7 +124,7 @@ trait CleaningBookingFilterQuery
                         ->where('preferred_worker_id', $worker->id)
                         ->whereDoesntHave('rejections', fn (Builder $rejections) => $rejections->where('worker_id', $worker->id));
                 })
-                ->orWhere(function (Builder $pending) use ($worker, $preferredWorkType, $canReceiveNewRequests): void {
+                ->orWhere(function (Builder $pending) use ($worker, $preferredWorkTypes, $canReceiveNewRequests): void {
                     if (! $canReceiveNewRequests) {
                         $pending->where('id', -1);
 
@@ -142,14 +139,30 @@ trait CleaningBookingFilterQuery
                                 ->orWhere('worker_scope', '!=', CleaningBooking::WORKER_SCOPE_SPECIFIC)
                                 ->orWhereJsonContains('specific_worker_ids', [(int) $worker->id]);
                         })
-                        ->when(
-                            $preferredWorkType === WorkerPreferredWorkType::Cleaning,
-                            fn (Builder $query): Builder => $query->where('property_type', '!=', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
-                        )
-                        ->when(
-                            $preferredWorkType === WorkerPreferredWorkType::Events,
-                            fn (Builder $query): Builder => $query->where('property_type', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
-                        )
+                        ->where(function (Builder $typeQuery) use ($preferredWorkTypes): void {
+                            $hasType = false;
+                            if (in_array('cleaning', $preferredWorkTypes, true)) {
+                                $hasType = true;
+                                $typeQuery->orWhere(function (Builder $cleaning): void {
+                                    $cleaning->where('booking_kind', '!=', 'open_time')
+                                        ->where('property_type', '!=', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE);
+                                });
+                            }
+                            if (in_array('events', $preferredWorkTypes, true)) {
+                                $hasType = true;
+                                $typeQuery->orWhere(function (Builder $events): void {
+                                    $events->where('booking_kind', '!=', 'open_time')
+                                        ->where('property_type', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE);
+                                });
+                            }
+                            if (in_array('hourly', $preferredWorkTypes, true)) {
+                                $hasType = true;
+                                $typeQuery->orWhere('booking_kind', 'open_time');
+                            }
+                            if (! $hasType) {
+                                $typeQuery->where('id', -1);
+                            }
+                        })
                         ->where(function (Builder $genderQuery) use ($worker): void {
                             $genderQuery
                                 ->whereNull('gender_preference')
