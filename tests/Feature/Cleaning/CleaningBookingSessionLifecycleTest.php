@@ -307,6 +307,116 @@ it('confirms the pending child session through the legacy customer completion en
         ->toBe(CleaningBookingStatus::WorkerAssigned);
 });
 
+it('accepts a legacy extension warning without session id by resolving the worker child session', function (): void {
+    Queue::fake();
+
+    [, $workerUser, $worker, $booking] = makeLifecycleScenario();
+    $session = makeLifecycleSession($booking, 1, now()->addDay()->toDateString(), '10:00');
+    $assignment = makeLifecycleAssignment($session, $worker);
+
+    $session->forceFill([
+        'status' => CleaningBookingSessionStatus::TimeExtensionRequested,
+        'work_started_at' => now()->subHours(2),
+        'work_finished_at' => now()->subMinute(),
+        'payment_status' => 'ready',
+    ])->save();
+    $assignment->forceFill([
+        'status' => CleaningBookingWorkerAssignmentStatus::TimeExtensionRequested,
+        'work_started_at' => now()->subHours(2),
+        'work_finished_at' => now()->subMinute(),
+    ])->save();
+    $booking->forceFill([
+        'status' => CleaningBookingStatus::TimeExtensionRequested,
+        'worker_id' => null,
+    ])->save();
+
+    $warning = CleaningTimeWarning::query()->create([
+        'booking_id' => $booking->id,
+        'booking_type' => 'cleaning_booking',
+        'cleaning_booking_session_id' => null,
+        'worker_id' => $worker->id,
+        'customer_response' => 'extend_time',
+        'worker_response' => null,
+        'sent_at' => now(),
+        'customer_responded_at' => now(),
+        'worker_responded_at' => null,
+        'additional_minutes' => 30,
+        'quoted_base_amount' => 0,
+        'quoted_admin_margin_amount' => 0,
+        'quoted_amount' => 0,
+        'quoted_currency' => 'SYP',
+    ]);
+
+    Sanctum::actingAs($workerUser);
+
+    $this->postJson("/api/v1/cleaning-time-warnings/{$warning->id}/accept")
+        ->assertOk()
+        ->assertJsonPath('data.sessionId', $session->id);
+
+    expect((int) $warning->fresh()->cleaning_booking_session_id)
+        ->toBe($session->id)
+        ->and($session->fresh()->status)
+        ->toBe(CleaningBookingSessionStatus::InProgress)
+        ->and($assignment->fresh()->status)
+        ->toBe(CleaningBookingWorkerAssignmentStatus::InProgress);
+});
+
+it('rejects a legacy extension warning without session id by resolving the worker child session', function (): void {
+    Queue::fake();
+
+    [, $workerUser, $worker, $booking] = makeLifecycleScenario();
+    $session = makeLifecycleSession($booking, 1, now()->addDay()->toDateString(), '10:00');
+    $assignment = makeLifecycleAssignment($session, $worker);
+
+    $session->forceFill([
+        'status' => CleaningBookingSessionStatus::TimeExtensionRequested,
+        'work_started_at' => now()->subHours(2),
+        'work_finished_at' => now()->subMinute(),
+        'payment_status' => 'ready',
+    ])->save();
+    $assignment->forceFill([
+        'status' => CleaningBookingWorkerAssignmentStatus::TimeExtensionRequested,
+        'work_started_at' => now()->subHours(2),
+        'work_finished_at' => now()->subMinute(),
+    ])->save();
+    $booking->forceFill([
+        'status' => CleaningBookingStatus::TimeExtensionRequested,
+        'worker_id' => null,
+    ])->save();
+
+    $warning = CleaningTimeWarning::query()->create([
+        'booking_id' => $booking->id,
+        'booking_type' => 'cleaning_booking',
+        'cleaning_booking_session_id' => null,
+        'worker_id' => $worker->id,
+        'customer_response' => 'extend_time',
+        'worker_response' => null,
+        'sent_at' => now(),
+        'customer_responded_at' => now(),
+        'worker_responded_at' => null,
+        'additional_minutes' => 30,
+        'quoted_base_amount' => 0,
+        'quoted_admin_margin_amount' => 0,
+        'quoted_amount' => 0,
+        'quoted_currency' => 'SYP',
+    ]);
+
+    Sanctum::actingAs($workerUser);
+
+    $this->postJson("/api/v1/cleaning-time-warnings/{$warning->id}/reject", [
+        'message' => 'لا أستطيع التمديد',
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.sessionId', $session->id);
+
+    expect((int) $warning->fresh()->cleaning_booking_session_id)
+        ->toBe($session->id)
+        ->and($session->fresh()->status)
+        ->toBe(CleaningBookingSessionStatus::AwaitingCustomerCompletion)
+        ->and($assignment->fresh()->status)
+        ->toBe(CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion);
+});
+
 it('routes a customer time-extension request to the selected child session and lets its worker accept it', function (): void {
     Queue::fake();
 
