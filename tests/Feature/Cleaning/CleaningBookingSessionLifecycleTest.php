@@ -18,6 +18,34 @@ use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
 use Modules\Cleaning\Models\CleaningTimeWarning;
 
+it('allows a worker assigned only to a child session to view the parent booking details', function (): void {
+    [, $workerUser, $worker, $booking] = makeLifecycleScenario();
+    $session = makeLifecycleSession(
+        $booking,
+        1,
+        now()->addDay()->toDateString(),
+        '10:00',
+    );
+    $assignment = makeLifecycleAssignment($session, $worker);
+
+    $booking->forceFill([
+        'status' => CleaningBookingStatus::TimeExtensionRequested,
+        'worker_id' => null,
+    ])->save();
+    $session->forceFill([
+        'status' => CleaningBookingSessionStatus::TimeExtensionRequested,
+    ])->save();
+    $assignment->forceFill([
+        'status' => CleaningBookingWorkerAssignmentStatus::TimeExtensionRequested,
+    ])->save();
+
+    Sanctum::actingAs($workerUser);
+
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")
+        ->assertOk()
+        ->assertJsonPath('data.id', $booking->id);
+});
+
 it('broadcasts the session start approval immediately after the customer verifies the code', function (): void {
     Event::fake([ArrivalVerified::class, CleaningBookingTrackingUpdated::class]);
 
