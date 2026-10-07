@@ -172,6 +172,9 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
                 $openTime['expectedMaxMinutes'] = 480;
                 $merge['openTime'] = $openTime;
             }
+            // Open-Time is the legacy payload name; every such request is now
+            // classified as the standalone hourly-worker booking type.
+            $merge['bookingKind'] = 'open_time';
             $merge['numberOfWorkers'] = max(1, (int) $openTime['workerCount']);
             $merge['assignmentMode'] = 'open_count';
         }
@@ -229,11 +232,17 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
     {
         $hasMaterials = (bool) $this->input('requestMaterials');
         $hasSpecialServices = is_array($this->input('specialServices')) && $this->input('specialServices') !== [];
+        $hasCleaningServices = is_array($this->input('cleaning_services')) && $this->input('cleaning_services') !== [];
         $hasOpenTime = is_array($this->input('openTime'));
+        $bookingKind = mb_strtolower((string) $this->input('bookingKind'));
         $isRepeated = mb_strtolower((string) $this->input('schedule.mode')) === 'recurring';
 
-        if ($hasOpenTime && ($hasMaterials || $hasSpecialServices)) {
-            $validator->errors()->add('openTime', 'Open-Time requests cannot be combined with materials or special services.');
+        if ($bookingKind === 'open_time' && ! $hasOpenTime) {
+            $validator->errors()->add('openTime', 'Hourly-worker requests require Open-Time settings.');
+        }
+
+        if ($hasOpenTime && ($hasMaterials || $hasSpecialServices || $hasCleaningServices)) {
+            $validator->errors()->add('openTime', 'Hourly-worker requests cannot be combined with cleaning materials or cleaning services.');
         }
 
         if ($hasOpenTime && $isRepeated) {
