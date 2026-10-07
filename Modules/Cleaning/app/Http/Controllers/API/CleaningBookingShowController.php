@@ -46,7 +46,19 @@ final class CleaningBookingShowController
             ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
             ->exists();
 
-        if ((int) ($booking->worker_id ?? 0) === (int) $worker->id || $hasAcceptedAssignment) {
+        $hasAcceptedSessionAssignment = $booking->sessions()
+            ->whereHas('workerAssignments', function ($query) use ($worker): void {
+                $query
+                    ->where('worker_id', $worker->id)
+                    ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
+            })
+            ->exists();
+
+        if (
+            (int) ($booking->worker_id ?? 0) === (int) $worker->id
+            || $hasAcceptedAssignment
+            || $hasAcceptedSessionAssignment
+        ) {
             return;
         }
 
