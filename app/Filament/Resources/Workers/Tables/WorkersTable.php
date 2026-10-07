@@ -45,15 +45,11 @@ final class WorkersTable
                         default => (string) ($state ?? '-'),
                     })
                     ->searchable(),
-                TextColumn::make('preferred_work_type')
+                TextColumn::make('preferred_work_types')
                     ->label(__('cleaning_admin.workers.fields.preferred_work_type'))
-                    ->formatStateUsing(function ($state): string {
-                        $value = $state instanceof WorkerPreferredWorkType
-                            ? $state->value
-                            : (string) ($state ?? WorkerPreferredWorkType::Both->value);
-
-                        return WorkerPreferredWorkType::options()[$value] ?? $value;
-                    })
+                    ->state(fn ($record): string => collect($record->preferredWorkTypes())
+                        ->map(fn (string $value): string => WorkerPreferredWorkType::options()[$value] ?? $value)
+                        ->implode('، '))
                     ->badge(),
                 TextColumn::make('user.phone')
                     ->label(self::headerLabel(
