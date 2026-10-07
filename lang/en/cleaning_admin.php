@@ -188,7 +188,7 @@ return [
         'preferred_work_type_options' => [
             'cleaning' => 'Cleaning',
             'events' => 'Events',
-            'both' => 'Both',
+            'hourly' => 'Hourly worker',
         ],
         'reviews' => 'Customer Reviews',
         'customer_ratings' => 'Worker Ratings of Customers',
