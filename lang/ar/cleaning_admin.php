@@ -173,7 +173,7 @@ return [
         'preferred_work_type_options' => [
             'cleaning' => 'تنظيف',
             'events' => 'مناسبات',
-            'both' => 'كلاهما',
+            'hourly' => 'عامل بالساعة',
         ],
         'reviews' => 'تقييمات العملاء',
         'reviews_fields' => [
