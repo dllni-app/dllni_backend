@@ -25,7 +25,10 @@ final class WorkerAccountProfileUpdateRequest extends FormRequest
             'phone' => ['nullable', 'string', 'max:255', Rule::unique('users', 'phone')->ignore($userId)],
             'bio' => ['nullable', 'string'],
             'birthday' => ['nullable', 'date'],
+            // Legacy single-value field is still accepted for already-published clients.
             'preferred_work_type' => ['sometimes', 'string', Rule::in(WorkerPreferredWorkType::values())],
+            'preferred_work_types' => ['sometimes', 'array', 'min:1', 'max:3'],
+            'preferred_work_types.*' => ['string', 'distinct', Rule::in(WorkerPreferredWorkType::selectableValues())],
             'avatar' => ['nullable', 'file', 'mimes:jpeg,png,jpg,gif,svg,webp', 'max:2048'],
             'isActive' => ['nullable', 'boolean'],
             'homeAddress' => ['nullable', 'string', 'max:255'],
