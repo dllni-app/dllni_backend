@@ -43,6 +43,9 @@ final class ExtensionRequestNotification extends Notification implements ShouldQ
             extraData: array_filter([
                 'bookingId' => $booking ? (int) $booking->getKey() : null,
                 'orderId' => $booking ? (int) $booking->getKey() : null,
+                'sessionId' => $this->timeWarning->cleaning_booking_session_id !== null
+                    ? (int) $this->timeWarning->cleaning_booking_session_id
+                    : null,
                 'status' => $booking?->status?->value,
                 'action' => 'extension_request',
                 'deep_link_target' => 'cleaning_booking_details',
@@ -61,6 +64,9 @@ final class ExtensionRequestNotification extends Notification implements ShouldQ
             extraData: array_filter([
                 'bookingId' => $booking ? (int) $booking->getKey() : null,
                 'orderId' => $booking ? (int) $booking->getKey() : null,
+                'sessionId' => $this->timeWarning->cleaning_booking_session_id !== null
+                    ? (int) $this->timeWarning->cleaning_booking_session_id
+                    : null,
                 'status' => $booking?->status?->value,
                 'action' => 'extension_request',
                 'deep_link_target' => 'cleaning_booking_details',
