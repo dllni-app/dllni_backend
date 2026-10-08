@@ -51,7 +51,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
         $status = $booking->status instanceof \BackedEnum
             ? $booking->status->value
             : (string) $booking->status;
-        if (! in_array($status, ['pending', 'worker_assigned'], true) || $booking->isTeamFulfilled()) {
+        if (! in_array($status, ['pending', 'worker_assigned'], true) || ! app(CleaningGeographicDispatchService::class)->hasOpenWorkerSlots($booking)) {
             return;
         }
 
