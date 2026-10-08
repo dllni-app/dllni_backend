@@ -15,6 +15,8 @@ use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+use Modules\Cleaning\Services\CleaningGeographicDispatchService;
 use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
@@ -133,21 +135,16 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
                 fn ($query) => $query->where('gender', $booking->gender_preference->value),
             )
             ->whereNotIn('id', array_values(array_unique(array_merge($rejectedWorkerIds, $acceptedWorkerIds))))
-            ->when(
-                $booking->neighborhood_id !== null,
-                fn ($query) => $query->coversNeighborhood((int) $booking->neighborhood_id),
-            )
             ->with(['user', 'deposit'])
-            ->limit(50)
-            ->get();
+            ->get()
+            ->filter(fn (Worker $worker): bool => app(CleaningGeographicDispatchService::class)->isWithinRadius($worker, $booking))
+            ->take(50);
 
         if ($workers->isEmpty()) {
             $this->createDispatchAlert(
                 $booking,
-                $booking->neighborhood_id !== null ? 'no_neighborhood_coverage' : 'no_active_workers',
-                $booking->neighborhood_id !== null
-                    ? 'No active worker covers the booking neighborhood.'
-                    : 'No active worker is available for this booking.',
+                'no_workers_within_radius',
+                'No eligible worker is currently within the booking dispatch radius.',
             );
 
             return;
@@ -193,7 +190,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             $this->createDispatchAlert(
                 $booking,
                 'no_dispatch_eligible_workers',
-                'Workers match the booking area, but none are currently available and eligible for dispatch.',
+                'Workers match the booking radius, but none are currently available and eligible for dispatch.',
                 ['ineligibleWorkersCount' => $ineligibleCount],
             );
         }
@@ -240,10 +237,6 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
                 $booking->gender_preference instanceof GenderPreference
                     && $booking->gender_preference !== GenderPreference::Any,
                 fn ($query) => $query->where('gender', $booking->gender_preference->value),
-            )
-            ->when(
-                $booking->neighborhood_id !== null,
-                fn ($query) => $query->coversNeighborhood((int) $booking->neighborhood_id),
             )
             ->with(['user', 'deposit'])
             ->get();
@@ -361,6 +354,19 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
     private function notifyWorkerAboutNewOrder(Worker $worker, CleaningBooking $booking): void
     {
         if (! $worker->user) {
+            return;
+        }
+
+        // Expansion retries target only workers who have not received this booking.
+        $alreadyNotified = DB::table('notifications')
+            ->where('type', NewOrderRequestNotification::class)
+            ->where('notifiable_id', $worker->user->id)
+            ->where(function ($query) use ($booking): void {
+                $query->where('data->bookingId', $booking->id)
+                    ->orWhere('data->orderId', $booking->id);
+            })
+            ->exists();
+        if ($alreadyNotified) {
             return;
         }
 
