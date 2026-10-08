@@ -501,14 +501,12 @@ final class CleaningBookingsTable
             throw new InvalidArgumentException('Worker user account is inactive.');
         }
 
-        if (
-            $booking->neighborhood_id !== null
-            && ! Worker::query()
-                ->whereKey($worker->id)
-                ->coversNeighborhood((int) $booking->neighborhood_id)
-                ->exists()
-        ) {
-            throw new InvalidArgumentException('Worker does not cover booking neighborhood.');
+        $explicitlySelected = (int) $booking->preferred_worker_id === (int) $worker->id
+            || ($booking->resolvedWorkerScope() === CleaningBooking::WORKER_SCOPE_SPECIFIC
+                && in_array((int) $worker->id, $booking->specificWorkerIds(), true));
+        if (! $explicitlySelected
+            && ! app(\Modules\Cleaning\Services\CleaningGeographicDispatchService::class)->isWithinRadius($worker, $booking)) {
+            throw new InvalidArgumentException('Worker is outside the current booking dispatch radius.');
         }
     }
 
@@ -827,14 +825,18 @@ final class CleaningBookingsTable
             ->map(static fn ($id): int => (int) $id)
             ->all();
 
-        $coveredWorkerIds = null;
-        if ($record->neighborhood_id !== null) {
-            $coveredWorkerIds = Worker::query()
-                ->coversNeighborhood((int) $record->neighborhood_id)
-                ->pluck('id')
-                ->map(static fn ($id): int => (int) $id)
-                ->all();
-        }
+        $coveredWorkerIds = $workers
+            ->filter(static function (Worker $worker) use ($record): bool {
+                $selected = (int) $record->preferred_worker_id === (int) $worker->id
+                    || ($record->resolvedWorkerScope() === CleaningBooking::WORKER_SCOPE_SPECIFIC
+                        && in_array((int) $worker->id, $record->specificWorkerIds(), true));
+
+                return $selected
+                    || app(\Modules\Cleaning\Services\CleaningGeographicDispatchService::class)->isWithinRadius($worker, $record);
+            })
+            ->pluck('id')
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
 
         $assignmentMode = $record->assignment_mode instanceof BackedEnum
             ? $record->assignment_mode->value
@@ -911,7 +913,7 @@ final class CleaningBookingsTable
         }
 
         if ($coveredWorkerIds !== null && ! in_array((int) $worker->id, $coveredWorkerIds, true)) {
-            $issues[] = 'لا يغطي حي هذا الحجز';
+            $issues[] = 'العامل خارج نطاق المسافة الحالي للطلب';
         }
 
         if (in_array((int) $worker->id, $acceptedWorkerIds, true)) {
