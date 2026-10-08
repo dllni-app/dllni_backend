@@ -22,7 +22,7 @@ final class UserCleaningOrderStoreRequest extends FormRequest
     use ValidatesRecurringWorkerScope;
     use ValidatesWorkerRoomAssignments;
 
-    private const INCOMPLETE_ADDRESS_MESSAGE = 'يرجى تحديث العنوان المختار وإضافة الحي والإحداثيات قبل إنشاء الطلب.';
+    private const INCOMPLETE_ADDRESS_MESSAGE = 'يرجى تحديث العنوان المختار وتحديد موقعه على الخريطة قبل إنشاء الطلب.';
 
     public function authorize(): bool
     {
@@ -337,7 +337,7 @@ final class UserCleaningOrderStoreRequest extends FormRequest
             || mb_trim((string) $address->neighborhood) !== '';
         $hasCoordinates = $address->latitude !== null && $address->longitude !== null;
 
-        return $hasAddressText && $hasNeighborhood && $hasCoordinates;
+        return $hasAddressText && $hasCoordinates;
     }
 
     private function isEventAssistanceRequested(): bool
