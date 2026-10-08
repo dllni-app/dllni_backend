@@ -7,6 +7,7 @@ namespace Modules\Cleaning\Http\Controllers\API;
 use App\Models\Worker;
 use App\Support\Broadcast\BroadcastAfterResponse;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Events\WorkerLocationUpdated;
 use Modules\Cleaning\Http\Requests\CleaningBookingLocationRequest;
@@ -48,6 +49,15 @@ final class CleaningBookingSessionLocationController
         $recordedAt = now();
         $latitude = (float) $request->validated('latitude');
         $longitude = (float) $request->validated('longitude');
+        DB::table('worker_latest_locations')->updateOrInsert(
+            ['worker_id' => (int) $worker->id],
+            [
+                'latitude' => $latitude,
+                'longitude' => $longitude,
+                'recorded_at' => $recordedAt,
+                'updated_at' => $recordedAt,
+            ],
+        );
 
         $assignment->forceFill([
             'last_latitude' => $latitude,
