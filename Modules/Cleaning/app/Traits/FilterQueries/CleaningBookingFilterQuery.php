@@ -6,6 +6,8 @@ namespace Modules\Cleaning\Traits\FilterQueries;
 
 use App\Enums\GenderPreference;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
+use App\Notifications\Cleaning\NewOrderRequestNotification;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -99,8 +101,20 @@ trait CleaningBookingFilterQuery
         $canReceiveNewRequests = app(DepositService::class)->isWorkerEligibleForNewRequests($worker);
 
         $preferredWorkTypes = $worker->preferredWorkTypes();
+        $notifiedBookingIds = DB::table('notifications')
+            ->where('type', NewOrderRequestNotification::class)
+            ->where('notifiable_id', $worker->user_id)
+            ->pluck('data')
+            ->map(static function ($payload): int {
+                $data = is_array($payload) ? $payload : json_decode((string) $payload, true);
+                return (int) ($data['bookingId'] ?? $data['orderId'] ?? 0);
+            })
+            ->filter(static fn (int $id): bool => $id > 0)
+            ->unique()
+            ->all();
 
-        return $query->where(function (Builder $q) use ($worker, $preferredWorkTypes, $canReceiveNewRequests): void {
+
+        return $query->where(function (Builder $q) use ($worker, $preferredWorkTypes, $canReceiveNewRequests, $notifiedBookingIds): void {
             $q->where('worker_id', $worker->id)
                 ->orWhereHas('workerAssignments', function (Builder $assignments) use ($worker): void {
                     $assignments
@@ -124,14 +138,15 @@ trait CleaningBookingFilterQuery
                         ->where('preferred_worker_id', $worker->id)
                         ->whereDoesntHave('rejections', fn (Builder $rejections) => $rejections->where('worker_id', $worker->id));
                 })
-                ->orWhere(function (Builder $pending) use ($worker, $preferredWorkTypes, $canReceiveNewRequests): void {
+                ->orWhere(function (Builder $pending) use ($worker, $preferredWorkTypes, $canReceiveNewRequests, $notifiedBookingIds): void {
                     if (! $canReceiveNewRequests) {
                         $pending->where('id', -1);
 
                         return;
                     }
 
-                    $pending->where('status', CleaningBookingStatus::Pending)
+                    $pending->whereIn('id', $notifiedBookingIds)
+                        ->where('status', CleaningBookingStatus::Pending)
                         ->whereNull('worker_id')
                         ->whereNull('preferred_worker_id')
                         ->where(function (Builder $scope) use ($worker): void {
