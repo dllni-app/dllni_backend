@@ -16,6 +16,26 @@ use Modules\User\Models\UserAddress;
 use Modules\User\Jobs\ProcessExpiredRestaurantGroupOrdersJob;
 use App\Models\WorkerZone;
 
+
+Artisan::command('cleaning:expand-geographic-dispatch', function (): int {
+    \Modules\Cleaning\Models\CleaningBooking::query()
+        ->where('status', 'pending')
+        ->whereNotNull('address_latitude')
+        ->whereNotNull('address_longitude')
+        ->where('created_at', '>=', now()->subDays(2))
+        ->where('created_at', '<=', now()->subMinutes(20))
+        ->orderBy('id')
+        ->chunkById(100, function ($bookings): void {
+            foreach ($bookings as $booking) {
+                \App\Jobs\NotifyEligibleWorkersNewOrderJob::dispatch((int) $booking->id);
+            }
+        });
+
+    return 0;
+})->purpose('Expand cleaning booking dispatch radius every twenty minutes up to 50 km');
+
+Schedule::command('cleaning:expand-geographic-dispatch')->everyFiveMinutes()->withoutOverlapping();
+
 Artisan::command('restaurant:generate-system-alerts', function (RestaurantSystemAlertGenerator $generator): int {
     $count = $generator->handle();
 
