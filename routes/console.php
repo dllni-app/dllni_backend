@@ -22,12 +22,12 @@ Artisan::command('cleaning:expand-geographic-dispatch', function (): int {
         ->whereIn('status', ['pending', 'worker_assigned'])
         ->whereNotNull('address_latitude')
         ->whereNotNull('address_longitude')
-        ->where('created_at', '>=', now()->subDays(2))
+        ->whereDate('scheduled_date', '>=', today())
         ->where('created_at', '<=', now()->subMinutes(20))
         ->orderBy('id')
         ->chunkById(100, function ($bookings): void {
             foreach ($bookings as $booking) {
-                if (! $booking->isTeamFulfilled()) {
+                if (app(\Modules\Cleaning\Services\CleaningGeographicDispatchService::class)->hasOpenWorkerSlots($booking)) {
                     \App\Jobs\NotifyEligibleWorkersNewOrderJob::dispatch((int) $booking->id);
                 }
             }
