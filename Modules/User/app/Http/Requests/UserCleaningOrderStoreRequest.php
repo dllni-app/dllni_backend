@@ -333,8 +333,6 @@ final class UserCleaningOrderStoreRequest extends FormRequest
     private function isCompleteServiceAddress(UserAddress $address): bool
     {
         $hasAddressText = mb_trim($this->formatUserAddress($address)) !== '';
-        $hasNeighborhood = $address->neighborhood_id !== null
-            || mb_trim((string) $address->neighborhood) !== '';
         $hasCoordinates = $address->latitude !== null && $address->longitude !== null;
 
         return $hasAddressText && $hasCoordinates;
