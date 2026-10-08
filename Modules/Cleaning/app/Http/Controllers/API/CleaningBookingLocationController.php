@@ -8,6 +8,7 @@ use App\Models\Worker;
 use App\Support\Broadcast\BroadcastAfterResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Events\WorkerLocationUpdated;
@@ -29,6 +30,16 @@ final class CleaningBookingLocationController
         $latitude = (float) $request->validated('latitude');
         $longitude = (float) $request->validated('longitude');
         $recordedAt = now();
+        // Latest GPS is separate from individual booking tracking.
+        DB::table('worker_latest_locations')->updateOrInsert(
+            ['worker_id' => (int) $worker->id],
+            [
+                'latitude' => $latitude,
+                'longitude' => $longitude,
+                'recorded_at' => $recordedAt,
+                'updated_at' => $recordedAt,
+            ],
+        );
 
         $assignment = CleaningBookingWorkerAssignment::query()
             ->where('cleaning_booking_id', $cleaning_booking->id)
