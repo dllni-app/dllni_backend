@@ -79,6 +79,48 @@ final class CleaningGeographicDispatchService
         return 6371.0088 * 2 * asin(min(1.0, sqrt(max(0.0, $a))));
     }
 
+    /**
+     * Pending bookings discoverable by a worker even if the notification has
+     * not been persisted or the push channel failed. Matching is based on
+     * the same location and expansion policy as the dispatch job.
+     *
+     * @return array<int, int>
+     */
+    public function discoverableBookingIds(Worker $worker): array
+    {
+        return CleaningBooking::query()
+            ->where('status', 'pending')
+            ->whereDate('scheduled_date', '>=', today())
+            ->where(function ($query) use ($worker): void {
+                $query->whereNull('worker_id')->orWhere('worker_id', $worker->id);
+            })
+            ->whereNotNull('address_latitude')
+            ->whereNotNull('address_longitude')
+            ->get()
+            ->filter(function (CleaningBooking $booking) use ($worker): bool {
+                if ($booking->isTeamFulfilled()) {
+                    return false;
+                }
+
+                if ((int) ($booking->preferred_worker_id ?? 0) === (int) $worker->id) {
+                    return true;
+                }
+
+                if ($booking->preferred_worker_id !== null) {
+                    return false;
+                }
+
+                if ($booking->resolvedWorkerScope() === CleaningBooking::WORKER_SCOPE_SPECIFIC) {
+                    return in_array((int) $worker->id, $booking->specificWorkerIds(), true);
+                }
+
+                return $this->isWithinRadius($worker, $booking);
+            })
+            ->pluck('id')
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
+    }
+
     public function isWithinRadius(Worker $worker, CleaningBooking $booking): bool
     {
         $distance = $this->workerDistanceKm($worker, $booking);
