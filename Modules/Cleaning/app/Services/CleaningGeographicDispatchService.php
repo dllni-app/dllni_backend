@@ -24,16 +24,28 @@ final class CleaningGeographicDispatchService
             return null;
         }
 
-        $position = DB::table('cleaning_booking_worker_assignments')
+        $position = DB::table('worker_latest_locations')
             ->where('worker_id', $worker->id)
-            ->whereNotNull('last_latitude')
-            ->whereNotNull('last_longitude')
-            ->where('location_updated_at', '>', now()->subHour())
-            ->orderByDesc('location_updated_at')
-            ->first(['last_latitude', 'last_longitude']);
+            ->where('recorded_at', '>', now()->subHour())
+            ->first(['latitude', 'longitude']);
+        if ($position === null) {
+            $lastAssignment = DB::table('cleaning_booking_worker_assignments')
+                ->where('worker_id', $worker->id)
+                ->whereNotNull('last_latitude')
+                ->whereNotNull('last_longitude')
+                ->where('location_updated_at', '>', now()->subHour())
+                ->orderByDesc('location_updated_at')
+                ->first(['last_latitude', 'last_longitude']);
+            if ($lastAssignment !== null) {
+                $position = (object) [
+                    'latitude' => $lastAssignment->last_latitude,
+                    'longitude' => $lastAssignment->last_longitude,
+                ];
+            }
+        }
 
-        $latitude = $position?->last_latitude ?? $worker->home_latitude;
-        $longitude = $position?->last_longitude ?? $worker->home_longitude;
+        $latitude = $position?->latitude ?? $worker->home_latitude;
+        $longitude = $position?->longitude ?? $worker->home_longitude;
 
         if ($latitude === null || $longitude === null) {
             return null;
