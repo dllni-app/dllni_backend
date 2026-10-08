@@ -84,14 +84,12 @@ final class CleaningBookingSessionWorkerEligibilityService
             return $this->blocked('gender_mismatch', 'Worker gender does not match the booking requirement.');
         }
 
-        if (
-            $booking->neighborhood_id !== null
-            && ! Worker::query()
-                ->whereKey($worker->id)
-                ->coversNeighborhood((int) $booking->neighborhood_id)
-                ->exists()
-        ) {
-            return $this->blocked('neighborhood_not_covered', 'Worker does not cover the booking neighborhood.');
+        $explicitlySelected = (int) $booking->preferred_worker_id === (int) $worker->id
+            || ($booking->resolvedWorkerScope() === CleaningBooking::WORKER_SCOPE_SPECIFIC
+                && in_array((int) $worker->id, $booking->specificWorkerIds(), true));
+        if (! $explicitlySelected
+            && ! app(CleaningGeographicDispatchService::class)->isWithinRadius($worker, $booking)) {
+            return $this->blocked('worker_outside_dispatch_radius', 'Worker is outside the current dispatch radius.');
         }
 
         $startsAt = $session->startsAt();
