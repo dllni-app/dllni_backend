@@ -11,6 +11,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use App\Notifications\Cleaning\NewOrderRequestNotification;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
@@ -148,7 +150,20 @@ final class WorkerHomepageController
             default => 0.0,
         };
 
-        $newOrderCandidates = $this->newOrdersCandidateQuery($worker, $today)->get();
+        $notifiedIds = DB::table('notifications')
+            ->where('type', NewOrderRequestNotification::class)
+            ->where('notifiable_id', $worker->user_id)
+            ->pluck('data')
+            ->map(static function ($payload): int {
+                $data = is_array($payload) ? $payload : json_decode((string) $payload, true);
+                return (int) ($data['bookingId'] ?? $data['orderId'] ?? 0);
+            })
+            ->filter(static fn (int $id): bool => $id > 0)
+            ->unique()
+            ->all();
+        $newOrderCandidates = $this->newOrdersCandidateQuery($worker, $today)
+            ->whereIn('id', $notifiedIds)
+            ->get();
         $newOrdersCount = 0;
         $blockedByCommissionCapacityCount = 0;
 
