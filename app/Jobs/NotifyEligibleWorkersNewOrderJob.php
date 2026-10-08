@@ -144,8 +144,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             ->whereNotIn('id', array_values(array_unique(array_merge($rejectedWorkerIds, $acceptedWorkerIds))))
             ->with(['user', 'deposit'])
             ->get()
-            ->filter(fn (Worker $worker): bool => app(CleaningGeographicDispatchService::class)->isWithinRadius($worker, $booking))
-            ->take(50);
+            ->filter(fn (Worker $worker): bool => app(CleaningGeographicDispatchService::class)->isWithinRadius($worker, $booking));
 
         if ($workers->isEmpty()) {
             $this->createDispatchAlert(
