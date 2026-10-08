@@ -49,7 +49,15 @@ final class CleaningBookingController
 
     public function index(CleaningBookingFilterRequest $request): AnonymousResourceCollection
     {
-        $bookings = CleaningBooking::getQuery()
+        // A worker cannot bypass the geographic dispatch audience by omitting
+        // filter[forCurrentWorker] from the request.
+        $query = CleaningBooking::getQuery();
+        $authenticatedWorker = $request->user()?->worker;
+        if ($authenticatedWorker instanceof Worker) {
+            $query->forCurrentWorker(true);
+        }
+
+        $bookings = $query
             ->with([
                 'customer',
                 'worker.user',
