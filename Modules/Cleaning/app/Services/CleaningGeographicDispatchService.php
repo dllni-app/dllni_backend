@@ -7,10 +7,29 @@ namespace Modules\Cleaning\Services;
 use App\Models\Worker;
 use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 
 final class CleaningGeographicDispatchService
 {
     public const MAX_RADIUS_KM = 50;
+
+    public function hasOpenWorkerSlots(CleaningBooking $booking): bool
+    {
+        if (! $booking->isTeamFulfilled()) {
+            return true;
+        }
+
+        // Multi-session events may need more workers for later days
+        // even when the parent booking has already received an assignment.
+        if ($booking->sessions()->count() <= 1) {
+            return false;
+        }
+
+        return $booking->sessions()
+            ->whereNotIn('status', CleaningBookingSessionStatus::terminalValues())
+            ->get()
+            ->contains(static fn ($session): bool => $session->remainingWorkerCount() > 0);
+    }
 
     public function radiusKm(CleaningBooking $booking): int
     {
