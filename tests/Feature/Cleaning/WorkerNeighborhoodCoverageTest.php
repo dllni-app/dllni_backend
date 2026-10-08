@@ -7,6 +7,8 @@ use App\Models\User;
 use App\Models\Worker;
 use App\Notifications\Cleaning\NewOrderRequestNotification;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -106,13 +108,13 @@ it('rejects inactive neighborhoods when updating worker work areas', function ()
         ->assertJsonValidationErrors(['zones.0.neighborhoodId']);
 });
 
-it('dispatches new orders only to workers covering the booking neighborhood', function (): void {
+it('dispatches to nearby workers regardless of selected neighborhoods', function (): void {
     Notification::fake();
 
     $neighborhoodA = CleaningNeighborhood::factory()->create(['name_ar' => 'Aziziyah']);
     $neighborhoodB = CleaningNeighborhood::factory()->create(['name_ar' => 'Jamiliyah']);
     [$userA] = createCoveredWorker($neighborhoodA);
-    [$userB] = createCoveredWorker($neighborhoodB);
+    [$userB] = createCoveredWorker($neighborhoodB, ['home_latitude' => 36.50, 'home_longitude' => 37.50]);
 
     $booking = CleaningBooking::factory()->create([
         'status' => CleaningBookingStatus::Pending->value,
@@ -121,6 +123,8 @@ it('dispatches new orders only to workers covering the booking neighborhood', fu
         'gender_preference' => 'any',
         'neighborhood_id' => $neighborhoodA->id,
         'neighborhood_name' => $neighborhoodA->name_ar,
+        'address_latitude' => 36.20,
+        'address_longitude' => 37.15,
     ]);
 
     (new NotifyEligibleWorkersNewOrderJob($booking->id))->handle();
@@ -129,7 +133,7 @@ it('dispatches new orders only to workers covering the booking neighborhood', fu
     Notification::assertNotSentTo($userB, NewOrderRequestNotification::class);
 });
 
-it('shows current worker pending bookings regardless of neighborhood coverage', function (): void {
+it('shows only pending bookings previously dispatched to the worker', function (): void {
     $neighborhoodA = CleaningNeighborhood::factory()->create(['name_ar' => 'Aziziyah']);
     $neighborhoodB = CleaningNeighborhood::factory()->create(['name_ar' => 'Jamiliyah']);
     [$user] = createCoveredWorker($neighborhoodA);
@@ -155,10 +159,20 @@ it('shows current worker pending bookings regardless of neighborhood coverage', 
         'neighborhood_name' => $neighborhoodB->name_ar,
     ]);
 
+    DB::table('notifications')->insert([
+        'id' => (string) Str::uuid(),
+        'type' => NewOrderRequestNotification::class,
+        'notifiable_type' => $user->getMorphClass(),
+        'notifiable_id' => $user->id,
+        'data' => json_encode(['bookingId' => $insideAreaBooking->id]),
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
     $response = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
 
     $response->assertOk()
-        ->assertJsonCount(2, 'data');
+        ->assertJsonCount(1, 'data');
 
     $bookingIds = collect($response->json('data'))
         ->pluck('id')
@@ -166,10 +180,10 @@ it('shows current worker pending bookings regardless of neighborhood coverage', 
         ->all();
 
     expect($bookingIds)->toContain($insideAreaBooking->id);
-    expect($bookingIds)->toContain($outsideAreaBooking->id);
+    expect($bookingIds)->not->toContain($outsideAreaBooking->id);
 });
 
-it('blocks workers from accepting bookings outside their neighborhoods', function (): void {
+it('blocks accepting bookings outside the geographic dispatch radius', function (): void {
     $neighborhoodA = CleaningNeighborhood::factory()->create(['name_ar' => 'Aziziyah']);
     $neighborhoodB = CleaningNeighborhood::factory()->create(['name_ar' => 'Jamiliyah']);
     [$user] = createCoveredWorker($neighborhoodA);
@@ -182,8 +196,8 @@ it('blocks workers from accepting bookings outside their neighborhoods', functio
         'scheduled_date' => now()->toDateString(),
         'scheduled_time' => now()->addHour()->format('H:i'),
         'gender_preference' => 'any',
-        'address_latitude' => 36.21,
-        'address_longitude' => 37.16,
+        'address_latitude' => 36.50,
+        'address_longitude' => 37.50,
         'neighborhood_id' => $neighborhoodB->id,
         'neighborhood_name' => $neighborhoodB->name_ar,
     ]);
