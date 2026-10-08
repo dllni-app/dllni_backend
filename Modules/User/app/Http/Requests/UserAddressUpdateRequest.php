@@ -22,20 +22,20 @@ final class UserAddressUpdateRequest extends FormRequest
         return [
             'label' => ['required', 'string', 'max:100'],
             'mobile' => ['nullable', 'string', 'max:32'],
-            'city' => ['required', 'string', 'max:255'],
+            'city' => ['nullable', 'string', 'max:255'],
             'neighborhoodId' => [
                 'sometimes',
                 'nullable',
                 'integer',
                 Rule::exists('cleaning_neighborhoods', 'id')->where('is_active', true),
             ],
-            'neighborhood' => ['required_without:neighborhoodId', 'nullable', 'string', 'max:255'],
-            'street' => ['nullable', 'string', 'max:255'],
+            'neighborhood' => ['nullable', 'string', 'max:255'],
+            'street' => ['required', 'string', 'max:255'],
             'building' => ['nullable', 'string', 'max:255'],
             'floor' => ['nullable', 'string', 'max:50'],
-            'directions' => ['required', 'string', 'max:2000'],
-            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
-            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'directions' => ['nullable', 'string', 'max:2000'],
+            'latitude' => ['required', 'numeric', 'between:-90,90'],
+            'longitude' => ['required', 'numeric', 'between:-180,180'],
             'isDefault' => ['sometimes', 'boolean'],
         ];
     }
