@@ -133,7 +133,7 @@ it('dispatches to nearby workers regardless of selected neighborhoods', function
     Notification::assertNotSentTo($userB, NewOrderRequestNotification::class);
 });
 
-it('shows only pending bookings previously dispatched to the worker', function (): void {
+it('shows only pending bookings within dispatch radius even without notifications', function (): void {
     $neighborhoodA = CleaningNeighborhood::factory()->create(['name_ar' => 'Aziziyah']);
     $neighborhoodB = CleaningNeighborhood::factory()->create(['name_ar' => 'Jamiliyah']);
     [$user] = createCoveredWorker($neighborhoodA);
@@ -148,6 +148,8 @@ it('shows only pending bookings previously dispatched to the worker', function (
         'gender_preference' => 'any',
         'neighborhood_id' => $neighborhoodA->id,
         'neighborhood_name' => $neighborhoodA->name_ar,
+        'address_latitude' => 36.20,
+        'address_longitude' => 37.15,
     ]);
     $outsideAreaBooking = CleaningBooking::factory()->create([
         'status' => CleaningBookingStatus::Pending->value,
@@ -157,16 +159,8 @@ it('shows only pending bookings previously dispatched to the worker', function (
         'gender_preference' => 'any',
         'neighborhood_id' => $neighborhoodB->id,
         'neighborhood_name' => $neighborhoodB->name_ar,
-    ]);
-
-    DB::table('notifications')->insert([
-        'id' => (string) Str::uuid(),
-        'type' => NewOrderRequestNotification::class,
-        'notifiable_type' => $user->getMorphClass(),
-        'notifiable_id' => $user->id,
-        'data' => json_encode(['bookingId' => $insideAreaBooking->id]),
-        'created_at' => now(),
-        'updated_at' => now(),
+        'address_latitude' => 36.50,
+        'address_longitude' => 37.50,
     ]);
 
     $response = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
