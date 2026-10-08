@@ -101,20 +101,10 @@ trait CleaningBookingFilterQuery
         $canReceiveNewRequests = app(DepositService::class)->isWorkerEligibleForNewRequests($worker);
 
         $preferredWorkTypes = $worker->preferredWorkTypes();
-        $notifiedBookingIds = DB::table('notifications')
-            ->where('type', NewOrderRequestNotification::class)
-            ->where('notifiable_id', $worker->user_id)
-            ->pluck('data')
-            ->map(static function ($payload): int {
-                $data = is_array($payload) ? $payload : json_decode((string) $payload, true);
-                return (int) ($data['bookingId'] ?? $data['orderId'] ?? 0);
-            })
-            ->filter(static fn (int $id): bool => $id > 0)
-            ->unique()
-            ->all();
+        $discoverableBookingIds = app(\Modules\Cleaning\Services\CleaningGeographicDispatchService::class)
+            ->discoverableBookingIds($worker);
 
-
-        return $query->where(function (Builder $q) use ($worker, $preferredWorkTypes, $canReceiveNewRequests, $notifiedBookingIds): void {
+        return $query->where(function (Builder $q) use ($worker, $preferredWorkTypes, $canReceiveNewRequests, $discoverableBookingIds): void {
             $q->where('worker_id', $worker->id)
                 ->orWhereHas('workerAssignments', function (Builder $assignments) use ($worker): void {
                     $assignments
@@ -138,14 +128,14 @@ trait CleaningBookingFilterQuery
                         ->where('preferred_worker_id', $worker->id)
                         ->whereDoesntHave('rejections', fn (Builder $rejections) => $rejections->where('worker_id', $worker->id));
                 })
-                ->orWhere(function (Builder $pending) use ($worker, $preferredWorkTypes, $canReceiveNewRequests, $notifiedBookingIds): void {
+                ->orWhere(function (Builder $pending) use ($worker, $preferredWorkTypes, $canReceiveNewRequests, $discoverableBookingIds): void {
                     if (! $canReceiveNewRequests) {
                         $pending->where('id', -1);
 
                         return;
                     }
 
-                    $pending->whereIn('id', $notifiedBookingIds)
+                    $pending->whereIn('id', $discoverableBookingIds)
                         ->where('status', CleaningBookingStatus::Pending)
                         ->whereNull('worker_id')
                         ->whereNull('preferred_worker_id')
