@@ -39,6 +39,8 @@ it('creates an address and marks first one as default', function (): void {
         'neighborhood' => 'الفرقان',
         'street' => 'شارع الجامعة',
         'directions' => 'قرب الحديقة',
+        'latitude' => 36.22,
+        'longitude' => 37.16,
     ]);
 
     $response->assertCreated();
@@ -51,7 +53,7 @@ it('creates an address and marks first one as default', function (): void {
     ]);
 });
 
-it('rejects create without required city neighborhood and directions', function (): void {
+it('rejects create without map address and coordinates', function (): void {
     Sanctum::actingAs(User::factory()->create());
 
     $response = $this->postJson('/api/v1/user/addresses', [
@@ -59,7 +61,7 @@ it('rejects create without required city neighborhood and directions', function 
     ]);
 
     $response->assertUnprocessable()
-        ->assertJsonValidationErrors(['city', 'neighborhood', 'directions']);
+        ->assertJsonValidationErrors(['street', 'latitude', 'longitude']);
 });
 
 it('updates an address', function (): void {
@@ -78,6 +80,9 @@ it('updates an address', function (): void {
         'city' => 'Damascus',
         'neighborhood' => 'Mazzeh',
         'directions' => 'by the pharmacy',
+        'street' => 'Map geocoded address',
+        'latitude' => 36.2,
+        'longitude' => 37.15,
         'isDefault' => true,
     ]);
 
@@ -87,7 +92,7 @@ it('updates an address', function (): void {
     expect($response->json('address.directions'))->toBe('by the pharmacy');
 });
 
-it('rejects full update without required city neighborhood and directions', function (): void {
+it('rejects full update without map address and coordinates', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
@@ -107,7 +112,7 @@ it('rejects full update without required city neighborhood and directions', func
     ]);
 
     $response->assertUnprocessable()
-        ->assertJsonValidationErrors(['city', 'neighborhood', 'directions']);
+        ->assertJsonValidationErrors(['street', 'latitude', 'longitude']);
 });
 
 it('shows a single address', function (): void {
