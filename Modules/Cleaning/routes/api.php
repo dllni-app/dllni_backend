@@ -30,6 +30,7 @@ use Modules\Cleaning\Http\Controllers\API\EventBookingController;
 use Modules\Cleaning\Http\Controllers\API\GeographicCoverageController;
 use Modules\Cleaning\Http\Controllers\API\ServicePricingController;
 use Modules\Cleaning\Http\Controllers\API\WorkerAccountProfileController;
+use Modules\Cleaning\Http\Controllers\API\WorkerCurrentLocationController;
 use Modules\Cleaning\Http\Controllers\API\WorkerAccountStatusController;
 use Modules\Cleaning\Http\Controllers\API\WorkerDepositController;
 use Modules\Cleaning\Http\Controllers\API\WorkerDetailsController;
@@ -52,6 +53,7 @@ Route::prefix('v1')->group(function () {
         Route::post('cleaning/neighborhoods/match', [CleaningNeighborhoodController::class, 'match']);
 
         Route::get('cleaning/dashboard/overview', DashboardOverviewController::class);
+        Route::post('cleaning/worker/current-location', WorkerCurrentLocationController::class);
         Route::get('cleaning/worker/homepage', WorkerHomepageEligibilityController::class);
         Route::get('cleaning/worker/statistics', WorkerStatisticsController::class);
         Route::get('cleaning/worker/reviews', [WorkerReviewController::class, 'index']);
