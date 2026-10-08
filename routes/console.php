@@ -19,7 +19,7 @@ use App\Models\WorkerZone;
 
 Artisan::command('cleaning:expand-geographic-dispatch', function (): int {
     \Modules\Cleaning\Models\CleaningBooking::query()
-        ->where('status', 'pending')
+        ->whereIn('status', ['pending', 'worker_assigned'])
         ->whereNotNull('address_latitude')
         ->whereNotNull('address_longitude')
         ->where('created_at', '>=', now()->subDays(2))
@@ -27,7 +27,9 @@ Artisan::command('cleaning:expand-geographic-dispatch', function (): int {
         ->orderBy('id')
         ->chunkById(100, function ($bookings): void {
             foreach ($bookings as $booking) {
-                \App\Jobs\NotifyEligibleWorkersNewOrderJob::dispatch((int) $booking->id);
+                if (! $booking->isTeamFulfilled()) {
+                    \App\Jobs\NotifyEligibleWorkersNewOrderJob::dispatch((int) $booking->id);
+                }
             }
         });
 
