@@ -237,7 +237,12 @@ final class UserCleaningOrderStoreRequest extends FormRequest
 
                 $propertyDetails = $this->input('propertyDetails');
                 if (is_array($propertyDetails)) {
-                    if (! array_key_exists('address', $propertyDetails) || mb_trim((string) ($propertyDetails['address'] ?? '')) === '') {
+                    if ((string) ($merge['bookingKind'] ?? $this->input('bookingKind')) === 'open_time') {
+                        // Always use the same saved address as the coordinates for hourly bookings.
+                        // Do not trust a stale address label from the client-side selection.
+                        $propertyDetails['address'] = $this->formatUserAddress($address);
+                        $propertyDetails['location_name'] = $address->label;
+                    } elseif (! array_key_exists('address', $propertyDetails) || mb_trim((string) ($propertyDetails['address'] ?? '')) === '') {
                         $propertyDetails['address'] = $this->formatUserAddress($address);
                     }
 
