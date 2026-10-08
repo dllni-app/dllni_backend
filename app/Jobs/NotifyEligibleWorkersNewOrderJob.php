@@ -48,6 +48,13 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             return;
         }
 
+        $status = $booking->status instanceof \BackedEnum
+            ? $booking->status->value
+            : (string) $booking->status;
+        if (! in_array($status, ['pending', 'worker_assigned'], true) || $booking->isTeamFulfilled()) {
+            return;
+        }
+
         $depositService = app(DepositService::class);
         $solvencyService = app(WorkerOrderSolvencyService::class);
         $scheduleConflictService = app(WorkerBookingScheduleConflictService::class);
