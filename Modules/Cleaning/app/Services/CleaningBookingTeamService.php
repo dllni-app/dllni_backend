@@ -653,16 +653,14 @@ final class CleaningBookingTeamService
             throw new InvalidArgumentException('Booking is reserved for a different preferred worker.');
         }
 
-        if (
-            $this->resolveAssignmentMode($booking) === CleaningAssignmentMode::OpenCount->value
-            && $booking->neighborhood_id !== null
-            && ! Worker::query()
-                ->whereKey($worker->id)
-                ->coversNeighborhood((int) $booking->neighborhood_id)
-                ->exists()
-        ) {
+        $explicitlySelected = (int) $booking->preferred_worker_id === (int) $worker->id
+            || ($booking->resolvedWorkerScope() === CleaningBooking::WORKER_SCOPE_SPECIFIC
+                && in_array((int) $worker->id, $booking->specificWorkerIds(), true));
+
+        if (! $explicitlySelected
+            && ! app(\Modules\Cleaning\Services\CleaningGeographicDispatchService::class)->isWithinRadius($worker, $booking)) {
             throw ValidationException::withMessages([
-                'worker' => ['This booking is outside the worker\'s active neighborhoods.'],
+                'worker' => ['الطلب خارج نطاق المسافة المتاح لك حالياً.'],
             ]);
         }
 
