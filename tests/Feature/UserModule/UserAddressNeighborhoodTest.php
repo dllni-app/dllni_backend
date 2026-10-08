@@ -23,6 +23,8 @@ it('stores the canonical neighborhood snapshot when neighborhood id is provided'
         'neighborhood' => 'Custom client text',
         'street' => 'Granada Street',
         'directions' => 'Near the school',
+        'latitude' => 36.22,
+        'longitude' => 37.16,
     ]);
 
     $response->assertCreated()
