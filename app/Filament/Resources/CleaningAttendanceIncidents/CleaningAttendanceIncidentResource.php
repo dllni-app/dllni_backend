@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningAttendanceIncidents;
 
+use App\Filament\Clusters\CleaningOperationsCluster;
 use App\Filament\Resources\CleaningAttendanceIncidents\Pages\ListCleaningAttendanceIncidents;
 use App\Filament\Resources\CleaningAttendanceIncidents\Pages\ViewCleaningAttendanceIncident;
 use App\Filament\Resources\CleaningAttendanceIncidents\Schemas\CleaningAttendanceIncidentInfolist;
@@ -20,6 +21,8 @@ use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
 final class CleaningAttendanceIncidentResource extends Resource
 {
     protected static ?string $model = CleaningBookingSessionWorkerAssignment::class;
+
+    protected static ?string $cluster = CleaningOperationsCluster::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClock;
 
