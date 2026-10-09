@@ -369,3 +369,85 @@ it('dispatches hourly worker bookings only to workers that selected hourly work'
     Notification::assertSentTo($hourlyUser, NewOrderRequestNotification::class);
     Notification::assertNotSentTo($cleaningUser, NewOrderRequestNotification::class);
 });
+
+
+it('sends urgent same-day bookings to every eligible worker regardless of distance or missing GPS', function (): void {
+    Notification::fake();
+    Event::fake([CleaningBookingCreated::class]);
+
+    CleaningDepositSetting::query()->create([
+        'minimum_deposit_amount' => 0,
+        'default_max_negative_balance' => 100000,
+        'restriction_threshold_percent' => 80,
+        'allowance_warning_threshold_percent' => 10,
+        'is_enabled' => true,
+        'trust_reject_after_accept_penalty' => 10,
+        'trust_minimum_for_dispatch' => 0,
+    ]);
+
+    $scheduledAt = today()->setTime(15, 0);
+    $dayKey = mb_strtolower($scheduledAt->format('l'));
+
+    $makeWorker = static function (string $email, ?float $latitude, bool $suspended = false) use ($dayKey): array {
+        $user = User::factory()->create(['email' => $email, 'is_active' => true]);
+        $worker = Worker::factory()->create([
+            'user_id' => $user->id,
+            'is_active' => true,
+            'is_suspended' => $suspended,
+            'trust_score' => 100,
+            'home_latitude' => $latitude,
+            'home_longitude' => $latitude === null ? null : 37.15,
+            'default_working_hours' => [
+                $dayKey => ['available' => true, 'data' => [['00:00' => '23:59']]],
+            ],
+        ]);
+        CleaningWorkerDeposit::query()->create([
+            'worker_id' => $worker->id,
+            'current_balance' => 100000,
+            'deposited_total' => 100000,
+            'withdrawn_total' => 0,
+            'minimum_required' => 0,
+            'max_negative_balance' => 100000,
+        ]);
+
+        return [$user, $worker];
+    };
+
+    [$nearUser, $nearWorker] = $makeWorker('urgent-near@example.com', 36.2);
+    [$farUser, $farWorker] = $makeWorker('urgent-far@example.com', 35.0);
+    [$noGpsUser, $noGpsWorker] = $makeWorker('urgent-no-gps@example.com', null);
+    [$suspendedUser] = $makeWorker('urgent-suspended@example.com', 36.2, true);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => null,
+        'preferred_worker_id' => null,
+        'status' => CleaningBookingStatus::Pending->value,
+        'gender_preference' => 'any',
+        'address_latitude' => 36.20,
+        'address_longitude' => 37.15,
+        'scheduled_date' => $scheduledAt->toDateString(),
+        'scheduled_time' => $scheduledAt->format('H:i'),
+        'number_of_workers' => 1,
+    ]);
+
+    // Isolate the explicit dispatch from any observer-triggered queue activity.
+    Notification::fake();
+    Event::fake([CleaningBookingCreated::class]);
+
+    (new NotifyEligibleWorkersNewOrderJob((int) $booking->id))->handle();
+
+    foreach ([$nearUser, $farUser, $noGpsUser] as $user) {
+        Notification::assertSentTo($user, NewOrderRequestNotification::class);
+    }
+    Notification::assertNotSentTo($suspendedUser, NewOrderRequestNotification::class);
+
+    foreach ([$nearWorker, $farWorker, $noGpsWorker] as $worker) {
+        Event::assertDispatched(CleaningBookingCreated::class, fn (CleaningBookingCreated $event): bool =>
+            $event->cleaningBookingId === (int) $booking->id
+                && $event->workerId === (int) $worker->id);
+    }
+
+    $dispatch = app(\\Modules\\Cleaning\\Services\\CleaningGeographicDispatchService::class);
+    expect($dispatch->discoverableBookingIds($farWorker))->toContain((int) $booking->id)
+        ->and($dispatch->discoverableBookingIds($noGpsWorker))->toContain((int) $booking->id);
+});
