@@ -447,7 +447,7 @@ it('sends urgent same-day bookings to every eligible worker regardless of distan
                 && $event->workerId === (int) $worker->id);
     }
 
-    $dispatch = app(\\Modules\\Cleaning\\Services\\CleaningGeographicDispatchService::class);
+    $dispatch = app(\Modules\Cleaning\Services\CleaningGeographicDispatchService::class);
     expect($dispatch->discoverableBookingIds($farWorker))->toContain((int) $booking->id)
         ->and($dispatch->discoverableBookingIds($noGpsWorker))->toContain((int) $booking->id);
 });
