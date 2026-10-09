@@ -13,6 +13,7 @@ use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Navigation\NavigationGroup;
 use Filament\Panel;
 use Filament\PanelProvider;
+use Filament\Tables\Table;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
@@ -28,6 +29,10 @@ final class AdminPanelProvider extends PanelProvider
 {
     public function panel(Panel $panel): Panel
     {
+        // Filament's numeric() defaults to app.locale (ar) unless the table
+        // explicitly overrides it. Configure all admin tables at the source.
+        Table::configureUsing(static fn (Table $table): Table => $table->defaultNumberLocale('en'));
+
         $vite = app(Vite::class);
         $hasViteAssets = $vite->isRunningHot() || $vite->manifestHash() !== null;
 
