@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningMaterialMovements;
 
+use App\Filament\Clusters\CleaningMaterialsCluster;
 use App\Filament\Resources\CleaningMaterialMovements\Pages\ListCleaningMaterialMovements;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -17,6 +18,8 @@ use Modules\Cleaning\Models\CleaningMaterialInventoryMovement;
 final class CleaningMaterialMovementResource extends Resource
 {
     protected static ?string $model = CleaningMaterialInventoryMovement::class;
+
+    protected static ?string $cluster = CleaningMaterialsCluster::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArrowsRightLeft;
 
