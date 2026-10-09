@@ -109,12 +109,12 @@ it('requeues radius expansion after fifteen minutes including same-day urgent bo
         'address_longitude' => null,
     ]));
 
-    \\Illuminate\\Support\\Facades\\Bus::fake([\\App\\Jobs\\NotifyEligibleWorkersNewOrderJob::class]);
+    \Illuminate\Support\Facades\Bus::fake([\App\Jobs\NotifyEligibleWorkersNewOrderJob::class]);
 
-    \\Illuminate\\Support\\Facades\\Artisan::call('cleaning:expand-geographic-dispatch');
+    \Illuminate\Support\Facades\Artisan::call('cleaning:expand-geographic-dispatch');
 
-    \\Illuminate\\Support\\Facades\\Bus::assertDispatchedTimes(
-        \\App\\Jobs\\NotifyEligibleWorkersNewOrderJob::class,
+    \Illuminate\Support\Facades\Bus::assertDispatchedTimes(
+        \App\Jobs\NotifyEligibleWorkersNewOrderJob::class,
         2,
     );
 });
