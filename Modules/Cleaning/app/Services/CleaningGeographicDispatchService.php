@@ -96,7 +96,7 @@ final class CleaningGeographicDispatchService
             })
             ->get()
             ->filter(function (CleaningBooking $booking) use ($worker): bool {
-                if ($booking->isTeamFulfilled()) {
+                if (! $this->hasRequiredLocations($worker, $booking) || $booking->isTeamFulfilled()) {
                     return false;
                 }
 
@@ -119,9 +119,22 @@ final class CleaningGeographicDispatchService
             ->all();
     }
 
+    public function hasRequiredLocations(Worker $worker, CleaningBooking $booking): bool
+    {
+        return filled($worker->home_address)
+            && $worker->home_latitude !== null
+            && $worker->home_longitude !== null
+            && $booking->address_latitude !== null
+            && $booking->address_longitude !== null;
+    }
+
     public function isWithinRadius(Worker $worker, CleaningBooking $booking): bool
     {
-        // Same-day urgent orders bypass geographic radius; worker eligibility is checked separately.
+        if (! $this->hasRequiredLocations($worker, $booking)) {
+            return false;
+        }
+
+        // Urgent same-day bookings bypass only the radius, not the required GPS inputs.
         if (app(CleaningOrderUrgencyService::class)->isHotOrder($booking->scheduled_date)) {
             return true;
         }
