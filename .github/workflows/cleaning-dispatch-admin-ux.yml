@@ -46,6 +46,11 @@ jobs:
           php -l Modules/Cleaning/app/Models/CleaningSpecialServiceCategory.php
           php -l Modules/Cleaning/database/migrations/2026_10_03_043800_fix_cleaning_special_service_session_unique.php
           php -l Modules/Cleaning/app/Services/CleaningGeographicDispatchService.php
+      - name: Verify Filament route registration
+        run: php artisan route:list --path=admin --except-vendor
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
       - name: Run affected dispatch and catalog tests
         run: php artisan test tests/Feature/Cleaning/CleaningGeographicDispatchTest.php tests/Feature/Cleaning/CleaningNewOrderDispatchTest.php tests/Feature/Cleaning/CleaningSpecialServiceCategorySlugTest.php
         env:
