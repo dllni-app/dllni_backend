@@ -34,7 +34,7 @@ final class CleaningGeographicDispatchService
     public function radiusKm(CleaningBooking $booking): int
     {
         $minutes = max(0, (int) $booking->created_at->diffInMinutes(now()));
-        return min(self::MAX_RADIUS_KM, 10 * (1 + intdiv($minutes, 20)));
+        return min(self::MAX_RADIUS_KM, 10 * (1 + intdiv($minutes, 15)));
     }
 
     public function workerDistanceKm(Worker $worker, CleaningBooking $booking): ?float
@@ -94,8 +94,6 @@ final class CleaningGeographicDispatchService
             ->where(function ($query) use ($worker): void {
                 $query->whereNull('worker_id')->orWhere('worker_id', $worker->id);
             })
-            ->whereNotNull('address_latitude')
-            ->whereNotNull('address_longitude')
             ->get()
             ->filter(function (CleaningBooking $booking) use ($worker): bool {
                 if ($booking->isTeamFulfilled()) {
@@ -123,6 +121,11 @@ final class CleaningGeographicDispatchService
 
     public function isWithinRadius(Worker $worker, CleaningBooking $booking): bool
     {
+        // Same-day urgent orders bypass geographic radius; worker eligibility is checked separately.
+        if (app(CleaningOrderUrgencyService::class)->isHotOrder($booking->scheduled_date)) {
+            return true;
+        }
+
         $distance = $this->workerDistanceKm($worker, $booking);
 
         return $distance !== null && $distance <= $this->radiusKm($booking);
