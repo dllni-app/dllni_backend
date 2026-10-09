@@ -31,6 +31,7 @@ it('uses fresh worker GPS and falls back to mission start for stale GPS', functi
         'address_latitude' => 36.2,
         'address_longitude' => 37.15,
         'created_at' => now(),
+        'scheduled_date' => today()->addDay(),
     ]);
 
     $service = app(CleaningGeographicDispatchService::class);
@@ -67,4 +68,23 @@ it('accepts authenticated location reporting independently from bookings', funct
         'latitude' => 36.201,
         'longitude' => 37.151,
     ]);
+});
+
+it('bypasses radius for same-day urgent orders but not future regular orders', function (): void {
+    $service = app(CleaningGeographicDispatchService::class);
+    $worker = Worker::factory()->create([
+        'home_latitude' => 35.0,
+        'home_longitude' => 36.0,
+    ]);
+    $booking = CleaningBooking::factory()->create([
+        'address_latitude' => 36.2,
+        'address_longitude' => 37.15,
+        'scheduled_date' => today(),
+        'created_at' => now(),
+    ]);
+
+    expect($service->isWithinRadius($worker, $booking))->toBeTrue();
+
+    $booking->scheduled_date = today()->addDay();
+    expect($service->isWithinRadius($worker, $booking))->toBeFalse();
 });
