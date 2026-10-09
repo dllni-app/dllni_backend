@@ -125,3 +125,32 @@ it('requeues radius expansion at fifteen minutes for regular and urgent orders w
         2,
     );
 });
+
+
+it('does not allow urgent radius bypass to defeat explicit customer worker selection', function (): void {
+    $selected = Worker::factory()->create();
+    $outsider = Worker::factory()->create([
+        'home_address' => 'Another worker home',
+        'home_latitude' => 35.0,
+        'home_longitude' => 36.0,
+    ]);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => null,
+        'preferred_worker_id' => null,
+        'assignment_mode' => 'open_count',
+        'worker_scope' => CleaningBooking::WORKER_SCOPE_SPECIFIC,
+        'specific_worker_ids' => [(int) $selected->id],
+        'status' => 'pending',
+        'scheduled_date' => today(),
+        'created_at' => now(),
+        'address_latitude' => 36.2,
+        'address_longitude' => 37.15,
+    ]);
+
+    expect(fn () => app(\Modules\Cleaning\Services\CleaningBookingTeamService::class)
+        ->acceptWorker($booking, $outsider))->toThrow(
+            InvalidArgumentException::class,
+            'Booking is reserved for customer-selected workers.',
+        );
+});
