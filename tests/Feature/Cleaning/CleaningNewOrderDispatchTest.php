@@ -371,7 +371,7 @@ it('dispatches hourly worker bookings only to workers that selected hourly work'
 });
 
 
-it('sends urgent same-day bookings to every eligible worker regardless of distance or missing GPS', function (): void {
+it('sends urgent same-day bookings to every eligible worker regardless of radius while excluding invalid locations', function (): void {
     Notification::fake();
     Event::fake([CleaningBookingCreated::class]);
 
@@ -395,6 +395,7 @@ it('sends urgent same-day bookings to every eligible worker regardless of distan
             'is_active' => true,
             'is_suspended' => $suspended,
             'trust_score' => 100,
+            'home_address' => 'Registered worker home',
             'home_latitude' => $latitude,
             'home_longitude' => $latitude === null ? null : 37.15,
             'default_working_hours' => [
@@ -436,12 +437,13 @@ it('sends urgent same-day bookings to every eligible worker regardless of distan
 
     (new NotifyEligibleWorkersNewOrderJob((int) $booking->id))->handle();
 
-    foreach ([$nearUser, $farUser, $noGpsUser] as $user) {
+    foreach ([$nearUser, $farUser] as $user) {
         Notification::assertSentTo($user, NewOrderRequestNotification::class);
     }
     Notification::assertNotSentTo($suspendedUser, NewOrderRequestNotification::class);
+    Notification::assertNotSentTo($noGpsUser, NewOrderRequestNotification::class);
 
-    foreach ([$nearWorker, $farWorker, $noGpsWorker] as $worker) {
+    foreach ([$nearWorker, $farWorker] as $worker) {
         Event::assertDispatched(CleaningBookingCreated::class, fn (CleaningBookingCreated $event): bool =>
             $event->cleaningBookingId === (int) $booking->id
                 && $event->workerId === (int) $worker->id);
@@ -449,5 +451,5 @@ it('sends urgent same-day bookings to every eligible worker regardless of distan
 
     $dispatch = app(\Modules\Cleaning\Services\CleaningGeographicDispatchService::class);
     expect($dispatch->discoverableBookingIds($farWorker))->toContain((int) $booking->id)
-        ->and($dispatch->discoverableBookingIds($noGpsWorker))->toContain((int) $booking->id);
+        ->and($dispatch->discoverableBookingIds($noGpsWorker))->not->toContain((int) $booking->id);
 });
