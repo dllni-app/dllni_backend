@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningMaterialTypes;
 
+use App\Filament\Clusters\CleaningMaterialsCluster;
 use App\Filament\Resources\CleaningMaterialTypes\Pages\CreateCleaningMaterialType;
 use App\Filament\Resources\CleaningMaterialTypes\Pages\EditCleaningMaterialType;
 use App\Filament\Resources\CleaningMaterialTypes\Pages\ListCleaningMaterialTypes;
@@ -24,6 +25,8 @@ use Modules\Cleaning\Models\CleaningMaterialType;
 final class CleaningMaterialTypeResource extends Resource
 {
     protected static ?string $model = CleaningMaterialType::class;
+
+    protected static ?string $cluster = CleaningMaterialsCluster::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTag;
 
