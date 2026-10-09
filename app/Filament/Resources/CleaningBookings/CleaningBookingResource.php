@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningBookings;
 
+use App\Filament\Clusters\CleaningOperationsCluster;
 use App\Enums\DisputeStatus;
 use App\Enums\SupportCaseKind;
 use App\Enums\SupportCaseStatus;
@@ -39,6 +40,8 @@ use Throwable;
 final class CleaningBookingResource extends Resource
 {
     protected static ?string $model = CleaningBooking::class;
+
+    protected static ?string $cluster = CleaningOperationsCluster::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCalendarDays;
 
