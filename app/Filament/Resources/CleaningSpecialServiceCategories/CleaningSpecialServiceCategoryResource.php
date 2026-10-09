@@ -51,8 +51,6 @@ final class CleaningSpecialServiceCategoryResource extends Resource
     {
         return $schema->components([
             TextInput::make('name')->label(__('cleaning_catalog.materials.fields.name'))->required(),
-            TextInput::make('slug')->label(__('cleaning_catalog.materials.fields.slug'))->required()->unique(ignoreRecord: true),
-            TextInput::make('sort_order')->label(__('cleaning_catalog.materials.fields.sort_order'))->numeric()->minValue(0)->default(0),
             Toggle::make('is_active')->label(__('cleaning_catalog.materials.fields.is_active'))->default(true),
         ]);
     }
@@ -61,11 +59,9 @@ final class CleaningSpecialServiceCategoryResource extends Resource
     {
         return $table->columns([
             TextColumn::make('name')->label(__('cleaning_catalog.materials.fields.name'))->searchable()->sortable(),
-            TextColumn::make('slug')->label(__('cleaning_catalog.materials.fields.slug'))->searchable(),
             TextColumn::make('services_count')->counts('services')->label(__('cleaning_catalog.materials.fields.services')),
-            TextColumn::make('sort_order')->label(__('cleaning_catalog.materials.fields.sort_order'))->sortable(),
             IconColumn::make('is_active')->label(__('cleaning_catalog.materials.fields.is_active'))->boolean(),
-        ])->defaultSort('sort_order');
+        ])->defaultSort('sort_order')->reorderable('sort_order');
     }
 
     public static function getPages(): array
