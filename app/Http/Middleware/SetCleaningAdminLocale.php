@@ -23,8 +23,6 @@ final class SetCleaningAdminLocale
         $currentLocale = (string) $request->session()->get('cleaning_admin_locale', 'ar');
         App::setLocale(in_array($currentLocale, ['ar', 'en'], true) ? $currentLocale : 'ar');
         // Keep dashboard labels Arabic, but format numeric values using Latin digits.
-        Number::useLocale('en');
-
-        return $next($request);
+        return Number::withLocale('en', fn (): Response => $next($request));
     }
 }
