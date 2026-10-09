@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningMaterialKits;
 
+use App\Filament\Clusters\CleaningMaterialsCluster;
 use App\Filament\Resources\CleaningMaterialKits\Pages\EditCleaningMaterialKit;
 use App\Filament\Resources\CleaningMaterialKits\Pages\ListCleaningMaterialKits;
 use BackedEnum;
@@ -22,6 +23,8 @@ use Modules\Cleaning\Models\CleaningBookingMaterialKit;
 final class CleaningMaterialKitResource extends Resource
 {
     protected static ?string $model = CleaningBookingMaterialKit::class;
+
+    protected static ?string $cluster = CleaningMaterialsCluster::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArchiveBox;
 

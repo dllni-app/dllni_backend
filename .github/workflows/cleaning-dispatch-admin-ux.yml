@@ -1,0 +1,58 @@
+name: Cleaning Dispatch and Admin UX
+
+on:
+  pull_request:
+    paths:
+      - 'Modules/Cleaning/app/Services/CleaningGeographicDispatchService.php'
+      - 'Modules/Cleaning/app/Models/CleaningSpecialServiceCategory.php'
+      - 'Modules/Cleaning/database/migrations/2026_10_03_043800_fix_cleaning_special_service_session_unique.php'
+      - 'routes/console.php'
+      - 'app/Filament/Clusters/**'
+      - 'app/Filament/Resources/Cleaning*/**'
+      - 'app/Providers/Filament/AdminPanelProvider.php'
+      - 'app/Http/Middleware/SetCleaningAdminLocale.php'
+      - 'tests/Feature/Cleaning/CleaningGeographicDispatchTest.php'
+      - 'tests/Feature/Cleaning/CleaningNewOrderDispatchTest.php'
+      - 'tests/Feature/Cleaning/CleaningSpecialServiceCategorySlugTest.php'
+      - '.github/workflows/cleaning-dispatch-admin-ux.yml'
+
+jobs:
+  cleaning-dispatch-and-admin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, bcmath, intl, gd
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Prepare app and migrate
+        run: |
+          cp .env.example .env
+          touch database/database.sqlite
+          php artisan key:generate
+          php artisan migrate --force
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+      - name: Check PHP syntax and formatting
+        run: |
+          find app/Filament/Clusters -name '*.php' -print0 | xargs -0 -n1 php -l
+          php -l routes/console.php
+          php -l app/Providers/Filament/AdminPanelProvider.php
+          php -l app/Http/Middleware/SetCleaningAdminLocale.php
+          php -l Modules/Cleaning/app/Models/CleaningSpecialServiceCategory.php
+          php -l Modules/Cleaning/database/migrations/2026_10_03_043800_fix_cleaning_special_service_session_unique.php
+          php -l Modules/Cleaning/app/Services/CleaningGeographicDispatchService.php
+      - name: Verify Filament route registration
+        run: php artisan route:list --path=admin --except-vendor
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+      - name: Run affected dispatch and catalog tests
+        run: php artisan test tests/Feature/Cleaning/CleaningGeographicDispatchTest.php tests/Feature/Cleaning/CleaningNewOrderDispatchTest.php tests/Feature/Cleaning/CleaningSpecialServiceCategorySlugTest.php
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite

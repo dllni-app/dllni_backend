@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningSpecialServiceEquipment;
 
+use App\Filament\Clusters\CleaningCatalogCluster;
 use App\Filament\Resources\CleaningSpecialServiceEquipment\Pages\CreateCleaningSpecialServiceEquipment;
 use App\Filament\Resources\CleaningSpecialServiceEquipment\Pages\EditCleaningSpecialServiceEquipment;
 use App\Filament\Resources\CleaningSpecialServiceEquipment\Pages\ListCleaningSpecialServiceEquipment;
@@ -23,6 +24,8 @@ use Modules\Cleaning\Models\CleaningSpecialServiceEquipment;
 final class CleaningSpecialServiceEquipmentResource extends Resource
 {
     protected static ?string $model = CleaningSpecialServiceEquipment::class;
+
+    protected static ?string $cluster = CleaningCatalogCluster::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedWrenchScrewdriver;
 

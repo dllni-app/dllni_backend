@@ -7,6 +7,7 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
+use Illuminate\Support\Number;
 use Symfony\Component\HttpFoundation\Response;
 
 final class SetCleaningAdminLocale
@@ -21,7 +22,7 @@ final class SetCleaningAdminLocale
 
         $currentLocale = (string) $request->session()->get('cleaning_admin_locale', 'ar');
         App::setLocale(in_array($currentLocale, ['ar', 'en'], true) ? $currentLocale : 'ar');
-
-        return $next($request);
+        // Keep dashboard labels Arabic, but format numeric values using Latin digits.
+        return Number::withLocale('en', fn (): Response => $next($request));
     }
 }

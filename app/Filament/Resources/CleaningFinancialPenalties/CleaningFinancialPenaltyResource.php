@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningFinancialPenalties;
 
+use App\Filament\Clusters\CleaningFinanceCluster;
 use App\Filament\Resources\CleaningFinancialPenalties\Pages\ListCleaningFinancialPenalties;
 use App\Filament\Resources\CleaningFinancialPenalties\Pages\ViewCleaningFinancialPenalty;
 use App\Models\CleaningFinancialPenalty;
@@ -18,6 +19,8 @@ use Filament\Tables\Table;
 final class CleaningFinancialPenaltyResource extends Resource
 {
     protected static ?string $model = CleaningFinancialPenalty::class;
+
+    protected static ?string $cluster = CleaningFinanceCluster::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;
 

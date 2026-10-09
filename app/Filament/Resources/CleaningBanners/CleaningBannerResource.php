@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningBanners;
 
+use App\Filament\Clusters\CleaningCatalogCluster;
 use App\Filament\Resources\CleaningBanners\Pages\ListCleaningBanners;
 use App\Filament\Resources\CleaningBanners\Schemas\CleaningBannerForm;
 use App\Filament\Resources\CleaningBanners\Tables\CleaningBannersTable;
@@ -17,6 +18,8 @@ use Modules\Cleaning\Models\CleaningBanner;
 final class CleaningBannerResource extends Resource
 {
     protected static ?string $model = CleaningBanner::class;
+
+    protected static ?string $cluster = CleaningCatalogCluster::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-photo';
 

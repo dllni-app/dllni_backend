@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningEquipmentReservations;
 
+use App\Filament\Clusters\CleaningMaterialsCluster;
 use App\Filament\Resources\CleaningEquipmentReservations\Pages\ListCleaningEquipmentReservations;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -17,6 +18,8 @@ use Modules\Cleaning\Models\CleaningEquipmentReservation;
 final class CleaningEquipmentReservationResource extends Resource
 {
     protected static ?string $model = CleaningEquipmentReservation::class;
+
+    protected static ?string $cluster = CleaningMaterialsCluster::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedWrenchScrewdriver;
 

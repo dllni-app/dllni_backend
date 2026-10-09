@@ -653,6 +653,15 @@ final class CleaningBookingTeamService
             throw new InvalidArgumentException('Booking is reserved for a different preferred worker.');
         }
 
+        // Radius-free urgent dispatch must never override the customer's explicit worker scope.
+        if (
+            $booking->resolvedWorkerScope() === CleaningBooking::WORKER_SCOPE_SPECIFIC
+            && ! in_array((int) $worker->id, $booking->specificWorkerIds(), true)
+            && (int) $booking->preferred_worker_id !== (int) $worker->id
+        ) {
+            throw new InvalidArgumentException('Booking is reserved for customer-selected workers.');
+        }
+
         $explicitlySelected = (int) $booking->preferred_worker_id === (int) $worker->id
             || ($booking->resolvedWorkerScope() === CleaningBooking::WORKER_SCOPE_SPECIFIC
                 && in_array((int) $worker->id, $booking->specificWorkerIds(), true));

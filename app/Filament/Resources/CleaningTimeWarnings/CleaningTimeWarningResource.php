@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningTimeWarnings;
 
+use App\Filament\Clusters\CleaningOperationsCluster;
 use App\Filament\Resources\CleaningTimeWarnings\Pages\ListCleaningTimeWarnings;
 use App\Filament\Resources\CleaningTimeWarnings\Pages\ViewCleaningTimeWarning;
 use App\Filament\Resources\CleaningTimeWarnings\Schemas\CleaningTimeWarningForm;
@@ -20,6 +21,8 @@ use Modules\Cleaning\Models\CleaningTimeWarning;
 final class CleaningTimeWarningResource extends Resource
 {
     protected static ?string $model = CleaningTimeWarning::class;
+
+    protected static ?string $cluster = CleaningOperationsCluster::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClock;
 
