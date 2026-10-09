@@ -21,6 +21,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
 use Modules\Cleaning\Models\CleaningMaterial;
 
 final class CleaningMaterialResource extends Resource
@@ -78,7 +79,7 @@ final class CleaningMaterialResource extends Resource
             TextColumn::make('materialType.name')->label(__('cleaning_catalog.materials.fields.type'))->searchable(),
             TextColumn::make('image_path')->label(__('cleaning_catalog.materials.fields.image'))->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
             TextColumn::make('materialType.unit.symbol')->label(__('cleaning_catalog.materials.fields.unit'))->placeholder('—'),
-            TextColumn::make('stock_quantity')->label(__('cleaning_catalog.materials.fields.stock'))->numeric(decimalPlaces: 3)->sortable(),
+            TextColumn::make('stock_quantity')->label(__('cleaning_catalog.materials.fields.stock'))->numeric(decimalPlaces: 3, locale: 'en')->sortable(),
             TextColumn::make('low_stock_threshold')->label(__('cleaning_catalog.materials.fields.low_stock_at'))->numeric(decimalPlaces: 3)->toggleable(),
             IconColumn::make('is_low_stock')->label(__('cleaning_catalog.materials.fields.low_stock'))->boolean()->state(fn (CleaningMaterial $record): bool => $record->isLowStock()),
             IconColumn::make('is_active')->label(__('cleaning_catalog.materials.fields.is_active'))->boolean(),
@@ -86,6 +87,12 @@ final class CleaningMaterialResource extends Resource
         ])->filters([
             TernaryFilter::make('is_active')->label(__('cleaning_catalog.materials.fields.is_active')),
         ])->defaultSort('name');
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        // Avoid loading the unit separately for every inventory row.
+        return parent::getEloquentQuery()->with(['materialType.unit']);
     }
 
     public static function getPages(): array
