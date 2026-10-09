@@ -25,6 +25,8 @@ final class CleaningNeighborhoodResource extends Resource
 
     protected static ?int $navigationSort = 21;
 
+    protected static bool $shouldRegisterNavigation = false;
+
     public static function getNavigationGroup(): ?string
     {
         return \App\Filament\Support\AdminNavigationGroup::cleaning();
