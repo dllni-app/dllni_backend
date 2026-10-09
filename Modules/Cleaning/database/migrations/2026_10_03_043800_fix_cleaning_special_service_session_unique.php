@@ -18,7 +18,7 @@ return new class extends Migration
             $table->dropUnique('clean_book_special_unique');
             $table->unique(
                 ['cleaning_booking_id', 'cleaning_special_service_id', 'cleaning_booking_session_id'],
-                'clean_book_special_session_unique'
+                'clean_book_special_pivot_session_unique'
             );
         });
     }
