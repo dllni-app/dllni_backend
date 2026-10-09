@@ -9,9 +9,9 @@ use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Services\CleaningGeographicDispatchService;
 
-it('expands dispatch from 10 km to 50 km at twenty-minute intervals', function (): void {
+it('expands dispatch from 10 km to 50 km at fifteen-minute intervals', function (): void {
     $service = app(CleaningGeographicDispatchService::class);
-    foreach ([0 => 10, 19 => 10, 20 => 20, 39 => 20, 40 => 30, 60 => 40, 80 => 50, 130 => 50] as $minutes => $expectedKm) {
+    foreach ([0 => 10, 14 => 10, 15 => 20, 29 => 20, 30 => 30, 45 => 40, 60 => 50, 130 => 50] as $minutes => $expectedKm) {
         $booking = CleaningBooking::factory()->create([
             'created_at' => now()->subMinutes($minutes),
             'address_latitude' => 36.2,
