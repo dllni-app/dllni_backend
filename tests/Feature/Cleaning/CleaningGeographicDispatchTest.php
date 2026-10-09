@@ -88,3 +88,33 @@ it('bypasses radius for same-day urgent orders but not future regular orders', f
     $booking->scheduled_date = today()->addDay();
     expect($service->isWithinRadius($worker, $booking))->toBeFalse();
 });
+
+
+it('requeues radius expansion after fifteen minutes including same-day urgent bookings without GPS', function (): void {
+    $base = [
+        'worker_id' => null,
+        'preferred_worker_id' => null,
+        'status' => 'pending',
+        'scheduled_date' => today()->addDay(),
+        'address_latitude' => 36.2,
+        'address_longitude' => 37.15,
+    ];
+
+    CleaningBooking::factory()->create(array_merge($base, ['created_at' => now()->subMinutes(14)]));
+    CleaningBooking::factory()->create(array_merge($base, ['created_at' => now()->subMinutes(16)]));
+    CleaningBooking::factory()->create(array_merge($base, [
+        'created_at' => now()->subMinutes(16),
+        'scheduled_date' => today(),
+        'address_latitude' => null,
+        'address_longitude' => null,
+    ]));
+
+    \\Illuminate\\Support\\Facades\\Bus::fake([\\App\\Jobs\\NotifyEligibleWorkersNewOrderJob::class]);
+
+    \\Illuminate\\Support\\Facades\\Artisan::call('cleaning:expand-geographic-dispatch');
+
+    \\Illuminate\\Support\\Facades\\Bus::assertDispatchedTimes(
+        \\App\\Jobs\\NotifyEligibleWorkersNewOrderJob::class,
+        2,
+    );
+});
