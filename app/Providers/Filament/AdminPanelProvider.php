@@ -65,7 +65,7 @@ final class AdminPanelProvider extends PanelProvider
                 fn (): HtmlString => $this->alertSoundPoller(),
             )
             ->databaseNotifications()
-            ->databaseNotificationsPolling('5s')
+            ->databaseNotificationsPolling('30s')
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
@@ -146,60 +146,9 @@ final class AdminPanelProvider extends PanelProvider
                 patchToLocale(Date.prototype, 'toLocaleDateString');
                 patchToLocale(Date.prototype, 'toLocaleTimeString');
 
-                // Normalize digits already present in server-rendered HTML and
-                // newly inserted Livewire content. Do not mutate editable inputs.
-                const asLatinDigits = (value) => value.replace(/[\u0660-\u0669\u06F0-\u06F9]/g, (digit) => {
-                    const code = digit.charCodeAt(0);
-                    return String.fromCharCode(48 + code - (code <= 0x0669 ? 0x0660 : 0x06F0));
-                });
-
-                const normalizeText = (node) => {
-                    if (node.nodeType !== Node.TEXT_NODE || !node.parentElement) {
-                        return;
-                    }
-                    if (node.parentElement.closest('script, style, textarea, input, pre, code, [contenteditable]')) {
-                        return;
-                    }
-                    const value = node.nodeValue;
-                    const normalized = asLatinDigits(value);
-                    if (value !== normalized) {
-                        node.nodeValue = normalized;
-                    }
-                };
-
-                const normalizeTree = (root) => {
-                    if (root.nodeType === Node.TEXT_NODE) {
-                        normalizeText(root);
-                        return;
-                    }
-                    if (root.nodeType !== Node.ELEMENT_NODE) {
-                        return;
-                    }
-                    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-                    while (walker.nextNode()) {
-                        normalizeText(walker.currentNode);
-                    }
-                };
-
-                const startDigitsObserver = () => {
-                    normalizeTree(document.body);
-                    new MutationObserver((changes) => {
-                        for (const change of changes) {
-                            if (change.type === 'characterData') {
-                                normalizeText(change.target);
-                            } else {
-                                for (const node of change.addedNodes) {
-                                    normalizeTree(node);
-                                }
-                            }
-                        }
-                    }).observe(document.body, { childList: true, characterData: true, subtree: true });
-                };
-                if (document.readyState === 'loading') {
-                    document.addEventListener('DOMContentLoaded', startDigitsObserver, { once: true });
-                } else {
-                    startDigitsObserver();
-                }
+                // Filament numeric table columns explicitly use the English locale.
+                // Avoid a document-wide MutationObserver: it re-traversed entire
+                // Livewire table fragments on every update and slowed navigation.
             })();
         </script>
         HTML);
