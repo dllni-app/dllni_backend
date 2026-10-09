@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningSpecialServiceCategories;
 
+use App\Filament\Clusters\CleaningCatalogCluster;
 use App\Filament\Resources\CleaningSpecialServiceCategories\Pages\CreateCleaningSpecialServiceCategory;
 use App\Filament\Resources\CleaningSpecialServiceCategories\Pages\EditCleaningSpecialServiceCategory;
 use App\Filament\Resources\CleaningSpecialServiceCategories\Pages\ListCleaningSpecialServiceCategories;
@@ -22,6 +23,8 @@ use Modules\Cleaning\Models\CleaningSpecialServiceCategory;
 final class CleaningSpecialServiceCategoryResource extends Resource
 {
     protected static ?string $model = CleaningSpecialServiceCategory::class;
+
+    protected static ?string $cluster = CleaningCatalogCluster::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
