@@ -15,10 +15,26 @@ final class CleaningSpecialServiceCategory extends Model
     protected static function booted(): void
     {
         static::creating(function (self $category): void {
-            if (blank($category->slug)) {
-                $slug = Str::slug((string) $category->name);
-                $category->slug = $slug !== '' ? $slug : 'category-'.substr(hash('sha256', (string) $category->name), 0, 16);
+            if (filled($category->slug)) {
+                return;
             }
+
+            $name = mb_trim((string) $category->name);
+            $base = Str::slug($name);
+            if ($base === '') {
+                // Arabic-only names should still generate a readable slug.
+                $base = trim((string) preg_replace('/[^\\p{L}\\p{N}]+/u', '-', mb_strtolower($name)), '-');
+            }
+            $base = mb_substr($base !== '' ? $base : 'category', 0, 160);
+
+            $slug = $base;
+            $suffix = 2;
+            while (self::query()->where('slug', $slug)->exists()) {
+                $addition = '-'.$suffix++;
+                $slug = mb_substr($base, 0, 160 - strlen($addition)).$addition;
+            }
+
+            $category->slug = $slug;
         });
     }
 
