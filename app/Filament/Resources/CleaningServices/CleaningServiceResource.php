@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningServices;
 
+use App\Filament\Clusters\CleaningCatalogCluster;
 use App\Filament\Resources\CleaningServices\Pages\CreateCleaningService;
 use App\Filament\Resources\CleaningServices\Pages\EditCleaningService;
 use App\Filament\Resources\CleaningServices\Pages\ListCleaningServices;
@@ -22,6 +23,8 @@ use Modules\Cleaning\Models\CleaningService;
 final class CleaningServiceResource extends Resource
 {
     protected static ?string $model = CleaningService::class;
+
+    protected static ?string $cluster = CleaningCatalogCluster::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedWrenchScrewdriver;
 
