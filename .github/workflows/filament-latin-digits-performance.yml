@@ -1,0 +1,30 @@
+name: Filament Latin Digits Performance
+on:
+  pull_request:
+    paths:
+      - 'app/Providers/Filament/AdminPanelProvider.php'
+      - 'app/Filament/Resources/CleaningMaterials/CleaningMaterialResource.php'
+      - '.github/workflows/filament-latin-digits-performance.yml'
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, bcmath, intl, gd
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Laravel boot, PHP lint, and Filament routes
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        run: |
+          cp .env.example .env
+          touch database/database.sqlite
+          php artisan key:generate
+          php artisan migrate --force
+          php -l app/Providers/Filament/AdminPanelProvider.php
+          php -l app/Filament/Resources/CleaningMaterials/CleaningMaterialResource.php
+          php artisan route:list --path=admin --except-vendor
