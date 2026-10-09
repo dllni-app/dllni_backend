@@ -24,6 +24,7 @@ it('expands dispatch from 10 km to 50 km at fifteen-minute intervals', function 
 
 it('uses fresh worker GPS and falls back to mission start for stale GPS', function (): void {
     $worker = Worker::factory()->create([
+        'home_address' => 'Test worker home',
         'home_latitude' => 36.2,
         'home_longitude' => 37.15,
     ]);
@@ -73,6 +74,7 @@ it('accepts authenticated location reporting independently from bookings', funct
 it('bypasses radius for same-day urgent orders but not future regular orders', function (): void {
     $service = app(CleaningGeographicDispatchService::class);
     $worker = Worker::factory()->create([
+        'home_address' => 'Test worker home',
         'home_latitude' => 35.0,
         'home_longitude' => 36.0,
     ]);
@@ -90,7 +92,7 @@ it('bypasses radius for same-day urgent orders but not future regular orders', f
 });
 
 
-it('requeues radius expansion after fifteen minutes including same-day urgent bookings without GPS', function (): void {
+it('requeues radius expansion at fifteen minutes for regular and urgent orders with valid locations', function (): void {
     $base = [
         'worker_id' => null,
         'preferred_worker_id' => null,
@@ -102,6 +104,11 @@ it('requeues radius expansion after fifteen minutes including same-day urgent bo
 
     CleaningBooking::factory()->create(array_merge($base, ['created_at' => now()->subMinutes(14)]));
     CleaningBooking::factory()->create(array_merge($base, ['created_at' => now()->subMinutes(16)]));
+    CleaningBooking::factory()->create(array_merge($base, [
+        'created_at' => now()->subMinutes(16),
+        'scheduled_date' => today(),
+    ]));
+    // Even urgent orders cannot be accepted before the customer provides a location.
     CleaningBooking::factory()->create(array_merge($base, [
         'created_at' => now()->subMinutes(16),
         'scheduled_date' => today(),
