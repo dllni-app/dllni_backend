@@ -23,6 +23,8 @@ final class CleaningRecurringSeriesController
     {
         $validated = $request->validate([
             'reason' => ['required', 'string', 'max:1000'],
+            'fromDate' => ['required_with:toDate', 'date_format:Y-m-d'],
+            'toDate' => ['required_with:fromDate', 'date_format:Y-m-d', 'after_or_equal:fromDate'],
         ]);
 
         try {
@@ -30,6 +32,8 @@ final class CleaningRecurringSeriesController
                 $cleaning_booking,
                 (int) $request->user()->id,
                 (string) $validated['reason'],
+                $validated['fromDate'] ?? null,
+                $validated['toDate'] ?? null,
             );
         } catch (InvalidArgumentException $e) {
             throw ValidationException::withMessages(['status' => [$e->getMessage()]]);

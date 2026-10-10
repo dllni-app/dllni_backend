@@ -22,7 +22,7 @@ final class RecurringCleaningPauseService
     ) {}
 
     /** @return array{booking:CleaningBooking,pausedSessionIds:array<int,int>,releasedWorkerIds:array<int,int>} */
-    public function pause(CleaningBooking $booking, int $customerId, string $reason): array
+    public function pause(CleaningBooking $booking, int $customerId, string $reason, ?string $fromDate = null, ?string $toDate = null): array
     {
         $this->assertCustomer($booking, $customerId);
         $normalizedReason = $this->requiredReason($reason);
@@ -32,13 +32,15 @@ final class RecurringCleaningPauseService
         DB::transaction(function () use (
             $booking,
             $normalizedReason,
+            $fromDate,
+            $toDate,
             &$pausedSessionIds,
             &$releasedWorkerIds,
         ): void {
             $lockedBooking = CleaningBooking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
             $this->assertRecurring($lockedBooking);
 
-            if ($lockedBooking->recurring_paused_at !== null) {
+            if ($lockedBooking->recurring_paused_at !== null && $fromDate === null) {
                 $pausedSessionIds = CleaningBookingSession::query()
                     ->where('cleaning_booking_id', $lockedBooking->id)
                     ->where('session_type', CleaningBookingSession::TYPE_RECURRING_CLEANING)
@@ -63,6 +65,8 @@ final class RecurringCleaningPauseService
             $sessions = CleaningBookingSession::query()
                 ->where('cleaning_booking_id', $lockedBooking->id)
                 ->where('session_type', CleaningBookingSession::TYPE_RECURRING_CLEANING)
+                ->when($fromDate !== null, fn ($query) => $query->whereDate('scheduled_date', '>=', $fromDate))
+                ->when($toDate !== null, fn ($query) => $query->whereDate('scheduled_date', '<=', $toDate))
                 ->whereIn('status', [
                     CleaningBookingSessionStatus::Scheduled->value,
                     CleaningBookingSessionStatus::WorkerAssigned->value,
@@ -121,6 +125,21 @@ final class RecurringCleaningPauseService
             }
 
             if ($pausedSessionIds === []) {
+                if ($fromDate !== null && CleaningBookingSession::query()
+                    ->where('cleaning_booking_id', $lockedBooking->id)
+                    ->where('session_type', CleaningBookingSession::TYPE_RECURRING_CLEANING)
+                    ->where('status', CleaningBookingSessionStatus::Paused->value)
+                    ->whereDate('scheduled_date', '>=', $fromDate)
+                    ->whereDate('scheduled_date', '<=', $toDate)
+                    ->exists()) {
+                    $pausedSessionIds = CleaningBookingSession::query()
+                        ->where('cleaning_booking_id', $lockedBooking->id)
+                        ->where('status', CleaningBookingSessionStatus::Paused->value)
+                        ->whereDate('scheduled_date', '>=', $fromDate)
+                        ->whereDate('scheduled_date', '<=', $toDate)
+                        ->orderBy('sequence')->pluck('id')->map(fn ($id): int => (int) $id)->all();
+                    return;
+                }
                 throw new InvalidArgumentException('No future recurring visits are eligible to pause.');
             }
 
@@ -131,8 +150,8 @@ final class RecurringCleaningPauseService
             }
 
             $lockedBooking->forceFill([
-                'recurring_paused_at' => now(),
-                'recurring_pause_reason' => $normalizedReason,
+                'recurring_paused_at' => $lockedBooking->recurring_paused_at ?? now(),
+                'recurring_pause_reason' => $lockedBooking->recurring_pause_reason ?? $normalizedReason,
             ])->save();
         }, 3);
 

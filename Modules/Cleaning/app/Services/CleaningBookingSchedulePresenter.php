@@ -73,7 +73,6 @@ final class CleaningBookingSchedulePresenter
         $isCustomerView = ! $viewerWorker instanceof Worker;
         $canPauseRecurring = $isCustomerView
             && $isRecurring
-            && ! $isRecurringPaused
             && $sessions->contains(fn (CleaningBookingSession $session): bool => $this->canPauseRecurringSession($session));
         $canResumeRecurring = $isCustomerView
             && $isRecurringPaused
