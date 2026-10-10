@@ -75,7 +75,7 @@ final class RecurringCleaningPauseService
                 $startsAt = $session->startsAt();
                 if (
                     $startsAt === null
-                    || ! $startsAt->isFuture()
+                    || $startsAt->lt(now()->addHours(24))
                     || $session->started_travel_at !== null
                     || $session->work_started_at !== null
                 ) {

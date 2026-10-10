@@ -414,6 +414,9 @@ final class CleaningBookingSessionCancellationService
         if ($startsAt === null || ! $startsAt->isFuture()) {
             throw new InvalidArgumentException('Only a future recurring session can be skipped.');
         }
+        if ($startsAt->lt(now()->addHours(24))) {
+            throw new InvalidArgumentException('A recurring session can only be skipped at least 24 hours before it starts.');
+        }
         if ($session->started_travel_at !== null || $session->work_started_at !== null) {
             throw new InvalidArgumentException('A recurring session cannot be skipped after worker travel starts.');
         }
