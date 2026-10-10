@@ -229,7 +229,7 @@ it('accepts a session security code through the legacy customer booking verifica
         ->not->toBeNull();
 });
 
-it('rejects the pending child session through the legacy customer completion endpoint', function (): void {
+it('rejects ambiguous legacy completion but allows rejecting the selected child session', function (): void {
     [$customer, , $worker, $booking] = makeLifecycleScenario();
     $first = makeLifecycleSession($booking, 1, now()->addDay()->toDateString(), '10:00');
     $second = makeLifecycleSession($booking, 2, now()->addDays(2)->toDateString(), '10:00');
@@ -256,6 +256,10 @@ it('rejects the pending child session through the legacy customer completion end
 
     $this->postJson("/api/v1/user/cleaning/orders/{$booking->id}/completion/reject", [
         'reason' => 'أكمل بعض التفاصيل',
+    ])->assertUnprocessable()->assertJsonValidationErrors('session');
+
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/sessions/{$first->id}/completion/reject", [
+        'reason' => 'أكمل بعض التفاصيل',
     ])->assertOk();
 
     expect($first->fresh()->status)
@@ -268,7 +272,7 @@ it('rejects the pending child session through the legacy customer completion end
         ->toBe(CleaningBookingStatus::InProgress);
 });
 
-it('confirms the pending child session through the legacy customer completion endpoint without completing future sessions', function (): void {
+it('rejects ambiguous legacy completion and confirms only the selected child without completing future sessions', function (): void {
     [$customer, $workerUser, $worker, $booking] = makeLifecycleScenario();
     $first = makeLifecycleSession($booking, 1, now()->addDay()->toDateString(), '10:00');
     $second = makeLifecycleSession($booking, 2, now()->addDays(2)->toDateString(), '10:00');
@@ -295,6 +299,8 @@ it('confirms the pending child session through the legacy customer completion en
     Sanctum::actingAs($customer);
 
     $this->postJson("/api/v1/user/cleaning/orders/{$booking->id}/completion/confirm")
+        ->assertUnprocessable()->assertJsonValidationErrors('session');
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/sessions/{$first->id}/completion/confirm")
         ->assertOk();
 
     expect($first->fresh()->status)
@@ -445,6 +451,11 @@ it('routes a customer time-extension request to the selected child session and l
     ])->save();
 
     Sanctum::actingAs($customer);
+
+    $this->postJson("/api/v1/user/cleaning/orders/{$booking->id}/completion/extend-time", [
+        'additionalMinutes' => 30,
+        'workerId' => $worker->id,
+    ])->assertUnprocessable()->assertJsonValidationErrors('session');
 
     $this->postJson("/api/v1/user/cleaning/orders/{$booking->id}/completion/extend-time", [
         'additionalMinutes' => 30,

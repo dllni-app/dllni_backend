@@ -31,6 +31,21 @@ final class RequireSessionScopedCleaningLifecycle
             return $next($request);
         }
 
+        // An older customer extension URL carries an explicit sessionId in its
+        // validated payload. Retain that compatibility only when the selected
+        // session belongs to this booking; never infer a target for multi-day work.
+        if (preg_match('#api/v1/user/cleaning/orders/[^/]+/completion/extend-time$#', $request->path()) === 1) {
+            $sessionId = $request->input('sessionId', $request->input('session_id'));
+            if (is_numeric($sessionId)
+                && \Modules\Cleaning\Models\CleaningBookingSession::query()
+                    ->where('cleaning_booking_id', $booking->id)
+                    ->whereKey((int) $sessionId)
+                    ->where('status', '!=', \Modules\Cleaning\Enums\CleaningBookingSessionStatus::Superseded->value)
+                    ->exists()) {
+                return $next($request);
+            }
+        }
+
         throw ValidationException::withMessages([
             'session' => ['Multi-day event assistance requires a session-scoped lifecycle endpoint.'],
         ]);
