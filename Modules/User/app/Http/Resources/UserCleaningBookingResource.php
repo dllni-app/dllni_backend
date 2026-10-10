@@ -89,6 +89,9 @@ final class UserCleaningBookingResource extends JsonResource
             ? $this->specificWorkerIds()
             : [];
         $payload['bookingKind'] = (string) ($this->booking_kind ?? 'standard');
+        $payload['lastHourTeamDecision'] = app(
+            \Modules\Cleaning\Services\CleaningLastHourCoverageService::class
+        )->decision($this->resource);
         $payload['requestMaterials'] = $materials !== [];
         $payload['materials'] = $materials;
         $payload['materialsTotal'] = round(array_sum(array_column($materials, 'totalPrice')), 2);

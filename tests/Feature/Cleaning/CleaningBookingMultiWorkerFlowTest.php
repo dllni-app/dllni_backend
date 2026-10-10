@@ -107,8 +107,9 @@ it('keeps the booking pending after the first worker accepts and finalizes when 
     Worker::factory()->financiallyEligible()->create([
         'user_id' => $worker2User->id,
         'home_address' => 'Worker Two Home',
-        'home_latitude' => 33.6,
-        'home_longitude' => 36.4,
+        // Keep this fixture within the initial 10-km dispatch radius.
+        'home_latitude' => 33.52,
+        'home_longitude' => 36.28,
     ]);
 
     Sanctum::actingAs($worker2User);
@@ -150,8 +151,9 @@ it('moves to in progress only after the customer verifies start and all accepted
     Worker::factory()->financiallyEligible()->create([
         'user_id' => $worker2User->id,
         'home_address' => 'Worker Two Home',
-        'home_latitude' => 33.6,
-        'home_longitude' => 36.4,
+        // Keep this fixture within the initial 10-km dispatch radius.
+        'home_latitude' => 33.52,
+        'home_longitude' => 36.28,
     ]);
 
     Sanctum::actingAs($worker2User);
@@ -319,8 +321,9 @@ it('applies planned worker room slots to accepted workers as the team fills', fu
     $worker2 = Worker::factory()->financiallyEligible()->create([
         'user_id' => $worker2User->id,
         'home_address' => 'Planned Worker Two Home',
-        'home_latitude' => 33.6,
-        'home_longitude' => 36.4,
+        // Matching should be eligible without waiting for geographic expansion.
+        'home_latitude' => 33.52,
+        'home_longitude' => 36.28,
         'trust_score' => 80,
     ]);
 

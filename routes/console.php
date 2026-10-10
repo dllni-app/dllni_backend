@@ -38,6 +38,18 @@ Artisan::command('cleaning:expand-geographic-dispatch', function (): int {
 
 Schedule::command('cleaning:expand-geographic-dispatch')->everyFiveMinutes()->withoutOverlapping();
 
+Artisan::command('cleaning:resolve-last-hour-coverage', function (
+    \Modules\Cleaning\Services\CleaningLastHourCoverageService $service
+): int {
+    $outcome = $service->processDue();
+    $this->info('Last-hour cleaning coverage: '.json_encode($outcome));
+
+    return 0;
+})->purpose('Cancel unmatched bookings only one hour before start, and ask customers about partial teams');
+
+Schedule::command('cleaning:resolve-last-hour-coverage')
+    ->everyMinute()->withoutOverlapping();
+
 Artisan::command('restaurant:generate-system-alerts', function (RestaurantSystemAlertGenerator $generator): int {
     $count = $generator->handle();
 

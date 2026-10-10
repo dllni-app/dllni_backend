@@ -131,6 +131,10 @@ final class CleaningBooking extends Model
         'cancelled_at',
         'cancellation_reason',
         'cancelled_by_role',
+        'last_hour_team_prompted_at',
+        'last_hour_team_decision',
+        'last_hour_team_worker_id',
+        'last_hour_team_decided_at',
     ];
 
     public function customer(): BelongsTo
@@ -333,6 +337,8 @@ final class CleaningBooking extends Model
             'address_latitude' => 'decimal:8',
             'address_longitude' => 'decimal:8',
             'cancelled_at' => 'datetime',
+            'last_hour_team_prompted_at' => 'datetime',
+            'last_hour_team_decided_at' => 'datetime',
         ];
     }
 
