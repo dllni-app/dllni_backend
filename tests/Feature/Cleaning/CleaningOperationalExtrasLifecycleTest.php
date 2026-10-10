@@ -3,6 +3,9 @@
 declare(strict_types=1);
 
 use App\Models\Worker;
+use App\Models\User;
+use Spatie\Permission\Models\Role;
+use Modules\Cleaning\Services\CleaningEquipmentHandoverService;
 use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Services\CleaningSpecialistEquipmentReservationService;
 use Laravel\Sanctum\Sanctum;
@@ -93,6 +96,12 @@ it('keeps material service and equipment operations idempotent through worker HT
 
     $reservation = CleaningEquipmentReservation::query()->sole();
     $this->postJson("/api/v1/cleaning-equipment-reservations/{$reservation->id}/acknowledge")
+        ->assertUnprocessable();
+    Role::findOrCreate('admin', 'web');
+    $admin = User::factory()->create(['is_active' => true]);
+    $admin->assignRole('admin');
+    app(CleaningEquipmentHandoverService::class)->handover($reservation, $admin, 'Asset handed to worker');
+    $this->postJson("/api/v1/cleaning-equipment-reservations/{$reservation->id}/acknowledge")
         ->assertOk()
         ->assertJsonPath('data.reservation.status', 'acknowledged');
     $acknowledgedAt = $reservation->fresh()->acknowledged_at?->toISOString();
@@ -115,14 +124,18 @@ it('keeps material service and equipment operations idempotent through worker HT
 
     $this->postJson("/api/v1/cleaning-equipment-reservations/{$reservation->id}/return")
         ->assertOk()
-        ->assertJsonPath('data.reservation.status', 'returned');
+        ->assertJsonPath('data.reservation.status', 'return_pending_confirmation');
     $returnedAt = $reservation->fresh()->returned_at?->toISOString();
 
     $this->postJson("/api/v1/cleaning-equipment-reservations/{$reservation->id}/return")
         ->assertOk()
-        ->assertJsonPath('data.reservation.status', 'returned');
+        ->assertJsonPath('data.reservation.status', 'return_pending_confirmation');
 
     expect($reservation->fresh()->returned_at?->toISOString())->toBe($returnedAt)
+        ->and($equipment->fresh()->status)->toBe('in_use');
+    app(CleaningEquipmentHandoverService::class)->confirmReturn($reservation, $admin, 'Received and checked');
+    expect($reservation->fresh()->status)->toBe('returned')
+        ->and($reservation->fresh()->return_confirmed_by_user_id)->toBe($admin->id)
         ->and($equipment->fresh()->status)->toBe('available');
 });
 

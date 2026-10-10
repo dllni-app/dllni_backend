@@ -12,6 +12,7 @@ use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\Select;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
@@ -24,6 +25,8 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Enums\CleaningTimeWarningResponse;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingSession;
+use Modules\Cleaning\Services\CleaningAdministrativeOperationsService;
 use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
 use Modules\Cleaning\Models\CleaningTimeWarning;
 use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
@@ -209,6 +212,53 @@ final class ViewCleaningBooking extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('terminate_open_time')
+                ->label('إنهاء العمل بالوقت المفتوح')
+                ->icon('heroicon-o-stop-circle')
+                ->color('danger')
+                ->visible(function (): bool {
+                    if (! CleaningBookingResource::canEdit($this->record) || $this->record->booking_kind !== 'open_time') {
+                        return false;
+                    }
+                    return ($this->record->work_started_at !== null
+                        && $this->record->work_finished_at === null
+                        && $this->record->open_time_finalized_at === null)
+                        || $this->record->sessions()
+                            ->where('session_type', CleaningBookingSession::TYPE_OPEN_TIME)
+                            ->whereNotNull('work_started_at')
+                            ->whereNull('work_finished_at')->exists();
+                })
+                ->requiresConfirmation()
+                ->modalHeading('تأكيد إنهاء العمل وإيقاف احتساب الوقت')
+                ->modalDescription('سيتم تثبيت وقت الإنهاء من الخادم واحتساب الأجرة النهائية وحفظ القرار وإبلاغ العميل والعامل.')
+                ->form([
+                    Select::make('session_id')
+                        ->label('الجلسة المطلوب إنهاؤها')
+                        ->options(function (): array {
+                            $sessions = $this->record->sessions()
+                                ->where('session_type', CleaningBookingSession::TYPE_OPEN_TIME)
+                                ->whereNotNull('work_started_at')
+                                ->whereNull('work_finished_at')
+                                ->orderBy('sequence')->get();
+                            if ($sessions->isEmpty()) {
+                                return ['0' => 'الطلب الرئيسي (بدون جلسات منفصلة)'];
+                            }
+                            return $sessions->mapWithKeys(fn ($session): array => [
+                                (string) $session->id => 'جلسة '.(int) $session->sequence.' — '.($session->scheduled_date?->format('Y-m-d') ?? '-'),
+                            ])->all();
+                        })
+                        ->required(),
+                    Textarea::make('reason')->label('سبب الإنهاء الإداري')->required()->maxLength(2000),
+                ])
+                ->action(function (array $data): void {
+                    $sessionId = (int) $data['session_id'];
+                    $session = $sessionId > 0 ? $this->record->sessions()->findOrFail($sessionId) : null;
+                    app(CleaningAdministrativeOperationsService::class)->terminateOpenTime(
+                        $this->record, auth()->user(), (string) $data['reason'], $session
+                    );
+                    $this->record = $this->record->fresh() ?? $this->record;
+                    Notification::make()->title('تم إيقاف المؤقت وتثبيت المستحقات')->success()->send();
+                }),
             Action::make('view_dispute')
                 ->label('عرض النزاع')
                 ->url(fn () => $this->record->disputes()->first()

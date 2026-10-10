@@ -125,10 +125,11 @@ final class CleaningOperationalExtrasService
             if ($locked->status === 'acknowledged') {
                 return $locked->fresh() ?? $locked;
             }
-            if (! in_array($locked->status, ['reserved', 'handed_over', 'acknowledged'], true)) {
-                throw ValidationException::withMessages(['equipment' => ['Equipment cannot be acknowledged in its current state.']]);
+            if ($locked->status !== 'handed_over' || $locked->handed_over_at === null) {
+                throw ValidationException::withMessages(['equipment' => ['Administrator must hand over equipment before worker acknowledgement.']]);
             }
             $locked->forceFill(['status' => 'acknowledged', 'acknowledged_at' => $locked->acknowledged_at ?? now()])->save();
+            $this->auditEquipmentWorkerAction($locked, $worker, 'equipment_acknowledged', 'handed_over', 'acknowledged');
 
             return $locked->fresh() ?? $locked;
         });
@@ -140,30 +141,51 @@ final class CleaningOperationalExtrasService
             $locked = CleaningEquipmentReservation::query()->whereKey($reservation->id)->lockForUpdate()->firstOrFail();
             abort_unless((int) $locked->worker_id === (int) $worker->id, 403, 'Equipment is assigned to another worker.');
             $failed = filled($failureReason);
-            $targetStatus = $failed ? 'failed' : 'returned';
-            if (in_array($locked->status, ['returned', 'failed'], true)) {
+            $targetStatus = $failed ? 'failure_pending_confirmation' : 'return_pending_confirmation';
+            if (in_array($locked->status, ['return_pending_confirmation', 'failure_pending_confirmation'], true)) {
                 if ($locked->status === $targetStatus) {
                     return $locked->fresh() ?? $locked;
                 }
-
-                throw ValidationException::withMessages(['equipment' => ['Equipment already has a different terminal status.']]);
+                throw ValidationException::withMessages(['equipment' => ['A different return report is already pending administrator confirmation.']]);
             }
-            if (! in_array($locked->status, ['reserved', 'handed_over', 'acknowledged'], true)) {
-                throw ValidationException::withMessages(['equipment' => ['Equipment cannot be returned in its current state.']]);
+            if ($locked->status !== 'acknowledged') {
+                throw ValidationException::withMessages(['equipment' => ['Worker must acknowledge the handed-over asset before returning it.']]);
             }
             $locked->forceFill([
                 'status' => $targetStatus,
                 'returned_at' => now(),
                 'failure_reason' => $failed ? mb_substr((string) $failureReason, 0, 2000) : null,
             ])->save();
-            $equipment = CleaningSpecialServiceEquipment::query()->whereKey($locked->cleaning_special_service_equipment_id)->lockForUpdate()->first();
-            $equipment?->forceFill([
-                'status' => $failed ? 'broken' : 'available',
-                'last_returned_at' => now(),
-            ])->save();
+            $this->auditEquipmentWorkerAction(
+                $locked, $worker, 'equipment_return_reported', 'acknowledged', $targetStatus,
+                $failed ? (string) $failureReason : 'Worker reported equipment returned'
+            );
 
             return $locked->fresh() ?? $locked;
         });
+    }
+
+    private function auditEquipmentWorkerAction(
+        CleaningEquipmentReservation $reservation,
+        Worker $worker,
+        string $action,
+        string $before,
+        string $after,
+        ?string $reason = null,
+    ): void {
+        DB::table('cleaning_operational_action_audits')->insert([
+            'action' => $action,
+            'cleaning_booking_id' => $reservation->bookingSpecialService?->cleaning_booking_id,
+            'cleaning_booking_session_id' => $reservation->cleaning_booking_session_id,
+            'cleaning_equipment_reservation_id' => $reservation->id,
+            'actor_user_id' => $worker->user_id,
+            'reason' => $reason,
+            'before_snapshot' => json_encode(['status' => $before], JSON_THROW_ON_ERROR),
+            'after_snapshot' => json_encode(['status' => $after], JSON_THROW_ON_ERROR),
+            'occurred_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
     private function assertAssigned(CleaningBooking $booking, Worker $worker): void

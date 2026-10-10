@@ -193,8 +193,10 @@ final class CleaningOpenTimeBillingService
             'warningMinutes' => $booking->open_time_warning_minutes,
             'extensionOptions' => $booking->open_time_extension_options ?? [],
             'ceilingEndsAt' => $ceilingEndsAt?->toIso8601String(),
-            'remainingMinutes' => $ceilingEndsAt === null ? null : max(0, $now->diffInMinutes($ceilingEndsAt, false)),
-            'remainingToCeilingMinutes' => $ceilingEndsAt === null ? null : max(0, $now->diffInMinutes($ceilingEndsAt, false)),
+            'remainingMinutes' => $booking->work_finished_at !== null || $booking->open_time_finalized_at !== null
+                ? 0 : ($ceilingEndsAt === null ? null : max(0, $now->diffInMinutes($ceilingEndsAt, false))),
+            'remainingToCeilingMinutes' => $booking->work_finished_at !== null || $booking->open_time_finalized_at !== null
+                ? 0 : ($ceilingEndsAt === null ? null : max(0, $now->diffInMinutes($ceilingEndsAt, false))),
             'serverNow' => $now->toIso8601String(),
             'workStartedAt' => $booking->work_started_at?->toIso8601String(),
             'workFinishedAt' => $booking->work_finished_at?->toIso8601String(),
@@ -260,7 +262,7 @@ final class CleaningOpenTimeBillingService
             'extensionOptions' => array_values((array) ($snapshot['extensionOptions'] ?? [15, 30, 60])),
             'ceilingEndsAt' => $ceilingEndsAt?->toIso8601String(),
             'remainingMinutes' => $ceilingEndsAt === null ? null : max(0, (int) $now->diffInMinutes($ceilingEndsAt, false)),
-            'remainingToCeilingMinutes' => $ceilingEndsAt === null ? null : max(0, (int) $now->diffInMinutes($ceilingEndsAt, false)),
+            'remainingToCeilingMinutes' => $finishedAt !== null ? 0 : ($ceilingEndsAt === null ? null : max(0, (int) $now->diffInMinutes($ceilingEndsAt, false))),
             'serverNow' => $now->toIso8601String(),
             'workStartedAt' => $startedAt?->toIso8601String(),
             'workFinishedAt' => $finishedAt?->toIso8601String(),
@@ -276,6 +278,7 @@ final class CleaningOpenTimeBillingService
             'endStatus' => $session->open_time_end_status,
             'endRequestedAt' => $session->open_time_end_requested_at?->toIso8601String(),
             'terminationReason' => $session->open_time_termination_reason,
+            'terminatedAt' => $session->open_time_terminated_at?->toIso8601String(),
             'pendingExtension' => $pendingExtension === null ? null : [
                 'id' => (int) $pendingExtension->id,
                 'requestedMinutes' => (int) $pendingExtension->requested_minutes,

@@ -832,10 +832,13 @@ final class CleaningBookingSessionLifecycleService
         CleaningBooking $booking,
         CleaningBookingSession $session,
         int $customerId,
+        bool $administrative = false,
     ): CleaningBookingSession {
-        $this->assertCustomerOwnsBooking($booking, $customerId);
+        if (! $administrative) {
+            $this->assertCustomerOwnsBooking($booking, $customerId);
+        }
 
-        $updatedSession = DB::transaction(function () use ($booking, $session): CleaningBookingSession {
+        $updatedSession = DB::transaction(function () use ($booking, $session, $administrative): CleaningBookingSession {
             $locked = $this->lockSession($booking, $session);
             if ($locked->status === CleaningBookingSessionStatus::Completed) {
                 return $this->freshSession($locked);
@@ -882,7 +885,7 @@ final class CleaningBookingSessionLifecycleService
             $locked->forceFill([
                 'status' => CleaningBookingSessionStatus::Completed,
                 'work_finished_at' => $locked->work_finished_at ?? $completedAt,
-                'customer_completed_at' => $locked->customer_completed_at ?? $completedAt,
+                'customer_completed_at' => $administrative ? $locked->customer_completed_at : ($locked->customer_completed_at ?? $completedAt),
                 'payment_status' => 'settled',
                 'payment_settled_at' => $locked->payment_settled_at ?? $completedAt,
             ])->save();
