@@ -128,7 +128,7 @@ jobs:
         run: |
           set -o pipefail
           php artisan migrate --database=mysql --force --no-ansi 2>&1 | tee release2-mysql-migrations.log
-      - name: Verify audit migration rollback and re-apply
+      - name: Verify latest migration rollback and re-apply
         run: |
           set -o pipefail
           php artisan migrate:rollback --database=mysql --step=1 --force --no-ansi 2>&1 | tee release2-mysql-rollback.log
