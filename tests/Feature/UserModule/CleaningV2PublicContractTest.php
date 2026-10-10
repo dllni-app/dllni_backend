@@ -121,6 +121,9 @@ it('accepts canonical materials and special-service attachment contracts while p
     ])->assertCreated();
 
     $bookingId = (int) $response->json('order.id');
+    $response->assertJsonPath('order.specialServiceDurationPlan.totalWorkMinutes', 90)
+        ->assertJsonPath('order.specialServiceDurationPlan.maxSingleSessionMinutes', 90)
+        ->assertJsonPath('order.specialServiceDurationPlan.sessionPlans.0.parallelWorkerCount', 0);
     $materialLine = CleaningBookingMaterial::query()->where('cleaning_booking_id', $bookingId)->sole();
     $item = CleaningBookingSpecialServiceItem::query()
         ->whereHas('bookingSpecialService', fn ($query) => $query->where('cleaning_booking_id', $bookingId))

@@ -13,6 +13,7 @@ use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingMaterial;
 use Modules\Cleaning\Models\CleaningBookingSpecialService;
 use Modules\Cleaning\Services\CleaningOpenTimeBillingService;
+use Modules\Cleaning\Services\CleaningSpecialServiceDurationPlanningService;
 use Modules\Cleaning\Services\CleaningPricingCalculator;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
@@ -99,6 +100,9 @@ final class UserCleaningBookingResource extends JsonResource
         $payload['materialKit'] = $this->materialKitPayload();
         $payload['specialServices'] = $specialServices;
         $payload['specialServicesTotal'] = round(array_sum(array_column($specialServices, 'totalPrice')), 2);
+        $payload['specialServiceDurationPlan'] = $specialServices !== []
+            ? app(CleaningSpecialServiceDurationPlanningService::class)->forBooking($this->resource)
+            : null;
         $payload['openTime'] = $openTime;
         $payload['scheduleChangeRequest'] = $this->scheduleChangeRequestPayload();
         $payload['schemaVersion'] = max(1, (int) ($this->capability_schema_version ?? 1));

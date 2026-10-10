@@ -26,6 +26,7 @@ final class CleaningScheduleChangeApprovalService
         private readonly CleaningBookingSessionFinancialAggregationService $financialAggregation,
         private readonly CleaningBookingSessionParentStateService $parentState,
         private readonly CleaningSpecialistAuthorizationService $specialistAuthorization,
+        private readonly CleaningSpecialistFairnessRankingService $fairnessRanking,
     ) {}
 
     /** @return array<int,array{id:int,name:string,gender:?string,rating:float}> */
@@ -54,8 +55,8 @@ final class CleaningScheduleChangeApprovalService
             ->when($genderPreference !== '' && $genderPreference !== 'any', fn ($query) => $query->where('gender', $genderPreference))
             ->when($booking->neighborhood_id !== null, fn ($query) => $query->coversNeighborhood((int) $booking->neighborhood_id))
             ->with('user')
-            ->orderByDesc('average_rating')
-            ->limit(100)
+            ->orderBy('id')
+            ->limit((int) config('cleaning_specialist_planning.candidate_limit', 500))
             ->get();
 
         $services = $booking->specialServices
@@ -64,7 +65,7 @@ final class CleaningScheduleChangeApprovalService
             ->unique('id')
             ->values();
 
-        return $workers->filter(function (Worker $worker) use ($definitions, $booking, $services): bool {
+        $eligible = $workers->filter(function (Worker $worker) use ($definitions, $booking, $services): bool {
             foreach ($services as $service) {
                 if (filled($service->gender_constraint) && (string) $service->gender_constraint !== (string) $worker->gender) {
                     return false;
@@ -76,7 +77,12 @@ final class CleaningScheduleChangeApprovalService
 
             $this->conflicts->forgetWorker($worker);
             return ! $this->conflicts->hasConflictForDefinitions($worker, $definitions, (int) $booking->id);
-        })->take(50)->map(static fn (Worker $worker): array => [
+        });
+        $ordered = $services->isNotEmpty()
+            ? $this->fairnessRanking->rank($eligible)
+            : $eligible->sortByDesc('average_rating')->values();
+
+        return $ordered->take(50)->map(static fn (Worker $worker): array => [
             'id' => (int) $worker->id,
             'name' => (string) ($worker->user?->name ?? $worker->first_name ?? ('Worker #'.$worker->id)),
             'gender' => filled($worker->gender) ? (string) $worker->gender : null,
