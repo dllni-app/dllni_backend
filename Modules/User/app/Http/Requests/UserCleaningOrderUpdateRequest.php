@@ -68,11 +68,26 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
             'serviceIds.*' => ['prohibited'],
             'requestMaterials' => ['sometimes', 'boolean'],
             'specialServices' => ['sometimes', 'array', 'max:10'],
-            'specialServices.*' => ['array:specialServiceId,quantity,dirtinessLevel,notes'],
-            'specialServices.*.specialServiceId' => ['required', 'integer', 'distinct', 'exists:cleaning_special_services,id'],
-            'specialServices.*.quantity' => ['required', 'numeric', 'gt:0', 'max:10000'],
-            'specialServices.*.dirtinessLevel' => ['required', 'string', 'max:32'],
+            'specialServices.*' => ['array:specialServiceId,serviceId,quantity,dirtinessLevel,notes,sessionIds,items'],
+            'specialServices.*.specialServiceId' => ['required_without:specialServices.*.serviceId', 'integer', 'exists:cleaning_special_services,id'],
+            'specialServices.*.serviceId' => ['required_without:specialServices.*.specialServiceId', 'integer', 'exists:cleaning_special_services,id'],
+            'specialServices.*.quantity' => ['required_without:specialServices.*.items', 'numeric', 'gt:0', 'max:10000'],
+            'specialServices.*.dirtinessLevel' => ['nullable', 'string', 'max:64'],
             'specialServices.*.notes' => ['nullable', 'string', 'max:2000'],
+            'specialServices.*.sessionIds' => ['sometimes', 'array', 'max:30'],
+            'specialServices.*.sessionIds.*' => ['integer', 'min:1', 'distinct'],
+            'specialServices.*.items' => ['sometimes', 'array', 'min:1', 'max:50'],
+            'specialServices.*.items.*' => ['array:quantity,dirtinessLevelId,dirtinessLevel,notes,attachments,beforeImages,afterImages'],
+            'specialServices.*.items.*.quantity' => ['required', 'numeric', 'gt:0', 'max:10000'],
+            'specialServices.*.items.*.dirtinessLevelId' => ['nullable', 'integer', 'exists:cleaning_dirtiness_levels,id'],
+            'specialServices.*.items.*.dirtinessLevel' => ['nullable', 'string', 'max:64'],
+            'specialServices.*.items.*.notes' => ['nullable', 'string', 'max:2000'],
+            'specialServices.*.items.*.attachments' => ['sometimes', 'array', 'max:10'],
+            'specialServices.*.items.*.attachments.*' => ['string', 'max:2048'],
+            'specialServices.*.items.*.beforeImages' => ['sometimes', 'array', 'max:10'],
+            'specialServices.*.items.*.beforeImages.*' => ['string', 'max:2048'],
+            'specialServices.*.items.*.afterImages' => ['sometimes', 'array', 'max:10'],
+            'specialServices.*.items.*.afterImages.*' => ['string', 'max:2048'],
             'openTime' => ['prohibited'],
             'scheduledDate' => ['sometimes', 'date', 'after_or_equal:'.$today],
             'scheduledTime' => ['sometimes', 'date_format:H:i'],
@@ -103,6 +118,17 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
     {
         $validator->after(function (Validator $validator): void {
             $this->validateEventAssistanceSchedule($validator);
+
+            $bookingId = $this->route('order');
+            if ($this->has('specialServices') && is_numeric($bookingId)
+                && is_array($this->input('specialServices'))
+                && $this->input('specialServices') === []
+                && CleaningBooking::query()
+                    ->whereKey((int) $bookingId)
+                    ->where('customer_id', (int) ($this->user()?->id ?? 0))
+                    ->where('booking_kind', 'special_service')->exists()) {
+                $validator->errors()->add('specialServices', 'A standalone special-service booking must retain at least one service.');
+            }
 
             $assignmentMode = $this->normalizedAssignmentMode();
             $preferredWorkerId = $this->input('preferredWorkerId');

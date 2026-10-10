@@ -225,9 +225,15 @@ final class UserCleaningOrderService
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            if (in_array($booking->status, [CleaningBookingStatus::InProgress, CleaningBookingStatus::Completed, CleaningBookingStatus::Cancelled], true)) {
+                throw ValidationException::withMessages(['order' => ['Order cannot be edited in current status.']]);
+            }
+
             $hasAcceptedAssignments = $booking->workerAssignments()
-                ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value)
-                ->exists();
+                ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
+                ->exists() || $booking->sessions()->whereHas('workerAssignments', static fn ($query) =>
+                    $query->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
+                )->exists();
 
             if ($hasAcceptedAssignments && array_intersect(array_keys($validated), [
                 'propertyType',
@@ -239,6 +245,9 @@ final class UserCleaningOrderService
                 'preferredWorkerId',
                 'assignmentMode',
                 'numberOfWorkers',
+                'specialServices',
+                'requestMaterials',
+                'cleaning_services',
             ]) !== []) {
                 throw ValidationException::withMessages([
                     'order' => ['Order cannot change room or pricing fields after workers have accepted.'],
@@ -434,6 +443,27 @@ final class UserCleaningOrderService
                     || array_key_exists('propertyDetails', $validated)
                     || array_key_exists('propertyType', $validated);
                 $shouldReplaceSpecialServices = array_key_exists('specialServices', $validated);
+                $beforeSpecialServices = $shouldReplaceSpecialServices
+                    ? $booking->specialServices()->with('items')->get()->map(static fn ($line): array => [
+                        'serviceId' => (int) $line->cleaning_special_service_id,
+                        'totalPrice' => (float) $line->total_price,
+                        'items' => $line->items->map(static fn ($item): array => [
+                            'quantity' => (float) $item->quantity,
+                            'dirtinessLevel' => $item->dirtiness_level,
+                            'beforeImages' => $item->before_images ?? [],
+                        ])->values()->all(),
+                    ])->values()->all()
+                    : [];
+                if ($shouldReplaceSpecialServices && $booking->specialServices()->whereHas('equipmentReservations')->exists()) {
+                    throw ValidationException::withMessages(['specialServices' => ['Special services with equipment reservation history cannot be replaced directly.']]);
+                }
+                if ($shouldReplaceSpecialServices && $booking->specialServices()
+                    ->where('execution_status', '!=', 'pending')->exists()) {
+                    throw ValidationException::withMessages(['specialServices' => ['A started or finished special service cannot be replaced.']]);
+                }
+                if ($shouldReplaceSpecialServices && $booking->specialServices()->whereHas('sessions')->exists()) {
+                    throw ValidationException::withMessages(['specialServices' => ['Changes to session-linked special services require the schedule-change approval workflow.']]);
+                }
                 if ($shouldReplaceMaterials || $shouldReplaceSpecialServices) {
                     $this->replaceNewServiceLines(
                         $booking,
@@ -441,6 +471,23 @@ final class UserCleaningOrderService
                         $shouldReplaceMaterials,
                         $shouldReplaceSpecialServices,
                     );
+                }
+                if ($shouldReplaceSpecialServices) {
+                    DB::table('cleaning_operational_action_audits')->insert([
+                        'action' => 'customer_special_services_updated',
+                        'cleaning_booking_id' => $booking->id,
+                        'actor_user_id' => $booking->customer_id,
+                        'reason' => 'Customer approved the updated special-service request',
+                        'before_snapshot' => json_encode($beforeSpecialServices, JSON_THROW_ON_ERROR),
+                        'after_snapshot' => json_encode([
+                            'lines' => (array) ($pricing['specialServices'] ?? []),
+                            'specialServicesTotal' => (float) ($pricing['specialServicesTotal'] ?? 0),
+                            'bookingTotal' => (float) $booking->total_price,
+                        ], JSON_THROW_ON_ERROR),
+                        'occurred_at' => now(),
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
                 }
             }
 
@@ -975,7 +1022,10 @@ final class UserCleaningOrderService
         }
 
         if ($replaceSpecialServices) {
-            $booking->specialServices()->delete();
+            foreach ($booking->specialServices()->with('items')->get() as $existingLine) {
+                $existingLine->items()->delete();
+                $existingLine->delete();
+            }
             $this->persistSpecialServiceLines($booking, (array) ($pricing['specialServices'] ?? []));
         }
     }
@@ -983,14 +1033,33 @@ final class UserCleaningOrderService
     /** @return array<int, array<string, mixed>> */
     private function existingSpecialServiceRequests(CleaningBooking $booking): array
     {
+        // Repricing a booking must preserve the customer's itemized measurements,
+        // before photos, notes and dirtiness levels. A top-level aggregate would
+        // silently collapse them into a single item at the first level.
         return $booking->specialServices()
+            ->with('items')
+            ->orderBy('id')
             ->get()
-            ->map(static fn (CleaningBookingSpecialService $line): array => [
-                'specialServiceId' => (int) $line->cleaning_special_service_id,
-                'quantity' => (float) $line->quantity,
-                'dirtinessLevel' => $line->dirtiness_level,
-                'notes' => $line->notes,
-            ])
+            ->unique('cleaning_special_service_id')
+            ->map(static function (CleaningBookingSpecialService $line): array {
+                $items = $line->items->map(static fn (CleaningBookingSpecialServiceItem $item): array => [
+                    'quantity' => (float) $item->quantity,
+                    'dirtinessLevelId' => $item->cleaning_dirtiness_level_id,
+                    'dirtinessLevel' => $item->dirtiness_level,
+                    'notes' => $item->notes,
+                    'beforeImages' => $item->before_images ?? [],
+                    'afterImages' => $item->after_images ?? [],
+                ])->values()->all();
+
+                return [
+                    'specialServiceId' => (int) $line->cleaning_special_service_id,
+                    'quantity' => (float) $line->quantity,
+                    'dirtinessLevel' => $line->dirtiness_level,
+                    'notes' => $line->notes,
+                    ...($items === [] ? [] : ['items' => $items]),
+                ];
+            })
+            ->values()
             ->all();
     }
 

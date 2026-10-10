@@ -6,6 +6,7 @@ namespace Modules\User\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Storage;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -170,8 +171,30 @@ final class UserCleaningBookingResource extends JsonResource
                 'notes' => $item->notes,
                 'beforeImages' => $item->before_images ?? [],
                 'afterImages' => $item->after_images ?? [],
+                'beforeImageUrls' => self::publicImageUrls((array) ($item->before_images ?? [])),
+                'afterImageUrls' => self::publicImageUrls((array) ($item->after_images ?? [])),
             ])->values()->all(),
         ])->values()->all();
+    }
+
+    /** @param array<int, mixed> $paths */
+    private static function publicImageUrls(array $paths): array
+    {
+        return collect($paths)->filter(static fn ($value): bool => is_string($value) && trim($value) !== '')
+            ->map(static function (string $path): ?string {
+                $path = trim($path);
+                if (preg_match('/^https?:\/\//i', $path)) {
+                    return $path;
+                }
+                if (str_starts_with($path, '/') || preg_match('#(^|/)\.\.(/|$)#', $path)) {
+                    return null;
+                }
+                $uri = Storage::disk('public')->url($path);
+                return str_starts_with($uri, 'http') ? $uri : url($uri);
+            })
+            ->filter()
+            ->values()
+            ->all();
     }
 
     private function materialKitPayload(): ?array
