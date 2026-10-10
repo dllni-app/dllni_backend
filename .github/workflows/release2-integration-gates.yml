@@ -1,0 +1,159 @@
+name: Release 2 Integration Gates
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [dev]
+    paths:
+      - 'Modules/Cleaning/**'
+      - 'Modules/User/app/**'
+      - 'app/Filament/**'
+      - 'app/Jobs/**'
+      - 'config/cleaning_**'
+      - 'resources/views/filament/cleaning-admin/**'
+      - 'database/migrations/**'
+      - 'tests/Feature/Cleaning/**'
+      - 'tests/Feature/UserModule/**'
+      - 'tests/Feature/Filament/**'
+      - 'docs/release2/**'
+      - 'phpunit.release2.mysql.xml'
+      - '.github/workflows/release2-integration-gates.yml'
+  pull_request:
+    branches: [dev]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release2-gates-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sqlite-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, bcmath, intl, gd
+          coverage: none
+      - name: Install locked dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Prepare disposable SQLite database
+        run: |
+          cp .env.example .env
+          touch database/database.sqlite
+          php artisan key:generate
+      - name: Verify SQLite migrations
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        run: php artisan migrate:fresh --force --no-ansi
+      - name: Release 2 contracts and Filament permissions
+        run: |
+          set -o pipefail
+          php artisan test \
+            tests/Feature/Cleaning/RecurringCleaningPauseResumeRetryTest.php \
+            tests/Feature/Cleaning/CleaningSpecialistReservationGateTest.php \
+            tests/Feature/Cleaning/CleaningAdministrativePhase3WorkflowTest.php \
+            tests/Feature/Cleaning/CleaningBookingSessionLifecycleTest.php \
+            tests/Feature/Cleaning/CleaningBookingSessionFinancialSettlementTest.php \
+            tests/Feature/Cleaning/CleaningPhase5FairnessDurationReportingTest.php \
+            tests/Feature/Cleaning/CleaningLifecycleNotificationsTest.php \
+            tests/Feature/Cleaning/CleaningBookingActionNotificationDispatchTest.php \
+            tests/Feature/Cleaning/CleaningBookingCancellationWorkerNotificationTest.php \
+            tests/Feature/Cleaning/CleaningWorkerNotificationTimingTest.php \
+            tests/Feature/Cleaning/CleaningRealtimeChannelAuthTest.php \
+            tests/Feature/Cleaning/CleaningNewOrderNotificationAvailabilityTest.php \
+            tests/Feature/Cleaning/CleaningWorkerHomepageRealtimeAudienceTest.php \
+            tests/Feature/Cleaning/CleaningTimeWarningCustomerNotificationTest.php \
+            tests/Feature/Cleaning/UserCleaningOrderRealtimeActionsTest.php \
+            tests/Feature/UserModule/CleaningV2PublicContractTest.php \
+            tests/Feature/UserModule/CleaningSpecialServiceCustomerEditPhase4Test.php \
+            tests/Feature/Filament/CleaningSpecialOperationsReportPageTest.php \
+            tests/Feature/Filament/CleaningV2AdminResourcesTest.php \
+            --log-junit release2-sqlite-junit.xml --colors=never 2>&1 | tee release2-sqlite.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release2-sqlite-evidence
+          path: |
+            release2-sqlite.log
+            release2-sqlite-junit.xml
+          if-no-files-found: ignore
+
+  mysql-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: release2_phase7_gate_20261011
+          MYSQL_ROOT_PASSWORD: release2_gate_ci_only
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -prelease2_gate_ci_only"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    env:
+      APP_ENV: testing
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: release2_phase7_gate_20261011
+      DB_USERNAME: root
+      DB_PASSWORD: release2_gate_ci_only
+      QUEUE_CONNECTION: sync
+      CACHE_STORE: array
+      BROADCAST_CONNECTION: 'null'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_mysql, bcmath, intl, gd
+          coverage: none
+      - name: Install locked dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Prepare CI-only environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+      - name: Verify all MySQL migrations on ephemeral schema
+        run: |
+          set -o pipefail
+          php artisan migrate --database=mysql --force --no-ansi 2>&1 | tee release2-mysql-migrations.log
+      - name: Verify audit migration rollback and re-apply
+        run: |
+          set -o pipefail
+          php artisan migrate:rollback --database=mysql --step=1 --force --no-ansi 2>&1 | tee release2-mysql-rollback.log
+          php artisan migrate --database=mysql --force --no-ansi 2>&1 | tee release2-mysql-reapply.log
+      - name: Verify physical asset row locks across independent MySQL connections
+        run: |
+          set -o pipefail
+          php scripts/release2/probe_equipment_lock.php 2>&1 | tee release2-mysql-lock.log
+      - name: Verify MySQL reservations and financial consistency
+        run: |
+          set -o pipefail
+          php vendor/bin/pest --configuration=phpunit.release2.mysql.xml \
+            tests/Feature/Cleaning/CleaningSpecialistReservationGateTest.php \
+            tests/Feature/Cleaning/CleaningAdministrativePhase3WorkflowTest.php \
+            tests/Feature/Cleaning/CleaningBookingSessionFinancialSettlementTest.php \
+            --log-junit release2-mysql-junit.xml --colors=never 2>&1 | tee release2-mysql-tests.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release2-mysql-evidence
+          path: |
+            release2-mysql-migrations.log
+            release2-mysql-rollback.log
+            release2-mysql-reapply.log
+            release2-mysql-lock.log
+            release2-mysql-tests.log
+            release2-mysql-junit.xml
+          if-no-files-found: ignore
