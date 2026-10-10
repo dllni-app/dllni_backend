@@ -25,6 +25,7 @@ final class CleaningScheduleChangeApprovalService
         private readonly WorkerBookingScheduleConflictService $conflicts,
         private readonly CleaningBookingSessionFinancialAggregationService $financialAggregation,
         private readonly CleaningBookingSessionParentStateService $parentState,
+        private readonly CleaningSpecialistAuthorizationService $specialistAuthorization,
     ) {}
 
     /** @return array<int,array{id:int,name:string,gender:?string,rating:float}> */
@@ -68,14 +69,7 @@ final class CleaningScheduleChangeApprovalService
                 if (filled($service->gender_constraint) && (string) $service->gender_constraint !== (string) $worker->gender) {
                     return false;
                 }
-                $configured = DB::table('cleaning_worker_special_service_skills')
-                    ->where('cleaning_special_service_id', $service->id)
-                    ->exists();
-                if ($configured && ! DB::table('cleaning_worker_special_service_skills')
-                    ->where('cleaning_special_service_id', $service->id)
-                    ->where('worker_id', $worker->id)
-                    ->where('is_active', true)
-                    ->exists()) {
+                if (! $this->specialistAuthorization->allowed($worker, $service)) {
                     return false;
                 }
             }
@@ -181,6 +175,24 @@ final class CleaningScheduleChangeApprovalService
             $replacementWorkerIds = array_values(array_unique(array_filter(array_map('intval', $replacementWorkerIds), fn (int $id) => $id > 0)));
             if ($resolution !== 'replace' || $replacementWorkerIds === []) {
                 throw ValidationException::withMessages(['replacementWorkerIds' => ['Select at least one replacement worker.']]);
+            }
+
+            // Do not trust replacement IDs supplied directly by the client. The
+            // replacement-options list is advisory, not an authorization gate.
+            $bookingForEligibility = $locked->booking()->with('specialServices.specialService.equipment')->firstOrFail();
+            foreach ($replacementWorkerIds as $replacementId) {
+                $replacementWorker = Worker::query()->with('user')->findOrFail($replacementId);
+                if (! (bool) $replacementWorker->is_active
+                    || (bool) $replacementWorker->is_suspended
+                    || ! (bool) $replacementWorker->user?->is_active) {
+                    throw ValidationException::withMessages(['replacementWorkerIds' => ['An active worker is required for reassignment.']]);
+                }
+                foreach ($bookingForEligibility->specialServices as $line) {
+                    if ($line->specialService !== null
+                        && ! $this->specialistAuthorization->allowed($replacementWorker, $line->specialService)) {
+                        throw ValidationException::withMessages(['replacementWorkerIds' => ['Replacement worker lacks specialist or equipment permissions.']]);
+                    }
+                }
             }
 
             $this->applyApprovedChange($locked);

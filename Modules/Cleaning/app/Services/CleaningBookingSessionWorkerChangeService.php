@@ -136,6 +136,12 @@ final class CleaningBookingSessionWorkerChangeService
                         'released_reason' => 'Customer requested worker replacement: '.$normalizedReason,
                     ])->save();
 
+                    $worker = \App\Models\Worker::query()->findOrFail($assignment->worker_id);
+                    app(CleaningSpecialistEquipmentReservationService::class)
+                        ->releaseForSessionWorker($lockedBooking, $session, $worker);
+                    app(CleaningSpecialistEquipmentReservationService::class)
+                        ->releaseIfNoActiveSessions($lockedBooking, $worker);
+
                     $releasedAssignments[] = [
                         'sessionId' => (int) $session->id,
                         'workerId' => (int) $assignment->worker_id,

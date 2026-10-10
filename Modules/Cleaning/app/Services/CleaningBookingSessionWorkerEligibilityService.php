@@ -14,6 +14,7 @@ final class CleaningBookingSessionWorkerEligibilityService
 {
     public function __construct(
         private readonly CleaningBookingSessionSolvencyService $solvencyService,
+        private readonly CleaningSpecialistAuthorizationService $specialistAuthorization,
     ) {}
 
     /** @return array{eligible:bool,reasonCode:string,message:string} */
@@ -34,7 +35,7 @@ final class CleaningBookingSessionWorkerEligibilityService
         }
 
         $specialServices = $booking->specialServices()
-            ->with('specialService')
+            ->with('specialService.equipment')
             ->where(function ($query) use ($session): void {
                 $query->whereDoesntHave('sessions')
                     ->orWhereHas('sessions', fn ($sessions) => $sessions->whereKey($session->id));
@@ -45,16 +46,19 @@ final class CleaningBookingSessionWorkerEligibilityService
             if ($service === null) {
                 continue;
             }
+            if (! (bool) $service->is_active) {
+                return $this->blocked('special_service_inactive', 'The selected special service is no longer available.');
+            }
             if (filled($service->gender_constraint) && (string) $service->gender_constraint !== (string) $worker->gender) {
                 return $this->blocked('special_service_gender_mismatch', 'Worker gender does not match a selected special service.');
             }
-            $hasSkills = DB::table('cleaning_worker_special_service_skills')
-                ->where('cleaning_special_service_id', $service->id)->exists();
-            $qualified = DB::table('cleaning_worker_special_service_skills')
-                ->where('cleaning_special_service_id', $service->id)
-                ->where('worker_id', $worker->id)->where('is_active', true)->exists();
-            if ($hasSkills && ! $qualified) {
-                return $this->blocked('special_service_skill_missing', 'Worker is not qualified for a selected special service.');
+            if (! $this->specialistAuthorization->qualified($worker, $service)) {
+                return $this->blocked('special_service_skill_missing', 'Worker requires an active approved qualification for this special service.');
+            }
+            foreach ($service->equipment as $equipment) {
+                if (! (bool) $equipment->is_active || ! $this->specialistAuthorization->authorizedForEquipment($worker, $equipment)) {
+                    return $this->blocked('special_equipment_authorization_missing', 'Worker requires a separate active equipment authorization.');
+                }
             }
         }
 

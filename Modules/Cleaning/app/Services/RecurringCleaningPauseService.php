@@ -112,11 +112,22 @@ final class RecurringCleaningPauseService
                     'coverage_status' => CleaningBookingSessionCoverageStatus::Searching,
                     'version' => max(1, (int) $session->version) + 1,
                 ])->save();
+                foreach ($assignments as $assignment) {
+                    $worker = \App\Models\Worker::query()->findOrFail($assignment->worker_id);
+                    app(CleaningSpecialistEquipmentReservationService::class)
+                        ->releaseForSessionWorker($lockedBooking, $session, $worker);
+                }
                 $pausedSessionIds[] = (int) $session->id;
             }
 
             if ($pausedSessionIds === []) {
                 throw new InvalidArgumentException('No future recurring visits are eligible to pause.');
+            }
+
+            foreach (array_unique($releasedWorkerIds) as $workerId) {
+                $worker = \App\Models\Worker::query()->findOrFail($workerId);
+                app(CleaningSpecialistEquipmentReservationService::class)
+                    ->releaseIfNoActiveSessions($lockedBooking, $worker);
             }
 
             $lockedBooking->forceFill([

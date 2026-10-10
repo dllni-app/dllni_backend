@@ -104,6 +104,12 @@ final class CleaningBookingMultiDayTeamService
 
             $booking = $this->sessionPricing->syncAssignmentsAndRecalculate($booking->fresh(['sessions', 'workerAssignments.worker']));
 
+            foreach ($booking->sessions()->whereHas('workerAssignments', fn ($query) => $query
+                ->where('worker_id', $worker->id)
+                ->whereIn('status', CleaningBookingWorkerAssignmentStatus::activeValues()))->get() as $session) {
+                app(CleaningSpecialistEquipmentReservationService::class)->confirmForSession($booking, $session, $worker);
+            }
+
             return $this->statusService->refreshParent($booking);
         });
     }
@@ -172,6 +178,13 @@ final class CleaningBookingMultiDayTeamService
             );
 
             $booking = $this->sessionPricing->syncAssignmentsAndRecalculate($booking->fresh(['sessions', 'workerAssignments.worker']));
+            foreach ($sessionRows as $row) {
+                if ($row->session !== null && $row->session->status !== CleaningBookingSessionStatus::Completed) {
+                    app(CleaningSpecialistEquipmentReservationService::class)
+                        ->releaseForSessionWorker($booking, $row->session, $worker);
+                }
+            }
+            app(CleaningSpecialistEquipmentReservationService::class)->releaseIfNoActiveSessions($booking, $worker);
 
             return $this->statusService->refreshParent($booking);
         });

@@ -8,6 +8,7 @@ use App\Models\CleaningWorkerDeposit;
 use App\Models\Worker;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -23,6 +24,7 @@ final class CleaningBookingSessionAcceptanceService
         private readonly CleaningBookingSessionWorkerPricingService $pricingService,
         private readonly CleaningBookingSessionCoverageService $coverageService,
         private readonly CleaningBookingSessionWorkerEligibilityService $eligibilityService,
+        private readonly CleaningSpecialistEquipmentReservationService $specialistReservations,
     ) {}
 
     /**
@@ -106,6 +108,7 @@ final class CleaningBookingSessionAcceptanceService
             $accepted = [];
             foreach ($sessions as $session) {
                 $assignment = $this->createAcceptedAssignment($session, $worker);
+                $this->specialistReservations->confirmForSession($booking, $session, $worker);
                 $accepted[] = (int) $assignment->cleaning_booking_session_id;
                 $this->scheduleConflictService->forgetWorker($worker);
                 $this->coverageService->refresh($session);
@@ -176,10 +179,20 @@ final class CleaningBookingSessionAcceptanceService
                 }
 
                 try {
-                    $assignment = $this->createAcceptedAssignment($session, $worker);
+                    $assignment = DB::transaction(function () use ($booking, $session, $worker): CleaningBookingSessionWorkerAssignment {
+                        $assignment = $this->createAcceptedAssignment($session, $worker);
+                        $this->specialistReservations->confirmForSession($booking, $session, $worker);
+                        $this->coverageService->refresh($session);
+                        return $assignment;
+                    });
                     $accepted[] = (int) $assignment->cleaning_booking_session_id;
                     $this->scheduleConflictService->forgetWorker($worker);
-                    $this->coverageService->refresh($session);
+                } catch (ValidationException $exception) {
+                    $rejected[] = $this->rejection(
+                        $sessionId,
+                        'specialist_assignment_unavailable',
+                        'Required specialist permission or equipment reservation is unavailable.',
+                    );
                 } catch (Throwable $exception) {
                     report($exception);
                     $rejected[] = $this->rejection(

@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use App\Models\Worker;
+use Illuminate\Support\Facades\DB;
+use Modules\Cleaning\Services\CleaningSpecialistEquipmentReservationService;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -53,6 +55,18 @@ it('keeps material service and equipment operations idempotent through worker HT
         'equipment_snapshot' => [['id' => $equipment->id, 'name' => $equipment->name]],
         'execution_status' => 'pending',
     ]);
+
+    DB::table('cleaning_worker_special_service_skills')->insert([
+        'worker_id' => $worker->id, 'cleaning_special_service_id' => $catalogService->id,
+        'is_active' => true, 'approved_at' => now(), 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    DB::table('cleaning_worker_equipment_authorizations')->insert([
+        'worker_id' => $worker->id, 'cleaning_special_service_equipment_id' => $equipment->id,
+        'is_active' => true, 'approved_at' => now(), 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    // Worker assignment must reserve assets before execution, not at Start.
+    app(CleaningSpecialistEquipmentReservationService::class)->confirmForBooking($booking, $worker);
+    expect(CleaningEquipmentReservation::query()->count())->toBe(1);
 
     Sanctum::actingAs($worker->user);
 

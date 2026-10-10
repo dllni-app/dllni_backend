@@ -17,6 +17,10 @@ use Modules\Cleaning\Models\CleaningSpecialServiceEquipment;
 
 final class CleaningOperationalExtrasService
 {
+    public function __construct(
+        private readonly CleaningSpecialistEquipmentReservationService $equipmentReservations,
+    ) {}
+
     public function receiveMaterialKit(CleaningBooking $booking, Worker $worker): CleaningBookingMaterialKit
     {
         $this->assertAssigned($booking, $worker);
@@ -48,7 +52,7 @@ final class CleaningOperationalExtrasService
             $locked = CleaningBookingSpecialService::query()->whereKey($line->id)->lockForUpdate()->firstOrFail();
             $booking = CleaningBooking::query()->findOrFail($locked->cleaning_booking_id);
             $this->assertAssigned($booking, $worker);
-            $this->assertQualified($locked, $worker);
+            $this->equipmentReservations->assertReservedForExecution($locked, $worker);
 
             if ($locked->assigned_worker_id !== null && (int) $locked->assigned_worker_id !== (int) $worker->id) {
                 abort(403, 'This special service is assigned to another worker.');
@@ -65,7 +69,6 @@ final class CleaningOperationalExtrasService
                 'execution_status' => 'in_progress',
                 'started_at' => $locked->started_at ?? now(),
             ])->save();
-            $this->reserveRequiredEquipment($locked, $booking, $worker);
 
             return $locked->fresh(['items', 'equipmentReservations.equipment']) ?? $locked;
         }, 3);
@@ -161,66 +164,6 @@ final class CleaningOperationalExtrasService
 
             return $locked->fresh() ?? $locked;
         });
-    }
-
-    private function reserveRequiredEquipment(CleaningBookingSpecialService $line, CleaningBooking $booking, Worker $worker): void
-    {
-        $service = $line->specialService()->with('equipment')->firstOrFail();
-        $session = $line->session()->first() ?? $line->sessions()->orderBy('sequence')->first();
-        $start = $session?->startsAt()
-            ?? CarbonImmutable::parse($booking->scheduled_date->toDateString().' '.(string) $booking->scheduled_time, config('app.timezone'));
-        $duration = max(15, (int) $service->estimated_duration_minutes);
-
-        foreach ($service->equipment as $equipment) {
-            if ($equipment->status !== 'available') {
-                throw ValidationException::withMessages(['equipment' => ["Required equipment {$equipment->name} is not available."]]);
-            }
-            $hasAuthorizationRules = DB::table('cleaning_worker_equipment_authorizations')
-                ->where('cleaning_special_service_equipment_id', $equipment->id)->exists();
-            $authorized = DB::table('cleaning_worker_equipment_authorizations')
-                ->where('cleaning_special_service_equipment_id', $equipment->id)
-                ->where('worker_id', $worker->id)->where('is_active', true)->exists();
-            if ($hasAuthorizationRules && ! $authorized) {
-                throw ValidationException::withMessages(['equipment' => ['Worker is not authorized to use required equipment.']]);
-            }
-
-            $from = $start->subMinutes((int) $equipment->buffer_before_minutes);
-            $until = $start->addMinutes($duration + (int) $equipment->buffer_after_minutes);
-            $overlap = CleaningEquipmentReservation::query()
-                ->where('cleaning_special_service_equipment_id', $equipment->id)
-                ->whereIn('status', ['reserved', 'handed_over', 'acknowledged'])
-                ->where('reserved_from', '<', $until)
-                ->where('reserved_until', '>', $from)
-                ->lockForUpdate()
-                ->exists();
-            if ($overlap) {
-                throw ValidationException::withMessages(['equipment' => ["Required equipment {$equipment->name} is already reserved."]]);
-            }
-
-            CleaningEquipmentReservation::query()->firstOrCreate([
-                'cleaning_special_service_equipment_id' => $equipment->id,
-                'cleaning_booking_special_service_id' => $line->id,
-            ], [
-                'cleaning_booking_session_id' => $session?->id,
-                'worker_id' => $worker->id,
-                'reserved_from' => $from,
-                'reserved_until' => $until,
-                'status' => 'reserved',
-            ]);
-        }
-    }
-
-    private function assertQualified(CleaningBookingSpecialService $line, Worker $worker): void
-    {
-        $serviceId = (int) $line->cleaning_special_service_id;
-        $hasConfiguredSkills = DB::table('cleaning_worker_special_service_skills')
-            ->where('cleaning_special_service_id', $serviceId)->exists();
-        $qualified = DB::table('cleaning_worker_special_service_skills')
-            ->where('cleaning_special_service_id', $serviceId)
-            ->where('worker_id', $worker->id)->where('is_active', true)->exists();
-        if ($hasConfiguredSkills && ! $qualified) {
-            throw ValidationException::withMessages(['worker' => ['Worker is not qualified for this special service.']]);
-        }
     }
 
     private function assertAssigned(CleaningBooking $booking, Worker $worker): void

@@ -154,6 +154,8 @@ final class CleaningBookingTeamService
                 ])->save();
             }
 
+            app(CleaningSpecialistEquipmentReservationService::class)->confirmForBooking($booking, $worker);
+
             if ($roomIds !== null) {
                 $this->claimRoomsForWorker($booking, $worker->id, $roomIds, CleaningBookingRoomAssignmentSource::Worker);
             }
@@ -268,6 +270,10 @@ final class CleaningBookingTeamService
                     'assigned_worker_id' => null,
                     'assignment_source' => null,
                 ]);
+
+            if ($hadAccepted) {
+                app(CleaningSpecialistEquipmentReservationService::class)->releaseUnstartedForWorker($booking, $worker);
+            }
 
             $booking = $this->recalculateBookingTeam($booking, finalizeBooking: false);
 

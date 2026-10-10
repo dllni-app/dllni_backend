@@ -172,6 +172,14 @@ final class CleaningBookingSessionCancellationService
                 ])->save();
             }
 
+            foreach ($affectedWorkerIds as $workerId) {
+                $worker = \App\Models\Worker::query()->findOrFail($workerId);
+                app(CleaningSpecialistEquipmentReservationService::class)
+                    ->releaseForSessionWorker($booking, $locked, $worker);
+                app(CleaningSpecialistEquipmentReservationService::class)
+                    ->releaseIfNoActiveSessions($booking, $worker);
+            }
+
             $locked->forceFill([
                 'coverage_status' => CleaningBookingSessionCoverageStatus::Searching,
                 'status' => CleaningBookingSessionStatus::Skipped,
