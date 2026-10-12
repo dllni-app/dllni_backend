@@ -7,8 +7,9 @@ namespace Modules\User\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
-use Modules\User\Http\Requests\Concerns\ValidatesEventAssistanceSchedule;
+use Modules\User\Http\Requests\Concerns\ResolvesEventVenueTypes;
 use Modules\User\Http\Requests\Concerns\ValidatesDynamicCleaningEvent;
+use Modules\User\Http\Requests\Concerns\ValidatesEventAssistanceSchedule;
 use Modules\User\Http\Requests\Concerns\ValidatesRecurringWorkerScope;
 use Modules\User\Http\Requests\Concerns\ValidatesWorkerRoomAssignments;
 use Modules\User\Models\UserAddress;
@@ -17,8 +18,9 @@ use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderStoreRequest extends FormRequest
 {
-    use ValidatesEventAssistanceSchedule;
+    use ResolvesEventVenueTypes;
     use ValidatesDynamicCleaningEvent;
+    use ValidatesEventAssistanceSchedule;
     use ValidatesRecurringWorkerScope;
     use ValidatesWorkerRoomAssignments;
 
@@ -365,7 +367,6 @@ final class UserCleaningOrderStoreRequest extends FormRequest
             $validator->errors()->add('openTime', 'Hourly-worker requests cannot be combined with cleaning materials or cleaning services.');
         }
 
-
         if ($hasOpenTime && $isRepeated) {
             $validator->errors()->add('schedule', 'Use openTime.sessions for multi-day Open-Time requests.');
         }
@@ -378,13 +379,5 @@ final class UserCleaningOrderStoreRequest extends FormRequest
     private function requiresFemaleWorkerSafetyConfirmation(): bool
     {
         return mb_strtolower((string) $this->input('genderPreference')) === 'female';
-    }
-
-    private function availableVenueTypes(): array
-    {
-        return array_values(array_filter(
-            UserCleaningOrderEstimationService::PROPERTY_TYPES,
-            static fn (string $type): bool => $type !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE
-        ));
     }
 }

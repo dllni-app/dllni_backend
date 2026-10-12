@@ -9,12 +9,14 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\User\Http\Requests\Concerns\ResolvesEventVenueTypes;
 use Modules\User\Http\Requests\Concerns\ValidatesEventAssistanceSchedule;
 use Modules\User\Services\FemaleWorkerSafetyPolicyService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderUpdateRequest extends FormRequest
 {
+    use ResolvesEventVenueTypes;
     use ValidatesEventAssistanceSchedule;
 
     public function authorize(): bool
@@ -227,13 +229,5 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
         }
 
         $validator->errors()->add('genderPreference', 'Order gender preference cannot be changed after workers have accepted.');
-    }
-
-    private function availableVenueTypes(): array
-    {
-        return array_values(array_filter(
-            UserCleaningOrderEstimationService::PROPERTY_TYPES,
-            static fn (string $type): bool => $type !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE
-        ));
     }
 }

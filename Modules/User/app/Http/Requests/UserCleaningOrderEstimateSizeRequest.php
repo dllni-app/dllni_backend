@@ -6,10 +6,13 @@ namespace Modules\User\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Modules\User\Http\Requests\Concerns\ResolvesEventVenueTypes;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderEstimateSizeRequest extends FormRequest
 {
+    use ResolvesEventVenueTypes;
+
     public function authorize(): bool
     {
         return true;
@@ -62,11 +65,4 @@ final class UserCleaningOrderEstimateSizeRequest extends FormRequest
     /**
      * @return array<int, string>
      */
-    private function availableVenueTypes(): array
-    {
-        return array_values(array_filter(
-            UserCleaningOrderEstimationService::PROPERTY_TYPES,
-            static fn (string $type): bool => $type !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE
-        ));
-    }
 }

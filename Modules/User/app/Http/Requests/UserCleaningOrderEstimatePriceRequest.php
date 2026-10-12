@@ -8,8 +8,9 @@ use App\Enums\GenderPreference;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
-use Modules\User\Http\Requests\Concerns\ValidatesEventAssistanceSchedule;
+use Modules\User\Http\Requests\Concerns\ResolvesEventVenueTypes;
 use Modules\User\Http\Requests\Concerns\ValidatesDynamicCleaningEvent;
+use Modules\User\Http\Requests\Concerns\ValidatesEventAssistanceSchedule;
 use Modules\User\Http\Requests\Concerns\ValidatesRecurringWorkerScope;
 use Modules\User\Http\Requests\Concerns\ValidatesWorkerRoomAssignments;
 use Modules\User\Models\UserAddress;
@@ -17,8 +18,9 @@ use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderEstimatePriceRequest extends FormRequest
 {
-    use ValidatesEventAssistanceSchedule;
+    use ResolvesEventVenueTypes;
     use ValidatesDynamicCleaningEvent;
+    use ValidatesEventAssistanceSchedule;
     use ValidatesRecurringWorkerScope;
     use ValidatesWorkerRoomAssignments;
 
@@ -312,11 +314,4 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
     /**
      * @return array<int, string>
      */
-    private function availableVenueTypes(): array
-    {
-        return array_values(array_filter(
-            UserCleaningOrderEstimationService::PROPERTY_TYPES,
-            static fn (string $type): bool => $type !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE
-        ));
-    }
 }
