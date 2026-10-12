@@ -729,6 +729,24 @@ final class CleaningBookingService
 
     public function cancel(CleaningBooking $booking, ?string $reason = null): CleaningBooking
     {
+        // A worker leaving a multi-worker booking must not cancel the customer's
+        // booking or the assignments already accepted by other workers.
+        // Reuse the team withdrawal lifecycle so rooms, pricing, replacement
+        // dispatch and customer notifications stay consistent.
+        if ((int) ($booking->number_of_workers ?? 1) > 1
+            && $booking->workerAssignments()->exists()) {
+            if (! in_array($booking->status, [
+                CleaningBookingStatus::Pending,
+                CleaningBookingStatus::WorkerAssigned,
+            ], true)) {
+                throw new InvalidArgumentException(
+                    'A worker cannot cancel a multi-worker booking after work has started.'
+                );
+            }
+
+            return $this->reject($booking, $reason);
+        }
+
         $fromStatus = (string) $booking->status->value;
 
         $updated = DB::transaction(function () use ($booking, $reason) {
