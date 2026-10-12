@@ -23,6 +23,8 @@ final class CleaningHomeType extends Model
         'code',
         'booking_value',
         'title',
+        'icon_key',
+        'description',
         'image_path',
         'external_image_url',
         'sort_order',

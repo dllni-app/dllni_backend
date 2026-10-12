@@ -23,6 +23,7 @@ final class UserCleaningHomeContentController
         $propertyTypes = CleaningHomeType::query()
             ->active()
             ->forSection(CleaningHomeType::SECTION_PROPERTY)
+            ->whereIn('booking_value', ['villa', 'office', 'apartment', 'studio', 'house'])
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get();
@@ -30,6 +31,7 @@ final class UserCleaningHomeContentController
         $occasionTypes = CleaningHomeType::query()
             ->active()
             ->forSection(CleaningHomeType::SECTION_OCCASION)
+            ->whereIn('booking_value', ['family_dinner', 'birthday', 'large_gathering', 'funeral'])
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get();

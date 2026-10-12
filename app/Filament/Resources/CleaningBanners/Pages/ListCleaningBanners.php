@@ -41,15 +41,11 @@ final class ListCleaningBanners extends ListRecords
                     return DB::transaction(function () use ($data): CleaningBanner {
                         $nextSortOrder = ((int) (CleaningBanner::query()->max('sort_order') ?? -1)) + 1;
 
-                        return CleaningBanner::query()->create(array_merge($data, [
+                        return CleaningBanner::query()->create(array_merge([
                             'title' => '',
-                            'subtitle' => null,
-                            'target_url' => null,
                             'sort_order' => $nextSortOrder,
-                            'starts_at' => null,
-                            'ends_at' => null,
                             'is_active' => true,
-                        ]));
+                        ], $data));
                     });
                 })
                 ->successNotificationTitle(app()->isLocale('ar')

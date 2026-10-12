@@ -6,6 +6,7 @@ namespace App\Filament\Resources\CleaningBanners;
 
 use App\Filament\Clusters\CleaningCatalogCluster;
 use App\Filament\Resources\CleaningBanners\Pages\ListCleaningBanners;
+use App\Filament\Resources\CleaningBanners\Pages\EditCleaningBanner;
 use App\Filament\Resources\CleaningBanners\Schemas\CleaningBannerForm;
 use App\Filament\Resources\CleaningBanners\Tables\CleaningBannersTable;
 use BackedEnum;
@@ -79,7 +80,7 @@ final class CleaningBannerResource extends Resource
 
     public static function canEdit(Model $record): bool
     {
-        return false;
+        return self::hasPermission('banners.update');
     }
 
     public static function canDelete(Model $record): bool
@@ -101,6 +102,7 @@ final class CleaningBannerResource extends Resource
     {
         return [
             'index' => ListCleaningBanners::route('/'),
+            'edit' => EditCleaningBanner::route('/{record}/edit'),
         ];
     }
 

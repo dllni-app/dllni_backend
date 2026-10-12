@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningDirtinessLevel;
 use Modules\Cleaning\Models\CleaningEventType;
+use Modules\Cleaning\Models\CleaningMaterialType;
 use Modules\Cleaning\Models\CleaningSpecialServiceCategory;
 
 final class CleaningSuiteConfigController
@@ -85,6 +86,32 @@ final class CleaningSuiteConfigController
                     'name' => (string) $level->name,
                     'slug' => (string) $level->slug,
                     'priceMultiplier' => (float) $level->price_multiplier,
+                ])->values()->all(),
+            'materialTypes' => CleaningMaterialType::query()
+                ->where('is_active', true)
+                ->whereHas('unit', fn ($query) => $query->where('is_active', true))
+                ->with([
+                    'unit',
+                    'materials' => fn ($query) => $query->where('is_active', true),
+                    'quantityRules' => fn ($query) => $query
+                        ->where('is_active', true)
+                        ->where('requires_admin_resolution', false),
+                ])
+                ->orderBy('id')
+                ->get()
+                ->map(static fn ($type): array => [
+                    'id' => (int) $type->id,
+                    'name' => (string) $type->name,
+                    'unitCode' => (string) $type->unit->code,
+                    'unitLabel' => (string) $type->unit->name,
+                    'unitPrice' => (float) $type->price_per_unit,
+                    'availableQuantity' => round((float) $type->materials->sum('stock_quantity'), 3),
+                    'quantityRules' => $type->quantityRules->map(static fn ($rule): array => [
+                        'roomType' => $rule->room_type,
+                        'roomSize' => $rule->room_size,
+                        'cleaningMode' => $rule->cleaning_mode,
+                        'quantityPerRoom' => (float) $rule->quantity_per_room,
+                    ])->values()->all(),
                 ])->values()->all(),
             'specialServiceCategories' => $categories->map(static fn ($category) => [
                 'id' => (int) $category->id,
