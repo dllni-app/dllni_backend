@@ -106,6 +106,7 @@ final class RecurringCleaningScheduleService
         $adminRate = max(0.0, (float) ($singleVisitPricing['adminMargin'] ?? 0)) / $singleVisitSubtotal;
         $scheduleSessions = [];
         $aggregateAddons = 0.0;
+        $aggregateSpecialServices = 0.0;
         $aggregateAdmin = 0.0;
         $aggregateTotal = 0.0;
 
@@ -127,6 +128,7 @@ final class RecurringCleaningScheduleService
             $sessionAdmin = round(($basePrice + $sessionAddons) * $adminRate, 2);
             $sessionTotal = round($basePrice + $sessionAddons + $travelFee + $sessionAdmin, 2);
             $aggregateAddons += $sessionAddons;
+            $aggregateSpecialServices += $sessionSpecialTotal;
             $aggregateAdmin += $sessionAdmin;
             $aggregateTotal += $sessionTotal;
             $scheduleSessions[] = [
@@ -148,6 +150,8 @@ final class RecurringCleaningScheduleService
             ...$singleVisitPricing,
             'basePrice' => round($basePrice * $count, 2),
             'addonsTotal' => round($aggregateAddons, 2),
+            'materialsTotal' => round($materialTotal, 2),
+            'specialServicesTotal' => round($aggregateSpecialServices, 2),
             'travelFee' => round($travelFee * $count, 2),
             'adminMargin' => round($aggregateAdmin, 2),
             'totalPrice' => round($aggregateTotal, 2),

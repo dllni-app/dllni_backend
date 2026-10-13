@@ -5,6 +5,10 @@ declare(strict_types=1);
 use Modules\Cleaning\Models\CleaningDirtinessLevel;
 use Modules\Cleaning\Models\CleaningEventType;
 use Modules\Cleaning\Models\CleaningEventTypeField;
+use Modules\Cleaning\Models\CleaningMaterial;
+use Modules\Cleaning\Models\CleaningMaterialType;
+use Modules\Cleaning\Models\CleaningMaterialTypeQuantityRule;
+use Modules\Cleaning\Models\CleaningMaterialUnit;
 use Modules\Cleaning\Models\CleaningSpecialService;
 use Modules\Cleaning\Models\CleaningSpecialServiceCategory;
 
@@ -62,4 +66,30 @@ it('publishes dynamic event and special-service configuration with v2 capabiliti
             'slug' => 'heavy-test',
             'priceMultiplier' => 1.5,
         ]);
+});
+
+it('publishes only active material types with unit, available stock and automatic quantity rules', function (): void {
+    $unit = CleaningMaterialUnit::query()->create([
+        'name' => 'Liter', 'code' => 'liter-suite', 'symbol' => 'L', 'is_active' => true,
+    ]);
+    $type = CleaningMaterialType::query()->create([
+        'name' => 'Floor cleaner', 'cleaning_material_unit_id' => $unit->id,
+        'price_per_unit' => 12, 'is_active' => true,
+    ]);
+    CleaningMaterial::query()->create([
+        'name' => 'Floor cleaner stock', 'cleaning_material_type_id' => $type->id,
+        'stock_quantity' => 4.5, 'low_stock_threshold' => 1, 'is_active' => true,
+    ]);
+    CleaningMaterialTypeQuantityRule::query()->create([
+        'cleaning_material_type_id' => $type->id,
+        'room_type' => 'bedroom', 'room_size' => 'small', 'cleaning_mode' => 'regular',
+        'quantity_per_room' => 0.25, 'is_active' => true, 'requires_admin_resolution' => false,
+    ]);
+
+    getJson('/api/v1/cleaning/suite-config')
+        ->assertOk()
+        ->assertJsonPath('data.materialTypes.0.id', $type->id)
+        ->assertJsonPath('data.materialTypes.0.unitCode', 'liter-suite')
+        ->assertJsonPath('data.materialTypes.0.availableQuantity', 4.5)
+        ->assertJsonPath('data.materialTypes.0.quantityRules.0.quantityPerRoom', 0.25);
 });

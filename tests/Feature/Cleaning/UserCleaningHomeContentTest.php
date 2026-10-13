@@ -32,6 +32,8 @@ it('returns public cleaning home content with active types ordered by section so
         'code' => 'small_apartment',
         'booking_value' => 'apartment',
         'title' => 'شقة صغيرة',
+        'description' => 'تنظيف الشقق الصغيرة',
+        'icon_key' => 'apartment',
         'external_image_url' => 'https://example.com/apartment.jpg',
         'sort_order' => 10,
         'is_active' => true,
@@ -45,6 +47,14 @@ it('returns public cleaning home content with active types ordered by section so
         'external_image_url' => 'https://example.com/villa.jpg',
         'sort_order' => 1,
         'is_active' => false,
+    ]);
+
+    CleaningHomeType::query()->create([
+        'section' => CleaningHomeType::SECTION_PROPERTY,
+        'code' => 'unsupported_property',
+        'booking_value' => 'unsupported_property',
+        'title' => 'غير مدعوم',
+        'is_active' => true,
     ]);
 
     $occasion = CleaningHomeType::query()->create([
@@ -66,10 +76,36 @@ it('returns public cleaning home content with active types ordered by section so
         ->assertJsonPath('propertyTypes.0.code', 'small_apartment')
         ->assertJsonPath('propertyTypes.0.contentCode', 'small_apartment')
         ->assertJsonPath('propertyTypes.0.value', 'apartment')
+        ->assertJsonPath('propertyTypes.0.description', 'تنظيف الشقق الصغيرة')
+        ->assertJsonPath('propertyTypes.0.iconKey', 'apartment')
         ->assertJsonPath('propertyTypes.0.imageUrl', 'https://example.com/apartment.jpg')
         ->assertJsonPath('propertyTypes.1.id', $propertySecond->id)
         ->assertJsonPath('occasionTypes.0.id', $occasion->id)
         ->assertJsonPath('occasionTypes.0.code', 'birthday_party')
         ->assertJsonPath('occasionTypes.0.contentCode', 'graduation_party')
         ->assertJsonPath('occasionTypes.0.value', 'birthday');
+});
+
+it('serves icon-only cleaning cards without changing their booking values', function (): void {
+    $type = CleaningHomeType::query()->create([
+        'section' => CleaningHomeType::SECTION_OCCASION,
+        'code' => 'admin_large_gathering',
+        'booking_value' => 'large_gathering',
+        'title' => 'تجمع كبير',
+        'icon_key' => 'large_gathering',
+        'image_path' => null,
+        'sort_order' => 900,
+        'is_active' => true,
+    ]);
+
+    $this->getJson('/api/v1/user/cleaning/home/content')
+        ->assertOk()
+        ->assertJsonFragment([
+            'id' => $type->id,
+            'code' => 'large_gathering',
+            'contentCode' => 'admin_large_gathering',
+            'value' => 'large_gathering',
+            'iconKey' => 'large_gathering',
+            'imageUrl' => null,
+        ]);
 });

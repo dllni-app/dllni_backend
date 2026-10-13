@@ -210,6 +210,7 @@ final class UserCleaningOrderEstimatePriceController
         }
 
         $clientPricing = $this->legacyMinimumPriceCompatibility($pricing);
+        $clientPricing['priceSummary'] = $this->priceSummary($pricing, $openTimePlan !== null);
 
         return response()->json([
             'size' => [
@@ -218,6 +219,10 @@ final class UserCleaningOrderEstimatePriceController
                 'sizeTier' => $estimation['sizeTier'],
             ],
             'pricing' => $clientPricing,
+            'materialsPreview' => $isEventAssistance || $openTimePlan !== null
+                ? []
+                : app(\Modules\Cleaning\Services\CleaningMaterialQuoteService::class)
+                    ->quote($pricingPropertyDetails, null, false)['lines'],
             'schedule' => ($eventPlan !== null || $recurringPlan !== null || $openTimePlan !== null) ? $pricing['schedule'] : null,
             'assignmentMode' => $assignmentMode,
             'workerScope' => $workerScope,
@@ -235,6 +240,28 @@ final class UserCleaningOrderEstimatePriceController
             'extendedTimeRanges' => $extendedTimePricing->ranges(),
             'algorithmVersion' => $service->algorithmVersion(),
         ]);
+    }
+
+    /** @param array<string, mixed> $pricing */
+    private function priceSummary(array $pricing, bool $isMaximum): array
+    {
+        $total = (float) ($pricing['totalPrice'] ?? 0);
+        $transport = (float) ($pricing['travelFee'] ?? 0);
+        $materials = (float) ($pricing['materialsTotal'] ?? 0);
+        $specialServices = (float) ($pricing['specialServicesTotal'] ?? 0);
+        $discount = max(0.0, (float) ($pricing['discountAmount'] ?? 0));
+
+        return [
+            'quoteKind' => $isMaximum ? 'preliminary' : 'estimate',
+            'serviceCharge' => round($total + $discount - $transport - $materials - $specialServices, 2),
+            'transport' => $transport,
+            'materials' => $materials,
+            'specialServices' => $specialServices,
+            'discount' => $discount,
+            'total' => $total,
+            'currency' => $pricing['currency'] ?? config('app.currency', 'SYP'),
+            'isPricingFinal' => (bool) ($pricing['isPricingFinal'] ?? false),
+        ];
     }
 
     /**

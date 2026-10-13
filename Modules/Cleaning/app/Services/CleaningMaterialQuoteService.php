@@ -15,7 +15,7 @@ final class CleaningMaterialQuoteService
      * @param  array<string, mixed>  $propertyDetails
      * @return array{lines:array<int, array<string, mixed>>,total:float}
      */
-    public function quote(array $propertyDetails): array
+    public function quote(array $propertyDetails, ?array $selectedTypeIds = null, bool $enforceStock = true): array
     {
         $roomBreakdown = is_array($propertyDetails['room_size_breakdown'] ?? null)
             ? $propertyDetails['room_size_breakdown']
@@ -39,17 +39,24 @@ final class CleaningMaterialQuoteService
             ->get();
 
         foreach ($materialTypes as $materialType) {
+            if ($selectedTypeIds !== null && ! in_array((int) $materialType->id, $selectedTypeIds, true)) {
+                continue;
+            }
             if ($materialType->unit === null) {
                 continue;
             }
 
             $quantity = $this->quantityForType($materialType, $roomBreakdown, $cleaningMode);
+            // Whole inventory packages and pieces are never billed as fractions.
+            if (in_array(mb_strtolower((string) $materialType->unit->code), ['pack', 'package', 'bottle', 'piece'], true)) {
+                $quantity = (float) ceil($quantity);
+            }
             if ($quantity <= 0) {
                 continue;
             }
 
             $available = round((float) $materialType->materials->sum('stock_quantity'), 3);
-            if ($available < $quantity) {
+            if ($enforceStock && $available < $quantity) {
                 throw new InvalidArgumentException("Insufficient stock for {$materialType->name}.");
             }
 
@@ -61,6 +68,7 @@ final class CleaningMaterialQuoteService
                 'materialTypeId' => (int) $materialType->id,
                 'unitId' => (int) $materialType->unit->id,
                 'name' => $materialType->name,
+                'categoryKey' => $materialType->category_key ?? 'other',
                 'quantity' => $quantity,
                 'unit' => $materialType->unit->code,
                 'unitLabel' => $materialType->unit->name,
@@ -117,8 +125,7 @@ final class CleaningMaterialQuoteService
                     && ($rule->room_size === null || $rule->room_size === $roomSize)
                     && ($rule->cleaning_mode === null || $rule->cleaning_mode === $cleaningMode);
             })
-            ->sortByDesc(static fn (CleaningMaterialTypeQuantityRule $rule): int =>
-                (int) ($rule->room_type !== null)
+            ->sortByDesc(static fn (CleaningMaterialTypeQuantityRule $rule): int => (int) ($rule->room_type !== null)
                 + (int) ($rule->room_size !== null)
                 + (int) ($rule->cleaning_mode !== null)
             )
@@ -138,8 +145,7 @@ final class CleaningMaterialQuoteService
                     && ($rule->room_size === null || $rule->room_size === $roomSize)
                     && ($rule->cleaning_mode === null || $rule->cleaning_mode === $cleaningMode);
             })
-            ->sortByDesc(static fn ($rule): int =>
-                (int) ($rule->room_type !== null)
+            ->sortByDesc(static fn ($rule): int => (int) ($rule->room_type !== null)
                 + (int) ($rule->room_size !== null)
                 + (int) ($rule->cleaning_mode !== null)
             )

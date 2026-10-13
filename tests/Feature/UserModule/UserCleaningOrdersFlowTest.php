@@ -25,8 +25,8 @@ use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Models\CleaningService;
-use Modules\Cleaning\Services\CleaningPricingCalculator;
 use Modules\Cleaning\Models\ServicePricing;
+use Modules\Cleaning\Services\CleaningPricingCalculator;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 use function Pest\Laravel\getJson;
@@ -270,6 +270,8 @@ it('creates an open count order when preferred worker mode is requested without 
         'assignmentMode' => 'preferred_worker',
         'scheduledDate' => now()->addDay()->format('Y-m-d'),
         'scheduledTime' => '09:00',
+        'addressLatitude' => 33.5138,
+        'addressLongitude' => 36.2765,
         'termsAccepted' => true,
     ]);
 
@@ -799,6 +801,8 @@ it('creates order with room_size_breakdown and persists normalized breakdown-der
         ],
         'scheduledDate' => now()->addDay()->format('Y-m-d'),
         'scheduledTime' => '10:00',
+        'addressLatitude' => 33.5138,
+        'addressLongitude' => 36.2765,
         'termsAccepted' => true,
     ]);
 
@@ -890,6 +894,8 @@ it('creates order with partial room_size_breakdown and persists zero-filled norm
         ],
         'scheduledDate' => now()->addDay()->format('Y-m-d'),
         'scheduledTime' => '10:00',
+        'addressLatitude' => 33.5138,
+        'addressLongitude' => 36.2765,
         'termsAccepted' => true,
     ]);
 
@@ -947,6 +953,8 @@ it('creates team order with worker room assignments and persists planned slots',
         ],
         'scheduledDate' => now()->addDay()->format('Y-m-d'),
         'scheduledTime' => '10:00',
+        'addressLatitude' => 33.5138,
+        'addressLongitude' => 36.2765,
         'termsAccepted' => true,
     ]);
 
@@ -1330,6 +1338,8 @@ it('creates regular cleaning order with selected service names', function (): vo
         'cleaning_services' => ['Balcony cleaning', 'Window cleaning'],
         'scheduledDate' => now()->addDay()->format('Y-m-d'),
         'scheduledTime' => '10:30',
+        'addressLatitude' => 33.5138,
+        'addressLongitude' => 36.2765,
         'termsAccepted' => true,
     ]);
 
@@ -1479,6 +1489,8 @@ it('updates regular cleaning order service names', function (): void {
         'cleaning_services' => ['Regular service A'],
         'scheduledDate' => now()->addDay()->format('Y-m-d'),
         'scheduledTime' => '16:00',
+        'addressLatitude' => 33.5138,
+        'addressLongitude' => 36.2765,
         'termsAccepted' => true,
     ])->assertCreated();
 
@@ -1727,6 +1739,8 @@ it('creates event assistance order with custom service and does not sync booking
         'scheduledDate' => now()->addDay()->format('Y-m-d'),
         'scheduledTime' => '18:30',
         'genderPreference' => 'male',
+        'addressLatitude' => 33.5138,
+        'addressLongitude' => 36.2765,
         'termsAccepted' => true,
     ]);
 
@@ -1770,6 +1784,8 @@ it('updates event assistance hours and custom service without service-based pric
         ],
         'scheduledDate' => now()->addDay()->format('Y-m-d'),
         'scheduledTime' => '16:00',
+        'addressLatitude' => 33.5138,
+        'addressLongitude' => 36.2765,
         'termsAccepted' => true,
     ])->assertCreated();
 

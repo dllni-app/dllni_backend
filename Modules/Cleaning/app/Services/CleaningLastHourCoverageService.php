@@ -9,10 +9,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Modules\Cleaning\Enums\CleaningBookingRoomAssignmentSource;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
-use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingRoom;
-use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 
 /**
  * Last-hour decision is independent from internal geographic worker discovery.
@@ -40,6 +38,7 @@ final class CleaningLastHourCoverageService
             && $now->greaterThanOrEqualTo($start->subHour())
             && $now->lessThan($start);
         $eligible = $isLegacyOneTime
+            && ! (bool) (($booking->property_details ?? [])['is_hot_order'] ?? false)
             && $withinLastHour
             && $status === CleaningBookingStatus::Pending->value
             && $accepted->count() > 0
@@ -73,7 +72,8 @@ final class CleaningLastHourCoverageService
                             return null;
                         }
                         if ($locked->sessions()->exists()
-                            || (string) ($locked->booking_kind ?? 'standard') !== 'standard') {
+                            || (string) ($locked->booking_kind ?? 'standard') !== 'standard'
+                            || (bool) (($locked->property_details ?? [])['is_hot_order'] ?? false)) {
                             return null;
                         }
                         $start = $this->schedule->resolve($locked);
@@ -88,6 +88,7 @@ final class CleaningLastHourCoverageService
                                 'cancelled_by_role' => 'system',
                                 'cancellation_reason' => 'لم يتوفر عامل قبل موعد الخدمة بساعة.',
                             ])->save();
+
                             return 'cancelled';
                         }
                         if ($accepted < max(1, (int) ($locked->number_of_workers ?? 1))
@@ -95,8 +96,10 @@ final class CleaningLastHourCoverageService
                             && $locked->last_hour_team_decision === null
                             && $locked->last_hour_team_prompted_at === null) {
                             $locked->forceFill(['last_hour_team_prompted_at' => $now])->save();
+
                             return 'prompted';
                         }
+
                         return null;
                     });
 
@@ -123,6 +126,7 @@ final class CleaningLastHourCoverageService
                     }
                 }
             });
+
         return $result;
     }
 
@@ -195,6 +199,7 @@ final class CleaningLastHourCoverageService
             action: 'last_hour_team_decision_'.$choice,
             actorRole: 'customer',
         );
+
         return $updated;
     }
 }

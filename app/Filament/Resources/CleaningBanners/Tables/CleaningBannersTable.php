@@ -7,6 +7,7 @@ namespace App\Filament\Resources\CleaningBanners\Tables;
 use App\Filament\Resources\CleaningBanners\CleaningBannerResource;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\EditAction;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -36,6 +37,7 @@ final class CleaningBannersTable
                         : (app()->isLocale('ar') ? 'تغيير الترتيب بالسحب والإفلات' : 'Reorder by Drag and Drop')),
             )
             ->recordActions([
+                EditAction::make(),
                 DeleteAction::make()
                     ->label(app()->isLocale('ar') ? 'حذف' : 'Delete')
                     ->requiresConfirmation()

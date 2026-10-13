@@ -6,9 +6,11 @@ namespace App\Filament\Resources\CleaningHomeTypes\Schemas;
 
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Modules\Cleaning\Models\CleaningHomeType;
 
@@ -29,12 +31,51 @@ final class CleaningHomeTypeForm
                                 CleaningHomeType::SECTION_OCCASION => 'المناسبات',
                             ])
                             ->required()
+                            ->live()
+                            ->native(false),
+                        Select::make('booking_value')
+                            ->label('نوع الحجز')
+                            ->helperText('اختر مسار حجز مدعوماً؛ يمكن تغيير الاسم والوصف والأيقونة دون تغيير قواعد الحجز.')
+                            ->options(fn (Get $get): array => $get('section') === CleaningHomeType::SECTION_OCCASION
+                                ? [
+                                    'family_dinner' => 'عشاء عائلي',
+                                    'birthday' => 'عيد ميلاد',
+                                    'large_gathering' => 'تجمع كبير',
+                                    'funeral' => 'عزاء',
+                                ]
+                                : [
+                                    'villa' => 'فيلا',
+                                    'office' => 'مكتب',
+                                    'apartment' => 'شقة',
+                                    'studio' => 'استديو',
+                                    'house' => 'منزل',
+                                ])
+                            ->required()
+                            ->live()
                             ->native(false),
                         TextInput::make('title')
                             ->label('الاسم الظاهر للمستخدم')
                             ->required()
                             ->maxLength(255)
                             ->helperText('يولّد النظام رمز النوع تلقائياً عند الحفظ.'),
+                        Select::make('icon_key')
+                            ->label('أيقونة النوع')
+                            ->options([
+                                'villa' => 'فيلا',
+                                'office' => 'مكتب',
+                                'apartment' => 'شقة',
+                                'studio' => 'استديو',
+                                'family_dinner' => 'عشاء عائلي',
+                                'birthday' => 'عيد ميلاد',
+                                'large_gathering' => 'تجمع كبير',
+                                'funeral' => 'عزاء',
+                            ])
+                            ->native(false),
+                        Textarea::make('description')
+                            ->label('الوصف الظاهر للمستخدم')
+                            ->rows(2)
+                            ->maxLength(1000)
+                            ->columnSpanFull(),
                     ]),
                 Section::make('الصورة والحالة')
                     ->columns(2)
@@ -46,7 +87,7 @@ final class CleaningHomeTypeForm
                             ->image()
                             ->imageEditor()
                             ->maxSize(5120)
-                            ->required()
+                            ->nullable()
                             ->helperText('ارفع صورة واضحة لا يتجاوز حجمها 5 ميغابايت.'),
                         Toggle::make('is_active')
                             ->label('ظاهر في التطبيق')

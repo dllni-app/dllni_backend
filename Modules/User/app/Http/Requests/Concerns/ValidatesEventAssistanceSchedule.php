@@ -11,7 +11,7 @@ use Throwable;
 
 trait ValidatesEventAssistanceSchedule
 {
-    private const RECURRING_MAX_WINDOW_DAYS = 30;
+    private const RECURRING_MAX_WINDOW_DAYS = 90;
 
     /** @return array<string, mixed> */
     protected function eventAssistanceScheduleRules(bool $isEventAssistance, bool $requireFutureDate = true): array
@@ -134,7 +134,7 @@ trait ValidatesEventAssistanceSchedule
                 if ($firstDate->diffInDays($lastDate) > self::RECURRING_MAX_WINDOW_DAYS) {
                     $validator->errors()->add(
                         'schedule.sessions',
-                        'يجب أن تقع جميع زيارات الحجز الدوري ضمن فترة لا تتجاوز 30 يوماً.',
+                        'يجب أن تقع جميع زيارات الحجز الدوري ضمن فترة لا تتجاوز 90 يوماً.',
                     );
                 }
             }

@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 final class CleaningMaterialType extends Model
 {
-    protected $fillable = ['name', 'cleaning_material_unit_id', 'price_per_unit', 'is_active'];
+    protected $fillable = ['name', 'cleaning_material_unit_id', 'price_per_unit', 'category_key', 'is_active'];
 
     public function unit(): BelongsTo
     {

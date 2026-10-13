@@ -96,6 +96,9 @@ final class UserCleaningOrderEstimationService
             'living_room_size' => $livingRoomSize,
             'cleaning_mode' => $cleaningMode,
             'room_size_breakdown' => $breakdown,
+            'requested_material_type_ids' => array_key_exists('requested_material_type_ids', $propertyDetails)
+                && is_array($propertyDetails['requested_material_type_ids'])
+                ? array_values(array_map('intval', $propertyDetails['requested_material_type_ids'])) : null,
         ];
     }
 
@@ -196,7 +199,10 @@ final class UserCleaningOrderEstimationService
         $regularCalculation = null;
 
         $materialQuote = $requestMaterials
-            ? $this->materialQuoteService->quote($input['propertyDetails'])
+            ? $this->materialQuoteService->quote(
+                $input['propertyDetails'],
+                $input['propertyDetails']['requested_material_type_ids'] ?? null,
+            )
             : ['lines' => [], 'total' => 0.0];
         $specialServiceQuote = $specialServices !== []
             ? $this->specialServiceQuoteService->quote($specialServices)
@@ -390,7 +396,10 @@ final class UserCleaningOrderEstimationService
             $hourlyRatePerWorker * $normalizedHours * $normalizedWorkers,
         );
         $materialQuote = $requestMaterials
-            ? $this->materialQuoteService->quote($input['propertyDetails'])
+            ? $this->materialQuoteService->quote(
+                $input['propertyDetails'],
+                $input['propertyDetails']['requested_material_type_ids'] ?? null,
+            )
             : ['lines' => [], 'total' => 0.0];
         $specialServiceQuote = $specialServices !== []
             ? $this->specialServiceQuoteService->quote($specialServices)

@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningBanners\Schemas;
 
+use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Validation\Rule;
@@ -28,6 +32,28 @@ final class CleaningBannerForm
     public static function components(): array
     {
         return [
+            Section::make(__('cleaning_admin.cleaning_banners.sections.content'))
+                ->columns(2)
+                ->schema([
+                    TextInput::make('title')
+                        ->label(__('cleaning_admin.cleaning_banners.fields.title'))
+                        ->maxLength(255),
+                    Textarea::make('subtitle')
+                        ->label(__('cleaning_admin.cleaning_banners.fields.subtitle'))
+                        ->maxLength(1000),
+                ]),
+            Section::make(__('cleaning_admin.cleaning_banners.sections.visibility'))
+                ->columns(3)
+                ->schema([
+                    Toggle::make('is_active')
+                        ->label(__('cleaning_admin.cleaning_banners.fields.is_active'))
+                        ->default(true),
+                    DateTimePicker::make('starts_at')
+                        ->label(__('cleaning_admin.cleaning_banners.fields.starts_at')),
+                    DateTimePicker::make('ends_at')
+                        ->label(__('cleaning_admin.cleaning_banners.fields.ends_at'))
+                        ->after('starts_at'),
+                ]),
             Section::make(app()->isLocale('ar') ? 'صورة البانر' : 'Banner Image')
                 ->description(app()->isLocale('ar')
                     ? 'بانر قسم التنظيف يظهر في تطبيق المستخدم كصورة فقط.'

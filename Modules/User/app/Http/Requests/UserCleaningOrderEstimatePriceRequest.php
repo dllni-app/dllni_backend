@@ -71,7 +71,11 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             'serviceIds' => $isEventAssistance ? ['prohibited'] : ['sometimes', 'array', 'min:1'],
             'serviceIds.*' => $isEventAssistance ? ['prohibited'] : ['integer', 'distinct', 'exists:cleaning_services,id'],
             'requestMaterials' => ['sometimes', 'boolean'],
-            'materials' => ['sometimes', 'array:providedByPlatform'],
+            'materials' => ['sometimes', 'array:providedByPlatform,materialTypeIds'],
+            'materials.materialTypeIds' => ['sometimes', 'array', 'max:64'],
+            'materials.materialTypeIds.*' => ['integer', 'distinct', 'exists:cleaning_material_types,id'],
+            'propertyDetails.requested_material_type_ids' => ['sometimes', 'array', 'max:64'],
+            'propertyDetails.requested_material_type_ids.*' => ['integer', 'distinct', 'exists:cleaning_material_types,id'],
             'materials.providedByPlatform' => ['required_with:materials', 'boolean'],
             'bookingKind' => ['sometimes', 'string', Rule::in(['standard', 'special_service', 'open_time'])],
             'event' => ['sometimes', 'array:eventTypeId,dynamicAnswers'],
@@ -142,6 +146,13 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
                 FILTER_VALIDATE_BOOL,
                 FILTER_NULL_ON_FAILURE,
             ) ?? $materials['providedByPlatform'];
+        }
+
+        if (is_array($materials) && array_key_exists('materialTypeIds', $materials)) {
+            $merge['propertyDetails'] = [
+                ...(array) $this->input('propertyDetails', []),
+                'requested_material_type_ids' => $materials['materialTypeIds'],
+            ];
         }
 
         $preferredWorkerIds = $this->normalizePreferredWorkerIds(

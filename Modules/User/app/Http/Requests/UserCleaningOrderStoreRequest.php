@@ -39,7 +39,7 @@ final class UserCleaningOrderStoreRequest extends FormRequest
 
         return [
             'propertyType' => ['required', 'string', Rule::in(UserCleaningOrderEstimationService::PROPERTY_TYPES)],
-            'propertyDetails' => ['required', 'array:address,location_name,bedrooms,rooms,bathrooms,toilets,kitchens,balconies,sheds,living_room_size,cleaning_mode,room_size_breakdown,eventType,eventTypeId,dynamicAnswers,guestCount,venueType,customService,hours,specialRequirement,notes'],
+            'propertyDetails' => ['required', 'array:address,location_name,bedrooms,rooms,bathrooms,toilets,kitchens,balconies,sheds,living_room_size,cleaning_mode,room_size_breakdown,eventType,eventTypeId,dynamicAnswers,guestCount,venueType,customService,hours,specialRequirement,notes,requested_material_type_ids'],
             'propertyDetails.address' => ['required', 'string', 'max:500'],
             'propertyDetails.location_name' => ['nullable', 'string', 'max:255'],
             'propertyDetails.bedrooms' => ['nullable', 'integer', 'min:0', 'max:100'],
@@ -79,7 +79,11 @@ final class UserCleaningOrderStoreRequest extends FormRequest
             'serviceIds' => ['prohibited'],
             'serviceIds.*' => ['prohibited'],
             'requestMaterials' => ['sometimes', 'boolean'],
-            'materials' => ['sometimes', 'array:providedByPlatform'],
+            'materials' => ['sometimes', 'array:providedByPlatform,materialTypeIds'],
+            'materials.materialTypeIds' => ['sometimes', 'array', 'max:64'],
+            'materials.materialTypeIds.*' => ['integer', 'distinct', 'exists:cleaning_material_types,id'],
+            'propertyDetails.requested_material_type_ids' => ['sometimes', 'array', 'max:64'],
+            'propertyDetails.requested_material_type_ids.*' => ['integer', 'distinct', 'exists:cleaning_material_types,id'],
             'materials.providedByPlatform' => ['required_with:materials', 'boolean'],
             'specialServices' => ['sometimes', 'array', 'max:10'],
             'specialServices.*' => ['array:specialServiceId,serviceId,quantity,dirtinessLevel,notes,sessionIds,items'],
@@ -183,6 +187,13 @@ final class UserCleaningOrderStoreRequest extends FormRequest
             ) ?? $materials['providedByPlatform'];
         }
 
+        if (is_array($materials) && array_key_exists('materialTypeIds', $materials)) {
+            $merge['propertyDetails'] = [
+                ...(array) $this->input('propertyDetails', []),
+                'requested_material_type_ids' => $materials['materialTypeIds'],
+            ];
+        }
+
         $preferredWorkerIds = $this->normalizePreferredWorkerIds(
             $this->input('preferredWorkerIds', $this->input('preferredWorkerId'))
         );
@@ -237,7 +248,9 @@ final class UserCleaningOrderStoreRequest extends FormRequest
                     $merge['neighborhood'] = $address->neighborhood;
                 }
 
-                $propertyDetails = $this->input('propertyDetails');
+                // Preserve material type selections already merged above.
+                // Reading the original input here would silently drop them for saved addresses.
+                $propertyDetails = $merge['propertyDetails'] ?? $this->input('propertyDetails');
                 if (is_array($propertyDetails)) {
                     if ((string) ($merge['bookingKind'] ?? $this->input('bookingKind')) === 'open_time') {
                         // Always use the same saved address as the coordinates for hourly bookings.

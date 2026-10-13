@@ -6,8 +6,8 @@ namespace Modules\Cleaning\Services;
 
 use App\Models\Worker;
 use Illuminate\Support\Facades\DB;
-use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
+use Modules\Cleaning\Models\CleaningBooking;
 
 final class CleaningGeographicDispatchService
 {
@@ -34,6 +34,7 @@ final class CleaningGeographicDispatchService
     public function radiusKm(CleaningBooking $booking): int
     {
         $minutes = max(0, (int) $booking->created_at->diffInMinutes(now()));
+
         return min(self::MAX_RADIUS_KM, 10 * (1 + intdiv($minutes, 15)));
     }
 
@@ -135,7 +136,7 @@ final class CleaningGeographicDispatchService
         }
 
         // Urgent same-day bookings bypass only the radius, not the required GPS inputs.
-        if (app(CleaningOrderUrgencyService::class)->isHotOrder($booking->scheduled_date)) {
+        if ((bool) (($booking->property_details ?? [])['is_hot_order'] ?? false)) {
             return true;
         }
 

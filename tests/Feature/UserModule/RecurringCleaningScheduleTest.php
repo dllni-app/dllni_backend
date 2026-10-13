@@ -250,7 +250,38 @@ it('rejects duplicate recurring execution slots', function (): void {
         ->assertJsonValidationErrors('schedule.sessions.2.time');
 });
 
-it('rejects recurring visits that span more than thirty days', function (): void {
+it('accepts a monthly visit 31 days after the first scheduled visit', function (): void {
+    // A legitimate monthly recurrence (Oct -> Nov) can span 31 days,
+    // unlike a weekly recurrence which follows a seven-day cadence.
+    $payload = recurringCleaningPayload();
+    $anchor = Carbon\CarbonImmutable::parse('2026-10-14', config('app.timezone'));
+    if ($anchor->isPast()) {
+        $anchor = Carbon\CarbonImmutable::now(config('app.timezone'))
+            ->addMonthsNoOverflow(2)
+            ->startOfMonth()->setDay(14);
+    }
+    $next = $anchor->addMonthNoOverflow();
+    $payload['scheduledDate'] = $anchor->toDateString();
+    $payload['schedule']['calculationMode'] = 'hours';
+    $payload['schedule']['hoursPerVisit'] = 2.0;
+    $payload['schedule']['sessions'] = [
+        ['date' => $anchor->toDateString(), 'time' => '09:00'],
+        ['date' => $next->toDateString(), 'time' => '09:00'],
+    ];
+
+    $response = postJson('/api/v1/user/cleaning/orders/estimate-price', [
+        'propertyType' => $payload['propertyType'],
+        'propertyDetails' => $payload['propertyDetails'],
+        'addressLatitude' => $payload['addressLatitude'],
+        'addressLongitude' => $payload['addressLongitude'],
+        'assignmentMode' => $payload['assignmentMode'],
+        'numberOfWorkers' => $payload['numberOfWorkers'],
+        'schedule' => $payload['schedule'],
+    ])->assertOk();
+    $response->assertJsonPath('schedule.sessionsCount', 2);
+});
+
+it('rejects recurring visits that span more than ninety days', function (): void {
     $payload = recurringCleaningPayload();
     $payload['schedule']['sessions'] = [
         [
@@ -258,7 +289,7 @@ it('rejects recurring visits that span more than thirty days', function (): void
             'time' => '10:00',
         ],
         [
-            'date' => now(config('app.timezone'))->addDays(33)->toDateString(),
+            'date' => now(config('app.timezone'))->addDays(93)->toDateString(),
             'time' => '10:00',
         ],
     ];

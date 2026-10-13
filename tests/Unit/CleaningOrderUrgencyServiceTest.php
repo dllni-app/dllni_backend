@@ -88,3 +88,21 @@ it('adds hot-order fields to current-date event booking resources', function ():
     expect($payload['urgencyPrefix'])->toBe(CleaningOrderUrgencyService::HOT_ORDER_PREFIX);
     expect($payload['displayTitle'])->toBe(CleaningOrderUrgencyService::HOT_ORDER_PREFIX.' طلب مناسبة #EVT-TEST');
 });
+
+it('keeps a pre-scheduled cleaning booking non-urgent when its service day arrives', function (): void {
+    $scheduled = now(config('app.timezone'))->addDay()->startOfDay()->addHours(12);
+    $booking = CleaningBooking::factory()->create([
+        'booking_number' => 'CLN-ADVANCE',
+        'property_type' => 'apartment',
+        'scheduled_date' => $scheduled->toDateString(),
+    ]);
+
+    expect($booking->fresh()->property_details['is_hot_order'] ?? false)->toBeFalse();
+
+    $this->travelTo($scheduled->copy()->subHour());
+    $payload = CleaningBookingResource::make($booking->fresh())->resolve(request());
+
+    expect($payload['isHotOrder'])->toBeFalse();
+    expect($payload['urgencyLabel'])->toBeNull();
+    expect($payload['displayTitle'])->toBe('طلب تنظيف #CLN-ADVANCE');
+});

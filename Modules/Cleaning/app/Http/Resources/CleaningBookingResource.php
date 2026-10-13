@@ -13,8 +13,8 @@ use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingRoom;
 use Modules\Cleaning\Models\CleaningBookingSession;
-use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
+use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\CleaningExtendedTimePricingService;
 use Modules\Cleaning\Services\CleaningOrderUrgencyService;
 use Modules\Cleaning\Services\WorkerOrderSolvencyService;
@@ -96,8 +96,8 @@ final class CleaningBookingResource extends JsonResource
             default => 'طلب تنظيف',
         };
         $baseTitle .= ' #'.$this->booking_number;
-        $displayTitle = $urgency->displayTitle($baseTitle, $this->scheduled_date);
-        $isHotOrder = $urgency->isHotOrder($this->scheduled_date);
+        $isHotOrder = (bool) ($details['is_hot_order'] ?? false);
+        $displayTitle = $isHotOrder ? $urgency->prependHotPrefix($baseTitle) : $baseTitle;
         $bookingHours = (float) ($this->total_hours ?? 0);
         $workerHours = is_array($workerOffer) ? ($workerOffer['totalHours'] ?? null) : null;
         $servicePrice = is_array($workerOffer)
@@ -281,6 +281,7 @@ final class CleaningBookingResource extends JsonResource
         $required = max(1, (int) ($this->number_of_workers ?? 1));
         $accepted = $this->acceptedWorkerCount();
         $startApproved = $this->startApprovedWorkerCount();
+
         return ['required' => $required, 'accepted' => $accepted, 'remaining' => max(0, $required - $accepted), 'isFulfilled' => $accepted >= $required, 'startApproved' => $startApproved, 'notStartApproved' => max(0, $accepted - $startApproved)];
     }
 
@@ -339,58 +340,84 @@ final class CleaningBookingResource extends JsonResource
     private function propertyDetailsWithLabels(array $details): array
     {
         foreach (['living_room_size', 'room_size', 'room_type', 'cleaning_mode', 'event_type', 'venue_type'] as $key) {
-            if (array_key_exists($key, $details)) $details[$key.'_label'] = $this->label($details[$key]);
+            if (array_key_exists($key, $details)) {
+                $details[$key.'_label'] = $this->label($details[$key]);
+            }
         }
         foreach (['eventType' => 'eventTypeLabel', 'venueType' => 'venueTypeLabel', 'cleaningMode' => 'cleaningModeLabel'] as $key => $labelKey) {
-            if (array_key_exists($key, $details)) $details[$labelKey] = $this->label($details[$key]);
+            if (array_key_exists($key, $details)) {
+                $details[$labelKey] = $this->label($details[$key]);
+            }
         }
+
         return $details;
     }
 
     private function addressPayload(array $details): array
     {
         $full = Arr::get($details, 'full_address') ?? Arr::get($details, 'address') ?? Arr::get($details, 'location_name');
+
         return ['fullAddress' => $full, 'full_address' => $full, 'locationName' => Arr::get($details, 'location_name'), 'location_name' => Arr::get($details, 'location_name'), 'neighborhoodId' => $this->neighborhood_id, 'neighborhoodName' => $this->neighborhood_name, 'latitude' => $this->address_latitude !== null ? (float) $this->address_latitude : null, 'longitude' => $this->address_longitude !== null ? (float) $this->address_longitude : null, 'building' => Arr::get($details, 'building'), 'floor' => Arr::get($details, 'floor'), 'apartment' => Arr::get($details, 'apartment'), 'notes' => Arr::get($details, 'address_notes') ?? Arr::get($details, 'notes')];
     }
 
     private function normalizedCleaningServices(): ?array
     {
-        if (! is_array($this->cleaning_services)) return null;
-        $items = array_values(array_filter(array_map(static fn (mixed $service): ?string => is_string($service) && trim($service) !== '' ? trim($service) : null, $this->cleaning_services)));
+        if (! is_array($this->cleaning_services)) {
+            return null;
+        }
+        $items = array_values(array_filter(array_map(static fn (mixed $service): ?string => is_string($service) && mb_trim($service) !== '' ? mb_trim($service) : null, $this->cleaning_services)));
+
         return $items !== [] ? $items : null;
     }
 
     private function servicesPayload(): array
     {
         $services = $this->normalizedCleaningServices() ?? [];
+
         return array_values(array_map(static fn (string $service, int $index): array => ['id' => null, 'name' => $service, 'quantity' => 1, 'unitPrice' => null, 'unit_price' => null, 'totalPrice' => null, 'total_price' => null, 'sort' => $index], $services, array_keys($services)));
     }
 
     private function finishedSnapshot(mixed $items, string $type): array
     {
-        if (! is_array($items)) return [];
+        if (! is_array($items)) {
+            return [];
+        }
         $out = [];
         foreach ($items as $item) {
             if (is_string($item)) {
-                $text = trim($item);
-                if ($text !== '') $out[] = ['name' => $text, 'label' => $this->snapshotLabel($text, $type)];
+                $text = mb_trim($item);
+                if ($text !== '') {
+                    $out[] = ['name' => $text, 'label' => $this->snapshotLabel($text, $type)];
+                }
+
                 continue;
             }
-            if (! is_array($item)) continue;
+            if (! is_array($item)) {
+                continue;
+            }
             $payload = [];
-            if (is_numeric($item['id'] ?? null)) $payload['id'] = (int) $item['id'];
+            if (is_numeric($item['id'] ?? null)) {
+                $payload['id'] = (int) $item['id'];
+            }
             foreach (['name', 'label', 'roomKey', 'room_key', 'roomType', 'room_type', 'roomTypeLabel', 'room_type_label', 'displayLabel', 'display_label'] as $key) {
                 $value = Arr::get($item, $key);
-                if (is_string($value) && trim($value) !== '') $payload[$key] = trim($value);
+                if (is_string($value) && mb_trim($value) !== '') {
+                    $payload[$key] = mb_trim($value);
+                }
             }
             $payload['label'] ??= $payload['name'] ?? $payload['displayLabel'] ?? $payload['display_label'] ?? $payload['roomTypeLabel'] ?? $payload['room_type_label'] ?? $payload['roomType'] ?? $payload['room_type'] ?? $payload['roomKey'] ?? $payload['room_key'] ?? null;
             if (isset($payload['label']) && is_string($payload['label'])) {
                 $payload['label'] = $this->snapshotLabel($payload['label'], $type);
             }
-            if ($type === 'service' && ! isset($payload['name']) && isset($payload['label'])) $payload['name'] = $payload['label'];
+            if ($type === 'service' && ! isset($payload['name']) && isset($payload['label'])) {
+                $payload['name'] = $payload['label'];
+            }
             $payload = array_filter($payload, static fn (mixed $v): bool => $v !== null && $v !== '');
-            if ($payload !== []) $out[] = $payload;
+            if ($payload !== []) {
+                $out[] = $payload;
+            }
         }
+
         return array_values($out);
     }
 
@@ -454,22 +481,30 @@ final class CleaningBookingResource extends JsonResource
 
     private function serializeWorkerRoomAssignments(): array
     {
-        if (! $this->relationLoaded('rooms')) return [];
+        if (! $this->relationLoaded('rooms')) {
+            return [];
+        }
+
         return $this->rooms->groupBy('planned_worker_slot')->filter(fn ($_, $slot): bool => $slot !== '')->map(fn ($rooms, $slot): array => ['workerSlot' => (int) $slot, 'preferredWorkerId' => $rooms->first()?->planned_preferred_worker_id, 'roomsWeight' => round((float) $rooms->sum('weight'), 2), 'rooms' => $rooms->map(fn ($room): array => ['roomKey' => $room->room_key, 'roomType' => $room->room_type, 'roomTypeLabel' => $this->label($room->room_type), 'roomSize' => $room->room_size, 'roomSizeLabel' => $this->label($room->room_size)])->values()->all()])->values()->all();
     }
 
     private function currentWorkerAssignment(Request $request): ?CleaningBookingWorkerAssignment
     {
         $workerId = $request->user()?->worker?->id;
-        if ($workerId === null) return null;
+        if ($workerId === null) {
+            return null;
+        }
         $assignment = $this->relationLoaded('workerAssignments') ? $this->workerAssignments->firstWhere('worker_id', $workerId) : $this->workerAssignments()->where('worker_id', $workerId)->first();
+
         return $assignment instanceof CleaningBookingWorkerAssignment ? $assignment : null;
     }
 
     private function currentWorkerOffer(Request $request, ?CleaningBookingWorkerAssignment $assignment): ?array
     {
         $worker = $request->user()?->worker;
-        if ($worker === null) return null;
+        if ($worker === null) {
+            return null;
+        }
 
         try {
             return app(WorkerOrderSolvencyService::class)->workerOfferForBooking(
@@ -615,20 +650,13 @@ final class CleaningBookingResource extends JsonResource
         }
 
         return match (true) {
-            $statuses->contains(CleaningBookingSessionStatus::UnderDispute->value) =>
-                CleaningBookingStatus::UnderDispute->value,
-            $statuses->contains(CleaningBookingSessionStatus::TimeExtensionRequested->value) =>
-                CleaningBookingStatus::TimeExtensionRequested->value,
-            $statuses->contains(CleaningBookingSessionStatus::AwaitingCustomerCompletion->value) =>
-                CleaningBookingStatus::AwaitingCustomerCompletion->value,
-            $statuses->contains(CleaningBookingSessionStatus::InProgress->value) =>
-                CleaningBookingStatus::InProgress->value,
-            $statuses->contains(CleaningBookingSessionStatus::AwaitingStartVerification->value) =>
-                CleaningBookingStatus::AwaitingStartVerification->value,
-            $statuses->contains(CleaningBookingSessionStatus::AwaitingWorkerStartConfirmation->value) =>
-                CleaningBookingStatus::AwaitingWorkerStartConfirmation->value,
-            $statuses->contains(CleaningBookingSessionStatus::WorkerAssigned->value) =>
-                CleaningBookingStatus::WorkerAssigned->value,
+            $statuses->contains(CleaningBookingSessionStatus::UnderDispute->value) => CleaningBookingStatus::UnderDispute->value,
+            $statuses->contains(CleaningBookingSessionStatus::TimeExtensionRequested->value) => CleaningBookingStatus::TimeExtensionRequested->value,
+            $statuses->contains(CleaningBookingSessionStatus::AwaitingCustomerCompletion->value) => CleaningBookingStatus::AwaitingCustomerCompletion->value,
+            $statuses->contains(CleaningBookingSessionStatus::InProgress->value) => CleaningBookingStatus::InProgress->value,
+            $statuses->contains(CleaningBookingSessionStatus::AwaitingStartVerification->value) => CleaningBookingStatus::AwaitingStartVerification->value,
+            $statuses->contains(CleaningBookingSessionStatus::AwaitingWorkerStartConfirmation->value) => CleaningBookingStatus::AwaitingWorkerStartConfirmation->value,
+            $statuses->contains(CleaningBookingSessionStatus::WorkerAssigned->value) => CleaningBookingStatus::WorkerAssigned->value,
             default => CleaningBookingStatus::Pending->value,
         };
     }
@@ -727,9 +755,13 @@ final class CleaningBookingResource extends JsonResource
 
     private function label(mixed $value): ?string
     {
-        if ($value === null) return null;
-        $text = trim((string) $value);
-        if ($text === '') return null;
+        if ($value === null) {
+            return null;
+        }
+        $text = mb_trim((string) $value);
+        if ($text === '') {
+            return null;
+        }
 
         $normalized = $this->normalizeLabelKey($text);
 
@@ -738,9 +770,13 @@ final class CleaningBookingResource extends JsonResource
 
     private function snapshotLabel(string $value, string $type): string
     {
-        $text = trim($value);
-        if ($text === '') return $text;
-        if ($type !== 'room') return $this->label($text) ?? $text;
+        $text = mb_trim($value);
+        if ($text === '') {
+            return $text;
+        }
+        if ($type !== 'room') {
+            return $this->label($text) ?? $text;
+        }
 
         if (preg_match('/^([a-z_ ]+)\.(small|medium|large)\.(\d+)$/i', $text, $matches) === 1) {
             return $this->roomUnitLabel($matches[1], (int) $matches[3], $matches[2]);
@@ -755,15 +791,15 @@ final class CleaningBookingResource extends JsonResource
 
     private function roomUnitLabel(string $roomType, int $index, string $roomSize): string
     {
-        $type = $this->label($roomType) ?? trim($roomType);
-        $size = $this->label($roomSize) ?? trim($roomSize);
+        $type = $this->label($roomType) ?? mb_trim($roomType);
+        $size = $this->label($roomSize) ?? mb_trim($roomSize);
 
         return sprintf('%s %d - %s', $type, $index, $size);
     }
 
     private function normalizeLabelKey(string $value): string
     {
-        return mb_strtolower(str_replace(['-', ' '], '_', trim($value)));
+        return mb_strtolower(str_replace(['-', ' '], '_', mb_trim($value)));
     }
 
     private function workerTimestamp(?CleaningBookingWorkerAssignment $assignment, string $field, mixed $fallback, string $format): ?string
@@ -825,11 +861,14 @@ final class CleaningBookingResource extends JsonResource
         $hours = $assignment instanceof CleaningBookingWorkerAssignment
             ? (float) ($this->workerDurationHours($assignment) ?? 0)
             : ($totalHours > 0 ? $totalHours : $estimatedHours);
-        if ($start === null || $hours <= 0) return ['timerStartAt' => $start?->toIso8601String(), 'expectedFinishAt' => null, 'durationHours' => $hours > 0 ? $hours : null, 'elapsedWorkSeconds' => 0, 'remainingWorkSeconds' => 0, 'overdueWorkSeconds' => 0, 'isWorkOverdue' => false, 'shouldShowWorkTimer' => false, 'source' => ['startField' => null, 'durationField' => null]];
+        if ($start === null || $hours <= 0) {
+            return ['timerStartAt' => $start?->toIso8601String(), 'expectedFinishAt' => null, 'durationHours' => $hours > 0 ? $hours : null, 'elapsedWorkSeconds' => 0, 'remainingWorkSeconds' => 0, 'overdueWorkSeconds' => 0, 'isWorkOverdue' => false, 'shouldShowWorkTimer' => false, 'source' => ['startField' => null, 'durationField' => null]];
+        }
         $expected = $start->copy()->addSeconds((int) round($hours * 3600));
         $diff = now()->diffInSeconds($expected, false);
         $show = in_array($status, [CleaningBookingStatus::InProgress->value, CleaningBookingStatus::TimeExtensionRequested->value], true);
         $elapsed = max(0, $start->diffInSeconds(now(), false));
+
         return ['timerStartAt' => $start->toIso8601String(), 'expectedFinishAt' => $expected->toIso8601String(), 'durationHours' => $hours, 'elapsedWorkSeconds' => $elapsed, 'remainingWorkSeconds' => $show ? max(0, $diff) : 0, 'overdueWorkSeconds' => $show ? max(0, -$diff) : 0, 'isWorkOverdue' => $show && $diff < 0, 'shouldShowWorkTimer' => $show, 'source' => ['startField' => $assignment?->work_started_at !== null ? 'assignment.work_started_at' : ($this->work_started_at !== null ? 'work_started_at' : 'arrived_at'), 'durationField' => $assignment instanceof CleaningBookingWorkerAssignment ? 'worker_total_hours' : ($totalHours > 0 ? 'total_hours' : 'estimated_hours')]];
     }
 }

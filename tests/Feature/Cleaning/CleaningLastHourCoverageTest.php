@@ -86,7 +86,7 @@ it('assigns all rooms to a single accepted worker only after customer chooses it
     expect($service->decision($updated)['required'])->toBeFalse();
     Notification::assertSentTo(
         $worker->user,
-        \App\Notifications\Cleaning\BookingLifecycleNotification::class,
+        App\Notifications\Cleaning\BookingLifecycleNotification::class,
     );
 });
 
@@ -126,12 +126,12 @@ it('exposes the customer decision endpoint only to the booking owner', function 
         'accepted_at' => now(),
     ]);
     $this->travelTo($this->startAt->copy()->subMinutes(50));
-    \Laravel\Sanctum\Sanctum::actingAs(\App\Models\User::factory()->create());
+    Laravel\Sanctum\Sanctum::actingAs(App\Models\User::factory()->create());
     \Pest\Laravel\postJson(
         '/api/v1/user/cleaning/orders/'.$this->booking->id.'/last-hour-team-decision',
         ['choice' => 'assigned_only'],
     )->assertNotFound();
-    \Laravel\Sanctum\Sanctum::actingAs($this->booking->customer);
+    Laravel\Sanctum\Sanctum::actingAs($this->booking->customer);
     \Pest\Laravel\postJson(
         '/api/v1/user/cleaning/orders/'.$this->booking->id.'/last-hour-team-decision',
         ['choice' => 'assigned_only'],
@@ -149,4 +149,31 @@ it('rejects changing task coverage outside the final hour', function (): void {
     app(CleaningLastHourCoverageService::class)->decide(
         $this->booking, 'all_tasks', $worker->id,
     );
-})->throws(\Illuminate\Validation\ValidationException::class);
+})->throws(Illuminate\Validation\ValidationException::class);
+
+it('keeps urgent same-day requests outside the scheduled last-hour cancellation and team rules', function (): void {
+    $clock = now()->startOfDay()->addHours(11);
+    $this->travelTo($clock);
+    $urgent = CleaningBooking::factory()->create([
+        'status' => CleaningBookingStatus::Pending,
+        'scheduled_date' => $clock->toDateString(),
+        'scheduled_time' => '12:00',
+        'booking_kind' => 'standard',
+        'number_of_workers' => 2,
+    ]);
+
+    $service = app(CleaningLastHourCoverageService::class);
+    expect($service->processDue(CarbonImmutable::instance($clock))['cancelled'])->toBe(0);
+    expect($urgent->fresh()->status)->toBe(CleaningBookingStatus::Pending);
+
+    $worker = Worker::factory()->create();
+    CleaningBookingWorkerAssignment::query()->create([
+        'cleaning_booking_id' => $urgent->id,
+        'worker_id' => $worker->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart,
+        'accepted_at' => $clock,
+    ]);
+    expect($service->decision($urgent->fresh(), CarbonImmutable::instance($clock))['required'])->toBeFalse();
+    expect($service->processDue(CarbonImmutable::instance($clock))['prompted'])->toBe(0);
+    expect($urgent->fresh()->status)->toBe(CleaningBookingStatus::Pending);
+});

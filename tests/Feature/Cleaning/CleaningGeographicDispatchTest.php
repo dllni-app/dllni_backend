@@ -88,9 +88,9 @@ it('bypasses radius for same-day urgent orders but not future regular orders', f
     expect($service->isWithinRadius($worker, $booking))->toBeTrue();
 
     $booking->scheduled_date = today()->addDay();
+    $booking->save(); // Persist the schedule change so the urgency snapshot is refreshed.
     expect($service->isWithinRadius($worker, $booking))->toBeFalse();
 });
-
 
 it('requeues radius expansion at fifteen minutes for regular and urgent orders with valid locations', function (): void {
     $base = [
@@ -116,16 +116,15 @@ it('requeues radius expansion at fifteen minutes for regular and urgent orders w
         'address_longitude' => null,
     ]));
 
-    \Illuminate\Support\Facades\Bus::fake([\App\Jobs\NotifyEligibleWorkersNewOrderJob::class]);
+    Illuminate\Support\Facades\Bus::fake([App\Jobs\NotifyEligibleWorkersNewOrderJob::class]);
 
-    \Illuminate\Support\Facades\Artisan::call('cleaning:expand-geographic-dispatch');
+    Illuminate\Support\Facades\Artisan::call('cleaning:expand-geographic-dispatch');
 
-    \Illuminate\Support\Facades\Bus::assertDispatchedTimes(
-        \App\Jobs\NotifyEligibleWorkersNewOrderJob::class,
+    Illuminate\Support\Facades\Bus::assertDispatchedTimes(
+        App\Jobs\NotifyEligibleWorkersNewOrderJob::class,
         2,
     );
 });
-
 
 it('does not allow urgent radius bypass to defeat explicit customer worker selection', function (): void {
     $selected = Worker::factory()->create();
@@ -148,7 +147,7 @@ it('does not allow urgent radius bypass to defeat explicit customer worker selec
         'address_longitude' => 37.15,
     ]);
 
-    expect(fn () => app(\Modules\Cleaning\Services\CleaningBookingTeamService::class)
+    expect(fn () => app(Modules\Cleaning\Services\CleaningBookingTeamService::class)
         ->acceptWorker($booking, $outsider))->toThrow(
             InvalidArgumentException::class,
             'Booking is reserved for customer-selected workers.',

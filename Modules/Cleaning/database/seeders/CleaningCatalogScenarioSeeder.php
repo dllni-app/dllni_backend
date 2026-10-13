@@ -30,7 +30,8 @@ final class CleaningCatalogScenarioSeeder extends Seeder
             ['name' => 'كيلوغرام', 'code' => 'kg', 'symbol' => 'كغ'],
             ['name' => 'قطعة', 'code' => 'piece', 'symbol' => 'قطعة'],
             ['name' => 'عبوة', 'code' => 'pack', 'symbol' => 'عبوة'],
-        ];        foreach ($units as $unit) {
+        ];
+        foreach ($units as $unit) {
             DB::table('cleaning_material_units')->updateOrInsert(
                 ['code' => $unit['code']],
                 $unit + ['is_active' => true, 'created_at' => now(), 'updated_at' => now()],
@@ -40,15 +41,15 @@ final class CleaningCatalogScenarioSeeder extends Seeder
         $unitIds = DB::table('cleaning_material_units')->pluck('id', 'code');
 
         $types = [
-            ['name' => 'منظف أرضيات', 'unit' => 'liter', 'price' => 18],
-            ['name' => 'مطهر أسطح', 'unit' => 'liter', 'price' => 22],
-            ['name' => 'منظف زجاج', 'unit' => 'liter', 'price' => 20],
-            ['name' => 'مزيل دهون', 'unit' => 'liter', 'price' => 28],
-            ['name' => 'مبيض كلور', 'unit' => 'liter', 'price' => 16],
-            ['name' => 'أكياس نفايات', 'unit' => 'pack', 'price' => 12],
-            ['name' => 'قماش مايكروفايبر', 'unit' => 'piece', 'price' => 8],
-            ['name' => 'إسفنج تنظيف', 'unit' => 'piece', 'price' => 5],
-            ['name' => 'قفازات تنظيف', 'unit' => 'pack', 'price' => 10],
+            ['name' => 'منظف أرضيات', 'unit' => 'pack', 'price' => 150, 'category' => 'cleaners'],
+            ['name' => 'مطهر أسطح', 'unit' => 'liter', 'price' => 550, 'category' => 'disinfectants'],
+            ['name' => 'منظف زجاج', 'unit' => 'liter', 'price' => 450, 'category' => 'cleaners'],
+            ['name' => 'مزيل دهون', 'unit' => 'liter', 'price' => 700, 'category' => 'cleaners'],
+            ['name' => 'مبيض كلور', 'unit' => 'liter', 'price' => 350, 'category' => 'disinfectants'],
+            ['name' => 'أكياس نفايات', 'unit' => 'pack', 'price' => 75, 'category' => 'supplies'],
+            ['name' => 'قماش مايكروفايبر', 'unit' => 'piece', 'price' => 65, 'category' => 'supplies'],
+            ['name' => 'إسفنج تنظيف', 'unit' => 'piece', 'price' => 30, 'category' => 'supplies'],
+            ['name' => 'قفازات تنظيف', 'unit' => 'pack', 'price' => 85, 'category' => 'supplies'],
         ];
 
         foreach ($types as $type) {
@@ -57,6 +58,8 @@ final class CleaningCatalogScenarioSeeder extends Seeder
                 [
                     'cleaning_material_unit_id' => $unitIds[$type['unit']],
                     'price_per_unit' => $type['price'],
+                    ...((Schema::hasColumn('cleaning_material_types', 'category_key'))
+                        ? ['category_key' => $type['category'] ?? 'other'] : []),
                     'is_active' => true,
                     'created_at' => now(),
                     'updated_at' => now(),
@@ -96,7 +99,9 @@ final class CleaningCatalogScenarioSeeder extends Seeder
         if (Schema::hasTable('cleaning_material_type_quantity_rules')) {
             $this->seedMaterialTypeRules($typeIds);
         }
-    }    private function seedMaterialTypeRules($typeIds): void
+    }
+
+    private function seedMaterialTypeRules($typeIds): void
     {
         $rules = [
             ['منظف أرضيات', 'living_room', 'medium', 'regular', 0.10],
@@ -129,7 +134,9 @@ final class CleaningCatalogScenarioSeeder extends Seeder
                 ],
             );
         }
-    }    private function seedSpecialServiceCatalog(): void
+    }
+
+    private function seedSpecialServiceCatalog(): void
     {
         if (! Schema::hasTable('cleaning_special_service_categories')) {
             return;
@@ -234,7 +241,9 @@ final class CleaningCatalogScenarioSeeder extends Seeder
                 }
             }
         }
-    }    private function seedEventCatalog(): void
+    }
+
+    private function seedEventCatalog(): void
     {
         if (! Schema::hasTable('cleaning_event_types')) {
             return;
