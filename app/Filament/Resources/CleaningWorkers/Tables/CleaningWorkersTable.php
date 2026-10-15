@@ -7,6 +7,7 @@ namespace App\Filament\Resources\CleaningWorkers\Tables;
 use App\Enums\WorkerCustomerRatingType;
 use App\Enums\WorkerPreferredWorkType;
 use App\Filament\Resources\CleaningWorkers\Support\WorkerDepositActions;
+use App\Filament\Resources\SystemUsers\Support\ResetAccountPasswordAction;
 use App\Filament\Resources\Workers\Support\WorkerSuspensionActions;
 use App\Models\CleaningDepositSetting;
 use App\Models\Worker;
@@ -139,6 +140,7 @@ final class CleaningWorkersTable
             ->recordActions([
                 ViewAction::make()->label('عرض'),
                 ...WorkerSuspensionActions::make(),
+                ResetAccountPasswordAction::make(),
                 EditAction::make()->label('تعديل'),
                 ...WorkerDepositActions::make(),
             ]);
