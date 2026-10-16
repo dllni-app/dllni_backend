@@ -324,7 +324,7 @@ final class CleaningBookingsTable
                             self::notifyAdminWorkerAssignment($updated, $incoming, $oldStatus);
                             Notification::make()->title('تم استبدال العامل بنجاح')->success()->send();
                         }),
-Action::make('assign_rooms')
+                    Action::make('assign_rooms')
                         ->label('تعيين الغرف')
                         ->icon('heroicon-o-squares-plus')
                         ->color('primary')
