@@ -169,7 +169,9 @@ final class CleaningBookingService
 
         $this->dispatchTrackingUpdate($updated);
 
-        if ($shouldNotifyCustomer) {
+        // A terminal cancellation is already sent below. Do not send both a rejection
+        // and cancellation notification to the same customer for one action.
+        if ($shouldNotifyCustomer && $updated->status !== CleaningBookingStatus::Cancelled) {
             $this->lifecycleNotifications->notifyCustomer(
                 booking: $updated,
                 canonicalType: $isPreferredWorkerRejection
