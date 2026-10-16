@@ -263,13 +263,68 @@ final class CleaningBookingsTable
                                 $record->fresh(['rooms.assignedWorker.user', 'workerAssignments.worker.user']),
                                 $worker,
                                 filled($data['reason'] ?? null) ? (string) $data['reason'] : null,
+                                false, // Administrative removal is not a worker withdrawal.
                             );
 
                             $record->setRawAttributes($updated->getAttributes(), true);
 
                             Notification::make()->title('تم إلغاء تعيين العامل')->success()->send();
                         }),
-                    Action::make('assign_rooms')
+                    Action::make('replace_worker')
+                        ->label('استبدال عامل')
+                        ->icon('heroicon-o-arrow-path')
+                        ->color('info')
+                        ->visible(fn (CleaningBooking $record): bool => in_array(
+                            $record->status,
+                            [CleaningBookingStatus::Pending, CleaningBookingStatus::WorkerAssigned],
+                            true,
+                        ) && $record->acceptedWorkerCount() > 0)
+                        ->modalHeading('استبدال عامل ضمن الفريق')
+                        ->modalDescription('يتم استبدال العامل في عملية واحدة؛ إذا تعذرت إضافة البديل فلن يُحذف العامل الحالي.')
+                        ->form([
+                            Select::make('outgoing_worker_id')
+                                ->label('العامل الحالي')
+                                ->options(fn (?CleaningBooking $record): array => self::acceptedWorkerOptions($record))
+                                ->searchable()
+                                ->required(),
+                            Select::make('incoming_worker_id')
+                                ->label('العامل البديل')
+                                ->options(fn (?CleaningBooking $record): array => self::activeWorkerOptions($record))
+                                ->searchable()
+                                ->required(),
+                            TextInput::make('reason')->label('سبب الاستبدال')->maxLength(255),
+                        ])
+                        ->action(function (CleaningBooking $record, array $data): void {
+                            $oldStatus = $record->status instanceof BackedEnum
+                                ? (string) $record->status->value
+                                : (string) $record->status;
+                    
+                            try {
+                                $outgoing = Worker::query()->with('user')->findOrFail((int) $data['outgoing_worker_id']);
+                                $incoming = Worker::query()->with('user')->findOrFail((int) $data['incoming_worker_id']);
+                                self::assertDashboardWorkerEligibility($record, $incoming);
+                                $updated = app(CleaningBookingTeamService::class)->replaceWorkerByAdmin(
+                                    $record,
+                                    $outgoing,
+                                    $incoming,
+                                    filled($data['reason'] ?? null) ? (string) $data['reason'] : null,
+                                );
+                            } catch (Throwable $exception) {
+                                Notification::make()
+                                    ->title('تعذر استبدال العامل')
+                                    ->body(self::workerAssignmentErrorMessage($exception->getMessage()))
+                                    ->danger()
+                                    ->persistent()
+                                    ->send();
+                    
+                                return;
+                            }
+                    
+                            $record->setRawAttributes($updated->getAttributes(), true);
+                            self::notifyAdminWorkerAssignment($updated, $incoming, $oldStatus);
+                            Notification::make()->title('تم استبدال العامل بنجاح')->success()->send();
+                        }),
+Action::make('assign_rooms')
                         ->label('تعيين الغرف')
                         ->icon('heroicon-o-squares-plus')
                         ->color('primary')
