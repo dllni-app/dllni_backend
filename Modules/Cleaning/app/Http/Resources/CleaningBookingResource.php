@@ -60,6 +60,15 @@ final class CleaningBookingResource extends JsonResource
         $details = is_array($this->property_details) ? $this->property_details : [];
         $globalOrderStatus = $this->status?->value ?? $this->status;
         $myAssignmentModel = $this->currentWorkerAssignment($request);
+        // A pending offer must not reveal the customer's private contact info.
+        $currentWorkerId = $request->user()?->worker?->id;
+        $canViewCustomerPhone = $currentWorkerId === null
+            || ($myAssignmentModel instanceof CleaningBookingWorkerAssignment
+                && in_array($myAssignmentModel->status, CleaningBookingWorkerAssignmentStatus::acceptedStatuses(), true))
+            || $hasCurrentWorkerSessionAcceptance
+            || ((int) ($this->worker_id ?? 0) === (int) $currentWorkerId
+                && (int) $currentWorkerId > 0
+                && $globalOrderStatus !== CleaningBookingStatus::Pending->value);
         $workerOffer = $this->currentWorkerOffer($request, $myAssignmentModel);
         $pendingCompletionAssignments = $this->pendingCustomerCompletionAssignments();
         $pendingCompletionAssignment = $pendingCompletionAssignments[0] ?? null;
@@ -222,7 +231,7 @@ final class CleaningBookingResource extends JsonResource
             'cancellationReason' => $this->cancellation_reason,
             'cancelledByRole' => $this->cancelled_by_role,
             'cancelled_by_role' => $this->cancelled_by_role,
-            'customer' => $this->whenLoaded('customer', fn () => ['id' => $this->customer->id, 'name' => $this->customer->name, 'email' => $this->customer->email, 'phone' => $this->customer->phone]),
+            'customer' => $this->whenLoaded('customer', fn () => ['id' => $this->customer->id, 'name' => $this->customer->name, 'email' => $this->customer->email, 'phone' => $canViewCustomerPhone ? $this->customer->phone : null]),
             'preferredWorker' => $this->whenLoaded('preferredWorker', fn () => $this->preferredWorker ? $this->serializeWorker($this->preferredWorker) : null),
             'worker' => $this->whenLoaded('worker', fn () => $this->worker ? $this->serializeWorker($this->worker) : null),
             'workerAssignments' => $this->whenLoaded('workerAssignments', fn () => $this->workerAssignments->map(fn (CleaningBookingWorkerAssignment $assignment): array => $this->serializeWorkerAssignment($assignment))->values()),
