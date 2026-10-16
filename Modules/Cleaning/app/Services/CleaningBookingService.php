@@ -206,7 +206,8 @@ final class CleaningBookingService
     {
         $fromStatus = (string) $booking->status->value;
 
-        $updated = DB::transaction(function () use ($booking): CleaningBooking {
+        $newlyStarted = false;
+        $updated = DB::transaction(function () use ($booking, &$newlyStarted): CleaningBooking {
             $worker = $this->currentWorker();
             $lockedBooking = $this->lockBooking($booking);
 
@@ -215,13 +216,14 @@ final class CleaningBookingService
                 CleaningBookingStatus::AwaitingStartVerification,
                 CleaningBookingStatus::AwaitingWorkerStartConfirmation,
             ], true)) {
-                throw new InvalidArgumentException('Booking cannot start travel in current status.');
+                throw new InvalidArgumentException('لا يمكن بدء الرحلة لأن حالة الطلب الحالية لا تسمح بذلك. حدّث تفاصيل الطلب وحاول مجدداً.');
             }
 
             $assignment = $this->activeAssignmentForWorker($lockedBooking->id, $worker->id, true);
 
             if ($assignment instanceof CleaningBookingWorkerAssignment) {
                 if ($assignment->started_travel_at === null) {
+                    $newlyStarted = true;
                     $assignment->forceFill([
                         'started_travel_at' => now(),
                     ])->save();
@@ -235,23 +237,32 @@ final class CleaningBookingService
             }
 
             if ((int) $lockedBooking->worker_id !== (int) $worker->id) {
-                throw new InvalidArgumentException('Worker must accept the booking before starting travel.');
+                throw new InvalidArgumentException('يجب قبول الطلب أولاً قبل الضغط على أنا في الطريق.');
             }
 
+            if ($lockedBooking->started_travel_at !== null) {
+                return $this->freshBooking($lockedBooking);
+            }
+
+            $newlyStarted = true;
             $lockedBooking->update(['started_travel_at' => now()]);
 
             return $this->freshBooking($lockedBooking);
         });
 
         $this->dispatchTrackingUpdate($updated);
-        $this->lifecycleNotifications->notifyCustomer(
+        // Retry-safe: an identical start-travel request must not send a second notification.
+        if ($newlyStarted) {
+            $this->lifecycleNotifications->notifyCustomer(
             booking: $updated,
             canonicalType: 'cleaning.booking.worker_started_travel',
             action: 'worker_started_travel',
             actorRole: 'worker',
             fromStatus: $fromStatus,
             occurredAt: $updated->started_travel_at?->toIso8601String() ?? $updated->updated_at?->toIso8601String(),
+            extraData: ['workerId' => (int) $this->currentWorker()->id],
         );
+        }
 
         return $updated;
     }
