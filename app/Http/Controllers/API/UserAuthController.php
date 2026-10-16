@@ -34,9 +34,16 @@ final class UserAuthController
             $this->throwValidationError('phone', self::ACCOUNT_NOT_ACTIVE_MESSAGE);
         }
 
-        $requestedModuleType = UserModuleType::from($request->validated('module'));
-        if ($user->module_type !== $requestedModuleType) {
-            $this->throwValidationError('phone', self::MODULE_ACCESS_DENIED_MESSAGE);
+        $requestedModule = $request->validated('module');
+        if ($requestedModule === 'user') {
+            if ($user->module_type !== null) {
+                $this->throwValidationError('phone', self::MODULE_ACCESS_DENIED_MESSAGE);
+            }
+        } else {
+            $requestedModuleType = UserModuleType::from($requestedModule);
+            if ($user->module_type !== $requestedModuleType) {
+                $this->throwValidationError('phone', self::MODULE_ACCESS_DENIED_MESSAGE);
+            }
         }
 
         $fcmToken = $request->validated('fcmToken');
