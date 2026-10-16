@@ -135,10 +135,12 @@ final class CleaningBookingForm
                 ->columnSpanFull(),
 
             Section::make('الغرف المشمولة بالخدمة')
-                ->description('يمكن تعديل الغرف التي يشملها هذا الحجز فقط. لن يتم تغيير السعر أو المساحة أو التقديرات المحسوبة تلقائياً.')
+                ->description('لضمان توافق السعر والمدة ومستحقات العمال، عدّل عدد الغرف من إجراء «تعديل عدد الغرف» في قائمة الحجوزات. القائمة أدناه للعرض فقط.')
                 ->schema([
                     CheckboxList::make('selected_room_keys')
                         ->label('الغرف المختارة')
+                        ->disabled()
+                        ->dehydrated(false)
                         ->options(fn (?CleaningBooking $record): array => self::roomOptions($record))
                         ->columns(3)
                         ->bulkToggleable()
