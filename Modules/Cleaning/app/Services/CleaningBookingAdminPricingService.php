@@ -63,6 +63,15 @@ final class CleaningBookingAdminPricingService
 
             $details['room_size_breakdown'] = $breakdown;
             $estimate = $this->estimator->estimate((string) $booking->property_type, $details);
+            // Match the customer-side safety rule: at most eight estimated
+            // service hours per worker on ordinary cleaning requests.
+            $requiredWorkers = max(1, (int) ($booking->number_of_workers ?? 1));
+            if ((float) $estimate['estimatedHours'] > 8 * $requiredWorkers) {
+                throw new InvalidArgumentException(
+                    'المدة المقدرة تتجاوز 8 ساعات لكل عامل. عدّل عدد الغرف أو عدد العمال أولاً.',
+                );
+            }
+
             $pricing = $this->estimator->price(
                 (string) $booking->property_type,
                 $details,
