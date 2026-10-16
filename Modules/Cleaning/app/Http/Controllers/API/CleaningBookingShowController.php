@@ -15,6 +15,10 @@ final class CleaningBookingShowController
 {
     public function __invoke(CleaningBooking $cleaning_booking): CleaningBookingOperationalResource
     {
+        // Supervisor-managed work has a separate redacted read endpoint.
+        if ($cleaning_booking->isSupervisedTeam()) {
+            abort(404);
+        }
         $this->ensureWorkerCanViewBooking($cleaning_booking);
 
         return CleaningBookingOperationalResource::make($cleaning_booking->load([

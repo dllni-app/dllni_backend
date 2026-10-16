@@ -28,11 +28,44 @@ final class SupervisedWorkerBookingController
 
         $booking->load([
             'rooms',
+            'roomPeriods',
             'specialServices.items',
             'supervisorAssignments.supervisor',
         ]);
         $supervisor = $booking->supervisorAssignments
             ->first(fn ($item) => $item->released_at === null && (int) $item->active_slot === 1);
+
+        // Booking-level scope only: periods are not assigned to individual
+        // workers. Never serialize materials, prices, or per-worker room owners.
+        $roomTasks = $booking->rooms->map(fn ($room) => [
+            'id' => $room->id,
+            'key' => $room->room_key,
+            'title' => $room->display_label,
+            'roomType' => $room->room_type,
+            'roomSize' => $room->room_size,
+            'cleaningMode' => is_array($booking->property_details['room_cleaning_modes'] ?? null)
+                ? ($booking->property_details['room_cleaning_modes'][$room->room_key] ?? null)
+                : null,
+        ]);
+        $roomTitles = [
+            'bedroom' => 'غرفة نوم', 'bathroom' => 'حمام', 'toilet' => 'مرحاض',
+            'kitchen' => 'مطبخ', 'living_room' => 'غرفة معيشة',
+            'balcony' => 'شرفة', 'corridor' => 'ممر', 'shed' => 'مستودع',
+        ];
+        $tasks = $booking->roomPeriods->isNotEmpty()
+            ? $booking->roomPeriods->map(fn ($period) => [
+                'id' => $period->id,
+                'key' => $period->client_key,
+                'title' => $roomTitles[$period->room_type] ?? 'غرفة',
+                'roomType' => $period->room_type,
+                'roomSize' => $period->room_size,
+                'cleaningMode' => $period->cleaning_mode,
+                'notes' => $period->notes,
+                'scheduledDate' => $period->scheduled_date?->format('Y-m-d'),
+                'scheduledTime' => $period->scheduled_time,
+                'estimatedWorkMinutes' => $period->estimated_work_minutes,
+            ])
+            : $roomTasks;
 
         return response()->json(['data' => [
             'id' => $booking->id,
@@ -57,16 +90,8 @@ final class SupervisedWorkerBookingController
                 'assignmentId' => $assignment->id,
                 'status' => $assignment->status?->value ?? (string) $assignment->status,
             ],
-            'tasks' => $booking->rooms->map(fn ($room) => [
-                'id' => $room->id,
-                'key' => $room->room_key,
-                'title' => $room->display_label,
-                'roomType' => $room->room_type,
-                'roomSize' => $room->room_size,
-                'cleaningMode' => (is_array($booking->property_details['room_cleaning_modes'] ?? null)
-                    ? ($booking->property_details['room_cleaning_modes'][$room->room_key] ?? null)
-                    : null),
-            ])->values(),
+            'scopeRooms' => $roomTasks->values(),
+            'tasks' => $tasks->values(),
             'specializedServices' => $booking->specialServices->map(fn ($service) => [
                 'id' => $service->id,
                 'name' => $service->service_name,

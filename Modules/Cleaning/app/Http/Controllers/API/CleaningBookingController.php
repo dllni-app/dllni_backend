@@ -55,6 +55,17 @@ final class CleaningBookingController
         $authenticatedWorker = $request->user()?->worker;
         if ($authenticatedWorker instanceof Worker) {
             $query->forCurrentWorker(true);
+            // The fourth service is never an open invitation. Only assigned
+            // workers may discover a supervisor-managed booking.
+            $query->where(function ($visible) use ($authenticatedWorker): void {
+                $visible->where(function ($legacy): void {
+                    $legacy->whereNull('booking_kind')
+                        ->orWhere('booking_kind', '!=', 'supervised_team');
+                })->orWhereHas('workerAssignments', function ($assignments) use ($authenticatedWorker): void {
+                    $assignments->where('worker_id', $authenticatedWorker->id)
+                        ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
+                });
+            });
         }
 
         $bookings = $query
