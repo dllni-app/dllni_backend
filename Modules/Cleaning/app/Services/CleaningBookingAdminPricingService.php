@@ -9,6 +9,7 @@ use InvalidArgumentException;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Observers\CleaningBookingObserver;
 use Modules\Cleaning\Support\WorkerRoomAssignmentPlanner;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
@@ -84,13 +85,20 @@ final class CleaningBookingAdminPricingService
                 max(1, (int) ($booking->number_of_workers ?? 1)),
             );
 
-            $booking->forceFill([
-                'property_details' => $details,
-                'estimated_sqm' => $estimate['estimatedSqm'],
-                'estimated_hours' => $estimate['estimatedHours'],
-                'total_hours' => $estimate['estimatedHours'],
-                'base_price' => $pricing['basePrice'],
-            ])->save();
+            // The final team recalculation emits one canonical update. Suppress
+            // the intermediate snapshot update to avoid duplicate customer alerts.
+            CleaningBookingObserver::withoutLifecycleUpdateNotificationsFor(
+                (int) $booking->id,
+                function () use ($booking, $details, $estimate, $pricing): void {
+                    $booking->forceFill([
+                        'property_details' => $details,
+                        'estimated_sqm' => $estimate['estimatedSqm'],
+                        'estimated_hours' => $estimate['estimatedHours'],
+                        'total_hours' => $estimate['estimatedHours'],
+                        'base_price' => $pricing['basePrice'],
+                    ])->save();
+                },
+            );
 
             // Room keys remain stable for unchanged rooms, preserving existing
             // worker assignments. Removed keys are deleted only before travel.
@@ -128,7 +136,10 @@ final class CleaningBookingAdminPricingService
             $booking = CleaningBooking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
             $this->assertBookingIsEditable($booking);
 
-            $booking->forceFill(['base_price' => round($basePrice, 2)])->save();
+            CleaningBookingObserver::withoutLifecycleUpdateNotificationsFor(
+                (int) $booking->id,
+                fn () => $booking->forceFill(['base_price' => round($basePrice, 2)])->save(),
+            );
 
             return $this->teamService->recalculateBookingTeam(
                 $booking,
