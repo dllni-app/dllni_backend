@@ -6,6 +6,7 @@ namespace Modules\User\Http\Controllers\API;
 
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
 use Modules\User\Enums\OtpPurpose;
@@ -25,6 +26,13 @@ final class LoginController
 
         if (! $user instanceof User || ! Hash::check($request->validated('password'), $user->password)) {
             throw AuthFlowException::invalidCredentials();
+        }
+
+        // Customer credentials must not grant access to a merchant or worker account.
+        if ($user->module_type !== null) {
+            throw ValidationException::withMessages([
+                'phone' => ['هذا الحساب مخصص لتطبيق آخر ولا يمكن استخدامه في تطبيق العميل.'],
+            ]);
         }
 
         if (! $this->isActive($user)) {
