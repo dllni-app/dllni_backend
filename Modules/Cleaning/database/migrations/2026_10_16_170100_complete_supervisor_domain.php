@@ -11,6 +11,14 @@ return new class extends Migration
 {
     public function up(): void
     {
+        Schema::table('cleaning_bookings', function (Blueprint $table): void {
+            $table->string('supervised_state', 40)->nullable();
+            $table->unsignedInteger('supervised_base_minutes')->nullable();
+            $table->unsignedInteger('supervised_duration_minutes')->nullable();
+            $table->dateTime('supervised_scheduled_end_at')->nullable();
+            $table->dateTime('supervised_original_end_at')->nullable();
+        });
+
         $active = DB::table('cleaning_supervisor_assignments')->whereNull('released_at')
             ->orderBy('cleaning_booking_id')->orderByDesc('assigned_at')->orderByDesc('id')->get();
         $seen = [];
@@ -56,6 +64,15 @@ return new class extends Migration
 
     public function down(): void
     {
+        Schema::table('cleaning_bookings', function (Blueprint $table): void {
+            $table->dropColumn([
+                'supervised_state',
+                'supervised_base_minutes',
+                'supervised_duration_minutes',
+                'supervised_scheduled_end_at',
+                'supervised_original_end_at',
+            ]);
+        });
         Schema::dropIfExists('cleaning_supervisor_replacements');
         Schema::dropIfExists('cleaning_supervisor_incidents');
         Schema::table('cleaning_supervisor_assignments', function (Blueprint $table): void {

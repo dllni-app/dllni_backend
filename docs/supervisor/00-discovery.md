@@ -1,6 +1,6 @@
 # Supervisor backend discovery
 
-Checked on 2026-10-16 on `dev` in `Dllni_backend`. The branch was two commits ahead of `origin/dev` at inspection. Five untracked supervisor implementation files were already present. Additional backend edits appeared during this work, so those edits are listed separately in the implementation status and are not treated as approved behavior.
+Checked on 2026-10-16 on `dev` in `Dllni_backend`. The branch was two commits ahead of `origin/dev` at inspection. Five untracked supervisor implementation files were already present. The live API was narrowed to the routes and behavior documented here and in `api-contract.md`.
 
 ## Existing behavior
 

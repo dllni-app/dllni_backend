@@ -39,11 +39,22 @@ final class UserCleaningOrderStoreController
             'couponCode' => ['nullable', 'string', 'max:50'],
         ])->validate();
         $validated = $this->normalizeWorkerCount($request->validated());
-        if (($validated['serviceType'] ?? null) === 'supervised_team') {
+        if (($validated['serviceType'] ?? null) === 'supervised_team' && ! config('cleaning_supervisor.booking_enabled')) {
             return response()->json([
                 'code' => 'FEATURE_NOT_CONFIGURED',
                 'message' => 'حجز فريق تحت الإشراف غير متاح حتى اعتماد آلية التحقق والموافقات.',
             ], 409);
+        }
+        if (($validated['serviceType'] ?? null) === 'supervised_team') {
+            if ((int) ($validated['numberOfWorkers'] ?? 0) < 2
+                || (int) ($validated['contractVersion'] ?? 0) === 2
+                || ! empty($validated['openTime']) || ! empty($validated['roomPeriods'])
+                || ! empty($validated['recurringSchedule']) || ! empty($validated['workerRoomAssignments'])
+                || ! empty($validated['preferredWorkerIds']) || ! empty($validated['preferredWorkerId'])
+                || ($validated['assignmentMode'] ?? 'open_count') !== 'open_count'
+                || $estimationService->isEventAssistanceType((string) $validated['propertyType'])) {
+                throw ValidationException::withMessages(['serviceType' => ['يجب اختيار عاملين على الأقل وخدمة فريق بموعد واحد.']]);
+            }
         }
         if ((int) ($validated['contractVersion'] ?? 0) === 2) {
             $booking = app(\Modules\User\Services\CleaningTimePeriodBookingService::class)->create($request->user(), $validated);

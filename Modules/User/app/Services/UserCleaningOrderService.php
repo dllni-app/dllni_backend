@@ -170,7 +170,9 @@ final class UserCleaningOrderService
                 'status' => CleaningBookingStatus::Pending,
                 'booking_kind' => $isOpenTime
                     ? 'open_time'
-                    : ((string) ($validated['bookingKind'] ?? '') === 'special_service' ? 'special_service' : 'standard'),
+                    : (($validated['serviceType'] ?? null) === 'supervised_team'
+                        ? 'supervised_team'
+                        : ((string) ($validated['bookingKind'] ?? '') === 'special_service' ? 'special_service' : 'standard')),
                 'capability_schema_version' => 2,
                 'property_type' => $normalizedPropertyType,
                 'cleaning_event_type_id' => $eventType?->id,
@@ -204,7 +206,19 @@ final class UserCleaningOrderService
                 'terms_accepted' => true,
             ]);
 
-            $this->teamService->syncRooms($booking, $plannedWorkerRoomAssignments);
+            if (! $booking->isSupervisedTeam()) {
+                $this->teamService->syncRooms($booking, $plannedWorkerRoomAssignments);
+            } else {
+                $base = max(1, (int) ceil((float) ($estimation['estimatedRawMinutes'] ?? ($estimation['estimatedHours'] * 60))));
+                $teamInterval = app(\Modules\Cleaning\Services\SupervisedTeamScheduleService::class)->estimate(
+                    $base, (int) $requestedWorkers, (string) $validated['scheduledDate'], (string) $validated['scheduledTime']
+                );
+                app(\Modules\Cleaning\Services\SupervisedTeamScheduleService::class)->initialize($booking, $teamInterval);
+                app(\Modules\Cleaning\Services\SupervisedTeamService::class)->activity(
+                    (int) $booking->id, (int) $user->id, 'supervised_booking_created',
+                    ['requiredWorkers' => $requestedWorkers, 'durationMinutes' => $teamInterval['durationMinutes']]
+                );
+            }
             $this->persistNewServiceLines($booking, $pricing);
 
             return $booking->fresh();

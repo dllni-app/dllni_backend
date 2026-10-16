@@ -91,7 +91,7 @@ final class SupervisedTeamService
             'serviceType' => self::KIND,
             'status' => $booking->status?->value ?? (string) $booking->status,
             'scheduledDate' => $booking->scheduled_date?->format('Y-m-d'),
-            'scheduledTime' => substr((string) $booking->scheduled_time, 0, 5),
+            'scheduledTime' => mb_substr((string) $booking->scheduled_time, 0, 5),
             'requiredWorkers' => $attendance['requiredWorkers'],
             'acceptedWorkers' => $attendance['acceptedWorkers'],
             'arrivedWorkers' => $attendance['arrivedWorkers'],

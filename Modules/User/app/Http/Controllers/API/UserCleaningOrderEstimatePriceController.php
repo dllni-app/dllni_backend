@@ -33,11 +33,22 @@ final class UserCleaningOrderEstimatePriceController
         RoomPeriodBookingCreationService $periodCreation,
     ): JsonResponse {
         $validated = $request->validated();
-        if (($validated['serviceType'] ?? null) === 'supervised_team') {
+        if (($validated['serviceType'] ?? null) === 'supervised_team' && ! config('cleaning_supervisor.booking_enabled')) {
             return response()->json([
                 'code' => 'FEATURE_NOT_CONFIGURED',
                 'message' => 'تسعير الفريق تحت الإشراف غير متاح حتى اكتمال اعتماد الخدمة.',
             ], 409);
+        }
+        if (($validated['serviceType'] ?? null) === 'supervised_team') {
+            if ((int) ($validated['numberOfWorkers'] ?? 0) < 2
+                || (int) ($validated['contractVersion'] ?? 0) === 2
+                || ! empty($validated['openTime']) || ! empty($validated['roomPeriods'])
+                || ! empty($validated['recurringSchedule']) || ! empty($validated['workerRoomAssignments'])
+                || ! empty($validated['preferredWorkerIds']) || ! empty($validated['preferredWorkerId'])
+                || ($validated['assignmentMode'] ?? 'open_count') !== 'open_count'
+                || $service->isEventAssistanceType((string) $validated['propertyType'])) {
+                throw ValidationException::withMessages(['serviceType' => ['يجب اختيار عاملين على الأقل وخدمة فريق بموعد واحد.']]);
+            }
         }
         if ((int) ($validated['contractVersion'] ?? 0) === 2) {
             $result = app(\Modules\User\Services\CleaningTimePeriodQuoteService::class)->estimate($request->user(), $validated);
@@ -282,6 +293,14 @@ final class UserCleaningOrderEstimatePriceController
                 : app(\Modules\Cleaning\Services\CleaningMaterialQuoteService::class)
                     ->quote($pricingPropertyDetails, null, false)['lines'],
             'schedule' => ($eventPlan !== null || $recurringPlan !== null || $openTimePlan !== null) ? $pricing['schedule'] : null,
+            'serviceType' => $validated['serviceType'] ?? 'standard',
+            'supervisedTeam' => ($validated['serviceType'] ?? null) === 'supervised_team'
+                ? app(\Modules\Cleaning\Services\SupervisedTeamScheduleService::class)->estimate(
+                    max(1, (int) ceil((float) ($estimation['estimatedRawMinutes'] ?? $singleVisitEstimatedHours * 60))),
+                    (int) $requestedWorkers,
+                    (string) $validated['scheduledDate'],
+                    (string) $validated['scheduledTime'],
+                ) : null,
             'assignmentMode' => $assignmentMode,
             'workerScope' => $workerScope,
             'specificWorkerIds' => $specificWorkerIds,

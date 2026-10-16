@@ -164,7 +164,7 @@ it('enforces one active supervisor per booking while retaining released history'
     expect(DB::table('cleaning_supervisor_assignments')->where('cleaning_booking_id', $booking->id)->count())->toBe(2);
 });
 
-it('lets operations assign the first supervisor with audit and blocks reassignment', function () {
+it('lets operations assign a supervisor and validates replacement reason', function () {
     $manager = User::factory()->create(['is_active' => true]);
     Role::findOrCreate('Cleaning Ops Manager', 'web');
     $manager->assignRole('Cleaning Ops Manager');
@@ -191,14 +191,13 @@ it('lets operations assign the first supervisor with audit and blocks reassignme
     ])->assertOk()->assertJsonPath('data.unchanged', true);
     $this->postJson('/api/v1/admin/cleaning/supervised-bookings/'.$booking->id.'/supervisor', [
         'supervisorUserId' => $second->id,
-    ])->assertStatus(409);
+    ])->assertStatus(422);
     $this->assertDatabaseHas('cleaning_supervisor_activity', [
         'cleaning_booking_id' => $booking->id, 'actor_user_id' => $manager->id,
         'action' => 'supervisor_assigned',
     ]);
     expect(DB::table('cleaning_supervisor_assignments')->where('cleaning_booking_id', $booking->id)->count())->toBe(1);
 });
-
 
 it('blocks legacy worker execution actions for supervised bookings', function () {
     $supervisor = supervisorUser();
@@ -210,4 +209,80 @@ it('blocks legacy worker execution actions for supervised bookings', function ()
     Sanctum::actingAs($worker->user);
     $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/start-work")->assertForbidden();
     $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/complete")->assertForbidden();
+});
+
+
+it('allows operations to assign a supervisor with an audited active slot', function () {
+    Role::findOrCreate('Cleaning Ops Manager', 'web');
+    $operations = User::factory()->create(['is_active' => true]);
+    $operations->assignRole('Cleaning Ops Manager');
+    $supervisor = supervisorUser();
+    $booking = CleaningBooking::factory()->create([
+        'booking_kind' => 'supervised_team',
+        'estimated_hours' => 12,
+        'number_of_workers' => 3,
+        'scheduled_date' => '2026-10-20',
+        'scheduled_time' => '09:00',
+    ]);
+    Sanctum::actingAs($operations);
+    $url = "/api/v1/admin/cleaning/supervised-bookings/{$booking->id}/supervisor";
+    $this->postJson($url, ['supervisorUserId' => $supervisor->id])
+        ->assertCreated()->assertJsonPath('data.supervisorUserId', $supervisor->id);
+    $this->postJson($url, ['supervisorUserId' => $supervisor->id])
+        ->assertOk()->assertJsonPath('data.unchanged', true);
+    $this->assertDatabaseCount('cleaning_supervisor_assignments', 1);
+    $this->assertDatabaseHas('cleaning_supervisor_activity', [
+        'cleaning_booking_id' => $booking->id, 'action' => 'supervisor_assigned',
+    ]);
+    Sanctum::actingAs($supervisor);
+    $this->getJson("/api/v1/supervisor/bookings/{$booking->id}")->assertOk();
+});
+
+it('blocks overlapping supervisor assignments and allows separate appointments', function () {
+    Role::findOrCreate('Cleaning Ops Manager', 'web');
+    $operations = User::factory()->create(['is_active' => true]);
+    $operations->assignRole('Cleaning Ops Manager');
+    $supervisor = supervisorUser();
+    Sanctum::actingAs($operations);
+    $url = '/api/v1/admin/cleaning/supervised-bookings/';
+    $makeBooking = fn (string $time) => CleaningBooking::factory()->create([
+        'booking_kind' => 'supervised_team', 'number_of_workers' => 3,
+        'estimated_hours' => 12, 'scheduled_date' => '2026-10-20', 'scheduled_time' => $time,
+    ]);
+    $first = $makeBooking('09:00');
+    $overlap = $makeBooking('12:00');
+    $later = $makeBooking('14:00');
+    $this->postJson($url.$first->id.'/supervisor', ['supervisorUserId' => $supervisor->id])
+        ->assertCreated();
+    $this->postJson($url.$overlap->id.'/supervisor', ['supervisorUserId' => $supervisor->id])
+        ->assertStatus(409);
+    $this->postJson($url.$later->id.'/supervisor', ['supervisorUserId' => $supervisor->id])
+        ->assertCreated();
+    $this->assertDatabaseCount('cleaning_supervisor_assignments', 2);
+});
+
+it('requires authorization and a reason to replace the current supervisor', function () {
+    Role::findOrCreate('Cleaning Ops Manager', 'web');
+    $operations = User::factory()->create(['is_active' => true]);
+    $operations->assignRole('Cleaning Ops Manager');
+    $first = supervisorUser();
+    $second = supervisorUser();
+    $booking = supervisorBooking($first, [
+        'estimated_hours' => 12, 'scheduled_date' => '2026-10-22', 'scheduled_time' => '09:00',
+    ]);
+    $url = "/api/v1/admin/cleaning/supervised-bookings/{$booking->id}/supervisor";
+    Sanctum::actingAs($first);
+    $this->postJson($url, ['supervisorUserId' => $second->id])->assertForbidden();
+    Sanctum::actingAs($operations);
+    $this->postJson($url, ['supervisorUserId' => $second->id])->assertStatus(422);
+    $this->postJson($url, [
+        'supervisorUserId' => $second->id, 'reason' => 'Supervisor unavailable',
+    ])->assertCreated();
+    $this->assertDatabaseHas('cleaning_supervisor_assignments', [
+        'cleaning_booking_id' => $booking->id, 'supervisor_user_id' => $first->id, 'active_slot' => null,
+    ]);
+    Sanctum::actingAs($first);
+    $this->getJson("/api/v1/supervisor/bookings/{$booking->id}")->assertNotFound();
+    Sanctum::actingAs($second);
+    $this->getJson("/api/v1/supervisor/bookings/{$booking->id}")->assertOk();
 });

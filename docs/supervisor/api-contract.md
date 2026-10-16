@@ -4,7 +4,7 @@ Base URL: `/api/v1/supervisor`. JSON responses use `data`; errors from this API 
 
 ## Routes
 
-These are the 17 routes returned by `php artisan route:list --path=supervisor` on 2026-10-16:
+The supervisor mobile prefix has 17 routes. `php artisan route:list --path=supervisor` also returns the operations route below, for 18 total:
 
 | Method | Path | Behavior |
 | --- | --- | --- |
@@ -25,6 +25,8 @@ These are the 17 routes returned by `php artisan route:list --path=supervisor` o
 | POST | `/bookings/{booking}/extension-requests` | 409 `FEATURE_NOT_CONFIGURED` |
 | POST | `/bookings/{booking}/handover-requests` | 409 `FEATURE_NOT_CONFIGURED` |
 | POST | `/bookings/{booking}/reports` | 409 `FEATURE_NOT_CONFIGURED` |
+
+Operations-only route: `POST /api/v1/admin/cleaning/supervised-bookings/{booking}/supervisor` with `supervisorUserId`. An active `Super Admin` or `Cleaning Ops Manager` can assign the first active supervisor to an existing `supervised_team` booking. Repeating the same assignment is idempotent; reassignment to another supervisor returns 409. The action writes `cleaning_supervisor_activity` audit. It does not create a customer booking or change worker assignments.
 
 Except login, every route requires `auth:sanctum`, active supervisor role, and an active assignment to any booking ID. A booking belonging to another supervisor, a released assignment, or a different `booking_kind` responds `404 BOOKING_NOT_FOUND`. A non-supervisor responds `403 SUPERVISOR_FORBIDDEN`. Unconfigured actions check ownership before returning 409. No attendance endpoint writes worker arrival. No endpoint marks a booking paid or completed.
 
