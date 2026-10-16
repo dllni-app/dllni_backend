@@ -47,6 +47,11 @@ final class UserAuthController
         }
 
         $user->loadMissing('worker');
+        // Signing in as a cleaning worker invalidates the previous device's
+        // Sanctum token. Other account types retain their existing behavior.
+        if ($requestedModule === UserModuleType::CleaningWorker->value) {
+            $user->tokens()->where('name', 'user-api')->delete();
+        }
         $token = $user->createToken('user-api')->plainTextToken;
 
         $payload = [
