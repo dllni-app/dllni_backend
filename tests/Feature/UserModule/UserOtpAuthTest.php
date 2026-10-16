@@ -348,3 +348,18 @@ it('stores fcm token from fcm-token header during v1 user login', function (): v
     $response->assertOk()->assertJsonStructure(['data', 'token']);
     expect($user->fresh()->fcm_token)->toBe('v1_user_header_fcm_token_1234567890');
 });
+
+it('blocks cleaning workers from the dedicated customer login route', function (): void {
+    $phone = '+963944000449';
+
+    User::factory()->phoneVerified()->create([
+        'phone' => $phone,
+        'password' => bcrypt('secret123'),
+        'module_type' => \App\Enums\UserModuleType::CleaningWorker->value,
+    ]);
+
+    $this->postJson('/api/v1/user/login', [
+        'phone' => $phone,
+        'password' => 'secret123',
+    ])->assertUnprocessable()->assertJsonValidationErrors(['phone']);
+});
