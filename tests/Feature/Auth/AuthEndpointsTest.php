@@ -297,3 +297,24 @@ it('user: restaurant seller staff login returns restaurant role and assigned per
 
     expect($response->json('permissions'))->toHaveCount(2);
 });
+
+it('revokes the previous cleaning worker device token on a new login', function (): void {
+    $phone = '+962799901101';
+
+    $user = User::factory()->create([
+        'phone' => $phone,
+        'password' => bcrypt('secret'),
+        'module_type' => UserModuleType::CleaningWorker->value,
+    ]);
+
+    $oldToken = $user->createToken('user-api');
+
+    $this->postJson('/api/login', [
+        'phone' => $phone,
+        'password' => 'secret',
+        'module' => UserModuleType::CleaningWorker->value,
+    ])->assertOk()->assertJsonStructure(['token']);
+
+    expect($user->tokens()->whereKey($oldToken->accessToken->id)->exists())->toBeFalse();
+    expect($user->tokens()->where('name', 'user-api')->count())->toBe(1);
+});
