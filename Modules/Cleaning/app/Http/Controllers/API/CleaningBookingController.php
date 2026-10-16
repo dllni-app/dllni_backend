@@ -258,6 +258,7 @@ final class CleaningBookingController
     /** @throws Throwable */
     public function claimRooms(CleaningBookingRoomClaimRequest $request, CleaningBooking $cleaning_booking): CleaningBookingResource|JsonResponse
     {
+        abort_if($cleaning_booking->isSupervisedTeam(), 403, 'لا يوجد توزيع رقمي للغرف ضمن فريق المشرف.');
         try {
             $booking = $this->cleaningBookingService->claimRooms($cleaning_booking, $request->validated('roomIds'));
         } catch (InvalidArgumentException $e) {

@@ -132,6 +132,7 @@ final class UserCleaningOrderStoreRequest extends FormRequest
             ...$this->recurringWorkerScopeRules(),
             'assignmentMode' => ['nullable', 'string', Rule::in(['preferred_worker', 'open_count'])],
             'numberOfWorkers' => ['nullable', 'integer', 'min:1', 'max:20'],
+            'serviceType' => ['nullable', Rule::in(['standard', 'supervised_team'])],
             ...$this->workerRoomAssignmentRules(),
             'genderPreference' => ['nullable', 'string', Rule::in(['any', 'male', 'female'])],
             'workEnvironmentConfirmation' => [Rule::excludeIf(! $requiresFemaleWorkerSafetyConfirmation), Rule::requiredIf($requiresFemaleWorkerSafetyConfirmation), 'array:beneficiaryPresence,pledgeAccepted,pledgeVersion'],

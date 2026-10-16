@@ -196,6 +196,16 @@ final class CleaningBooking extends Model
         return $this->hasMany(CleaningBookingWorkerAssignment::class, 'cleaning_booking_id');
     }
 
+    public function supervisorAssignments(): HasMany
+    {
+        return $this->hasMany(CleaningSupervisorAssignment::class, 'cleaning_booking_id');
+    }
+
+    public function isSupervisedTeam(): bool
+    {
+        return (string) $this->booking_kind === 'supervised_team';
+    }
+
     public function acceptedWorkerAssignments(): HasMany
     {
         return $this->hasMany(CleaningBookingWorkerAssignment::class, 'cleaning_booking_id')

@@ -33,6 +33,12 @@ final class UserCleaningOrderEstimatePriceController
         RoomPeriodBookingCreationService $periodCreation,
     ): JsonResponse {
         $validated = $request->validated();
+        if (($validated['serviceType'] ?? null) === 'supervised_team') {
+            return response()->json([
+                'code' => 'FEATURE_NOT_CONFIGURED',
+                'message' => 'تسعير الفريق تحت الإشراف غير متاح حتى اكتمال اعتماد الخدمة.',
+            ], 409);
+        }
         if ((int) ($validated['contractVersion'] ?? 0) === 2) {
             $result = app(\Modules\User\Services\CleaningTimePeriodQuoteService::class)->estimate($request->user(), $validated);
             return response()->json($result);

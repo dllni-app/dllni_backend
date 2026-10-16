@@ -6,6 +6,7 @@ use App\Http\Controllers\API\RegisterFcmTokenController;
 use App\Http\Controllers\API\UserNotificationController;
 use Illuminate\Support\Facades\Route;
 use Modules\Cleaning\Http\Controllers\API\CleaningBillingPolicyController;
+use Modules\Cleaning\Http\Controllers\API\AssignSupervisedBookingController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingArriveController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingCompleteController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingController;
@@ -29,6 +30,8 @@ use Modules\Cleaning\Http\Controllers\API\DepositManagementController;
 use Modules\Cleaning\Http\Controllers\API\EventBookingController;
 use Modules\Cleaning\Http\Controllers\API\GeographicCoverageController;
 use Modules\Cleaning\Http\Controllers\API\ServicePricingController;
+use Modules\Cleaning\Http\Controllers\API\SupervisorAppController;
+use Modules\Cleaning\Http\Middleware\EnsureSupervisor;
 use Modules\Cleaning\Http\Controllers\API\WorkerAccountProfileController;
 use Modules\Cleaning\Http\Controllers\API\WorkerCurrentLocationController;
 use Modules\Cleaning\Http\Controllers\API\WorkerAccountStatusController;
@@ -43,6 +46,27 @@ use Modules\Cleaning\Http\Controllers\API\WorkerWorkingHoursController;
 use Modules\Cleaning\Http\Controllers\API\WorkerWorkAreasController;
 
 Route::prefix('v1')->group(function () {
+    Route::post('admin/cleaning/supervised-bookings/{booking}/supervisor', AssignSupervisedBookingController::class)
+        ->middleware('auth:sanctum')->whereNumber('booking');
+    Route::prefix('supervisor')->group(function (): void {
+        Route::post('login', [SupervisorAppController::class, 'login'])->middleware('throttle:6,1');
+        Route::middleware(['auth:sanctum', EnsureSupervisor::class])->group(function (): void {
+            Route::get('me', [SupervisorAppController::class, 'me']);
+            Route::post('logout', [SupervisorAppController::class, 'logout']);
+            Route::get('home', [SupervisorAppController::class, 'home']);
+            Route::get('bookings', [SupervisorAppController::class, 'index']);
+            Route::get('schedule', [SupervisorAppController::class, 'schedule']);
+            Route::get('bookings/{booking}', [SupervisorAppController::class, 'show'])->whereNumber('booking');
+            Route::get('bookings/{booking}/attendance', [SupervisorAppController::class, 'attendance'])->whereNumber('booking');
+            Route::get('bookings/{booking}/timeline', [SupervisorAppController::class, 'timeline'])->whereNumber('booking');
+            Route::get('bookings/{booking}/incidents', [SupervisorAppController::class, 'incidents'])->whereNumber('booking');
+            Route::post('bookings/{booking}/attendance-incidents', [SupervisorAppController::class, 'createIncident'])->whereNumber('booking');
+            Route::post('bookings/{booking}/replacement-requests', [SupervisorAppController::class, 'replacementRequest'])->whereNumber('booking');
+            foreach (['verification-requests', 'start', 'extension-requests', 'handover-requests', 'reports'] as $action) {
+                Route::post('bookings/{booking}/'.$action, [SupervisorAppController::class, 'unavailable'])->whereNumber('booking');
+            }
+        });
+    });
     Route::apiResource('cleaning-services', CleaningServiceController::class)->only(['index', 'show']);
     Route::apiResource('cleaning-services.pricing', ServicePricingController::class)->only(['index', 'show'])->scoped();
     Route::apiResource('cleaning-billing-policies', CleaningBillingPolicyController::class)->only(['index', 'show']);

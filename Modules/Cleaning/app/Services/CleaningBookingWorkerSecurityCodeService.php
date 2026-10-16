@@ -34,6 +34,7 @@ final class CleaningBookingWorkerSecurityCodeService
     /** @return array{securityCode:string,expiresAt:string} */
     public function issueForCurrentWorker(CleaningBooking $booking): array
     {
+        abort_if($booking->isSupervisedTeam(), 403, 'التحقق مسؤولية المشرف.');
         return DB::transaction(function () use ($booking): array {
             $worker = $this->currentWorker();
             $lockedBooking = $this->lockBooking($booking);
@@ -91,6 +92,7 @@ final class CleaningBookingWorkerSecurityCodeService
 
     public function confirmForCustomer(CleaningBooking $booking, string $code): CleaningBooking
     {
+        abort_if($booking->isSupervisedTeam(), 403, 'استخدم التحقق الخاص بفريق المشرف.');
         if (in_array($booking->status, [CleaningBookingStatus::Completed, CleaningBookingStatus::Cancelled, CleaningBookingStatus::UnderDispute], true)) {
             throw ValidationException::withMessages(['status' => ['Order is not waiting for start verification.']]);
         }

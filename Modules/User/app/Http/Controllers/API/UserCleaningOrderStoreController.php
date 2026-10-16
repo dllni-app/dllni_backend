@@ -39,6 +39,12 @@ final class UserCleaningOrderStoreController
             'couponCode' => ['nullable', 'string', 'max:50'],
         ])->validate();
         $validated = $this->normalizeWorkerCount($request->validated());
+        if (($validated['serviceType'] ?? null) === 'supervised_team') {
+            return response()->json([
+                'code' => 'FEATURE_NOT_CONFIGURED',
+                'message' => 'حجز فريق تحت الإشراف غير متاح حتى اعتماد آلية التحقق والموافقات.',
+            ], 409);
+        }
         if ((int) ($validated['contractVersion'] ?? 0) === 2) {
             $booking = app(\Modules\User\Services\CleaningTimePeriodBookingService::class)->create($request->user(), $validated);
             $details = app(\Modules\User\Services\CleaningTimePeriodCustomerDetailService::class)->forBooking($booking);

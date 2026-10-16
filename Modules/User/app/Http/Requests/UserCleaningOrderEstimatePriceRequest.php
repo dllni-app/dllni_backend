@@ -126,6 +126,7 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             ...$this->recurringWorkerScopeRules(),
             'assignmentMode' => ['nullable', 'string', Rule::in(['preferred_worker', 'open_count'])],
             'numberOfWorkers' => ['nullable', 'integer', 'min:1', 'max:20'],
+            'serviceType' => ['nullable', Rule::in(['standard', 'supervised_team'])],
             'genderPreference' => ['nullable', 'string', Rule::in(array_column(GenderPreference::cases(), 'value'))],
             ...$this->workerRoomAssignmentRules(),
         ];
