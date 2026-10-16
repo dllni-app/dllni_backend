@@ -79,6 +79,6 @@ jobs:
         run: |
           php artisan test \
             tests/Feature/UserModule/UserOtpAuthTest.php \
-            tests/Feature/Auth/AuthEndpointsTest.php \
+            tests/Feature/Auth/CleaningWorkerSingleDeviceTest.php \
             tests/Feature/Cleaning/WorkerBookingScheduleOverlapRegressionTest.php \
             tests/Feature/Cleaning/MultiWorkerIndependentCancellationRegressionTest.php
