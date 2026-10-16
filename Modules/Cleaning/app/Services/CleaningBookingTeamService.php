@@ -212,9 +212,9 @@ final class CleaningBookingTeamService
         });
     }
 
-    public function rejectWorker(CleaningBooking $booking, Worker $worker, ?string $reason = null): CleaningBooking
+    public function rejectWorker(CleaningBooking $booking, Worker $worker, ?string $reason = null, bool $applyWorkerPenalty = true): CleaningBooking
     {
-        return DB::transaction(function () use ($booking, $worker, $reason): CleaningBooking {
+        return DB::transaction(function () use ($booking, $worker, $reason, $applyWorkerPenalty): CleaningBooking {
             $booking = $this->lockBooking($booking->id);
 
             if (! in_array($booking->status, [CleaningBookingStatus::Pending, CleaningBookingStatus::WorkerAssigned], true)) {
@@ -263,7 +263,7 @@ final class CleaningBookingTeamService
 
             $booking = $this->recalculateBookingTeam($booking, finalizeBooking: false);
 
-            if ($hadAccepted) {
+            if ($hadAccepted && $applyWorkerPenalty) {
                 $this->workerTrustService->applyRejectAfterAcceptPenalty($worker, $booking);
             }
 
@@ -278,6 +278,31 @@ final class CleaningBookingTeamService
                 'timeWarnings',
                 'disputes',
             ]);
+        });
+    }
+
+    /**
+     * Replace an accepted worker in one transaction. Administrative changes must
+     * not trigger the worker's voluntary-withdrawal trust penalty.
+     */
+    public function replaceWorkerByAdmin(
+        CleaningBooking $booking,
+        Worker $outgoing,
+        Worker $incoming,
+        ?string $reason = null,
+    ): CleaningBooking {
+        return DB::transaction(function () use ($booking, $outgoing, $incoming, $reason): CleaningBooking {
+            $booking = $this->lockBooking($booking->id);
+            if ((int) $outgoing->id === (int) $incoming->id) {
+                throw new InvalidArgumentException('يجب اختيار عامل بديل مختلف عن العامل الحالي.');
+            }
+            if ($this->acceptedAssignmentForWorker($booking->id, $outgoing->id) === null) {
+                throw new InvalidArgumentException('العامل المطلوب استبداله لم يعد ضمن الفريق.');
+            }
+
+            $booking = $this->rejectWorker($booking, $outgoing, $reason, false);
+
+            return $this->acceptWorker($booking, $incoming);
         });
     }
 
