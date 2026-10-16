@@ -31,6 +31,7 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Services\CleaningBookingTeamService;
+use Modules\Cleaning\Services\CleaningBookingAdminPricingService;
 use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 use Throwable;
@@ -190,6 +191,103 @@ final class CleaningBookingsTable
             ])
             ->recordActions([
                 ActionGroup::make([
+                                        Action::make('change_room_quantity')
+                        ->label('تعديل عدد الغرف')
+                        ->icon('heroicon-o-home-modern')
+                        ->color('primary')
+                        ->visible(fn (CleaningBooking $record): bool => in_array($record->status, [
+                            CleaningBookingStatus::Pending,
+                            CleaningBookingStatus::WorkerAssigned,
+                        ], true) && ! self::isEventAssistance($record)
+                            && (string) ($record->booking_kind ?? '') !== 'open_time'
+                            && $record->started_travel_at === null
+                            && ! $record->sessions()->exists())
+                        ->modalHeading('تعديل عدد الغرف وإعادة احتساب السعر')
+                        ->modalDescription('أدخل العدد النهائي لغرف نوع وحجم محددين. سيحسب النظام مدة التنفيذ والسعر وحصص العمال من جديد. لا يُسمح بالتعديل بعد بدء الرحلة.')
+                        ->form([
+                            Select::make('room_type')
+                                ->label('نوع الغرفة')
+                                ->options([
+                                    'bedroom' => 'غرفة نوم',
+                                    'bathroom' => 'حمام',
+                                    'kitchen' => 'مطبخ',
+                                    'living_room' => 'صالة',
+                                    'balcony' => 'بلكون',
+                                    'corridor' => 'موزع',
+                                    'shed' => 'سقيفة',
+                                ])->required(),
+                            Select::make('room_size')
+                                ->label('حجم الغرفة')
+                                ->options([
+                                    'small' => 'صغيرة',
+                                    'medium' => 'متوسطة',
+                                    'large' => 'كبيرة',
+                                ])->required(),
+                            TextInput::make('quantity')
+                                ->label('العدد النهائي لهذا النوع والحجم')
+                                ->numeric()->minValue(0)->maxValue(30)->required(),
+                        ])
+                        ->action(function (CleaningBooking $record, array $data): void {
+                            try {
+                                $updated = app(CleaningBookingAdminPricingService::class)->setRoomQuantity(
+                                    $record,
+                                    (string) $data['room_type'],
+                                    (string) $data['room_size'],
+                                    (int) $data['quantity'],
+                                );
+                            } catch (Throwable $exception) {
+                                Notification::make()
+                                    ->title('تعذر تعديل الغرف')
+                                    ->body($exception->getMessage())
+                                    ->danger()->persistent()->send();
+                    
+                                return;
+                            }
+                    
+                            $record->setRawAttributes($updated->getAttributes(), true);
+                            Notification::make()
+                                ->title('تم تحديث الغرف والسعر والمدة وحصص العمال')
+                                ->success()->send();
+                        }),
+                    Action::make('change_base_price')
+                        ->label('تعديل السعر الأساسي')
+                        ->icon('heroicon-o-currency-dollar')
+                        ->color('warning')
+                        ->visible(fn (CleaningBooking $record): bool => in_array($record->status, [
+                            CleaningBookingStatus::Pending,
+                            CleaningBookingStatus::WorkerAssigned,
+                        ], true) && ! self::isEventAssistance($record)
+                            && (string) ($record->booking_kind ?? '') !== 'open_time'
+                            && $record->started_travel_at === null
+                            && ! $record->sessions()->exists())
+                        ->modalHeading('تعديل السعر الأساسي للطلب')
+                        ->modalDescription('تعديل إداري للسعر الأساسي؛ يتم إعادة حساب الإجمالي وحصص العمال والعمولة ورسوم التنقل قبل إتمام الطلب.')
+                        ->form([
+                            TextInput::make('base_price')
+                                ->label('السعر الأساسي الجديد')
+                                ->default(fn (CleaningBooking $record): float => (float) ($record->base_price ?? 0))
+                                ->numeric()->minValue(1)->required(),
+                        ])
+                        ->action(function (CleaningBooking $record, array $data): void {
+                            try {
+                                $updated = app(CleaningBookingAdminPricingService::class)->setBasePrice(
+                                    $record,
+                                    (float) $data['base_price'],
+                                );
+                            } catch (Throwable $exception) {
+                                Notification::make()
+                                    ->title('تعذر تعديل السعر')
+                                    ->body($exception->getMessage())
+                                    ->danger()->persistent()->send();
+                    
+                                return;
+                            }
+                    
+                            $record->setRawAttributes($updated->getAttributes(), true);
+                            Notification::make()
+                                ->title('تم تحديث السعر وحصص العمال')
+                                ->success()->send();
+                        }),
                     Action::make('add_worker')
                         ->label('إضافة عامل')
                         ->icon('heroicon-o-user-plus')
