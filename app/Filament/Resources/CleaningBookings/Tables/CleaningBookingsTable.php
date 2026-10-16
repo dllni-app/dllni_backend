@@ -85,6 +85,13 @@ final class CleaningBookingsTable
                     ->formatStateUsing(fn ($state): string => self::integer($state))
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('estimated_duration_display')
+                    ->label(self::headerLabel('مدة العمل المتوقعة', 'المدة التقديرية للعمل في هذا الحجز بالساعات.'))
+                    ->getStateUsing(fn (CleaningBooking $record): string => (
+                        rtrim(rtrim(number_format(max(0.0, (float) ($record->estimated_hours ?: $record->total_hours ?: 0)), 2, '.', ''), '0'), '.')
+                    ).' ساعة')
+                    ->badge()
+                    ->color('info'),
                 TextColumn::make('accepted_workers')
                     ->label(self::headerLabel('الفريق', 'عدد العاملين الذين تم تأكيدهم من العدد المطلوب.'))
                     ->getStateUsing(fn (CleaningBooking $record): string => sprintf('%d من %d', $record->acceptedWorkerCount(), max(1, (int) ($record->number_of_workers ?? 1))))
