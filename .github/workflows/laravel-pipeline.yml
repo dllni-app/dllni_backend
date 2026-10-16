@@ -81,4 +81,5 @@ jobs:
             tests/Feature/UserModule/UserOtpAuthTest.php \
             tests/Feature/Auth/CleaningWorkerSingleDeviceTest.php \
             tests/Feature/Cleaning/WorkerBookingScheduleOverlapRegressionTest.php \
-            tests/Feature/Cleaning/MultiWorkerIndependentCancellationRegressionTest.php
+            tests/Feature/Cleaning/MultiWorkerIndependentCancellationRegressionTest.php \
+            tests/Feature/Cleaning/CleaningAdminPricingRegressionTest.php
