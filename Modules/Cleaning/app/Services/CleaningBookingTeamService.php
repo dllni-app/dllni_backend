@@ -302,7 +302,23 @@ final class CleaningBookingTeamService
 
             $booking = $this->rejectWorker($booking, $outgoing, $reason, false);
 
-            return $this->acceptWorker($booking, $incoming);
+            // Retarget a customer-selected or preferred assignment as part of
+            // the same administrative transaction. Otherwise the normal
+            // acceptance guard would reject the incoming replacement worker.
+            $newWorkerIds = array_values(array_unique(array_map(
+                static fn (int $workerId): int => $workerId === (int) $outgoing->id
+                    ? (int) $incoming->id
+                    : $workerId,
+                $booking->specificWorkerIds(),
+            )));
+            $booking->forceFill([
+                'specific_worker_ids' => $newWorkerIds,
+                'preferred_worker_id' => (int) ($booking->preferred_worker_id ?? 0) === (int) $outgoing->id
+                    ? (int) $incoming->id
+                    : $booking->preferred_worker_id,
+            ])->save();
+
+            return $this->acceptWorker($booking->fresh(), $incoming);
         });
     }
 
