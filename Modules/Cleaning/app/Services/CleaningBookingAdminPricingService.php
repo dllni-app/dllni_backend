@@ -158,7 +158,7 @@ final class CleaningBookingAdminPricingService
             || (string) $booking->property_type === 'event_assistance'
             || $booking->started_travel_at !== null
             || $booking->work_started_at !== null
-            || $booking->sessions()->exists()
+            || (method_exists($booking, 'sessions') && $booking->sessions()->exists())
             || $booking->workerAssignments()
                 ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
                 ->where(function ($query): void {
