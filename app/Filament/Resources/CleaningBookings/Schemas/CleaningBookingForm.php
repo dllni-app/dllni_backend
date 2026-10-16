@@ -144,7 +144,6 @@ final class CleaningBookingForm
                         ->options(fn (?CleaningBooking $record): array => self::roomOptions($record))
                         ->columns(3)
                         ->bulkToggleable()
-                        ->required(fn (?CleaningBooking $record): bool => self::hasRooms($record))
                         ->visible(fn (?CleaningBooking $record): bool => self::hasRooms($record))
                         ->columnSpanFull(),
                 ])
