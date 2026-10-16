@@ -74,6 +74,12 @@ final class CleaningBooking extends Model
         'booking_number',
         'status',
         'booking_kind',
+        'supervised_state',
+        'supervised_base_minutes',
+        'supervised_duration_minutes',
+        'supervised_scheduled_end_at',
+        'supervised_original_end_at',
+        'supervised_verified_at',
         'capability_schema_version',
         'property_type',
         'cleaning_event_type_id',
@@ -194,6 +200,16 @@ final class CleaningBooking extends Model
     public function workerAssignments(): HasMany
     {
         return $this->hasMany(CleaningBookingWorkerAssignment::class, 'cleaning_booking_id');
+    }
+
+    public function supervisorAssignments(): HasMany
+    {
+        return $this->hasMany(CleaningSupervisorAssignment::class, 'cleaning_booking_id');
+    }
+
+    public function isSupervisedTeam(): bool
+    {
+        return (string) $this->booking_kind === 'supervised_team';
     }
 
     public function acceptedWorkerAssignments(): HasMany
@@ -318,6 +334,11 @@ final class CleaningBooking extends Model
             'estimated_sqm' => 'decimal:2',
             'estimated_hours' => 'decimal:2',
             'scheduled_date' => 'date',
+            'supervised_base_minutes' => 'integer',
+            'supervised_duration_minutes' => 'integer',
+            'supervised_scheduled_end_at' => 'datetime',
+            'supervised_original_end_at' => 'datetime',
+            'supervised_verified_at' => 'datetime',
             'total_hours' => 'decimal:2',
             'base_price' => 'float',
             'open_time_hourly_rate' => 'float',

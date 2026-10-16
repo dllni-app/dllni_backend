@@ -22,6 +22,7 @@ final class CleaningBookingSecurityCodeController
         CleaningBookingWorkerSecurityCodeService $service,
         CleaningBookingService $bookingService,
     ): JsonResponse {
+        abort_if($cleaning_booking->isSupervisedTeam(), 403, 'التحقق مسؤولية المشرف.');
         $this->ensureWorkerCanActOnBooking($cleaning_booking);
 
         try {

@@ -27,6 +27,7 @@ final class CleaningBookingWorkerCompletionService
 
     public function confirm(CleaningBooking $booking, ?int $workerId = null, ?int $assignmentId = null): CleaningBooking
     {
+        abort_if($booking->isSupervisedTeam(), 403, 'استخدم تسليم طلب فريق المشرف.');
         $fromStatus = (string) $booking->status->value;
         $decisionWorkerId = null;
         $decisionAssignmentId = null;
@@ -103,6 +104,7 @@ final class CleaningBookingWorkerCompletionService
 
     public function reject(CleaningBooking $booking, ?string $message = null, ?int $workerId = null, ?int $assignmentId = null): CleaningBooking
     {
+        abort_if($booking->isSupervisedTeam(), 403, 'استخدم اعتراض طلب فريق المشرف.');
         $fromStatus = (string) $booking->status->value;
         $decisionWorkerId = null;
         $decisionAssignmentId = null;

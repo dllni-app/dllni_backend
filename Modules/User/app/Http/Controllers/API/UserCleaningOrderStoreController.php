@@ -39,6 +39,17 @@ final class UserCleaningOrderStoreController
             'couponCode' => ['nullable', 'string', 'max:50'],
         ])->validate();
         $validated = $this->normalizeWorkerCount($request->validated());
+        if (($validated['serviceType'] ?? null) === 'supervised_team') {
+            abort_unless(config('supervised_team.enabled', false), 409, 'خدمة فريق المشرف غير متاحة للحجز حالياً.');
+            if ((int) ($validated['numberOfWorkers'] ?? 0) < 2
+                || (int) ($validated['contractVersion'] ?? 0) === 2
+                || isset($validated['roomPeriods']) || isset($validated['preferredWorkerId'])
+                || ! empty($validated['workerRoomAssignments']) || ! empty($validated['openTime'])
+                || ! empty($validated['recurringSchedule']) || ! empty($validated['eventSchedule'])
+                || ($validated['propertyType'] ?? null) === 'event_assistance') {
+                throw ValidationException::withMessages(['serviceType' => ['يجب تحديد فريق من عاملين أو أكثر وموعد واحد دون توزيع الغرف.']]);
+            }
+        }
         if ((int) ($validated['contractVersion'] ?? 0) === 2) {
             $booking = app(\Modules\User\Services\CleaningTimePeriodBookingService::class)->create($request->user(), $validated);
             $details = app(\Modules\User\Services\CleaningTimePeriodCustomerDetailService::class)->forBooking($booking);
@@ -285,6 +296,9 @@ final class UserCleaningOrderStoreController
                 );
             }
 
+            if (($validated['serviceType'] ?? null) === 'supervised_team') {
+                return app(\Modules\Cleaning\Services\SupervisedTeamService::class)->initialize($order)->fresh();
+            }
             return $order->fresh();
         });
 

@@ -224,6 +224,7 @@ final class UserCleaningOrderService
 
     public function update(CleaningBooking $booking, array $validated): CleaningBooking
     {
+        abort_if($booking->isSupervisedTeam(), 409, 'تعديل عدد الفريق أو موعد الطلب يتطلب موافقة الإدارة والعميل.');
         if (in_array($booking->status, [CleaningBookingStatus::InProgress, CleaningBookingStatus::Completed, CleaningBookingStatus::Cancelled], true)) {
             throw ValidationException::withMessages([
                 'order' => ['Order cannot be edited in current status.'],
@@ -530,6 +531,7 @@ final class UserCleaningOrderService
      */
     public function assignRoomAssignments(CleaningBooking $booking, array $assignments): CleaningBooking
     {
+        abort_if($booking->isSupervisedTeam(), 403, 'لا يتم توزيع غرف الفريق على العمال.');
         return $this->teamService->assignRoomsFromCustomer($booking, $assignments);
     }
 

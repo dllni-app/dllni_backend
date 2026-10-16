@@ -25,6 +25,7 @@ final class UserCleaningOrderCompletionExtendTimeController
         $model = CleaningBooking::query()
             ->where('customer_id', $request->user()->id)
             ->findOrFail($order);
+        abort_if($model->isSupervisedTeam(), 403, 'استخدم طلب تمديد فريق المشرف.');
 
         $targetSession = $this->resolveTargetSession(
             $model,

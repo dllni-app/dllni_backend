@@ -276,6 +276,16 @@ final class UserCleaningOrderEstimatePriceController
                 : app(\Modules\Cleaning\Services\CleaningMaterialQuoteService::class)
                     ->quote($pricingPropertyDetails, null, false)['lines'],
             'schedule' => ($eventPlan !== null || $recurringPlan !== null || $openTimePlan !== null) ? $pricing['schedule'] : null,
+            'serviceType' => $validated['serviceType'] ?? 'standard',
+            'supervisedTeam' => ($validated['serviceType'] ?? null) === 'supervised_team' ? [
+                'requiredWorkers' => $requestedWorkers,
+                'baseWorkMinutes' => (int) ceil((float) ($estimation['estimatedRawMinutes'] ?? $singleVisitEstimatedHours * 60)),
+                'durationMinutes' => (int) ceil((float) ($estimation['estimatedRawMinutes'] ?? $singleVisitEstimatedHours * 60) / $requestedWorkers),
+                'scheduledEndAt' => isset($validated['scheduledDate'], $validated['scheduledTime'])
+                    ? \Carbon\Carbon::parse($validated['scheduledDate'].' '.$validated['scheduledTime'], config('app.timezone'))
+                        ->addMinutes((int) ceil((float) ($estimation['estimatedRawMinutes'] ?? $singleVisitEstimatedHours * 60) / $requestedWorkers))->toIso8601String()
+                    : null,
+            ] : null,
             'assignmentMode' => $assignmentMode,
             'workerScope' => $workerScope,
             'specificWorkerIds' => $specificWorkerIds,

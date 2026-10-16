@@ -127,6 +127,7 @@ final class CleaningBookingService
 
     public function claimRooms(CleaningBooking $booking, ?array $roomIds = null): CleaningBooking
     {
+        abort_if($booking->isSupervisedTeam(), 403, 'لا يتم توزيع الغرف في الخدمة الخاضعة للمشرف.');
         $worker = Auth::user()?->worker;
         if (! $worker) {
             throw new InvalidArgumentException('User must have an associated worker.');
