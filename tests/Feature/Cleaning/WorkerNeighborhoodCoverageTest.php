@@ -7,12 +7,11 @@ use App\Models\User;
 use App\Models\Worker;
 use App\Notifications\Cleaning\NewOrderRequestNotification;
 use Illuminate\Support\Facades\Notification;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningNeighborhood;
+use Modules\Cleaning\Services\CleaningGeographicDispatchService;
 
 function neighborhoodCoverageAllDayHours(): array
 {
@@ -118,7 +117,7 @@ it('dispatches to nearby workers regardless of selected neighborhoods', function
 
     $booking = CleaningBooking::factory()->create([
         'status' => CleaningBookingStatus::Pending->value,
-        'scheduled_date' => now()->toDateString(),
+        'scheduled_date' => now()->addDay()->toDateString(),
         'scheduled_time' => now()->addHour()->format('H:i'),
         'gender_preference' => 'any',
         'neighborhood_id' => $neighborhoodA->id,
@@ -133,6 +132,40 @@ it('dispatches to nearby workers regardless of selected neighborhoods', function
     Notification::assertNotSentTo($userB, NewOrderRequestNotification::class);
 });
 
+it('keeps the geographic radius bypass for urgent same-day bookings', function (): void {
+    Notification::fake();
+
+    $neighborhood = CleaningNeighborhood::factory()->create(['name_ar' => 'Urgent coverage']);
+    [$user, $worker] = createCoveredWorker($neighborhood, [
+        'home_latitude' => 36.50,
+        'home_longitude' => 37.50,
+    ]);
+
+    $booking = CleaningBooking::factory()->create([
+        'status' => CleaningBookingStatus::Pending->value,
+        'worker_id' => null,
+        'scheduled_date' => now()->toDateString(),
+        'scheduled_time' => now()->addHour()->format('H:i'),
+        'gender_preference' => 'any',
+        'address_latitude' => 36.20,
+        'address_longitude' => 37.15,
+    ])->fresh();
+
+    $dispatch = app(CleaningGeographicDispatchService::class);
+
+    expect((bool) data_get($booking->property_details, 'is_hot_order'))->toBeTrue()
+        ->and($dispatch->workerDistanceKm($worker, $booking))
+        ->toBeGreaterThan($dispatch->radiusKm($booking))
+        ->and($dispatch->isWithinRadius($worker, $booking))->toBeTrue();
+
+    (new NotifyEligibleWorkersNewOrderJob($booking->id))->handle();
+
+    Notification::assertSentTo($user, NewOrderRequestNotification::class);
+
+    Sanctum::actingAs($user);
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/accept")->assertOk();
+});
+
 it('shows only pending bookings within dispatch radius even without notifications', function (): void {
     $neighborhoodA = CleaningNeighborhood::factory()->create(['name_ar' => 'Aziziyah']);
     $neighborhoodB = CleaningNeighborhood::factory()->create(['name_ar' => 'Jamiliyah']);
@@ -143,7 +176,7 @@ it('shows only pending bookings within dispatch radius even without notification
     $insideAreaBooking = CleaningBooking::factory()->create([
         'status' => CleaningBookingStatus::Pending->value,
         'worker_id' => null,
-        'scheduled_date' => now()->toDateString(),
+        'scheduled_date' => now()->addDay()->toDateString(),
         'scheduled_time' => now()->addHour()->format('H:i'),
         'gender_preference' => 'any',
         'neighborhood_id' => $neighborhoodA->id,
@@ -154,7 +187,7 @@ it('shows only pending bookings within dispatch radius even without notification
     $outsideAreaBooking = CleaningBooking::factory()->create([
         'status' => CleaningBookingStatus::Pending->value,
         'worker_id' => null,
-        'scheduled_date' => now()->toDateString(),
+        'scheduled_date' => now()->addDay()->toDateString(),
         'scheduled_time' => now()->addHour()->format('H:i'),
         'gender_preference' => 'any',
         'neighborhood_id' => $neighborhoodB->id,
@@ -187,7 +220,7 @@ it('blocks accepting bookings outside the geographic dispatch radius', function 
     $booking = CleaningBooking::factory()->create([
         'status' => CleaningBookingStatus::Pending->value,
         'worker_id' => null,
-        'scheduled_date' => now()->toDateString(),
+        'scheduled_date' => now()->addDay()->toDateString(),
         'scheduled_time' => now()->addHour()->format('H:i'),
         'gender_preference' => 'any',
         'address_latitude' => 36.50,

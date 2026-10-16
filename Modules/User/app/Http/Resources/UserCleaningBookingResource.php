@@ -32,6 +32,9 @@ final class UserCleaningBookingResource extends JsonResource
             && app(CleaningPricingCalculator::class)->minimumOrderAdminMarginBase(
                 $bookingBasePrice,
                 (string) $this->property_type,
+                (float) ($this->addons_total ?? 0),
+                (float) ($this->travel_fee ?? 0),
+                (float) ($this->total_price ?? 0),
             ) > 0.0;
 
         // Temporary compatibility for the currently published Flutter app.
@@ -116,6 +119,85 @@ final class UserCleaningBookingResource extends JsonResource
         $payload['eventTypeId'] = $this->cleaning_event_type_id !== null ? (int) $this->cleaning_event_type_id : null;
         $payload['eventDynamicAnswers'] = $this->event_dynamic_answers ?? [];
 
+        // Room-period V2 has separate room-specific dates, workers and extras.
+        // Never flatten it into legacy booking-level fields: that would lose
+        // the selections the customer approved. Only the overall amount is
+        // public; transportation/material/commission lines stay internal.
+        $periods = $this->roomPeriods()
+            ->orderBy('visit_sequence')
+            ->orderBy('client_key')
+            ->get();
+        if ($periods->isNotEmpty()) {
+            $payload['roomPeriods'] = $periods->map(static fn ($period): array => [
+                'clientKey' => (string) $period->client_key,
+                'visitSequence' => (int) $period->visit_sequence,
+                'roomType' => (string) $period->room_type,
+                'size' => (string) $period->room_size,
+                'cleaningMode' => (string) $period->cleaning_mode,
+                'scheduledDate' => $period->scheduled_date?->format('Y-m-d'),
+                'scheduledTime' => substr((string) $period->scheduled_time, 0, 5),
+                'numberOfWorkers' => (int) $period->required_workers,
+                'estimatedDurationMinutes' => (int) $period->estimated_duration_minutes,
+                'materials' => (array) $period->materials,
+                'specialServices' => (array) $period->special_services,
+                'notes' => $period->notes,
+            ])->values()->all();
+            $payload['schemaVersion'] = max(2, (int) $payload['schemaVersion']);
+            $payload['capabilities']['roomPeriods'] = true;
+            $payload['travelFeePending'] = false;
+        }
+
+        // V2 is reconstructed from committed room/schedule/period/material/service rows.
+        // The approved quote snapshot is only retained for read-only requirements
+        // that have no separate inventory row when the customer brings materials.
+        $timePeriodSnapshot = $this->property_details['_time_period_v2'] ?? null;
+        if (is_array($timePeriodSnapshot)) {
+            $details = app(\Modules\User\Services\CleaningTimePeriodCustomerDetailService::class)
+                ->forBooking($this->resource);
+            if ($details !== null) {
+                $payload['contractVersion'] = 2;
+                $payload['rooms'] = $details['rooms'];
+                $payload['visits'] = $details['visits'];
+                $payload['recurrence'] = $details['recurrence'];
+                $payload['workforce'] = $details['workforce'];
+                $payload['pricing'] = $details['pricing'];
+                $payload['totalPrice'] = $details['pricing']['totalPrice'];
+                // The internal quote display snapshot is never a public detail field.
+                $publicDetails = (array) ($payload['propertyDetails'] ?? []);
+                foreach (array_keys($publicDetails) as $field) {
+                    if (str_starts_with((string) $field, '_')) {
+                        unset($publicDetails[$field]);
+                    }
+                }
+                $payload['propertyDetails'] = $publicDetails;
+                $payload['property_details'] = $publicDetails;
+                $payload['approvedMaterialsPreview'] = $timePeriodSnapshot['materialsPreview'] ?? [];
+                $payload['materials'] = collect($details['visits'])
+                    ->flatMap(static fn (array $visit): array => $visit['timePeriods'])
+                    ->flatMap(static fn (array $period): array => $period['platformMaterials'])
+                    ->values()->all();
+                $payload['specialServices'] = collect($details['visits'])
+                    ->flatMap(static fn (array $visit): array => $visit['timePeriods'])
+                    ->flatMap(static fn (array $period): array => $period['specialServices'])
+                    ->values()->all();
+                $payload['travelFeePending'] = false;
+                $payload['capabilities']['timePeriods'] = true;
+                $payload['canEdit'] = false;
+                $payload['can_edit'] = false;
+                // Private operational accounting must not be exposed to V2 customers.
+                unset($payload['basePrice'], $payload['servicePrice'], $payload['service_price'],
+                    $payload['adminMargin'], $payload['actualAdminMargin'], $payload['travelFee'],
+                    $payload['addonsTotal'], $payload['materialsTotal'], $payload['specialServicesTotal'],
+                    $payload['subtotalBeforeDiscount'], $payload['legacyMinimumPriceCompatibility'],
+                    $payload['bookingBasePrice'], $payload['bookingAddonsTotal'],
+                    $payload['bookingTravelFee'], $payload['bookingAdminMargin'],
+                    $payload['workerAmount'], $payload['serviceShareAmount'],
+                    $payload['deliveryFee'], $payload['travelDistanceKm'],
+                    $payload['extensionFeeTotal'], $payload['discountAmount'],
+                    $payload['materialKit'], $payload['specialServiceDurationPlan'],
+                    $payload['services'], $payload['cleaning_services']);
+            }
+        }
         return $payload;
     }
 

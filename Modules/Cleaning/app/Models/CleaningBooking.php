@@ -162,6 +162,14 @@ final class CleaningBooking extends Model
         return $this->hasMany(CleaningBookingRoom::class, 'cleaning_booking_id');
     }
 
+    public function roomPeriods(): HasMany
+    {
+        return $this->hasMany(CleaningBookingRoomPeriod::class, 'cleaning_booking_id')
+            ->orderBy('visit_sequence')
+            ->orderBy('scheduled_date')
+            ->orderBy('scheduled_time');
+    }
+
     public function sessions(): HasMany
     {
         return $this->hasMany(CleaningBookingSession::class, 'cleaning_booking_id')
@@ -171,6 +179,16 @@ final class CleaningBooking extends Model
     public function roomAssignments(): HasMany
     {
         return $this->rooms();
+    }
+
+    public function roomSchedules(): HasMany
+    {
+        return $this->hasMany(CleaningRoomSchedule::class, 'cleaning_booking_id');
+    }
+
+    public function timePeriods(): HasMany
+    {
+        return $this->hasMany(CleaningTimePeriod::class, 'cleaning_booking_id');
     }
 
     public function workerAssignments(): HasMany

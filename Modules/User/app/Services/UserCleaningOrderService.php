@@ -211,6 +211,17 @@ final class UserCleaningOrderService
         });
     }
 
+    public function validateSelectedWorkerCoverage(array $validated): void
+    {
+        $neighborhood = $this->resolveNeighborhoodFromPayload($validated);
+        $ids = $this->normalizedSpecificWorkerIds($validated);
+        if ($ids !== []) {
+            $this->guardSpecificWorkerCoverage($ids, $neighborhood);
+        } else {
+            $this->guardPreferredWorkerCoverage(isset($validated['preferredWorkerId']) ? (int) $validated['preferredWorkerId'] : null, $neighborhood);
+        }
+    }
+
     public function update(CleaningBooking $booking, array $validated): CleaningBooking
     {
         if (in_array($booking->status, [CleaningBookingStatus::InProgress, CleaningBookingStatus::Completed, CleaningBookingStatus::Cancelled], true)) {

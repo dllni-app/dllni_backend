@@ -1,0 +1,70 @@
+{
+  "description": "GET response is inside the Laravel API Resource data envelope. IDs, amounts and timestamps are server-derived.",
+  "data": {
+    "contractVersion": 2,
+    "rooms": [
+      {
+        "roomKey": "bedroom.1",
+        "roomType": "bedroom",
+        "size": "medium",
+        "cleaningMode": "deep"
+      }
+    ],
+    "visits": [
+      {
+        "visitKey": "visit.1",
+        "sequence": 1,
+        "startAt": "<ISO-8601-local-time>",
+        "endAt": "<ISO-8601-local-time>",
+        "timezone": "Asia/Damascus",
+        "estimatedDurationMinutes": "<server-duration>",
+        "requiredSimultaneousWorkers": 2,
+        "roomSchedules": [],
+        "timePeriods": [
+          {
+            "periodKey": "<stable-key>",
+            "roomScheduleKeys": [
+              "schedule.1"
+            ],
+            "startAt": "<ISO-8601>",
+            "endAt": "<ISO-8601>",
+            "materials": {
+              "choice": "customer_partial",
+              "materialTypeIds": [
+                "<platform-supplied-type-id>"
+              ]
+            },
+            "platformMaterials": [],
+            "specialServices": [
+              {
+                "serviceKey": "special.1",
+                "specialServiceId": "<catalog-service-id>",
+                "name": "<catalog-service-name>",
+                "targetRoomKeys": [
+                  "bedroom.1"
+                ],
+                "quantity": 1,
+                "unit": "<catalog-unit>",
+                "dirtinessLevel": null
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "recurrence": {
+      "isRecurring": false,
+      "visitCount": 1,
+      "cadence": "once"
+    },
+    "workforce": {
+      "requestedWorkers": 2
+    },
+    "pricing": {
+      "totalPrice": "<approved-total>",
+      "currency": "SYP",
+      "isPricingFinal": true,
+      "coverage": "all_visits"
+    }
+  }
+}

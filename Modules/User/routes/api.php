@@ -253,6 +253,7 @@ Route::prefix('v1/user')->group(function (): void {
         Route::post('cleaning/orders/estimate-size', UserCleaningOrderEstimateSizeController::class);
         Route::get('cleaning/preferred-worker-rejection/decisions/pending', [UserCleaningPreferredWorkerRejectionDecisionController::class, 'pending']);
         Route::get('cleaning/orders/previous-workers', UserCleaningPreviousWorkersController::class);
+        Route::post('cleaning/orders/materials-preview', \Modules\User\Http\Controllers\API\UserCleaningMaterialsPreviewController::class);
         Route::post('cleaning/orders/estimate-price', UserCleaningOrderEstimatePriceController::class);
         Route::get('cleaning/orders/{order}', UserCleaningOrderShowController::class);
         Route::patch('cleaning/orders/{order}', UserCleaningOrderUpdateController::class);

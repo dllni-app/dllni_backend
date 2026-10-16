@@ -17,7 +17,7 @@ use Modules\Cleaning\Support\CleaningRuntimeSettings;
 
 final class UserCleaningOrderEstimationService
 {
-    public const ALGORITHM_VERSION = '2026-09-23-minimum-includes-commission-v5';
+    public const ALGORITHM_VERSION = '2026-10-14-room-mode-v7';
 
     public const EVENT_ASSISTANCE_PROPERTY_TYPE = 'event_assistance';
 
@@ -59,6 +59,8 @@ final class UserCleaningOrderEstimationService
     {
         $breakdown = $this->normalizeRoomSizeBreakdown(Arr::get($propertyDetails, 'room_size_breakdown'));
         $cleaningMode = $this->normalizeCleaningMode(Arr::get($propertyDetails, 'cleaning_mode'));
+        $roomCleaningModes = is_array(Arr::get($propertyDetails, 'room_cleaning_modes'))
+            ? Arr::get($propertyDetails, 'room_cleaning_modes') : null;
         $address = Arr::has($propertyDetails, 'address') ? mb_trim((string) Arr::get($propertyDetails, 'address')) : null;
         $locationName = Arr::has($propertyDetails, 'location_name') ? mb_trim((string) Arr::get($propertyDetails, 'location_name')) : null;
 
@@ -95,6 +97,10 @@ final class UserCleaningOrderEstimationService
             'sheds' => $sheds,
             'living_room_size' => $livingRoomSize,
             'cleaning_mode' => $cleaningMode,
+            'room_cleaning_modes' => $roomCleaningModes === null ? null : array_map(
+                fn (mixed $mode): string => $this->normalizeCleaningMode($mode),
+                $roomCleaningModes,
+            ),
             'room_size_breakdown' => $breakdown,
             'requested_material_type_ids' => array_key_exists('requested_material_type_ids', $propertyDetails)
                 && is_array($propertyDetails['requested_material_type_ids'])
@@ -172,6 +178,7 @@ final class UserCleaningOrderEstimationService
             'isEventAssistance' => false,
             'recommendation' => null,
             'estimatedRawMinutes' => $calculation['estimatedRawMinutes'],
+            'estimatedWorkHours' => round($calculation['estimatedRawMinutes'] / 60, 2),
             // Kept as a neutral response field for existing Flutter clients.
             'setupBufferMinutes' => 0,
         ];
@@ -228,9 +235,9 @@ final class UserCleaningOrderEstimationService
             $addonsTotal = (float) $materialQuote['total'] + (float) $specialServiceQuote['total'];
         }
 
-        $includedAdminMarginBase = (bool) ($regularCalculation['minimumOrderApplied'] ?? false)
-            ? $basePrice
-            : 0.0;
+        // The minimum belongs to the entire customer order (base, extras,
+        // transport and margin), not to cleaning labor alone.
+        $includedAdminMarginBase = 0.0;
 
         if ($input['preferredWorkerId'] === null) {
             $pricing = $this->pricingCalculator->provisional(
@@ -255,6 +262,35 @@ final class UserCleaningOrderEstimationService
             );
         }
 
+        if ($regularCalculation !== null) {
+            $minimumOrderPrice = (float) $regularCalculation['minimumOrderPrice'];
+            if ($minimumOrderPrice > 0.0 && (float) $pricing['totalPrice'] < $minimumOrderPrice) {
+                $travelFee = (float) $pricing['travelFee'];
+                // Include commission inside the final minimum price. Extras
+                // and travel already paid by the customer reduce the labor top-up.
+                $basePrice = $this->pricingCalculator->roundMoney(
+                    max($basePrice, $minimumOrderPrice - $travelFee - $addonsTotal),
+                );
+                $includedAdminMarginBase = $basePrice + $addonsTotal;
+                $pricing = $input['preferredWorkerId'] === null
+                    ? $this->pricingCalculator->provisional(
+                        $basePrice,
+                        $addonsTotal,
+                        $includedAdminMarginBase,
+                        $workerCount,
+                    )
+                    : $this->pricingCalculator->finalizedForWorker(
+                        $basePrice,
+                        $addonsTotal,
+                        $input['addressLatitude'],
+                        $input['addressLongitude'],
+                        $worker,
+                        $includedAdminMarginBase,
+                    );
+                $regularCalculation['minimumOrderApplied'] = true;
+            }
+        }
+
         return [
             'basePrice' => $basePrice,
             'addonsTotal' => $addonsTotal,
@@ -270,6 +306,10 @@ final class UserCleaningOrderEstimationService
             'specialServices' => $specialServiceQuote['lines'],
             'specialServicesTotal' => (float) $specialServiceQuote['total'],
             'roomPricingLines' => $regularCalculation['roomPricingLines'] ?? [],
+            'estimatedWorkHours' => $regularCalculation === null ? null : round($regularCalculation['estimatedRawMinutes'] / 60, 2),
+            'estimatedWorkMinutes' => $regularCalculation['estimatedRawMinutes'] ?? null,
+            'estimatedDurationMinutes' => $regularCalculation === null ? null : max(1, (int) ceil($regularCalculation['estimatedRawMinutes'] / max(1, $workerCount))),
+            'estimatedDurationHours' => $regularCalculation === null ? null : round(ceil($regularCalculation['estimatedRawMinutes'] / max(1, $workerCount)) / 60, 2),
             'pricingAlgorithm' => $regularCalculation !== null ? [
                 'baseUnitPrice' => $regularCalculation['baseUnitPrice'],
                 'minimumOrderPrice' => $regularCalculation['minimumOrderPrice'],
@@ -474,7 +514,8 @@ final class UserCleaningOrderEstimationService
             : $this->legacyDetailsToRoomBreakdown($normalizedDetails);
         $cleaningMode = $this->normalizeCleaningMode($normalizedDetails['cleaning_mode'] ?? 'regular');
         $modeMultiplier = $cleaningMode === 'deep' ? $deepMultiplier : 1.0;
-        $minuteMode = $cleaningMode === 'deep' ? 'deep' : 'regular';
+        $roomCleaningModes = is_array($normalizedDetails['room_cleaning_modes'] ?? null)
+            ? $normalizedDetails['room_cleaning_modes'] : [];
         $rawSqm = 0.0;
         $unitTotal = 0.0;
         $rawMinutes = 0;
@@ -491,38 +532,59 @@ final class UserCleaningOrderEstimationService
                 $averageSqm = (float) ($roomSizeRanges[$roomType][$roomSize]['average'] ?? 0.0);
                 $unitCount = (float) ($roomPricingUnits[$roomType][$roomSize] ?? 0.0);
                 $roomDeepMultiplier = max(1.0, (float) ($roomDeepMultipliers[$roomType][$roomSize] ?? $deepMultiplier));
-                $roomModeMultiplier = $cleaningMode === 'deep' ? $roomDeepMultiplier : 1.0;
-                $minutesPerRoom = (int) ($roomTimeMinutes[$roomType][$roomSize][$minuteMode] ?? 1);
-                $unitPrice = $this->pricingCalculator->roundMoney($baseUnitPrice * $unitCount * $roomModeMultiplier);
-                $lineTotal = $this->pricingCalculator->roundMoney($unitPrice * $count);
-                $lineSqm = round($averageSqm * $count, 2);
-                $lineMinutes = $minutesPerRoom * $count;
-                $rawSqm += $lineSqm;
-                $unitTotal += $unitCount * $count;
-                $rawMinutes += $lineMinutes;
-                $basePrice += $lineTotal;
-                $lines[] = [
-                    'roomType' => $roomType,
-                    'roomSize' => $roomSize,
-                    'count' => $count,
-                    'unitCount' => round($unitCount, 2),
-                    'baseUnitPrice' => $baseUnitPrice,
-                    'deepMultiplier' => $roomDeepMultiplier,
-                    'modeMultiplier' => $roomModeMultiplier,
-                    'unitPrice' => $unitPrice,
-                    'totalPrice' => $lineTotal,
-                    'averageSqm' => $averageSqm,
-                    'totalSqm' => $lineSqm,
-                    'minutesPerRoom' => $minutesPerRoom,
-                    'totalMinutes' => $lineMinutes,
-                ];
+                // A room's stable key is identical to the worker-room assignment key.
+                // Mixed cleaning modes are priced by the configured room-specific rates.
+                foreach (self::CLEANING_MODES as $mode) {
+                    $matchingCount = 0;
+                    for ($index = 1; $index <= $count; $index++) {
+                        $roomKey = $roomType.'.'.$roomSize.'.'.$index;
+                        $assignedMode = $this->normalizeCleaningMode(
+                            $roomCleaningModes[$roomKey] ?? $cleaningMode
+                        );
+                        if ($assignedMode === $mode) {
+                            $matchingCount++;
+                        }
+                    }
+                    if ($matchingCount === 0) {
+                        continue;
+                    }
+
+                    $roomModeMultiplier = $mode === 'deep' ? $roomDeepMultiplier : 1.0;
+                    $minutesPerRoom = (int) ($roomTimeMinutes[$roomType][$roomSize][$mode] ?? 1);
+                    $unitPrice = $this->pricingCalculator->roundMoney($baseUnitPrice * $unitCount * $roomModeMultiplier);
+                    $lineTotal = $this->pricingCalculator->roundMoney($unitPrice * $matchingCount);
+                    $lineSqm = round($averageSqm * $matchingCount, 2);
+                    $lineMinutes = $minutesPerRoom * $matchingCount;
+                    $rawSqm += $lineSqm;
+                    $unitTotal += $unitCount * $matchingCount;
+                    $rawMinutes += $lineMinutes;
+                    $basePrice += $lineTotal;
+                    $lines[] = [
+                        'roomType' => $roomType,
+                        'roomSize' => $roomSize,
+                        'cleaningMode' => $mode,
+                        'count' => $matchingCount,
+                        'unitCount' => round($unitCount, 2),
+                        'baseUnitPrice' => $baseUnitPrice,
+                        'deepMultiplier' => $roomDeepMultiplier,
+                        'modeMultiplier' => $roomModeMultiplier,
+                        'unitPrice' => $unitPrice,
+                        'totalPrice' => $lineTotal,
+                        'averageSqm' => $averageSqm,
+                        'totalSqm' => $lineSqm,
+                        'minutesPerRoom' => $minutesPerRoom,
+                        'totalMinutes' => $lineMinutes,
+                    ];
+                }
             }
         }
 
         $calculatedBasePrice = $this->pricingCalculator->roundMoney($basePrice);
         $minimumOrderPrice = $this->pricingCalculator->roundMoney($minimumOrderPrice);
-        $minimumOrderApplied = $minimumOrderPrice > 0.0 && $calculatedBasePrice < $minimumOrderPrice;
-        $basePrice = $minimumOrderApplied ? $minimumOrderPrice : $calculatedBasePrice;
+        // Minimum-order pricing is applied after extras, transport and margin
+        // are known in price(); this helper only computes the raw room price.
+        $minimumOrderApplied = false;
+        $basePrice = $calculatedBasePrice;
         $estimatedSqm = round(max(25.0, $rawSqm), 2);
 
         return [

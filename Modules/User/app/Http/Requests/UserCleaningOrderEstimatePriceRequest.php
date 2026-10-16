@@ -18,6 +18,7 @@ use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderEstimatePriceRequest extends FormRequest
 {
+    use \Modules\User\Http\Requests\Concerns\ValidatesRoomCleaningModes;
     use ResolvesEventVenueTypes;
     use ValidatesDynamicCleaningEvent;
     use ValidatesEventAssistanceSchedule;
@@ -39,8 +40,14 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
         $isEventAssistance = $this->isEventAssistanceRequested();
 
         return [
+            ...\Modules\User\Http\Requests\Concerns\CleaningTimePeriodContract::rules(),
+            ...\Modules\User\Http\Requests\Concerns\RoomPeriodContract::rules(),
             'propertyType' => ['required', 'string', Rule::in(UserCleaningOrderEstimationService::PROPERTY_TYPES)],
             'propertyDetails' => ['required', 'array'],
+            'propertyDetails.address' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'propertyDetails.location_name' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'propertyDetails.notes' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'propertyDetails.specialRequirement' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'propertyDetails.bedrooms' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.rooms' => ['nullable', 'integer', 'min:0', 'max:30'],
             'propertyDetails.bathrooms' => ['nullable', 'integer', 'min:0', 'max:20'],
@@ -50,6 +57,7 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             'propertyDetails.sheds' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.living_room_size' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::LIVING_ROOM_SIZES)],
             'propertyDetails.cleaning_mode' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::CLEANING_MODES)],
+            ...$this->roomCleaningModeRules(),
             'propertyDetails.room_size_breakdown' => ['nullable', 'array:bedroom,bathroom,toilet,kitchen,living_room,balcony,corridor,shed'],
             'propertyDetails.room_size_breakdown.bedroom' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.bathroom' => ['sometimes', 'array:small,medium,large'],
@@ -126,6 +134,11 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
+            \Modules\User\Http\Requests\Concerns\CleaningTimePeriodContract::validate($this->all(), $validator);
+            if ($this->exists('roomPeriods')) {
+                \Modules\User\Http\Requests\Concerns\RoomPeriodContract::validateConsistency($this->all(), $validator);
+            }
+            $this->validateRoomCleaningModes($validator);
             $this->validateSelectedAddressCompleteness($validator);
             $this->validateEventAssistanceSchedule($validator);
             $this->validateDynamicCleaningEvent($validator);
@@ -200,6 +213,22 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             if ($address instanceof UserAddress) {
                 $merge['addressLatitude'] = $address->latitude !== null ? (float) $address->latitude : null;
                 $merge['addressLongitude'] = $address->longitude !== null ? (float) $address->longitude : null;
+                if ((int) $this->input('contractVersion') === 2) {
+                    if (! $this->filled('neighborhoodId') && $address->neighborhood_id !== null) {
+                        $merge['neighborhoodId'] = (int) $address->neighborhood_id;
+                    }
+                    if (! $this->filled('neighborhood') && $address->neighborhood !== null) {
+                        $merge['neighborhood'] = $address->neighborhood;
+                    }
+                    $details = (array) $this->input('propertyDetails', []);
+                    if (trim((string) ($details['address'] ?? '')) === '') {
+                        $details['address'] = $this->formatUserAddress($address);
+                    }
+                    if (! array_key_exists('location_name', $details) && $address->label !== null) {
+                        $details['location_name'] = $address->label;
+                    }
+                    $merge['propertyDetails'] = $details;
+                }
             }
         }
 

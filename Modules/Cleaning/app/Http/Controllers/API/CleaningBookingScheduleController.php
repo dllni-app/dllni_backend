@@ -35,6 +35,10 @@ final class CleaningBookingScheduleController
             abort(403, 'User must have an associated worker.');
         }
 
+        if ($viewerWorker instanceof Worker && ! $this->workerVisibility->canViewBooking($cleaning_booking, $viewerWorker)) {
+            abort(403, 'Worker cannot view this booking schedule.');
+        }
+
         $bookingId = (int) $cleaning_booking->id;
         $bookingNumber = (string) $cleaning_booking->booking_number;
         $isEvent = (string) $cleaning_booking->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE;

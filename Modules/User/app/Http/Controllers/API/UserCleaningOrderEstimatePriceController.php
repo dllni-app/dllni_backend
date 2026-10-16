@@ -16,6 +16,8 @@ use Modules\User\Services\FemaleWorkerSafetyPolicyService;
 use Modules\User\Services\OpenTimeScheduleService;
 use Modules\User\Services\RecurringCleaningScheduleService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
+use Modules\User\Services\RoomPeriodPricingService;
+use Modules\User\Services\RoomPeriodBookingCreationService;
 use Modules\User\Support\CleaningWorkerCapacity;
 
 final class UserCleaningOrderEstimatePriceController
@@ -27,8 +29,51 @@ final class UserCleaningOrderEstimatePriceController
         RecurringCleaningScheduleService $recurringSchedule,
         OpenTimeScheduleService $openTimeSchedule,
         CleaningExtendedTimePricingService $extendedTimePricing,
+        RoomPeriodPricingService $roomPeriodPricing,
+        RoomPeriodBookingCreationService $periodCreation,
     ): JsonResponse {
         $validated = $request->validated();
+        if ((int) ($validated['contractVersion'] ?? 0) === 2) {
+            $result = app(\Modules\User\Services\CleaningTimePeriodQuoteService::class)->estimate($request->user(), $validated);
+            return response()->json($result);
+        }
+        if (is_array($validated['roomPeriods'] ?? null)) {
+            try {
+                $quote = $roomPeriodPricing->quote($validated);
+            } catch (InvalidArgumentException $exception) {
+                throw ValidationException::withMessages(['roomPeriods' => [$exception->getMessage()]]);
+            }
+
+            return response()->json([
+                'size' => [
+                    'estimatedHours' => round($quote['estimatedWorkMinutes'] / 60, 2),
+                    'estimatedWorkMinutes' => $quote['estimatedWorkMinutes'],
+                    'estimatedDurationMinutes' => $quote['estimatedDurationMinutes'],
+                ],
+                'pricing' => [
+                    // Customer sees exactly one aggregate price, not hidden
+                    // transportation, labor, materials or commission lines.
+                    'totalPrice' => $quote['totalPrice'],
+                    'currency' => $quote['currency'],
+                    'isPricingFinal' => $quote['isPricingFinal'],
+                ],
+                'roomPeriods' => array_map(static fn (array $period): array => [
+                    'clientKey' => $period['clientKey'],
+                    'visitSequence' => $period['visitSequence'],
+                    'scheduledDate' => $period['scheduledDate'],
+                    'scheduledTime' => $period['scheduledTime'],
+                    'estimatedEndAt' => $period['estimatedEndAt'],
+                    'numberOfWorkers' => $period['numberOfWorkers'],
+                    'estimatedWorkMinutes' => $period['estimatedWorkMinutes'],
+                    'estimatedDurationMinutes' => $period['estimatedDurationMinutes'],
+                ], $quote['roomPeriods']),
+                'requiredSimultaneousWorkers' => $quote['requiredSimultaneousWorkers'],
+                'pricingAlgorithm' => $quote['algorithmVersion'],
+                'quoteSignature' => $periodCreation->signature($quote, $validated, (int) $request->user()->id),
+                'materialsPreview' => app(\Modules\Cleaning\Services\CleaningMaterialQuoteService::class)
+                    ->quote((array) $validated['propertyDetails'], null, false)['lines'],
+            ]);
+        }
         [$addressLatitude, $addressLongitude] = $this->resolveAddressCoordinates($validated, (int) $request->user()->id);
         $isEventAssistance = $service->isEventAssistanceType((string) $validated['propertyType']);
         $eventPlan = $isEventAssistance ? $eventSchedule->resolve($validated) : null;
@@ -216,6 +261,13 @@ final class UserCleaningOrderEstimatePriceController
             'size' => [
                 'estimatedSqm' => $estimation['estimatedSqm'],
                 'estimatedHours' => $estimation['estimatedHours'],
+                'estimatedWorkHours' => $isEventAssistance || $openTimePlan !== null ? null : ($estimation['estimatedWorkHours'] ?? $singleVisitEstimatedHours),
+                'estimatedDurationMinutes' => $isEventAssistance || $openTimePlan !== null
+                    ? null
+                    : max(1, (int) ceil(((float) ($estimation['estimatedRawMinutes'] ?? ($singleVisitEstimatedHours * 60))) / max(1, $requestedWorkers))),
+                'estimatedDurationHours' => $isEventAssistance || $openTimePlan !== null
+                    ? null
+                    : round(ceil(((float) ($estimation['estimatedRawMinutes'] ?? ($singleVisitEstimatedHours * 60))) / max(1, $requestedWorkers)) / 60, 2),
                 'sizeTier' => $estimation['sizeTier'],
             ],
             'pricing' => $clientPricing,

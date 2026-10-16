@@ -112,9 +112,15 @@ final class CleaningCouponPricingService
                 ?? ((float) ($booking->total_price ?? 0) + $storedDiscount)),
         ), 2);
         $grossTravelFee = round(max(0.0, (float) ($booking->travel_fee ?? 0)), 2);
+        $recurringAdminMargin = $this->recurringSessionAdminMargin($booking);
+        if ($recurringAdminMargin !== null) {
+            // In recurring minimum-inclusive quotes, administration is inside
+            // the child-session customer totals, not an extra charge.
+            $grossServiceAmount = round(max(0.0, $grossTotal - $grossTravelFee - $recurringAdminMargin), 2);
+        }
         $grossAdminMargin = round(max(0.0, $grossTotal - $grossServiceAmount - $grossTravelFee), 2);
 
-        if (! (bool) $booking->is_pricing_final && $grossAdminMargin <= 0.0) {
+        if ($recurringAdminMargin === null && ! (bool) $booking->is_pricing_final && $grossAdminMargin <= 0.0) {
             $grossAdminMargin = (float) $this->pricingCalculator
                 ->provisional($grossServiceAmount, 0.0)['adminMargin'];
         }
@@ -187,6 +193,13 @@ final class CleaningCouponPricingService
                 : $currentAdminMargin;
         }
 
+        if ($this->recurringSessionAdminMargin($booking) !== null) {
+            // Preserve the already-quoted recurring customer subtotal. The
+            // admin margin is funded from within that total, not added to it.
+            $grossCustomerTotal = round(max(0.0, (float) ($booking->subtotal_before_discount ?? 0)), 2);
+            $grossServiceAmount = round(max(0.0, $grossCustomerTotal - $grossTravelFee - $grossAdminMargin), 2);
+        }
+
         $allocation = $this->allocation(
             $coupon,
             $grossServiceAmount,
@@ -210,6 +223,19 @@ final class CleaningCouponPricingService
         $booking->total_price = $allocation['totalPrice'];
 
         $this->syncRedemptionSnapshot($booking, $allocation);
+    }
+
+    private function recurringSessionAdminMargin(CleaningBooking $booking): ?float
+    {
+        if (! $booking->exists) {
+            return null;
+        }
+
+        $sessions = $booking->sessions()->where('session_type', 'recurring_cleaning');
+
+        return $sessions->exists()
+            ? round(max(0.0, (float) $sessions->sum('admin_margin_amount')), 2)
+            : null;
     }
 
     /**

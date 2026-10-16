@@ -120,6 +120,11 @@ final class CleaningBookingResource extends JsonResource
 
         return [
             'id' => $this->id,
+            ...($this->property_details['_time_period_v2'] ?? null ? [
+                'contractVersion' => 2,
+                'rooms' => $this->property_details['_time_period_v2']['rooms'],
+                'visits' => $this->property_details['_time_period_v2']['visits'],
+            ] : []),
             // Additive v2 envelope fields let clients consume new snapshots
             // without losing compatibility with the legacy booking shape.
             'schemaVersion' => max(1, (int) ($this->capability_schema_version ?? 1)),
@@ -350,6 +355,21 @@ final class CleaningBookingResource extends JsonResource
             }
         }
 
+        // Legacy cleaning_mode remains the default/fallback for old clients.
+        // Its display labels must reflect real room choices on mixed bookings.
+        $roomModes = $details['room_cleaning_modes'] ?? null;
+        if (is_array($roomModes) && $roomModes !== []) {
+            $deepCount = count(array_filter($roomModes, static fn (mixed $mode): bool => $mode === 'deep'));
+            $regularCount = count($roomModes) - $deepCount;
+            $modeLabel = $deepCount > 0 && $regularCount > 0
+                ? 'حوسة وتعزيل'
+                : ($deepCount > 0 ? 'تعزيل' : 'حوسة');
+            $details['cleaning_mode_label'] = $modeLabel;
+            $details['cleaningModeLabel'] = $modeLabel;
+            $details['deep_room_count'] = $deepCount;
+            $details['regular_room_count'] = $regularCount;
+        }
+
         return $details;
     }
 
@@ -476,7 +496,21 @@ final class CleaningBookingResource extends JsonResource
 
     private function serializeRoomAssignment(CleaningBookingRoom $room): array
     {
-        return ['id' => $room->id, 'roomKey' => $room->room_key, 'roomType' => $room->room_type, 'roomTypeLabel' => $this->label($room->room_type), 'roomSize' => $room->room_size, 'roomSizeLabel' => $this->label($room->room_size), 'displayLabel' => $room->display_label, 'weight' => (float) $room->weight, 'plannedWorkerSlot' => $room->planned_worker_slot !== null ? (int) $room->planned_worker_slot : null, 'plannedPreferredWorkerId' => $room->planned_preferred_worker_id, 'assignedWorkerId' => $room->assigned_worker_id, 'assignmentSource' => $room->assignment_source?->value ?? $room->assignment_source, 'assignmentSourceLabel' => $this->label($room->assignment_source?->value ?? $room->assignment_source), 'assignedWorker' => $room->relationLoaded('assignedWorker') && $room->assignedWorker ? $this->serializeWorker($room->assignedWorker) : null];
+        return ['id' => $room->id, 'roomKey' => $room->room_key, 'roomType' => $room->room_type, 'roomTypeLabel' => $this->label($room->room_type), 'roomSize' => $room->room_size, 'roomSizeLabel' => $this->label($room->room_size), 'cleaningMode' => $this->roomCleaningModeForKey((string) $room->room_key), 'cleaningModeLabel' => $this->roomCleaningModeForKey((string) $room->room_key) === 'deep' ? 'تعزيل' : 'حوسة', 'displayLabel' => $room->display_label, 'weight' => (float) $room->weight, 'plannedWorkerSlot' => $room->planned_worker_slot !== null ? (int) $room->planned_worker_slot : null, 'plannedPreferredWorkerId' => $room->planned_preferred_worker_id, 'assignedWorkerId' => $room->assigned_worker_id, 'assignmentSource' => $room->assignment_source?->value ?? $room->assignment_source, 'assignmentSourceLabel' => $this->label($room->assignment_source?->value ?? $room->assignment_source), 'assignedWorker' => $room->relationLoaded('assignedWorker') && $room->assignedWorker ? $this->serializeWorker($room->assignedWorker) : null];
+    }
+
+    /**
+     * The persisted cleaning-mode key is an opaque room identifier containing dots,
+     * not a dot-delimited nested path. Read it as an exact associative-array key.
+     */
+    private function roomCleaningModeForKey(string $roomKey): string
+    {
+        $details = is_array($this->property_details) ? $this->property_details : [];
+        $modes = is_array($details['room_cleaning_modes'] ?? null)
+            ? $details['room_cleaning_modes'] : [];
+        $mode = $modes[$roomKey] ?? $details['cleaning_mode'] ?? 'regular';
+
+        return $mode === 'deep' ? 'deep' : 'regular';
     }
 
     private function serializeWorkerRoomAssignments(): array

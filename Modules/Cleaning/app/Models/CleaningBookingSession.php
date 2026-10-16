@@ -77,6 +77,11 @@ final class CleaningBookingSession extends Model
         return $this->belongsTo(CleaningBooking::class, 'cleaning_booking_id');
     }
 
+    public function roomPeriods(): HasMany
+    {
+        return $this->hasMany(CleaningBookingRoomPeriod::class, 'cleaning_booking_session_id');
+    }
+
     public function workerAssignments(): HasMany
     {
         return $this->hasMany(CleaningBookingSessionWorkerAssignment::class, 'cleaning_booking_session_id');

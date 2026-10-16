@@ -166,7 +166,8 @@ it('keeps every event worker on the full event duration and preserves the worker
     $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'home_address' => 'Worker home',
-        'home_latitude' => 33.5,
+        // Keep this acceptance fixture within the initial 10 km dispatch radius.
+        'home_latitude' => 33.52,
         'home_longitude' => 36.3,
     ]);
 

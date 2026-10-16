@@ -35,7 +35,7 @@ it('accepts a cleaning booking when status is pending (worker takes order)', fun
     $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'home_address' => 'Worker Home',
-        'home_latitude' => 33.6,
+        'home_latitude' => 33.5,
         'home_longitude' => 36.3,
     ]);
     Sanctum::actingAs($workerUser);

@@ -23,7 +23,11 @@ final class CleaningBookingWorkerSessionVisibilityService
         $sessions = $this->bookingSessions($booking);
 
         if ($sessions->isEmpty()) {
-            return $this->canViewLegacyBooking($booking, $worker);
+            // Ordinary single-visit cleaning bookings have no persisted child
+            // sessions. A pending booking already visible in the worker's
+            // dispatch audience must have a readable pre-acceptance schedule.
+            return $this->canViewLegacyBooking($booking, $worker)
+                || $this->isPendingOfferVisibleToWorker($booking, $worker);
         }
 
         if ($this->visibleSessionsFrom($booking, $worker, $sessions)->isNotEmpty()) {
@@ -161,6 +165,28 @@ final class CleaningBookingWorkerSessionVisibilityService
         ], true)
             && ! $session->isTerminal()
             && $session->remainingWorkerCount() > 0;
+    }
+
+    private function isPendingOfferVisibleToWorker(CleaningBooking $booking, Worker $worker): bool
+    {
+        $status = $booking->status instanceof \BackedEnum
+            ? $booking->status->value
+            : (string) $booking->status;
+
+        if ($status !== 'pending' || $booking->isTeamFulfilled()) {
+            return false;
+        }
+
+        // Do not let a caller supply a different worker object to bypass
+        // the same audience/eligibility filters used by the booking list.
+        if ((int) (auth()->id() ?? 0) !== (int) $worker->user_id) {
+            return false;
+        }
+
+        return CleaningBooking::query()
+            ->forCurrentWorker(true)
+            ->whereKey($booking->getKey())
+            ->exists();
     }
 
     private function canViewLegacySingleSessionBooking(CleaningBooking $booking, Worker $worker): bool

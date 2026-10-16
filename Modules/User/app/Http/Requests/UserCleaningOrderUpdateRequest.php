@@ -16,6 +16,7 @@ use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderUpdateRequest extends FormRequest
 {
+    use \Modules\User\Http\Requests\Concerns\ValidatesRoomCleaningModes;
     use ResolvesEventVenueTypes;
     use ValidatesEventAssistanceSchedule;
 
@@ -33,7 +34,7 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
 
         return [
             'propertyType' => ['sometimes', 'string', Rule::in(UserCleaningOrderEstimationService::PROPERTY_TYPES)],
-            'propertyDetails' => ['sometimes', 'array:address,location_name,bedrooms,rooms,bathrooms,toilets,kitchens,balconies,sheds,living_room_size,cleaning_mode,room_size_breakdown,eventType,guestCount,venueType,customService,hours,specialRequirement,notes'],
+            'propertyDetails' => ['sometimes', 'array:address,location_name,bedrooms,rooms,bathrooms,toilets,kitchens,balconies,sheds,living_room_size,cleaning_mode,room_cleaning_modes,room_size_breakdown,eventType,guestCount,venueType,customService,hours,specialRequirement,notes'],
             'propertyDetails.address' => ['sometimes', 'string', 'max:500'],
             'propertyDetails.location_name' => ['nullable', 'string', 'max:255'],
             'propertyDetails.bedrooms' => ['nullable', 'integer', 'min:0', 'max:20'],
@@ -45,6 +46,7 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
             'propertyDetails.sheds' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.living_room_size' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::LIVING_ROOM_SIZES)],
             'propertyDetails.cleaning_mode' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::CLEANING_MODES)],
+            ...$this->roomCleaningModeRules(),
             'propertyDetails.room_size_breakdown' => ['nullable', 'array:bedroom,bathroom,toilet,kitchen,living_room,balcony,corridor,shed'],
             'propertyDetails.room_size_breakdown.bedroom' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.bathroom' => ['sometimes', 'array:small,medium,large'],
@@ -119,6 +121,7 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
+            $this->validateRoomCleaningModes($validator);
             $this->validateEventAssistanceSchedule($validator);
 
             $bookingId = $this->route('order');

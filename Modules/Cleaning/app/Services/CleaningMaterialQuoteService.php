@@ -15,7 +15,7 @@ final class CleaningMaterialQuoteService
      * @param  array<string, mixed>  $propertyDetails
      * @return array{lines:array<int, array<string, mixed>>,total:float}
      */
-    public function quote(array $propertyDetails, ?array $selectedTypeIds = null, bool $enforceStock = true): array
+    public function quote(array $propertyDetails, ?array $selectedTypeIds = null, bool $enforceStock = true, bool $roundPackages = true): array
     {
         $roomBreakdown = is_array($propertyDetails['room_size_breakdown'] ?? null)
             ? $propertyDetails['room_size_breakdown']
@@ -48,7 +48,7 @@ final class CleaningMaterialQuoteService
 
             $quantity = $this->quantityForType($materialType, $roomBreakdown, $cleaningMode);
             // Whole inventory packages and pieces are never billed as fractions.
-            if (in_array(mb_strtolower((string) $materialType->unit->code), ['pack', 'package', 'bottle', 'piece'], true)) {
+            if ($roundPackages && in_array(mb_strtolower((string) $materialType->unit->code), ['pack', 'package', 'bottle', 'piece'], true)) {
                 $quantity = (float) ceil($quantity);
             }
             if ($quantity <= 0) {

@@ -113,3 +113,56 @@ it('treats the configured minimum as the final customer service price including 
         ->and($pricing['adminMargin'])->toBe(375.0)
         ->and($pricing['totalPrice'])->toBe(1500.0);
 });
+
+it('applies the minimum to the whole booking after special service charges', function (): void {
+    $pricingUnits = CleaningFinancialDefaults::roomPricingUnits();
+    $pricingUnits['kitchen']['small'] = 1.0;
+
+    CleaningFinancialSetting::query()->updateOrCreate(['id' => 1], [
+        'default_commission_rate' => 0,
+        'commission_type' => 'percent',
+        'cleaning_base_unit_price' => 50,
+        'cleaning_minimum_order_price' => 150,
+        'cleaning_room_pricing_units' => $pricingUnits,
+        'cleaning_room_deep_multipliers' => CleaningFinancialDefaults::roomDeepMultipliers(),
+        'cleaning_room_time_minutes' => CleaningFinancialDefaults::roomTimeMinutes(),
+    ]);
+
+    $addon = \Modules\Cleaning\Models\CleaningSpecialService::query()->create([
+        'name' => 'QA booking minimum service',
+        'pricing_unit' => 'piece',
+        'base_unit_price' => 85,
+        'is_active' => true,
+    ]);
+    \Modules\Cleaning\Models\CleaningSpecialServiceDirtinessRule::query()->create([
+        'cleaning_special_service_id' => $addon->id,
+        'dirtiness_level' => 'light',
+        'price_multiplier' => 1,
+        'is_active' => true,
+    ]);
+
+    $estimate = app(UserCleaningOrderEstimationService::class);
+    $rooms = ['room_size_breakdown' => ['kitchen' => ['small' => 1]]];
+    $addonSelection = [[
+        'specialServiceId' => $addon->id,
+        'quantity' => 1,
+        'dirtinessLevel' => 'light',
+    ]];
+
+    $below = $estimate->price('apartment', $rooms, null, null, specialServices: $addonSelection);
+
+    expect($below['pricingAlgorithm']['calculatedBasePrice'])->toBe(50.0)
+        ->and($below['addonsTotal'])->toBe(85.0)
+        ->and($below['basePrice'])->toBe(65.0)
+        ->and($below['totalPrice'])->toBe(150.0)
+        ->and($below['pricingAlgorithm']['minimumOrderApplied'])->toBeTrue();
+
+    $addon->update(['base_unit_price' => 130]);
+
+    $above = $estimate->price('apartment', $rooms, null, null, specialServices: $addonSelection);
+
+    expect($above['addonsTotal'])->toBe(130.0)
+        ->and($above['basePrice'])->toBe(50.0)
+        ->and($above['totalPrice'])->toBe(180.0)
+        ->and($above['pricingAlgorithm']['minimumOrderApplied'])->toBeFalse();
+});

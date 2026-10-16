@@ -1,0 +1,11 @@
+{
+  "description":"Contract shape only; times and totals derive from the installed catalog. No catalog identifiers are invented.",
+  "contractVersion":2,
+  "reconciliationRequired":false,
+  "visits":[{"visitKey":"visit.1","sequence":1,"roomSchedules":[{"scheduleKey":"schedule.1","roomKey":"bedroom.1","scheduledDate":"2026-10-20","scheduledTime":"09:00","numberOfWorkers":2,"estimatedWorkMinutes":70,"estimatedDurationMinutes":35,"startAt":"2026-10-20T09:00:00+03:00","endAt":"2026-10-20T09:35:00+03:00"},{"scheduleKey":"schedule.2","roomKey":"bedroom.2","scheduledDate":"2026-10-20","scheduledTime":"09:00","numberOfWorkers":1,"estimatedWorkMinutes":35,"estimatedDurationMinutes":35,"startAt":"2026-10-20T09:00:00+03:00","endAt":"2026-10-20T09:35:00+03:00"}],"timePeriods":[{"periodKey":"period.example","roomScheduleKeys":["schedule.1","schedule.2"],"startAt":"2026-10-20T09:00:00+03:00","endAt":"2026-10-20T09:35:00+03:00","materials":{"choice":"customer_all","materialTypeIds":[]},"specialServices":[]}],"requiredSimultaneousWorkers":3,"reconciliationRequired":false,"reconciliationSources":[]}],
+  "requiredSimultaneousWorkers":3,
+  "quoteId":"550e8400-e29b-41d4-a716-446655440000",
+  "quoteSignature":"SERVER_ISSUED_64_HEX_CHARACTERS",
+  "quoteExpiresAt":"2026-10-15T13:15:00+00:00",
+  "schedulingPolicy":{"timezone":"Asia/Damascus","minimumWorkers":1,"maximumWorkers":20,"maximumDurationMinutes":480,"crossMidnightAllowed":false}
+}

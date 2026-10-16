@@ -18,6 +18,7 @@ use Modules\User\Services\OpenTimeScheduleService;
 use Modules\User\Services\RecurringCleaningScheduleService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 use Modules\User\Services\UserCleaningOrderService;
+use Modules\User\Services\RoomPeriodBookingCreationService;
 use Modules\User\Support\CleaningWorkerCapacity;
 
 final class UserCleaningOrderStoreController
@@ -31,12 +32,59 @@ final class UserCleaningOrderStoreController
         OpenTimeScheduleService $openTimeSchedule,
         PlatformCouponRedemptionService $platformCoupons,
         CleaningPricingCalculator $pricingCalculator,
+        RoomPeriodBookingCreationService $periodCreation,
     ): JsonResponse {
         $couponCode = $request->input('couponCode');
         Validator::make(['couponCode' => $couponCode], [
             'couponCode' => ['nullable', 'string', 'max:50'],
         ])->validate();
         $validated = $this->normalizeWorkerCount($request->validated());
+        if ((int) ($validated['contractVersion'] ?? 0) === 2) {
+            $booking = app(\Modules\User\Services\CleaningTimePeriodBookingService::class)->create($request->user(), $validated);
+            $details = app(\Modules\User\Services\CleaningTimePeriodCustomerDetailService::class)->forBooking($booking);
+            if ($details === null) {
+                throw new \LogicException('Persisted V2 booking schedules are missing.');
+            }
+
+            return response()->json(['order' => UserCleaningBookingResource::make($booking), 'contractVersion' => 2, ...$details], 201);
+        }
+        if (is_array($validated['roomPeriods'] ?? null)) {
+            if ($request->filled('couponCode')) {
+                throw ValidationException::withMessages([
+                    'couponCode' => ['Period-level coupon support is not available yet; no booking was created.'],
+                ]);
+            }
+
+            $booking = $periodCreation->create(
+                $request->user(),
+                $validated,
+                (string) $validated['quoteSignature'],
+            );
+            $booking->load([
+                'worker.user', 'preferredWorker.user',
+                'rooms.assignedWorker.user', 'workerAssignments.worker.user',
+                'timeWarnings', 'disputes', 'addons', 'billingPolicy',
+            ]);
+
+            return response()->json([
+                'order' => UserCleaningBookingResource::make($booking),
+                'roomPeriods' => $booking->roomPeriods()
+                    ->get()
+                    ->map(static fn ($period): array => [
+                        'clientKey' => $period->client_key,
+                        'visitSequence' => $period->visit_sequence,
+                        'roomType' => $period->room_type,
+                        'size' => $period->room_size,
+                        'cleaningMode' => $period->cleaning_mode,
+                        'scheduledDate' => $period->scheduled_date?->format('Y-m-d'),
+                        'scheduledTime' => substr((string) $period->scheduled_time, 0, 5),
+                        'numberOfWorkers' => $period->required_workers,
+                        'estimatedDurationMinutes' => $period->estimated_duration_minutes,
+                        'materials' => $period->materials,
+                        'specialServices' => $period->special_services,
+                    ])->values()->all(),
+            ], 201);
+        }
         $validated = $this->withEventWorkerCount($validated);
         $this->assertWorkerCapacity($validated, $estimationService);
         $isEventAssistance = $estimationService->isEventAssistanceType((string) ($validated['propertyType'] ?? ''));
@@ -174,6 +222,7 @@ final class UserCleaningOrderStoreController
                         null,
                         (bool) ($validated['requestMaterials'] ?? false),
                         is_array($validated['specialServices'] ?? null) ? $validated['specialServices'] : [],
+                        max(1, (int) $order->number_of_workers),
                     );
                 }
 
@@ -194,15 +243,18 @@ final class UserCleaningOrderStoreController
                     (float) $order->base_price + (float) $order->addons_total,
                     2,
                 );
-                $couponAdminMargin = (bool) $order->is_pricing_final
-                    ? max(0.0, (float) $order->admin_margin_amount)
-                    : (float) $pricingCalculator->provisional($serviceSubtotal, 0.0)['adminMargin'];
-                $subtotal = round(
-                    $serviceSubtotal
-                    + (float) $order->travel_fee
-                    + $couponAdminMargin,
-                    2,
-                );
+                // A recurring quote already includes the configured minimum
+                // and its administration component in the customer total.
+                $subtotal = $recurringPlan !== null
+                    ? round((float) $order->total_price, 2)
+                    : round(
+                        $serviceSubtotal
+                        + (float) $order->travel_fee
+                        + ((bool) $order->is_pricing_final
+                            ? max(0.0, (float) $order->admin_margin_amount)
+                            : (float) $pricingCalculator->provisional($serviceSubtotal, 0.0)['adminMargin']),
+                        2,
+                    );
                 $quote = $platformCoupons->quoteForPlacement(
                     userId: (int) $request->user()->id,
                     section: PlatformCoupon::SECTION_CLEANING,

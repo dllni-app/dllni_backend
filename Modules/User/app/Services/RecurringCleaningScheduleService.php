@@ -9,6 +9,7 @@ use Modules\Cleaning\Enums\CleaningBookingSessionCoverageStatus;
 use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
+use Modules\Cleaning\Observers\CleaningBookingObserver;
 
 final class RecurringCleaningScheduleService
 {
@@ -104,6 +105,7 @@ final class RecurringCleaningScheduleService
         $specialLines = (array) ($singleVisitPricing['specialServices'] ?? []);
         $singleVisitSubtotal = max(0.01, $basePrice + (float) ($singleVisitPricing['addonsTotal'] ?? 0));
         $adminRate = max(0.0, (float) ($singleVisitPricing['adminMargin'] ?? 0)) / $singleVisitSubtotal;
+        $minimumIncludesCommission = (bool) data_get($singleVisitPricing, 'pricingAlgorithm.minimumOrderApplied', false);
         $scheduleSessions = [];
         $aggregateAddons = 0.0;
         $aggregateSpecialServices = 0.0;
@@ -126,7 +128,10 @@ final class RecurringCleaningScheduleService
             $sessionMaterialTotal = $index === 0 ? $materialTotal : 0.0;
             $sessionAddons = round($sessionMaterialTotal + $sessionSpecialTotal, 2);
             $sessionAdmin = round(($basePrice + $sessionAddons) * $adminRate, 2);
-            $sessionTotal = round($basePrice + $sessionAddons + $travelFee + $sessionAdmin, 2);
+            $sessionIncludedAdmin = $minimumIncludesCommission
+                ? min($sessionAdmin, (float) ($singleVisitPricing['adminMargin'] ?? 0))
+                : 0.0;
+            $sessionTotal = round($basePrice + $sessionAddons + $travelFee + $sessionAdmin - $sessionIncludedAdmin, 2);
             $aggregateAddons += $sessionAddons;
             $aggregateSpecialServices += $sessionSpecialTotal;
             $aggregateAdmin += $sessionAdmin;
@@ -201,7 +206,11 @@ final class RecurringCleaningScheduleService
             'travel_fee' => $aggregatePricing['travelFee'] ?? round($travelFee * $count, 2),
             'admin_margin_amount' => $aggregatePricing['adminMargin'] ?? round($adminMargin * $count, 2),
             'total_price' => $aggregatePricing['totalPrice'] ?? round($totalPrice * $count, 2),
-        ])->save();
+        ]);
+        // The aggregate must bypass single-booking price normalization, but
+        // its canonical date still needs the observer's urgent-order snapshot.
+        app(CleaningBookingObserver::class)->refreshHotOrderSnapshot($booking);
+        $booking->saveQuietly();
 
         $sessionPricingBySequence = collect((array) ($aggregatePricing['schedule']['sessions'] ?? []))->keyBy('sequence');
         foreach ($plan['sessions'] as $session) {

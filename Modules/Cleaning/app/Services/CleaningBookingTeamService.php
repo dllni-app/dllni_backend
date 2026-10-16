@@ -400,6 +400,9 @@ final class CleaningBookingTeamService
         $includedAdminMarginBase = $this->pricingCalculator->minimumOrderAdminMarginBase(
             (float) ($booking->base_price ?? 0),
             (string) $booking->property_type,
+            (float) ($booking->addons_total ?? 0),
+            (float) ($booking->travel_fee ?? 0),
+            (float) ($booking->total_price ?? 0),
         );
         $requiredWorkers = max(1, (int) ($booking->number_of_workers ?? 1));
         $totalTravelFee = 0.0;
@@ -472,13 +475,18 @@ final class CleaningBookingTeamService
             }
         }
 
+        $periodApprovedTotal = (array) ($booking->property_details ?? []);
+        $customerPriceLock = isset($periodApprovedTotal['_room_period_v2_approved_total'])
+            ? round((float) $periodApprovedTotal['_room_period_v2_approved_total'], 2)
+            : null;
+
         if ($finalizeBooking && $acceptedAssignments->isNotEmpty()) {
             $booking->forceFill([
                 'status' => CleaningBookingStatus::WorkerAssigned,
                 'worker_id' => $primaryWorkerId,
                 'travel_fee' => round($totalTravelFee, 2),
                 'admin_margin_amount' => round($totalAdminMargin, 2),
-                'total_price' => round($acceptedAssignments->sum(
+                'total_price' => $customerPriceLock ?? round($acceptedAssignments->sum(
                     fn (CleaningBookingWorkerAssignment $assignment): float =>
                         (float) $assignment->worker_amount + (float) $assignment->admin_margin_amount
                 ), 2),
@@ -497,7 +505,7 @@ final class CleaningBookingTeamService
                 'worker_id' => null,
                 'travel_fee' => 0,
                 'admin_margin_amount' => round((float) $provisionalPricing['adminMargin'], 2),
-                'total_price' => round((float) $provisionalPricing['totalPrice'], 2),
+                'total_price' => $customerPriceLock ?? round((float) $provisionalPricing['totalPrice'], 2),
                 'travel_distance_km' => null,
                 'is_pricing_final' => false,
             ])->save();

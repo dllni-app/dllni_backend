@@ -36,6 +36,13 @@ function createCleaningNeighborhoodCoverage(Worker $worker, ?string $name = null
         'is_active' => true,
     ]);
 
+    // Geographic discovery now requires GPS even when a legacy neighborhood is set.
+    $worker->forceFill([
+        'home_address' => 'QA coverage location, Aleppo',
+        'home_latitude' => 36.2000,
+        'home_longitude' => 37.1500,
+    ])->save();
+
     return $neighborhood;
 }
 
@@ -231,6 +238,8 @@ it('returns pending unassigned bookings for worker when forCurrentWorker and sta
         'gender_preference' => 'any',
         'neighborhood_id' => $neighborhood->id,
         'neighborhood_name' => $neighborhood->name_ar,
+        'address_latitude' => 36.2000,
+        'address_longitude' => 37.1500,
     ]);
     CleaningBooking::factory()->create([
         'worker_id' => null,
@@ -239,6 +248,8 @@ it('returns pending unassigned bookings for worker when forCurrentWorker and sta
         'gender_preference' => 'any',
         'neighborhood_id' => $neighborhood->id,
         'neighborhood_name' => $neighborhood->name_ar,
+        'address_latitude' => 36.2000,
+        'address_longitude' => 37.1500,
     ]);
 
     $response = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
@@ -273,6 +284,8 @@ it('returns only cleaning available bookings for cleaning preferred workers', fu
         'property_type' => 'apartment',
         'neighborhood_id' => $neighborhood->id,
         'neighborhood_name' => $neighborhood->name_ar,
+        'address_latitude' => 36.2000,
+        'address_longitude' => 37.1500,
     ]);
     CleaningBooking::factory()->create([
         'worker_id' => null,
@@ -282,6 +295,8 @@ it('returns only cleaning available bookings for cleaning preferred workers', fu
         'property_type' => 'event_assistance',
         'neighborhood_id' => $neighborhood->id,
         'neighborhood_name' => $neighborhood->name_ar,
+        'address_latitude' => 36.2000,
+        'address_longitude' => 37.1500,
     ]);
 
     $response = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
@@ -318,6 +333,8 @@ it('returns only event available bookings for events preferred workers', functio
         'property_type' => 'apartment',
         'neighborhood_id' => $neighborhood->id,
         'neighborhood_name' => $neighborhood->name_ar,
+        'address_latitude' => 36.2000,
+        'address_longitude' => 37.1500,
     ]);
     CleaningBooking::factory()->create([
         'worker_id' => null,
@@ -327,6 +344,8 @@ it('returns only event available bookings for events preferred workers', functio
         'property_type' => 'event_assistance',
         'neighborhood_id' => $neighborhood->id,
         'neighborhood_name' => $neighborhood->name_ar,
+        'address_latitude' => 36.2000,
+        'address_longitude' => 37.1500,
     ]);
 
     $response = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
@@ -363,6 +382,8 @@ it('returns cleaning and event available bookings for both preferred workers', f
         'property_type' => 'apartment',
         'neighborhood_id' => $neighborhood->id,
         'neighborhood_name' => $neighborhood->name_ar,
+        'address_latitude' => 36.2000,
+        'address_longitude' => 37.1500,
     ]);
     CleaningBooking::factory()->create([
         'worker_id' => null,
@@ -372,6 +393,8 @@ it('returns cleaning and event available bookings for both preferred workers', f
         'property_type' => 'event_assistance',
         'neighborhood_id' => $neighborhood->id,
         'neighborhood_name' => $neighborhood->name_ar,
+        'address_latitude' => 36.2000,
+        'address_longitude' => 37.1500,
     ]);
 
     $response = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
@@ -461,7 +484,8 @@ it('returns worker profile when user has worker', function () {
     $response->assertOk();
     expect($response->json('data.id'))->toBe($worker->id);
     expect($response->json('data.firstName'))->toBe('Ahmed');
-    expect($response->json('data.preferred_work_type'))->toBe('both');
+    expect($response->json('data.preferred_work_type'))->toBe('cleaning');
+    expect($response->json('data.preferredWorkTypes'))->toBe(['cleaning', 'events']);
     expect($response->json('data.user.id'))->toBe($workerUser->id);
     expect($response->json('data.user.phone'))->toBe('+963991234567');
 });
@@ -478,7 +502,8 @@ it('defaults existing style worker records to both preferred work type', functio
 
     $response->assertOk();
     expect($worker->fresh()->preferred_work_type)->toBe(WorkerPreferredWorkType::Both);
-    expect($response->json('data.preferred_work_type'))->toBe('both');
+    expect($response->json('data.preferred_work_type'))->toBe('cleaning');
+    expect($response->json('data.preferredWorkTypes'))->toBe(['cleaning', 'events']);
 });
 
 it('returns 403 for worker profile when user has no worker', function () {
@@ -617,7 +642,7 @@ it('finalizes provisional pricing when worker accepts booking', function () {
     $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'home_address' => 'Worker Home',
-        'home_latitude' => 33.6,
+        'home_latitude' => 33.55,
         'home_longitude' => 36.3,
         'is_active' => true,
     ]);
@@ -678,7 +703,7 @@ it('fails booking accept when worker home location is missing', function () {
 
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/accept");
 
-    $response->assertUnprocessable()->assertJsonValidationErrors(['status']);
+    $response->assertUnprocessable()->assertJsonValidationErrors(['worker']);
 });
 
 it('returns worker homepage stats for authenticated worker', function () {
@@ -786,6 +811,8 @@ it('returns worker homepage with todayEarnings newOrdersCount and pendingExtensi
         'gender_preference' => 'any',
         'neighborhood_id' => $neighborhood->id,
         'neighborhood_name' => $neighborhood->name_ar,
+        'address_latitude' => 36.2000,
+        'address_longitude' => 37.1500,
     ]);
 
     $bookingForWarning = CleaningBooking::factory()->create([

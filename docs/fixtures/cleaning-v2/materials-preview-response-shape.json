@@ -1,0 +1,21 @@
+{
+  "description": "Shape example only. The server supplies actual catalog IDs, Arabic names and quantities.",
+  "contractVersion": 2,
+  "materialsPreview": {
+    "items": [
+      {
+        "materialTypeId": "<active-catalog-type-id>",
+        "name": "<catalog-name>",
+        "quantity": "<rule-derived-quantity>",
+        "unit": "<unit-code>",
+        "unitLabel": "<localized-unit>",
+        "requiredForRoomKeys": [
+          "bedroom.1"
+        ],
+        "isRequired": true
+      }
+    ],
+    "catalogStatus": "ready|empty",
+    "sourceRevision": "<sha256-of-preview>"
+  }
+}
