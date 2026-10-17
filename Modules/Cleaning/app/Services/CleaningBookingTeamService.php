@@ -309,11 +309,21 @@ final class CleaningBookingTeamService
     ): CleaningBooking {
         return DB::transaction(function () use ($booking, $outgoing, $incoming, $reason): CleaningBooking {
             $booking = $this->lockBooking($booking->id);
+            if (! in_array($booking->status, [
+                CleaningBookingStatus::Pending,
+                CleaningBookingStatus::WorkerAssigned,
+            ], true) || $booking->started_travel_at !== null || $booking->work_started_at !== null) {
+                throw new InvalidArgumentException('لا يمكن استبدال عامل بعد بدء رحلة الفريق أو تنفيذ الطلب.');
+            }
             if ((int) $outgoing->id === (int) $incoming->id) {
                 throw new InvalidArgumentException('يجب اختيار عامل بديل مختلف عن العامل الحالي.');
             }
-            if ($this->acceptedAssignmentForWorker($booking->id, $outgoing->id) === null) {
+            $outgoingAssignment = $this->acceptedAssignmentForWorker($booking->id, $outgoing->id);
+            if ($outgoingAssignment === null) {
                 throw new InvalidArgumentException('العامل المطلوب استبداله لم يعد ضمن الفريق.');
+            }
+            if ($outgoingAssignment->started_travel_at !== null || $outgoingAssignment->work_started_at !== null) {
+                throw new InvalidArgumentException('لا يمكن استبدال عامل بعد بدء رحلته أو عمله.');
             }
 
             $booking = $this->rejectWorker($booking, $outgoing, $reason, false);
