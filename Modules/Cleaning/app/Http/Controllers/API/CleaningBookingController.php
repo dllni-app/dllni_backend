@@ -10,11 +10,13 @@ use App\Enums\SOSStatus;
 use App\Enums\SystemAlertStatus;
 use App\Models\SosAlert;
 use App\Models\SystemAlert;
+use App\Models\User;
 use App\Models\Worker;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -47,7 +49,7 @@ final class CleaningBookingController
         private readonly WorkerOrderSolvencyService $solvencyService,
     ) {}
 
-    public function index(CleaningBookingFilterRequest $request): AnonymousResourceCollection
+    public function index(CleaningBookingFilterRequest $request): AnonymousResourceCollection|JsonResponse
     {
         // A worker cannot bypass the geographic dispatch audience by omitting
         // filter[forCurrentWorker] from the request.
@@ -66,11 +68,11 @@ final class CleaningBookingController
                         ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
                 });
             });
+        } else {
+            $this->assertGenericOperationsActor($request->user());
         }
 
-        $bookings = $query
-            ->with([
-                'customer',
+        $relations = [
                 'worker.user',
                 'preferredWorker.user',
                 'rooms.assignedWorker.user',
@@ -79,7 +81,13 @@ final class CleaningBookingController
                 'billingPolicy',
                 'timeWarnings',
                 'disputes',
-            ])
+        ];
+        if (! $authenticatedWorker instanceof Worker) {
+            $relations[] = 'customer';
+        }
+
+        $bookings = $query
+            ->with($relations)
             ->paginate($request->get('perPage', 20));
 
         $worker = $request->user()?->worker;
@@ -87,18 +95,36 @@ final class CleaningBookingController
         if ($worker instanceof Worker) {
             $worker->loadMissing('deposit');
             $this->filterFinanciallyBlockedPendingBookings($bookings, $worker);
-        }
+            $this->filterV2BookingsWithoutAcceptedVisitProof($bookings, $worker);
 
-        $collection = CleaningBookingResource::collection($bookings);
-
-        if ($worker instanceof Worker) {
-            $collection->additional([
+            return response()->json([
+                'data' => $bookings->getCollection()
+                    ->map(fn (CleaningBooking $booking): array => $this->workerDiscoveryPayload($booking, $request, $worker))
+                    ->values()
+                    ->all(),
+                'links' => [
+                    'first' => $bookings->url(1),
+                    'last' => $bookings->url($bookings->lastPage()),
+                    'prev' => $bookings->previousPageUrl(),
+                    'next' => $bookings->nextPageUrl(),
+                ],
+                'meta' => [
+                    'current_page' => $bookings->currentPage(),
+                    'from' => $bookings->firstItem(),
+                    'last_page' => $bookings->lastPage(),
+                    'path' => $bookings->path(),
+                    'per_page' => $bookings->perPage(),
+                    'to' => $bookings->lastItem(),
+                    'total' => $bookings->total(),
+                ],
                 'dispatchEligibility' => $this->newRequestEligibility(
                     $worker,
                     $this->depositService->depositStatusPayload($worker),
                 ),
             ]);
         }
+
+        $collection = CleaningBookingResource::collection($bookings);
 
         return $collection;
     }
@@ -229,7 +255,7 @@ final class CleaningBookingController
     public function update(CleaningBookingRequest $request, CleaningBooking $cleaning_booking): CleaningBookingResource
     {
         $updated = $this->cleaningBookingService->update(
-            CleaningBookingData::from($request->validated()),
+            $request->validated(),
             $cleaning_booking
         );
 
@@ -240,7 +266,8 @@ final class CleaningBookingController
 
     public function destroy(CleaningBooking $cleaning_booking): Response
     {
-        $cleaning_booking->delete();
+        $this->assertGenericOperationsActor(Auth::user());
+        $this->cleaningBookingService->destroyGeneric($cleaning_booking);
 
         return response()->noContent();
     }
@@ -554,6 +581,27 @@ final class CleaningBookingController
             ->values());
     }
 
+    private function filterV2BookingsWithoutAcceptedVisitProof(LengthAwarePaginator $bookings, Worker $worker): void
+    {
+        $bookings->setCollection($bookings->getCollection()
+            ->filter(function (CleaningBooking $booking) use ($worker): bool {
+                if (! $this->shouldScopeV2WorkerRooms($booking)) {
+                    return true;
+                }
+                if ($this->isPendingCandidateForWorker($booking, $worker)) {
+                    return true;
+                }
+
+                return $booking->sessions()
+                    ->whereHas('workerAssignments', function ($assignments) use ($worker): void {
+                        $assignments->where('worker_id', $worker->id)
+                            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
+                    })
+                    ->exists();
+            })
+            ->values());
+    }
+
     private function isPendingCandidateForWorker(CleaningBooking $booking, Worker $worker): bool
     {
         if ($booking->status !== CleaningBookingStatus::Pending) {
@@ -570,5 +618,199 @@ final class CleaningBookingController
         }
 
         return $booking->worker_id === null;
+    }
+
+    private function assertGenericOperationsActor(mixed $user): User
+    {
+        abort_unless($user instanceof User && $user->exists, 403);
+        $actor = User::query()->whereKey($user->getKey())->where('is_active', true)->first();
+        abort_unless($actor instanceof User
+            && $actor->hasAnyRole(['admin', 'Super Admin', 'Cleaning Ops Manager']), 403);
+
+        return $actor;
+    }
+
+    private function workerDiscoveryPayload(
+        CleaningBooking $booking,
+        CleaningBookingFilterRequest $request,
+        Worker $worker,
+    ): array
+    {
+        $payload = CleaningBookingResource::make($booking)->resolve($request);
+        $safe = Arr::only($payload, [
+            'id', 'bookingNumber', 'displayTitle', 'status', 'statusLabel', 'globalStatus',
+            'worker_order_status', 'worker_order_status_label', 'type', 'bookingKind',
+            'numberOfWorkers', 'required_workers_count', 'accepted_workers_count', 'pending_workers_count',
+            'genderPreference', 'propertyType', 'propertyTypeLabel', 'numberOfRooms', 'numberOfKitchens',
+            'numberOfBalconies', 'numberOfSheds', 'estimatedHours', 'scheduledDate', 'scheduledTime',
+            'totalHours', 'workerTotalHours', 'serviceShareAmount', 'travelFee', 'workerAmount',
+            'workerOffer', 'worker_offer', 'myAssignment', 'worker_assignment', 'isHotOrder',
+            'urgencyLabel', 'createdAt', 'updatedAt',
+        ]);
+
+        $safe['visits'] = $this->workerVisitProjection($booking, $worker);
+        $ownedRooms = [];
+        if ($safe['visits'] !== []) {
+            $ownedRooms = $this->workerOwnedRoomProjection($booking, $worker);
+            $safe['address'] = $payload['address'] ?? null;
+            $safe['addressLatitude'] = $payload['addressLatitude'] ?? null;
+            $safe['addressLongitude'] = $payload['addressLongitude'] ?? null;
+            $safe['roomAssignments'] = $ownedRooms;
+        }
+        if ($this->shouldScopeV2WorkerRooms($booking)) {
+            $safe = $this->scopeNestedWorkerRoomData($safe, $ownedRooms);
+        }
+
+        return $safe;
+    }
+
+    private function workerVisitProjection(CleaningBooking $booking, Worker $worker): array
+    {
+        return $booking->sessions()
+            ->whereHas('workerAssignments', function ($assignments) use ($worker): void {
+                $assignments->where('worker_id', $worker->id)
+                    ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
+            })
+            ->with(['workerAssignments' => function ($assignments) use ($worker): void {
+                $assignments->where('worker_id', $worker->id)
+                    ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
+            }])
+            ->orderBy('sequence')
+            ->get()
+            ->map(static function ($session): array {
+                $assignment = $session->workerAssignments->first();
+
+                return [
+                    'id' => (int) $session->id,
+                    'sequence' => (int) $session->sequence,
+                    'status' => $session->status?->value ?? (string) $session->status,
+                    'scheduledDate' => $session->scheduled_date?->toDateString(),
+                    'scheduledTime' => mb_substr((string) $session->scheduled_time, 0, 5),
+                    'requiredWorkers' => $session->requiredWorkerCount(),
+                    'attendance' => [
+                        'status' => $assignment?->status?->value ?? $assignment?->status,
+                        'acceptedAt' => $assignment?->accepted_at?->toIso8601String(),
+                        'startedTravelAt' => $assignment?->started_travel_at?->toIso8601String(),
+                        'arrivedAt' => $assignment?->arrived_at?->toIso8601String(),
+                        'workStartedAt' => $assignment?->work_started_at?->toIso8601String(),
+                        'workFinishedAt' => $assignment?->work_finished_at?->toIso8601String(),
+                    ],
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function workerOwnedRoomProjection(CleaningBooking $booking, Worker $worker): array
+    {
+        $sessionIds = $booking->sessions()
+            ->whereHas('workerAssignments', function ($assignments) use ($worker): void {
+                $assignments->where('worker_id', $worker->id)
+                    ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
+            })
+            ->pluck('id');
+        if ($sessionIds->isEmpty()) {
+            return [];
+        }
+
+        $scheduledRooms = $booking->roomSchedules()
+            ->with('room')
+            ->whereIn('cleaning_booking_session_id', $sessionIds)
+            ->get()
+            ->map(static fn ($schedule): array => [
+                'id' => (int) $schedule->cleaning_booking_room_id,
+                'roomKey' => $schedule->room?->room_key,
+                'roomType' => $schedule->room?->room_type,
+                'roomSize' => $schedule->room?->room_size,
+                'displayLabel' => $schedule->room?->display_label,
+                'assignedWorkerId' => $schedule->room?->assigned_worker_id,
+            ]);
+        $periodRooms = $booking->roomPeriods()
+            ->with('room')
+            ->whereIn('cleaning_booking_session_id', $sessionIds)
+            ->get()
+            ->map(static fn ($period): array => [
+                'id' => (int) $period->cleaning_booking_room_id,
+                'roomKey' => $period->room?->room_key,
+                'roomType' => $period->room_type,
+                'roomSize' => $period->room_size,
+                'displayLabel' => $period->room?->display_label,
+                'assignedWorkerId' => $period->room?->assigned_worker_id,
+            ]);
+
+        return $scheduledRooms->concat($periodRooms)
+            ->unique('id')
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  list<array{id:int,roomKey:mixed,roomType:mixed,roomSize:mixed,displayLabel:mixed,assignedWorkerId:mixed}>  $ownedRooms
+     */
+    private function scopeNestedWorkerRoomData(array $safe, array $ownedRooms): array
+    {
+        $ownedIds = array_fill_keys(array_map(static fn (array $room): int => (int) $room['id'], $ownedRooms), true);
+        $ownedKeys = array_fill_keys(array_values(array_filter(array_map(
+            static fn (array $room): ?string => is_string($room['roomKey'] ?? null) ? mb_trim($room['roomKey']) : null,
+            $ownedRooms,
+        ))), true);
+        $ownedLabels = array_fill_keys(array_values(array_filter(array_map(
+            static fn (array $room): ?string => is_string($room['displayLabel'] ?? null) ? mb_trim($room['displayLabel']) : null,
+            $ownedRooms,
+        ))), true);
+
+        foreach (['workerOffer', 'worker_offer', 'myAssignment', 'worker_assignment'] as $key) {
+            if (! is_array($safe[$key] ?? null)) {
+                continue;
+            }
+
+            $nested = $safe[$key];
+            if (is_array($nested['roomIds'] ?? null)) {
+                $nested['roomIds'] = array_values(array_filter(
+                    $nested['roomIds'],
+                    static fn (mixed $roomId): bool => isset($ownedIds[(int) $roomId]),
+                ));
+            }
+            foreach (['workerFinishedPropertyRooms', 'worker_finished_property_rooms'] as $roomsKey) {
+                if (! is_array($nested[$roomsKey] ?? null)) {
+                    continue;
+                }
+                $nested[$roomsKey] = array_values(array_filter(
+                    $nested[$roomsKey],
+                    static function (mixed $snapshot) use ($ownedIds, $ownedKeys, $ownedLabels): bool {
+                        if (! is_array($snapshot)) {
+                            return false;
+                        }
+                        if (is_numeric($snapshot['id'] ?? null)) {
+                            return isset($ownedIds[(int) $snapshot['id']]);
+                        }
+                        $roomKey = $snapshot['roomKey'] ?? $snapshot['room_key'] ?? null;
+                        if (is_string($roomKey) && mb_trim($roomKey) !== '') {
+                            return isset($ownedKeys[mb_trim($roomKey)]);
+                        }
+                        $label = $snapshot['displayLabel'] ?? $snapshot['display_label'] ?? $snapshot['name'] ?? $snapshot['label'] ?? null;
+
+                        return is_string($label) && mb_trim($label) !== '' && isset($ownedLabels[mb_trim($label)]);
+                    },
+                ));
+            }
+            $safe[$key] = $nested;
+        }
+
+        return $safe;
+    }
+
+    private function shouldScopeV2WorkerRooms(CleaningBooking $booking): bool
+    {
+        if ((int) $booking->number_of_workers <= 1
+            || ! in_array((string) $booking->booking_kind, ['standard', 'open_time'], true)) {
+            return false;
+        }
+
+        $details = is_array($booking->property_details) ? $booking->property_details : [];
+
+        return $booking->isV2OperationalGroup()
+            || array_key_exists('_time_period_v2', $details)
+            || array_key_exists('_room_period_v2_approved_total', $details);
     }
 }

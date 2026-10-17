@@ -10,6 +10,7 @@ use Illuminate\Validation\ValidationException;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSpecialService;
 use Modules\Cleaning\Models\CleaningBookingSpecialServiceItem;
+use Modules\Cleaning\Services\CleaningBookingVisitInitializationService;
 use Modules\Cleaning\Services\CleaningMaterialInventoryService;
 
 /**
@@ -23,6 +24,7 @@ final class RoomPeriodBookingCreationService
         private readonly UserCleaningOrderService $legacyStore,
         private readonly RoomPeriodPricingService $periodPricing,
         private readonly CleaningMaterialInventoryService $materialsInventory,
+        private readonly CleaningBookingVisitInitializationService $visitInitialization,
     ) {}
 
     /** @param array<string,mixed> $data */
@@ -82,6 +84,9 @@ final class RoomPeriodBookingCreationService
                 (float) $quote['totalPrice'];
             $detailsWithFrozenQuote['_room_period_v2_quote_algorithm'] =
                 $quote['algorithmVersion'];
+            if (($quote['supervisor'] ?? null) !== null) {
+                $detailsWithFrozenQuote['_supervisor_pricing'] = $quote['supervisor'];
+            }
             $booking->forceFill([
                 'property_details' => $detailsWithFrozenQuote,
                 'number_of_workers' => (int) $quote['requiredSimultaneousWorkers'],
@@ -111,6 +116,11 @@ final class RoomPeriodBookingCreationService
                     $byKey[$period['clientKey']] = (int) $matched->id;
                 }
             }
+            if (count($byKey) !== count($sortedPeriods)) {
+                throw ValidationException::withMessages([
+                    'roomPeriods' => ['The persisted booking rooms do not match the signed room-period selection.'],
+                ]);
+            }
 
             foreach ($periods as $idx => $period) {
                 $line = (array) ($quote['roomPeriods'][$idx] ?? []);
@@ -135,6 +145,8 @@ final class RoomPeriodBookingCreationService
                     'pricing_snapshot' => $line,
                 ]);
             }
+
+            $this->visitInitialization->materializeCreatedRoomPeriodVisit($booking, $quote);
 
             // The worker/inventory modules still consume booking-level
             // material and special-service ledgers. Materialize a single

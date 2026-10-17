@@ -14,11 +14,22 @@ use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningNeighborhood;
+use Spatie\Permission\Models\Role;
 
 beforeEach(function () {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 });
+
+function authenticateGenericBookingAdmin(): User
+{
+    Role::findOrCreate('admin', 'web');
+    $admin = User::factory()->create(['is_active' => true]);
+    $admin->assignRole('admin');
+    Sanctum::actingAs($admin);
+
+    return $admin;
+}
 
 function createCleaningNeighborhoodCoverage(Worker $worker, ?string $name = null): CleaningNeighborhood
 {
@@ -59,6 +70,8 @@ it('lists cleaning bookings', function () {
         'billing_policy_id' => $billingPolicy->id,
     ]);
 
+    $this->getJson('/api/v1/cleaning-bookings')->assertForbidden();
+    authenticateGenericBookingAdmin();
     $response = $this->getJson('/api/v1/cleaning-bookings');
 
     $response->assertOk();
@@ -79,26 +92,24 @@ it('creates a cleaning booking', function () {
         'customerId' => $customer->id,
         'billingPolicyId' => $billingPolicy->id,
         'bookingNumber' => 'CLN-'.mb_strtoupper(Str::random(6)),
-        'status' => CleaningBookingStatus::Pending->value,
         'propertyType' => 'apartment',
         'scheduledDate' => now()->addDays(2)->format('Y-m-d'),
         'scheduledTime' => '10:00',
-        'numberOfWorkers' => 3,
+        'numberOfWorkers' => 1,
         'totalHours' => 3,
-        'basePrice' => 80,
-        'travelFee' => 10,
-        'totalPrice' => 90,
         'termsAccepted' => true,
     ];
 
+    $this->postJson('/api/v1/cleaning-bookings', $payload)->assertForbidden();
+    authenticateGenericBookingAdmin();
     $response = $this->postJson('/api/v1/cleaning-bookings', $payload);
 
     $response->assertCreated();
-    expect($response->json('data.numberOfWorkers'))->toBe(3);
+    expect($response->json('data.numberOfWorkers'))->toBe(1);
     $this->assertDatabaseHas('cleaning_bookings', [
         'booking_number' => $payload['bookingNumber'],
         'customer_id' => $customer->id,
-        'number_of_workers' => 3,
+        'number_of_workers' => 1,
     ]);
 });
 
@@ -116,6 +127,8 @@ it('shows a cleaning booking', function () {
         'number_of_workers' => 2,
     ]);
 
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")->assertForbidden();
+    authenticateGenericBookingAdmin();
     $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}");
 
     $response->assertOk();
@@ -138,29 +151,29 @@ it('updates a cleaning booking', function () {
         'status' => CleaningBookingStatus::Pending->value,
     ]);
 
-    $response = $this->putJson("/api/v1/cleaning-bookings/{$booking->id}", [
-        'customerId' => $booking->customer_id,
-        'billingPolicyId' => $billingPolicy->id,
-        'bookingNumber' => $booking->booking_number,
-        'status' => CleaningBookingStatus::WorkerAssigned->value,
-        'propertyType' => $booking->property_type,
-        'scheduledDate' => $booking->scheduled_date->format('Y-m-d'),
-        'scheduledTime' => $booking->scheduled_time,
-        'numberOfWorkers' => 4,
-        'totalHours' => (float) $booking->total_hours,
-        'basePrice' => (float) $booking->base_price,
-        'travelFee' => (float) $booking->travel_fee,
-        'totalPrice' => (float) $booking->total_price,
+    $payload = [
+        'propertyDetails' => ['kitchens' => 2, 'cleaning_mode' => 'deep'],
         'termsAccepted' => true,
-    ]);
+    ];
+    $this->putJson("/api/v1/cleaning-bookings/{$booking->id}", $payload)->assertForbidden();
+    authenticateGenericBookingAdmin();
+    $response = $this->putJson("/api/v1/cleaning-bookings/{$booking->id}", $payload);
 
     $response->assertOk();
     $this->assertDatabaseHas('cleaning_bookings', [
         'id' => $booking->id,
-        'status' => CleaningBookingStatus::WorkerAssigned->value,
-        'number_of_workers' => 4,
+        'status' => CleaningBookingStatus::Pending->value,
     ]);
-    expect($response->json('data.numberOfWorkers'))->toBe(4);
+    expect(data_get($booking->fresh()->property_details, 'kitchens'))->toBe(2)
+        ->and(data_get($booking->fresh()->property_details, 'cleaning_mode'))->toBe('deep');
+
+    $this->putJson("/api/v1/cleaning-bookings/{$booking->id}", [
+        'status' => CleaningBookingStatus::Completed->value,
+        'basePrice' => 1,
+        'totalPrice' => 1,
+        'workStartedAt' => now()->subHour()->toIso8601String(),
+        'workFinishedAt' => now()->toIso8601String(),
+    ])->assertUnprocessable();
 });
 
 it('deletes a cleaning booking', function () {
@@ -176,6 +189,8 @@ it('deletes a cleaning booking', function () {
         'billing_policy_id' => $billingPolicy->id,
     ]);
 
+    $this->deleteJson("/api/v1/cleaning-bookings/{$booking->id}")->assertForbidden();
+    authenticateGenericBookingAdmin();
     $response = $this->deleteJson("/api/v1/cleaning-bookings/{$booking->id}");
 
     $response->assertNoContent();
@@ -450,6 +465,7 @@ it('filters cleaning bookings by multiple statuses for current worker', function
 });
 
 it('filters cleaning bookings by property type', function () {
+    authenticateGenericBookingAdmin();
     $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
         'name' => 'Default',
         'billing_mode' => 'actual_working_time',
@@ -1102,6 +1118,7 @@ it('rejects activating worker account status without home location', function ()
 
 describe('cleaning booking work timer', function () {
     beforeEach(function () {
+        authenticateGenericBookingAdmin();
         Carbon::setTestNow(Carbon::parse('2026-06-21 12:00:00'));
 
         $this->billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([

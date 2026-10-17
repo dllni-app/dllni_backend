@@ -18,6 +18,10 @@ use Throwable;
 
 final class CleaningBookingSession extends Model
 {
+    public const SUPERVISION_MODE_WORKER = 'worker';
+
+    public const SUPERVISION_MODE_SUPERVISOR = 'supervisor';
+
     public const TYPE_RECURRING_CLEANING = 'recurring_cleaning';
 
     public const TYPE_OPEN_TIME = 'open_time';
@@ -39,6 +43,8 @@ final class CleaningBookingSession extends Model
         'open_time_terminated_at',
         'open_time_terminated_by_id',
         'required_workers',
+        'supervision_mode',
+        'supervision_initialized_at',
         'coverage_status',
         'status',
         'base_price',
@@ -87,6 +93,38 @@ final class CleaningBookingSession extends Model
         return $this->hasMany(CleaningBookingSessionWorkerAssignment::class, 'cleaning_booking_session_id');
     }
 
+    public function supervisorAssignments(): HasMany
+    {
+        return $this->hasMany(CleaningBookingSessionSupervisorAssignment::class, 'cleaning_booking_session_id');
+    }
+
+    public function executionTasks(): HasMany
+    {
+        return $this->hasMany(CleaningBookingSessionTask::class, 'cleaning_booking_session_id');
+    }
+
+    public function executionVerifications(): HasMany
+    {
+        return $this->hasMany(CleaningBookingSessionVerification::class, 'cleaning_booking_session_id');
+    }
+
+    public function supervisorAttendances(): HasMany
+    {
+        return $this->hasMany(CleaningBookingSessionSupervisorAttendance::class, 'cleaning_booking_session_id');
+    }
+
+    public function supervisorWorkSegments(): HasMany
+    {
+        return $this->hasMany(CleaningBookingSessionSupervisorWorkSegment::class, 'cleaning_booking_session_id');
+    }
+
+    public function activeSupervisorAssignment(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(CleaningBookingSessionSupervisorAssignment::class, 'cleaning_booking_session_id')
+            ->where('active_slot', 1)
+            ->whereNull('released_at');
+    }
+
     public function ratings(): HasMany
     {
         return $this->hasMany(WorkerCustomerRating::class, 'cleaning_booking_session_id');
@@ -126,6 +164,7 @@ final class CleaningBookingSession extends Model
             'open_time_end_requested_at' => 'datetime',
             'open_time_terminated_at' => 'datetime',
             'required_workers' => 'integer',
+            'supervision_initialized_at' => 'datetime',
             'coverage_status' => CleaningBookingSessionCoverageStatus::class,
             'status' => CleaningBookingSessionStatus::class,
             'base_price' => 'float',
@@ -188,6 +227,15 @@ final class CleaningBookingSession extends Model
     public function requiredWorkerCount(): int
     {
         return max(1, (int) ($this->required_workers ?? 1));
+    }
+
+    public function isSupervisionInitialized(): bool
+    {
+        return $this->supervision_initialized_at !== null
+            && in_array($this->supervision_mode, [
+                self::SUPERVISION_MODE_WORKER,
+                self::SUPERVISION_MODE_SUPERVISOR,
+            ], true);
     }
 
     public function acceptedWorkerCount(): int

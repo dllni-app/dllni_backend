@@ -13,6 +13,7 @@ use Modules\Cleaning\Models\CleaningMaterial;
 use Modules\Cleaning\Models\CleaningMaterialType;
 use Modules\Cleaning\Models\CleaningMaterialTypeQuantityRule;
 use Modules\Cleaning\Models\CleaningMaterialUnit;
+use Modules\Cleaning\Models\CleaningRoomType;
 use Modules\Cleaning\Models\CleaningSpecialService;
 use Modules\Cleaning\Support\CleaningFinancialDefaults;
 use Modules\User\Models\UserAddress;
@@ -45,6 +46,14 @@ beforeEach(function (): void {
     $minutes['bathroom']['small']['regular'] = 120;
     $minutes['kitchen']['medium']['deep'] = 240;
     CleaningFinancialSetting::query()->updateOrCreate(['id' => 1], ['default_commission_rate' => 10, 'commission_type' => 'percent', 'cleaning_base_unit_price' => 50, 'cleaning_minimum_order_price' => 0, 'cleaning_room_pricing_units' => CleaningFinancialDefaults::roomPricingUnits(), 'cleaning_room_deep_multipliers' => CleaningFinancialDefaults::roomDeepMultipliers(2), 'cleaning_room_time_minutes' => $minutes]);
+    // Room durations are now managed through the room catalog rather than the
+    // legacy financial multiplier matrix. Preserve the overlapping periods
+    // that these scheduling tests intentionally exercise.
+    foreach (['bedroom', 'bathroom', 'kitchen'] as $roomType) {
+        CleaningRoomType::query()->where('code', $roomType)->update([
+            'suggested_minutes_by_size' => json_encode($minutes[$roomType], JSON_THROW_ON_ERROR),
+        ]);
+    }
     Sanctum::actingAs(User::factory()->create());
 });
 
@@ -57,6 +66,23 @@ it('groups exact matching intervals into one period with two independent room sc
         ->assertJsonMissingPath('visits.0.financial')->assertJsonMissingPath('basePrice')->assertJsonMissingPath('visits.0.roomSchedules.0.basePrice')
         ->json();
     expect($quote['quoteSignature'])->toHaveLength(64);
+});
+
+it('bills one supervisor across overlapping room schedules and snapshots approved group hours', function (): void {
+    CleaningFinancialSetting::query()->where('id', 1)->update(['supervisor_hourly_rate' => 180]);
+    $input = timePeriodPayload();
+    $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)
+        ->assertOk()
+        ->assertJsonPath('pricing.supervisor.hourlyRate', 180)
+        ->assertJsonPath('pricing.supervisor.billableMinutes', 240)
+        ->assertJsonPath('pricing.supervisor.fee', 720)->json();
+    $bookingId = $this->postJson('/api/v1/user/cleaning/orders', timePeriodStorePayload($input, $quote))
+        ->assertCreated()->json('order.id');
+    $booking = CleaningBooking::query()->findOrFail($bookingId);
+
+    expect($booking->property_details['_supervisor_pricing'])->toMatchArray([
+        'hourlyRate' => 180, 'billableMinutes' => 240, 'fee' => 720,
+    ]);
 });
 
 it('keeps partial overlaps separate and treats touching endpoints as non-overlapping', function (): void {
@@ -107,7 +133,7 @@ it('rejects expired tampered cross-user changed and replayed quotes without crea
 it('invalidates approved pricing when the catalog changes', function (): void {
     $input = timePeriodPayload();
     $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)->assertOk()->json();
-    CleaningFinancialSetting::query()->where('id', 1)->update(['cleaning_base_unit_price' => 100]);
+    CleaningRoomType::query()->where('code', 'bedroom')->update(['deep_hourly_rate' => 100]);
     $this->postJson('/api/v1/user/cleaning/orders', timePeriodStorePayload($input, $quote))->assertUnprocessable()->assertJsonValidationErrors('quoteSignature');
     $this->assertDatabaseCount('cleaning_bookings', 0);
 });

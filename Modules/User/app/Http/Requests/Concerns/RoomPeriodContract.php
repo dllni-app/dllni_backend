@@ -6,6 +6,7 @@ namespace Modules\User\Http\Requests\Concerns;
 
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
+use Modules\Cleaning\Models\CleaningRoomType;
 
 /**
  * Shared contract for the next-version room-period estimate and store payloads.
@@ -21,12 +22,13 @@ final class RoomPeriodContract
         return [
             'quoteSignature' => ['sometimes', 'string', 'size:64'],
             'roomPeriods' => ['sometimes', 'array', 'min:1', 'max:30'],
-            'roomPeriods.*' => ['required', 'array:clientKey,visitSequence,roomType,size,cleaningMode,scheduledDate,scheduledTime,numberOfWorkers,materials,specialServices,notes'],
-            'roomPeriods.*.clientKey' => ['required', 'string', 'max:64', 'regex:/^(bedroom|bathroom|kitchen|living_room)\.[1-9][0-9]{0,2}$/D'],
+            'roomPeriods.*' => ['required', 'array:clientKey,visitSequence,roomType,size,cleaningMode,estimatedHours,scheduledDate,scheduledTime,numberOfWorkers,materials,specialServices,notes'],
+            'roomPeriods.*.clientKey' => ['required', 'string', 'max:64', 'regex:/^[a-z][a-z0-9_]*\.[1-9][0-9]{0,2}$/D'],
             'roomPeriods.*.visitSequence' => ['required', 'integer', 'min:1', 'max:30'],
-            'roomPeriods.*.roomType' => ['required', Rule::in(['bedroom', 'bathroom', 'kitchen', 'living_room'])],
+            'roomPeriods.*.roomType' => ['required', Rule::in(CleaningRoomType::availableCodes())],
             'roomPeriods.*.size' => ['required', Rule::in(['small', 'medium', 'large'])],
             'roomPeriods.*.cleaningMode' => ['required', Rule::in(['regular', 'deep'])],
+            'roomPeriods.*.estimatedHours' => ['sometimes', 'numeric', 'min:0.25', 'max:24'],
             'roomPeriods.*.scheduledDate' => ['required', 'date_format:Y-m-d', 'after_or_equal:'.$today],
             'roomPeriods.*.scheduledTime' => ['required', 'date_format:H:i'],
             'roomPeriods.*.numberOfWorkers' => ['required', 'integer', 'min:1', 'max:20'],
@@ -120,7 +122,7 @@ final class RoomPeriodContract
             return;
         }
         $expected = [];
-        foreach (['bedroom', 'bathroom', 'kitchen', 'living_room'] as $type) {
+        foreach (CleaningRoomType::availableCodes() as $type) {
             $counts = $breakdown[$type] ?? [];
             if (! is_array($counts)) {
                 continue;
@@ -149,7 +151,7 @@ final class RoomPeriodContract
                 $actualSizeCounts[$type][$size] = ($actualSizeCounts[$type][$size] ?? 0) + 1;
             }
         }
-        foreach (['bedroom', 'bathroom', 'kitchen', 'living_room'] as $type) {
+        foreach (CleaningRoomType::availableCodes() as $type) {
             foreach (['small', 'medium', 'large'] as $size) {
                 if ((int) ($actualSizeCounts[$type][$size] ?? 0)
                     !== (int) ($breakdown[$type][$size] ?? 0)) {

@@ -73,6 +73,7 @@ final class UserCleaningOrderEstimatePriceController
                     'totalPrice' => $quote['totalPrice'],
                     'currency' => $quote['currency'],
                     'isPricingFinal' => $quote['isPricingFinal'],
+                    'supervisor' => $quote['supervisor'] ?? null,
                 ],
                 'roomPeriods' => array_map(static fn (array $period): array => [
                     'clientKey' => $period['clientKey'],
@@ -216,6 +217,7 @@ final class UserCleaningOrderEstimatePriceController
                             (bool) ($validated['requestMaterials'] ?? false),
                             is_array($validated['specialServices'] ?? null) ? $validated['specialServices'] : [],
                             $requestedWorkers,
+                            ($validated['serviceType'] ?? null) === 'supervised_team',
                         ));
 
                 if ($isOpenTime && $openTimePlan !== null) {

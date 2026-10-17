@@ -58,7 +58,9 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             'propertyDetails.living_room_size' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::LIVING_ROOM_SIZES)],
             'propertyDetails.cleaning_mode' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::CLEANING_MODES)],
             ...$this->roomCleaningModeRules(),
-            'propertyDetails.room_size_breakdown' => ['nullable', 'array:bedroom,bathroom,toilet,kitchen,living_room,balcony,corridor,shed'],
+            ...$this->roomEstimatedHoursRules(),
+            'propertyDetails.room_size_breakdown' => ['nullable', 'array'],
+            'propertyDetails.room_size_breakdown.*' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.bedroom' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.bathroom' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.toilet' => ['sometimes', 'array:small,medium,large'],
@@ -127,6 +129,8 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             'assignmentMode' => ['nullable', 'string', Rule::in(['preferred_worker', 'open_count'])],
             'numberOfWorkers' => ['nullable', 'integer', 'min:1', 'max:20'],
             'serviceType' => ['nullable', Rule::in(['standard', 'supervised_team'])],
+            'scheduledDate' => [Rule::requiredIf($this->input('serviceType') === 'supervised_team'), 'sometimes', 'date_format:Y-m-d', 'after_or_equal:'.now(config('app.timezone'))->toDateString()],
+            'scheduledTime' => [Rule::requiredIf($this->input('serviceType') === 'supervised_team'), 'sometimes', 'date_format:H:i'],
             'genderPreference' => ['nullable', 'string', Rule::in(array_column(GenderPreference::cases(), 'value'))],
             ...$this->workerRoomAssignmentRules(),
         ];
@@ -140,6 +144,8 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
                 \Modules\User\Http\Requests\Concerns\RoomPeriodContract::validateConsistency($this->all(), $validator);
             }
             $this->validateRoomCleaningModes($validator);
+            $this->validateRoomEstimatedHours($validator);
+            $this->validateActiveRoomTypes($validator);
             $this->validateSelectedAddressCompleteness($validator);
             $this->validateEventAssistanceSchedule($validator);
             $this->validateDynamicCleaningEvent($validator);

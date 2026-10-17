@@ -9,9 +9,12 @@ use App\Filament\Resources\CleaningSpecialServiceEquipment\Pages\CreateCleaningS
 use App\Filament\Resources\CleaningSpecialServiceEquipment\Pages\EditCleaningSpecialServiceEquipment;
 use App\Filament\Resources\CleaningSpecialServiceEquipment\Pages\ListCleaningSpecialServiceEquipment;
 use BackedEnum;
+use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -19,7 +22,9 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
+use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningSpecialServiceEquipment;
+use Modules\Cleaning\Services\CleaningEquipmentHandoverService;
 
 final class CleaningSpecialServiceEquipmentResource extends Resource
 {
@@ -63,7 +68,8 @@ final class CleaningSpecialServiceEquipmentResource extends Resource
                 'in_use' => 'قيد الاستخدام',
                 'maintenance' => __('cleaning_catalog.materials.statuses.maintenance'),
                 'broken' => __('cleaning_catalog.materials.statuses.broken'),
-            ])->default('available')->disabled(fn (?CleaningSpecialServiceEquipment $record): bool => $record?->status === 'in_use'),
+                'lost' => 'مفقودة',
+            ])->default('available')->disabled(fn (?CleaningSpecialServiceEquipment $record): bool => in_array($record?->status, ['in_use', 'lost'], true)),
             TextInput::make('buffer_before_minutes')->label(__('cleaning_catalog.materials.fields.buffer_before'))->numeric()->minValue(0)->default(0),
             TextInput::make('buffer_after_minutes')->label(__('cleaning_catalog.materials.fields.buffer_after'))->numeric()->minValue(0)->default(0),
             Toggle::make('is_active')->label(__('cleaning_catalog.materials.fields.is_active'))->default(true),
@@ -79,6 +85,38 @@ final class CleaningSpecialServiceEquipmentResource extends Resource
             TextColumn::make('buffer_before_minutes')->label(__('cleaning_catalog.materials.fields.buffer_before'))->suffix(' '.__('cleaning_catalog.materials.fields.minutes')),
             TextColumn::make('buffer_after_minutes')->label(__('cleaning_catalog.materials.fields.buffer_after'))->suffix(' '.__('cleaning_catalog.materials.fields.minutes')),
             IconColumn::make('is_active')->label(__('cleaning_catalog.materials.fields.is_active'))->boolean(),
+        ])->recordActions([
+            Action::make('checkout')
+                ->label('صرف المعدة للطلب')
+                ->icon('heroicon-o-arrow-up-tray')
+                ->color('info')
+                ->visible(fn (CleaningSpecialServiceEquipment $record): bool => self::allowed('bookings.update') && $record->is_active && $record->status === 'available')
+                ->form([
+                    Select::make('booking_id')->label('الطلب')
+                        ->required()->searchable()
+                        ->getSearchResultsUsing(fn (string $search): array => CleaningBooking::query()
+                            ->where('booking_number', 'like', '%'.$search.'%')
+                            ->latest('id')->limit(30)->pluck('booking_number', 'id')->all())
+                        ->getOptionLabelUsing(fn ($value): ?string => CleaningBooking::query()->whereKey($value)->value('booking_number')),
+                    Textarea::make('note')->label('ملاحظات العهدة')->required()->maxLength(2000),
+                ])
+                ->action(function (CleaningSpecialServiceEquipment $record, array $data): void {
+                    app(CleaningEquipmentHandoverService::class)->checkoutForBooking(
+                        CleaningBooking::query()->findOrFail($data['booking_id']), $record, auth()->user(), $data['note']
+                    );
+                    Notification::make()->title('تم تسجيل صرف المعدة والعهدة')->success()->send();
+                }),
+            Action::make('recover')
+                ->label('إعادة المعدة المفقودة للمخزون')
+                ->icon('heroicon-o-arrow-path')
+                ->color('warning')
+                ->visible(fn (CleaningSpecialServiceEquipment $record): bool => self::allowed('bookings.update') && $record->status === 'lost')
+                ->requiresConfirmation()
+                ->form([Textarea::make('note')->label('محضر العثور والفحص')->required()->maxLength(2000)])
+                ->action(function (CleaningSpecialServiceEquipment $record, array $data): void {
+                    app(CleaningEquipmentHandoverService::class)->recoverLostEquipment($record, auth()->user(), $data['note']);
+                    Notification::make()->title('تمت إعادة المعدة بعد توثيق العثور عليها')->success()->send();
+                }),
         ])->defaultSort('name');
     }
 

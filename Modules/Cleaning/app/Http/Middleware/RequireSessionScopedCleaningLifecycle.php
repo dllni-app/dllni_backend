@@ -14,6 +14,22 @@ final class RequireSessionScopedCleaningLifecycle
 {
     public function handle(Request $request, Closure $next): Response
     {
+        $booking = $this->resolveBooking($request);
+        if ($booking?->isV2OperationalGroup() && $this->isV2ExecutionAction($request)) {
+            return response()->json([
+                'code' => 'CLEANING_V2_VISIT_EXECUTION_UNAVAILABLE',
+                'message' => 'تنفيذ مجموعة التنظيف يحتاج مسار زيارة مهيأ ومعتمداً. إجراءات القبول والحضور والاستغاثة تبقى متاحة.',
+            ], 422);
+        }
+
+        if (preg_match('#api/v1/user/cleaning/orders/.+/(start-verification/confirm|completion/(confirm|reject|extend-time))$#', $request->path()) === 1
+            && $booking?->isSupervisedTeam()) {
+            return response()->json([
+                'code' => 'SUPERVISED_TEAM_ACTION_FORBIDDEN',
+                'message' => 'استخدم إجراءات العميل الخاصة بطلب الفريق بإشراف.',
+            ], 403);
+        }
+
         if (str_contains($request->path(), '/sessions/')) {
             return $next($request);
         }
@@ -22,7 +38,6 @@ final class RequireSessionScopedCleaningLifecycle
             return $next($request);
         }
 
-        $booking = $this->resolveBooking($request);
         if (! $booking instanceof CleaningBooking || ! $booking->isEventAssistanceBooking()) {
             return $next($request);
         }
@@ -57,6 +72,33 @@ final class RequireSessionScopedCleaningLifecycle
 
         return preg_match('#api/v1/cleaning-bookings/[^/]+/(security-code|sos|start-travel|location|arrive|start-work|complete|finish|cancel)$#', $path) === 1
             || preg_match('#api/v1/user/cleaning/orders/[^/]+/(start-verification/confirm|completion/confirm|completion/reject|completion/extend-time)$#', $path) === 1;
+    }
+
+    private function isV2ExecutionAction(Request $request): bool
+    {
+        $path = $request->path();
+
+        if (preg_match('#api/v1/cleaning-bookings/[^/]+/(?:sessions/[^/]+/)?(sos|start-travel|location|arrive|attendance)$#', $path) === 1) {
+            return false;
+        }
+
+        return preg_match('#api/v1/cleaning-bookings/[^/]+/(security-code|start-work|complete|finish|cancel)$#', $path) === 1
+            || preg_match(
+                '#api/v1/cleaning-bookings/[^/]+/sessions/[^/]+/(security-code|start-verification/confirm|start-work|complete|completion/confirm|completion/reject|cancel|skip)$#',
+                $path,
+            ) === 1
+            || preg_match(
+                '#api/v1/cleaning-bookings/[^/]+/sessions/[^/]+/open-time/end/decision$#',
+                $path,
+            ) === 1
+            || preg_match(
+                '#api/v1/user/cleaning/orders/[^/]+/(?:sessions/[^/]+/)?(start-verification/confirm|completion/confirm|completion/reject|completion/extend-time|cancel)$#',
+                $path,
+            ) === 1
+            || preg_match(
+                '#api/v1/user/cleaning/orders/[^/]+/(?:sessions/[^/]+/)?open-time/(extensions|end)$#',
+                $path,
+            ) === 1;
     }
 
     private function resolveBooking(Request $request): ?CleaningBooking

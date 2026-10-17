@@ -103,7 +103,8 @@ final class SupervisedWorkerBookingController
                     'name' => $item->name ?? null,
                 ])->values(),
             ])->values(),
-            'allowedActions' => ['view'],
+            'allowedActions' => in_array($booking->status?->value ?? (string) $booking->status,
+                ['completed', 'cancelled'], true) ? ['view'] : ['view', 'sos'],
         ]]);
     }
 }

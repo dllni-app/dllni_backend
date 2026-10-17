@@ -115,6 +115,7 @@ final class UserCleaningOrderService
                         (bool) ($validated['requestMaterials'] ?? false),
                         is_array($validated['specialServices'] ?? null) ? $validated['specialServices'] : [],
                         $requestedWorkers,
+                        ($validated['serviceType'] ?? null) === 'supervised_team',
                     );
             } catch (InvalidArgumentException $exception) {
                 throw ValidationException::withMessages([
@@ -176,7 +177,9 @@ final class UserCleaningOrderService
                 'capability_schema_version' => 2,
                 'property_type' => $normalizedPropertyType,
                 'cleaning_event_type_id' => $eventType?->id,
-                'property_details' => $normalizedPropertyDetails,
+                'property_details' => $pricing['supervisor'] !== null
+                    ? [...$normalizedPropertyDetails, '_supervisor_pricing' => $pricing['supervisor']]
+                    : $normalizedPropertyDetails,
                 'event_dynamic_answers' => (array) ($eventPayload['dynamicAnswers'] ?? $validated['propertyDetails']['dynamicAnswers'] ?? []),
                 'cleaning_services' => $this->normalizeCleaningServices($validated['cleaning_services'] ?? null),
                 'address_latitude' => $normalizedInput['addressLatitude'],

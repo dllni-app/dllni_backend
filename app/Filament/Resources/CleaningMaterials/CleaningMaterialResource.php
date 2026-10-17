@@ -9,10 +9,13 @@ use App\Filament\Resources\CleaningMaterials\Pages\CreateCleaningMaterial;
 use App\Filament\Resources\CleaningMaterials\Pages\EditCleaningMaterial;
 use App\Filament\Resources\CleaningMaterials\Pages\ListCleaningMaterials;
 use BackedEnum;
+use Filament\Actions\Action;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -20,9 +23,10 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Modules\Cleaning\Models\CleaningMaterial;
+use Modules\Cleaning\Services\CleaningMaterialInventoryService;
 
 final class CleaningMaterialResource extends Resource
 {
@@ -66,7 +70,9 @@ final class CleaningMaterialResource extends Resource
                 ->imageEditor()
                 ->maxSize(5120),
             Select::make('cleaning_material_type_id')->label(__('cleaning_catalog.materials.fields.type'))->relationship('materialType', 'name')->searchable()->preload()->required(),
-            TextInput::make('stock_quantity')->label(__('cleaning_catalog.materials.fields.stock'))->numeric()->minValue(0)->required()->suffix(__('cleaning_catalog.materials.fields.unit')),
+            TextInput::make('stock_quantity')->label(__('cleaning_catalog.materials.fields.stock'))->numeric()->minValue(0)->required()->suffix(__('cleaning_catalog.materials.fields.unit'))
+                ->disabled(fn (?CleaningMaterial $record): bool => $record !== null)
+                ->helperText('تغيير رصيد مادة موجودة يتم من إجراء ضبط المخزون لتسجيل الحركة وسببها.'),
             TextInput::make('low_stock_threshold')->label(__('cleaning_catalog.materials.fields.low_stock_at'))->numeric()->minValue(0)->required(),
             Toggle::make('is_active')->label(__('cleaning_catalog.materials.fields.is_active'))->default(true),
         ])->columns(2);
@@ -86,6 +92,20 @@ final class CleaningMaterialResource extends Resource
             TextColumn::make('updated_at')->label(__('cleaning_catalog.materials.fields.updated_at'))->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
         ])->filters([
             TernaryFilter::make('is_active')->label(__('cleaning_catalog.materials.fields.is_active')),
+        ])->recordActions([
+            Action::make('adjust_stock')
+                ->label('ضبط المخزون')
+                ->icon('heroicon-o-adjustments-horizontal')
+                ->visible(fn (): bool => self::allowed('pricing.update'))
+                ->form([
+                    TextInput::make('stock_quantity')->label('الرصيد الجديد')->required()->numeric()->minValue(0)->step(0.001),
+                    Textarea::make('note')->label('سبب ضبط المخزون')->required()->maxLength(2000),
+                ])
+                ->fillForm(fn (CleaningMaterial $record): array => ['stock_quantity' => $record->stock_quantity])
+                ->action(function (CleaningMaterial $record, array $data): void {
+                    app(CleaningMaterialInventoryService::class)->adjustStock($record, auth()->user(), (float) $data['stock_quantity'], (string) $data['note']);
+                    Notification::make()->title('تم ضبط المخزون وتسجيل الحركة')->success()->send();
+                }),
         ])->defaultSort('name');
     }
 

@@ -27,5 +27,12 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // API clients and emulators must never be redirected to a missing web login route.
+        $exceptions->render(function (Illuminate\Auth\AuthenticationException $exception, Illuminate\Http\Request $request) {
+            if ($request->is('api/*')) {
+                return response()->json(['code' => 'UNAUTHENTICATED', 'message' => 'يرجى تسجيل الدخول.'], 401);
+            }
+
+            return null;
+        });
     })->create();

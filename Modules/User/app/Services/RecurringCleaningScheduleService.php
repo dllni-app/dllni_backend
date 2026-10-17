@@ -224,6 +224,10 @@ final class RecurringCleaningScheduleService
                 'scheduled_time' => $session['time'],
                 'duration_hours' => $sessionHours,
                 'required_workers' => max(1, (int) $booking->number_of_workers),
+                'supervision_mode' => max(1, (int) $booking->number_of_workers) > 1
+                    ? CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR
+                    : CleaningBookingSession::SUPERVISION_MODE_WORKER,
+                'supervision_initialized_at' => now(),
                 'coverage_status' => CleaningBookingSessionCoverageStatus::Searching,
                 'status' => CleaningBookingSessionStatus::Scheduled,
                 'base_price' => (float) ($sessionPricing['basePrice'] ?? $basePrice),

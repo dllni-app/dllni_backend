@@ -8,6 +8,8 @@ use App\Models\Worker;
 use Illuminate\Support\Arr;
 use InvalidArgumentException;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
+use Modules\Cleaning\Models\CleaningRoomType;
+use Modules\Cleaning\Services\CleaningSupervisorHourlyPricing;
 use Modules\Cleaning\Services\CleaningMaterialQuoteService;
 use Modules\Cleaning\Services\CleaningOpenTimeBillingService;
 use Modules\Cleaning\Services\CleaningPricingCalculator;
@@ -17,7 +19,7 @@ use Modules\Cleaning\Support\CleaningRuntimeSettings;
 
 final class UserCleaningOrderEstimationService
 {
-    public const ALGORITHM_VERSION = '2026-10-14-room-mode-v7';
+    public const ALGORITHM_VERSION = '2026-10-17-room-hourly-v8';
 
     public const EVENT_ASSISTANCE_PROPERTY_TYPE = 'event_assistance';
 
@@ -61,6 +63,8 @@ final class UserCleaningOrderEstimationService
         $cleaningMode = $this->normalizeCleaningMode(Arr::get($propertyDetails, 'cleaning_mode'));
         $roomCleaningModes = is_array(Arr::get($propertyDetails, 'room_cleaning_modes'))
             ? Arr::get($propertyDetails, 'room_cleaning_modes') : null;
+        $roomEstimatedHours = is_array(Arr::get($propertyDetails, 'room_estimated_hours'))
+            ? Arr::get($propertyDetails, 'room_estimated_hours') : null;
         $address = Arr::has($propertyDetails, 'address') ? mb_trim((string) Arr::get($propertyDetails, 'address')) : null;
         $locationName = Arr::has($propertyDetails, 'location_name') ? mb_trim((string) Arr::get($propertyDetails, 'location_name')) : null;
 
@@ -101,6 +105,7 @@ final class UserCleaningOrderEstimationService
                 fn (mixed $mode): string => $this->normalizeCleaningMode($mode),
                 $roomCleaningModes,
             ),
+            'room_estimated_hours' => $roomEstimatedHours,
             'room_size_breakdown' => $breakdown,
             'requested_material_type_ids' => array_key_exists('requested_material_type_ids', $propertyDetails)
                 && is_array($propertyDetails['requested_material_type_ids'])
@@ -194,6 +199,7 @@ final class UserCleaningOrderEstimationService
         bool $requestMaterials = false,
         array $specialServices = [],
         int $workerCount = 1,
+        bool $supervisedTeam = false,
     ): array {
         $input = $this->pricingSnapshotInput(
             $propertyType,
@@ -233,6 +239,16 @@ final class UserCleaningOrderEstimationService
             $estimation = ['recommendation' => null];
             $lines = $specialServiceQuote['lines'];
             $addonsTotal = (float) $materialQuote['total'] + (float) $specialServiceQuote['total'];
+        }
+
+        // One supervisor oversees the group during its actual scheduled duration.
+        // This charge is independent of the number of workers and included once
+        // in the customer labor subtotal before margin and minimum pricing.
+        $supervisor = null;
+        if (($supervisedTeam || $workerCount > 1) && $regularCalculation !== null) {
+            $durationMinutes = max(1, (int) ceil($regularCalculation['estimatedRawMinutes'] / max(1, $workerCount)));
+            $supervisor = app(CleaningSupervisorHourlyPricing::class)->forMinutes($durationMinutes);
+            $basePrice = $this->pricingCalculator->roundMoney($basePrice + $supervisor['fee']);
         }
 
         // The minimum belongs to the entire customer order (base, extras,
@@ -306,6 +322,7 @@ final class UserCleaningOrderEstimationService
             'specialServices' => $specialServiceQuote['lines'],
             'specialServicesTotal' => (float) $specialServiceQuote['total'],
             'roomPricingLines' => $regularCalculation['roomPricingLines'] ?? [],
+            'supervisor' => $supervisor,
             'estimatedWorkHours' => $regularCalculation === null ? null : round($regularCalculation['estimatedRawMinutes'] / 60, 2),
             'estimatedWorkMinutes' => $regularCalculation['estimatedRawMinutes'] ?? null,
             'estimatedDurationMinutes' => $regularCalculation === null ? null : max(1, (int) ceil($regularCalculation['estimatedRawMinutes'] / max(1, $workerCount))),
@@ -522,20 +539,35 @@ final class UserCleaningOrderEstimationService
         $basePrice = 0.0;
         $lines = [];
 
-        foreach (self::ROOM_SIZE_BREAKDOWN_TYPES as $roomType) {
+        $catalog = CleaningRoomType::catalog();
+        $hourOverrides = is_array($normalizedDetails['room_estimated_hours'] ?? null)
+            ? $normalizedDetails['room_estimated_hours'] : [];
+        foreach ($this->roomTypes() as $roomType) {
             foreach (CleaningFinancialDefaults::ROOM_SIZES as $roomSize) {
                 $count = max(0, (int) ($roomBreakdown[$roomType][$roomSize] ?? 0));
                 if ($count <= 0) {
                     continue;
                 }
 
-                $averageSqm = (float) ($roomSizeRanges[$roomType][$roomSize]['average'] ?? 0.0);
+                $averageSqm = (float) ($roomSizeRanges[$roomType][$roomSize]['average'] ?? 10.0);
                 $unitCount = (float) ($roomPricingUnits[$roomType][$roomSize] ?? 0.0);
                 $roomDeepMultiplier = max(1.0, (float) ($roomDeepMultipliers[$roomType][$roomSize] ?? $deepMultiplier));
                 // A room's stable key is identical to the worker-room assignment key.
                 // Mixed cleaning modes are priced by the configured room-specific rates.
                 foreach (self::CLEANING_MODES as $mode) {
                     $matchingCount = 0;
+                    $lineMinutes = 0;
+                    $lineTotal = 0.0;
+                    $minutesPerRoom = max(1, (int) (
+                        ($catalog[$roomType]?->suggested_minutes_by_size[$roomSize][$mode] ?? null)
+                        ?? ($roomTimeMinutes[$roomType][$roomSize][$mode] ?? ($mode === 'deep' ? 60 : 30))
+                    ));
+                    $legacyHour = ($baseUnitPrice * $unitCount * ($mode === 'deep' ? $roomDeepMultiplier : 1.0)) * 60 / max(1, $minutesPerRoom);
+                    $rate = $catalog[$roomType] ?? null;
+                    $hourlyRate = $rate instanceof CleaningRoomType
+                        ? max(0.0, (float) ($mode === 'deep' ? $rate->deep_hourly_rate : $rate->regular_hourly_rate))
+                        : round($legacyHour, 2);
+                    $details = [];
                     for ($index = 1; $index <= $count; $index++) {
                         $roomKey = $roomType.'.'.$roomSize.'.'.$index;
                         $assignedMode = $this->normalizeCleaningMode(
@@ -543,6 +575,20 @@ final class UserCleaningOrderEstimationService
                         );
                         if ($assignedMode === $mode) {
                             $matchingCount++;
+                            $suggestedMinutes = max(1, $minutesPerRoom);
+                            $override = $hourOverrides[$roomKey] ?? null;
+                            $actualMinutes = is_numeric($override)
+                                ? (int) round(max(0.25, min(24, (float) $override)) * 60)
+                                : $suggestedMinutes;
+                            $lineMinutes += $actualMinutes;
+                            $lineTotal += $this->pricingCalculator->roundMoney($hourlyRate * $actualMinutes / 60);
+                            $details[] = [
+                                'roomKey' => $roomKey,
+                                'suggestedHours' => round($suggestedMinutes / 60, 2),
+                                'estimatedHours' => round($actualMinutes / 60, 2),
+                                'estimatedMinutes' => $actualMinutes,
+                                'wasOverridden' => is_numeric($override),
+                            ];
                         }
                     }
                     if ($matchingCount === 0) {
@@ -550,11 +596,9 @@ final class UserCleaningOrderEstimationService
                     }
 
                     $roomModeMultiplier = $mode === 'deep' ? $roomDeepMultiplier : 1.0;
-                    $minutesPerRoom = (int) ($roomTimeMinutes[$roomType][$roomSize][$mode] ?? 1);
-                    $unitPrice = $this->pricingCalculator->roundMoney($baseUnitPrice * $unitCount * $roomModeMultiplier);
-                    $lineTotal = $this->pricingCalculator->roundMoney($unitPrice * $matchingCount);
+                    $unitPrice = $this->pricingCalculator->roundMoney($hourlyRate * $minutesPerRoom / 60);
+                    $lineTotal = $this->pricingCalculator->roundMoney($lineTotal);
                     $lineSqm = round($averageSqm * $matchingCount, 2);
-                    $lineMinutes = $minutesPerRoom * $matchingCount;
                     $rawSqm += $lineSqm;
                     $unitTotal += $unitCount * $matchingCount;
                     $rawMinutes += $lineMinutes;
@@ -566,6 +610,7 @@ final class UserCleaningOrderEstimationService
                         'count' => $matchingCount,
                         'unitCount' => round($unitCount, 2),
                         'baseUnitPrice' => $baseUnitPrice,
+                        'hourlyRate' => $hourlyRate,
                         'deepMultiplier' => $roomDeepMultiplier,
                         'modeMultiplier' => $roomModeMultiplier,
                         'unitPrice' => $unitPrice,
@@ -574,6 +619,7 @@ final class UserCleaningOrderEstimationService
                         'totalSqm' => $lineSqm,
                         'minutesPerRoom' => $minutesPerRoom,
                         'totalMinutes' => $lineMinutes,
+                        'rooms' => $details,
                     ];
                 }
             }
@@ -655,7 +701,7 @@ final class UserCleaningOrderEstimationService
         }
 
         $normalized = [];
-        foreach (self::ROOM_SIZE_BREAKDOWN_TYPES as $type) {
+        foreach ($this->roomTypes() as $type) {
             $roomTypeCounts = Arr::get($value, $type);
             $roomTypeCounts = is_array($roomTypeCounts) ? $roomTypeCounts : [];
             foreach (CleaningFinancialDefaults::ROOM_SIZES as $bucket) {
@@ -738,7 +784,7 @@ final class UserCleaningOrderEstimationService
     private function emptyRoomBreakdown(): array
     {
         $breakdown = [];
-        foreach (self::ROOM_SIZE_BREAKDOWN_TYPES as $type) {
+        foreach ($this->roomTypes() as $type) {
             foreach (CleaningFinancialDefaults::ROOM_SIZES as $size) {
                 $breakdown[$type][$size] = 0;
             }
@@ -761,7 +807,7 @@ final class UserCleaningOrderEstimationService
         $defaults = CleaningFinancialDefaults::roomSizeRanges();
         $saved = is_array($value) ? $value : [];
 
-        foreach (self::ROOM_SIZE_BREAKDOWN_TYPES as $type) {
+        foreach (CleaningFinancialDefaults::ROOM_TYPES as $type) {
             foreach (CleaningFinancialDefaults::ROOM_SIZES as $size) {
                 $min = $saved[$type][$size]['min'] ?? $defaults[$type][$size]['min'];
                 $max = $saved[$type][$size]['max'] ?? $defaults[$type][$size]['max'];
@@ -782,7 +828,7 @@ final class UserCleaningOrderEstimationService
         $defaults = CleaningFinancialDefaults::roomPricingUnits();
         $saved = is_array($value) ? $value : [];
 
-        foreach (self::ROOM_SIZE_BREAKDOWN_TYPES as $type) {
+        foreach (CleaningFinancialDefaults::ROOM_TYPES as $type) {
             foreach (CleaningFinancialDefaults::ROOM_SIZES as $size) {
                 $savedValue = $saved[$type][$size] ?? null;
                 $defaults[$type][$size] = is_numeric($savedValue)
@@ -799,7 +845,7 @@ final class UserCleaningOrderEstimationService
         $defaults = CleaningFinancialDefaults::roomDeepMultipliers($fallback);
         $saved = is_array($value) ? $value : [];
 
-        foreach (self::ROOM_SIZE_BREAKDOWN_TYPES as $type) {
+        foreach (CleaningFinancialDefaults::ROOM_TYPES as $type) {
             foreach (CleaningFinancialDefaults::ROOM_SIZES as $size) {
                 $savedValue = $saved[$type][$size] ?? null;
                 $defaults[$type][$size] = is_numeric($savedValue)
@@ -816,7 +862,7 @@ final class UserCleaningOrderEstimationService
         $defaults = CleaningFinancialDefaults::roomTimeMinutes();
         $saved = is_array($value) ? $value : [];
 
-        foreach (self::ROOM_SIZE_BREAKDOWN_TYPES as $type) {
+        foreach (CleaningFinancialDefaults::ROOM_TYPES as $type) {
             foreach (CleaningFinancialDefaults::ROOM_SIZES as $size) {
                 foreach (self::CLEANING_MODES as $mode) {
                     $savedValue = $saved[$type][$size][$mode] ?? null;
@@ -828,5 +874,11 @@ final class UserCleaningOrderEstimationService
         }
 
         return $defaults;
+    }
+
+    /** @return list<string> */
+    private function roomTypes(): array
+    {
+        return array_values(array_unique([...self::ROOM_SIZE_BREAKDOWN_TYPES, ...CleaningRoomType::availableCodes()]));
     }
 }

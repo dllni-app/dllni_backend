@@ -56,10 +56,14 @@ final class SupervisorAppController
         $query = $this->teams->assignedQuery($request->user());
         $today = now()->toDateString();
         $next = (clone $query)->whereDate('scheduled_date', '>=', $today)
+            ->whereNotIn('status', [CleaningBookingStatus::Completed, CleaningBookingStatus::Cancelled])
             ->orderBy('scheduled_date')->orderBy('scheduled_time')->first();
 
         return response()->json(['data' => [
             'todayTotal' => (clone $query)->whereDate('scheduled_date', $today)->count(),
+            'inProgress' => (clone $query)->where('status', CleaningBookingStatus::InProgress)->count(),
+            'awaitingHandover' => (clone $query)->where('status', CleaningBookingStatus::AwaitingCustomerCompletion)
+                ->where('supervised_state', 'handover_pending')->count(),
             'nextBooking' => $next ? $this->teams->summary($next) : null,
             'serverNow' => now()->toIso8601String(), 'timezone' => config('app.timezone'),
         ]]);

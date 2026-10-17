@@ -12,6 +12,7 @@ use Modules\Cleaning\Services\CleaningMaterialQuoteService;
 use Modules\Cleaning\Services\CleaningPricingCalculator;
 use Modules\Cleaning\Services\CleaningSpecialServiceQuoteService;
 use Modules\Cleaning\Support\CleaningRuntimeSettings;
+use Modules\Cleaning\Services\CleaningSupervisorHourlyPricing;
 
 final class CleaningTimePeriodPricingService
 {
@@ -94,7 +95,14 @@ final class CleaningTimePeriodPricingService
                 if ($room === null) {
                     $this->invalid('rooms', 'الغرفة غير موجودة في الحجز.');
                 }
-                $single = $this->estimator->price((string) $input['propertyType'], ['cleaning_mode' => $room['cleaningMode'], 'room_size_breakdown' => [$room['roomType'] => [$room['size'] => 1]]], null, null, null, null, false, [], (int) $schedule['numberOfWorkers']);
+                $singleRoomDetails = [
+                    'cleaning_mode' => $room['cleaningMode'],
+                    'room_size_breakdown' => [$room['roomType'] => [$room['size'] => 1]],
+                ];
+                if (isset($room['estimatedHours'])) {
+                    $singleRoomDetails['room_estimated_hours'] = [$room['roomType'].'.'.$room['size'].'.1' => $room['estimatedHours']];
+                }
+                $single = $this->estimator->price((string) $input['propertyType'], $singleRoomDetails, null, null, null, null, false, [], (int) $schedule['numberOfWorkers']);
                 $line = $single['roomPricingLines'][0] ?? null;
                 if ($line === null) {
                     $this->invalid('rooms', 'لا يتوفر تسعير لهذه الغرفة.');
@@ -166,6 +174,13 @@ final class CleaningTimePeriodPricingService
         }
         $materialsTotal = round(array_sum(array_column($kits, 'totalPrice')), 2);
         $addons = round($materialsTotal + $specialTotal, 2);
+        $supervisor = null;
+        if ($requestedWorkers > 1) {
+            $supervisor = app(CleaningSupervisorHourlyPricing::class)->forMinutes(
+                app(CleaningSupervisorHourlyPricing::class)->unionMinutes($allSchedules),
+            );
+            $base = $this->calculator->roundMoney($base + $supervisor['fee']);
+        }
         $priced = $this->calculator->provisional($base, $addons, 0, max(1, $peak));
         $minimum = max(0.0, (float) (CleaningRuntimeSettings::financial()->cleaning_minimum_order_price ?? 0));
         if ($priced['totalPrice'] < $minimum) {
@@ -174,7 +189,7 @@ final class CleaningTimePeriodPricingService
         }
         $this->allocateVisitPricing($visits, $base, $kits, $priced);
 
-        return ['algorithmVersion' => self::ALGORITHM, 'timezone' => $timezone, 'rooms' => $input['rooms'], 'visits' => $visits, 'requiredSimultaneousWorkers' => $peak, 'reconciliationRequired' => $reconciliation, 'basePrice' => $base, 'addonsTotal' => $addons, 'materialsTotal' => $materialsTotal, 'specialServicesTotal' => $specialTotal, 'materialKits' => array_values($kits), 'travelFee' => (float) $priced['travelFee'], 'adminMargin' => (float) $priced['adminMargin'], 'totalPrice' => (float) $priced['totalPrice'], 'currency' => (string) config('app.currency', 'SYP'), 'estimatedWorkMinutes' => array_sum(array_column($allSchedules, 'estimatedWorkMinutes'))];
+        return ['algorithmVersion' => self::ALGORITHM, 'timezone' => $timezone, 'rooms' => $input['rooms'], 'visits' => $visits, 'requiredSimultaneousWorkers' => $peak, 'reconciliationRequired' => $reconciliation, 'basePrice' => $base, 'supervisor' => $supervisor, 'addonsTotal' => $addons, 'materialsTotal' => $materialsTotal, 'specialServicesTotal' => $specialTotal, 'materialKits' => array_values($kits), 'travelFee' => (float) $priced['travelFee'], 'adminMargin' => (float) $priced['adminMargin'], 'totalPrice' => (float) $priced['totalPrice'], 'currency' => (string) config('app.currency', 'SYP'), 'estimatedWorkMinutes' => array_sum(array_column($allSchedules, 'estimatedWorkMinutes'))];
     }
 
     private function allocateVisitPricing(array &$visits, float $base, array $kits, array $priced): void

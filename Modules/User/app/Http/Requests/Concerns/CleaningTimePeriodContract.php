@@ -7,6 +7,7 @@ namespace Modules\User\Http\Requests\Concerns;
 use Carbon\CarbonImmutable;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
+use Modules\Cleaning\Models\CleaningRoomType;
 
 final class CleaningTimePeriodContract
 {
@@ -26,11 +27,12 @@ final class CleaningTimePeriodContract
             'workEnvironmentConfirmation.pledgeAccepted' => ['sometimes', 'boolean'],
             'workEnvironmentConfirmation.pledgeVersion' => ['sometimes', 'string', 'max:100'],
             'rooms' => ['required_if:contractVersion,2', 'array', 'min:1', 'max:30'],
-            'rooms.*' => ['array:roomKey,roomType,size,cleaningMode'],
+            'rooms.*' => ['array:roomKey,roomType,size,cleaningMode,estimatedHours'],
             'rooms.*.roomKey' => [...$key, 'distinct'],
-            'rooms.*.roomType' => ['required', Rule::in(['bedroom', 'bathroom', 'toilet', 'kitchen', 'living_room', 'balcony', 'corridor', 'shed'])],
+            'rooms.*.roomType' => ['required', Rule::in(CleaningRoomType::availableCodes())],
             'rooms.*.size' => ['required', Rule::in(['small', 'medium', 'large'])],
             'rooms.*.cleaningMode' => ['required', Rule::in(['regular', 'deep'])],
+            'rooms.*.estimatedHours' => ['sometimes', 'numeric', 'min:0.25', 'max:24'],
             'recurrence' => ['sometimes', 'array:cadence'],
             'recurrence.cadence' => ['required_with:recurrence', Rule::in(['once', 'weekly', 'monthly', 'custom'])],            'visits' => ['required_if:contractVersion,2', 'array', 'min:1', 'max:30'],
             'visits.*' => ['array:visitKey,sequence,roomSchedules,timePeriods'],

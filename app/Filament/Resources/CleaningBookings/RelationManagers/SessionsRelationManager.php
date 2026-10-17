@@ -6,22 +6,31 @@ namespace App\Filament\Resources\CleaningBookings\RelationManagers;
 
 use App\Enums\DisputeCategory;
 use App\Enums\DisputeStatus;
+use App\Models\User;
 use App\Models\Dispute;
 use App\Models\WorkerCustomerRating;
+use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Modules\Cleaning\Enums\CleaningBookingSessionCoverageStatus;
 use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
+use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
+use Modules\Cleaning\Services\CleaningSupervisorAssignmentService;
+use Modules\Cleaning\Services\SupervisedTeamService;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 final class SessionsRelationManager extends RelationManager
 {
@@ -342,11 +351,95 @@ final class SessionsRelationManager extends RelationManager
             ])
             ->headerActions([])
             ->recordActions([
+                Action::make('assign_visit_supervisor')
+                    ->label('إسناد مشرف الزيارة')
+                    ->icon('heroicon-o-user-group')
+                    ->color('info')
+                    ->visible(fn (CleaningBookingSession $record): bool => $this->canAssignVisitSupervisor($record))
+                    ->authorize(fn (CleaningBookingSession $record): bool => $this->canAssignVisitSupervisor($record))
+                    ->form([
+                        Select::make('supervisor_user_id')
+                            ->label('المشرف المسؤول')
+                            ->options(fn (): array => User::role(SupervisedTeamService::ROLE)
+                                ->where('is_active', true)
+                                ->orderBy('name')
+                                ->orderBy('id')
+                                ->get(['id', 'name', 'phone'])
+                                ->mapWithKeys(fn (User $user): array => [
+                                    $user->id => $user->name.' ('.$user->phone.')',
+                                ])->all())
+                            ->default(fn (CleaningBookingSession $record): ?int => app(CleaningSupervisorAssignmentService::class)
+                                ->activeVisitSupervisorId($record))
+                            ->searchable()
+                            ->preload()
+                            ->live()
+                            ->required(),
+                        Textarea::make('reason')
+                            ->label('سبب تغيير المشرف')
+                            ->minLength(10)
+                            ->maxLength(500)
+                            ->required(fn (Get $get, CleaningBookingSession $record): bool => $this->isVisitSupervisorReassignment(
+                                $record,
+                                $get('supervisor_user_id'),
+                            ))
+                            ->visible(fn (Get $get, CleaningBookingSession $record): bool => $this->isVisitSupervisorReassignment(
+                                $record,
+                                $get('supervisor_user_id'),
+                            )),
+                    ])
+                    ->action(function (CleaningBookingSession $record, array $data): void {
+                        try {
+                            app(CleaningSupervisorAssignmentService::class)->assignVisit(
+                                auth()->user(),
+                                (int) $record->cleaning_booking_id,
+                                (int) $record->sequence,
+                                (int) $data['supervisor_user_id'],
+                                $data['reason'] ?? null,
+                                fromDashboard: true,
+                            );
+                        } catch (HttpExceptionInterface $exception) {
+                            \Filament\Notifications\Notification::make()
+                                ->title('تعذر إسناد مشرف الزيارة')
+                                ->body($exception->getMessage() ?: 'راجع حالة الزيارة وجدول المشرف والعهدة.')
+                                ->danger()
+                                ->send();
+
+                            return;
+                        }
+
+                        \Filament\Notifications\Notification::make()
+                            ->title('تم حفظ إسناد مشرف الزيارة')
+                            ->success()
+                            ->send();
+                    }),
                 ViewAction::make()
                     ->label('تفاصيل اليوم')
                     ->icon('heroicon-o-eye'),
             ])
             ->toolbarActions([]);
+    }
+
+    private function canAssignVisitSupervisor(CleaningBookingSession $session): bool
+    {
+        $user = auth()->user();
+        $booking = $this->getOwnerRecord();
+        $assignments = app(CleaningSupervisorAssignmentService::class);
+
+        return $user instanceof User
+            && $assignments->canAssign($user, fromDashboard: true)
+            && $assignments->isEligible($booking)
+            && ! in_array($booking->status, [CleaningBookingStatus::Completed, CleaningBookingStatus::Cancelled], true)
+            && $session->isSupervisionInitialized()
+            && $session->supervision_mode === CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR
+            && $session->work_started_at === null
+            && $session->work_finished_at === null;
+    }
+
+    private function isVisitSupervisorReassignment(CleaningBookingSession $session, mixed $supervisorUserId): bool
+    {
+        $current = app(CleaningSupervisorAssignmentService::class)->activeVisitSupervisorId($session);
+
+        return $current !== null && (int) $supervisorUserId !== $current;
     }
 
     private static function statusLabel(mixed $state): string

@@ -168,6 +168,10 @@ final class OpenTimeScheduleService
                 'open_time_expected_max_minutes' => (int) $session['expectedMaxMinutes'],
                 'open_time_hard_max_minutes' => (int) ($openTime['hardMaxMinutes'] ?? 480),
                 'required_workers' => max(1, (int) $booking->number_of_workers),
+                'supervision_mode' => max(1, (int) $booking->number_of_workers) > 1
+                    ? CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR
+                    : CleaningBookingSession::SUPERVISION_MODE_WORKER,
+                'supervision_initialized_at' => now(),
                 'coverage_status' => CleaningBookingSessionCoverageStatus::Searching,
                 'status' => CleaningBookingSessionStatus::Scheduled,
                 'base_price' => (float) ($pricing['basePrice'] ?? 0),

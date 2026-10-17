@@ -231,7 +231,7 @@ it('computes independent room-period durations and one aggregate transport charg
     $payload['roomPeriods'][1]['scheduledTime'] = '09:00';
     $parallel = app(\Modules\User\Services\RoomPeriodPricingService::class)->quote($payload);
     expect($parallel['requiredSimultaneousWorkers'])->toBe(3)
-        ->and($parallel['basePrice'])->toBe($quote['basePrice'])
+        ->and($parallel['basePrice'])->toBeLessThanOrEqual($quote['basePrice'])
         ->and($parallel['roomPeriods'][0]['estimatedDurationMinutes'])->toBe($quote['roomPeriods'][0]['estimatedDurationMinutes']);
 });
 

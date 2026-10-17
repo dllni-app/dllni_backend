@@ -42,7 +42,7 @@ final class UserCleaningOrderStoreRequest extends FormRequest
             ...\Modules\User\Http\Requests\Concerns\CleaningTimePeriodContract::rules(),
             ...\Modules\User\Http\Requests\Concerns\RoomPeriodContract::rules(),
             'propertyType' => ['required', 'string', Rule::in(UserCleaningOrderEstimationService::PROPERTY_TYPES)],
-            'propertyDetails' => ['required', 'array:address,location_name,bedrooms,rooms,bathrooms,toilets,kitchens,balconies,sheds,living_room_size,cleaning_mode,room_cleaning_modes,room_size_breakdown,eventType,eventTypeId,dynamicAnswers,guestCount,venueType,customService,hours,specialRequirement,notes,requested_material_type_ids'],
+            'propertyDetails' => ['required', 'array:address,location_name,bedrooms,rooms,bathrooms,toilets,kitchens,balconies,sheds,living_room_size,cleaning_mode,room_cleaning_modes,room_estimated_hours,room_size_breakdown,eventType,eventTypeId,dynamicAnswers,guestCount,venueType,customService,hours,specialRequirement,notes,requested_material_type_ids'],
             'propertyDetails.address' => ['required', 'string', 'max:500'],
             'propertyDetails.location_name' => ['nullable', 'string', 'max:255'],
             'propertyDetails.bedrooms' => ['nullable', 'integer', 'min:0', 'max:100'],
@@ -55,7 +55,9 @@ final class UserCleaningOrderStoreRequest extends FormRequest
             'propertyDetails.living_room_size' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::LIVING_ROOM_SIZES)],
             'propertyDetails.cleaning_mode' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::CLEANING_MODES)],
             ...$this->roomCleaningModeRules(),
-            'propertyDetails.room_size_breakdown' => ['nullable', 'array:bedroom,bathroom,toilet,kitchen,living_room,balcony,corridor,shed'],
+            ...$this->roomEstimatedHoursRules(),
+            'propertyDetails.room_size_breakdown' => ['nullable', 'array'],
+            'propertyDetails.room_size_breakdown.*' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.bedroom' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.bathroom' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.toilet' => ['sometimes', 'array:small,medium,large'],
@@ -163,6 +165,8 @@ final class UserCleaningOrderStoreRequest extends FormRequest
                 }
             }
             $this->validateRoomCleaningModes($validator);
+            $this->validateRoomEstimatedHours($validator);
+            $this->validateActiveRoomTypes($validator);
             $this->validateSelectedAddressCompleteness($validator);
             $this->validateEventAssistanceSchedule($validator);
             $this->validateDynamicCleaningEvent($validator);

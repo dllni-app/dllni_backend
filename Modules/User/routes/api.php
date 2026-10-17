@@ -248,6 +248,7 @@ Route::prefix('v1/user')->group(function (): void {
         Route::delete('favorites/products/{product}', UserProductFavoriteDestroyController::class);
 
         Route::get('cleaning/cancellation-fee', UserCleaningCancellationFeeController::class);
+        Route::get('cleaning/room-types', \Modules\User\Http\Controllers\API\UserCleaningRoomTypesController::class);
         Route::get('cleaning/orders', UserCleaningOrdersController::class);
         Route::post('cleaning/orders', UserCleaningOrderStoreController::class);
         Route::post('cleaning/orders/estimate-size', UserCleaningOrderEstimateSizeController::class);

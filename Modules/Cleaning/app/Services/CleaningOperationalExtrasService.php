@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Services;
 
 use App\Models\Worker;
-use Carbon\CarbonImmutable;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
@@ -13,7 +13,6 @@ use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingMaterialKit;
 use Modules\Cleaning\Models\CleaningBookingSpecialService;
 use Modules\Cleaning\Models\CleaningEquipmentReservation;
-use Modules\Cleaning\Models\CleaningSpecialServiceEquipment;
 
 final class CleaningOperationalExtrasService
 {
@@ -23,6 +22,9 @@ final class CleaningOperationalExtrasService
 
     public function receiveMaterialKit(CleaningBooking $booking, Worker $worker): CleaningBookingMaterialKit
     {
+        if (app(CleaningGroupCustodyPolicy::class)->usesSupervisorCustody($booking)) {
+            throw ValidationException::withMessages(['kit' => 'A supervised-team material kit must be received by its assigned supervisor.']);
+        }
         $this->assertAssigned($booking, $worker);
 
         return DB::transaction(function () use ($booking, $worker): CleaningBookingMaterialKit {
@@ -51,6 +53,7 @@ final class CleaningOperationalExtrasService
         return DB::transaction(function () use ($line, $worker): CleaningBookingSpecialService {
             $locked = CleaningBookingSpecialService::query()->whereKey($line->id)->lockForUpdate()->firstOrFail();
             $booking = CleaningBooking::query()->findOrFail($locked->cleaning_booking_id);
+            $this->assertV2SpecialServiceExecutionAvailable($booking);
             $this->assertAssigned($booking, $worker);
             $this->equipmentReservations->assertReservedForExecution($locked, $worker);
 
@@ -84,6 +87,7 @@ final class CleaningOperationalExtrasService
         return DB::transaction(function () use ($line, $worker, $status, $reason, $afterImages): CleaningBookingSpecialService {
             $locked = CleaningBookingSpecialService::query()->whereKey($line->id)->lockForUpdate()->firstOrFail();
             $booking = CleaningBooking::query()->findOrFail($locked->cleaning_booking_id);
+            $this->assertV2SpecialServiceExecutionAvailable($booking);
             $this->assertAssigned($booking, $worker);
             if ((int) $locked->assigned_worker_id !== (int) $worker->id) {
                 abort(403, 'This special service is assigned to another worker.');
@@ -199,5 +203,17 @@ final class CleaningOperationalExtrasService
             ->where('worker_id', $worker->id)
             ->whereIn('status', CleaningBookingWorkerAssignmentStatus::activeValues()))->exists();
         abort_unless($direct || $assigned || $sessionAssigned, 403, 'Booking is not assigned to this worker.');
+    }
+
+    private function assertV2SpecialServiceExecutionAvailable(CleaningBooking $booking): void
+    {
+        if (! $booking->isV2OperationalGroup()) {
+            return;
+        }
+
+        throw new HttpResponseException(response()->json([
+            'code' => 'CLEANING_V2_VISIT_EXECUTION_UNAVAILABLE',
+            'message' => 'تنفيذ خدمات زيارة مجموعة التنظيف غير متاح حتى اعتماد مسار التنفيذ على مستوى الزيارة.',
+        ], 422));
     }
 }

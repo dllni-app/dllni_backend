@@ -7,17 +7,19 @@ namespace App\Filament\Resources\CleaningBookings\Pages;
 use App\Enums\WorkerCustomerRatingType;
 use App\Filament\Resources\CleaningBookings\CleaningBookingResource;
 use App\Filament\Resources\Disputes\DisputeResource;
+use App\Models\User;
 use App\Models\WorkerCustomerRating;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
-use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
@@ -26,11 +28,14 @@ use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Enums\CleaningTimeWarningResponse;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
-use Modules\Cleaning\Services\CleaningAdministrativeOperationsService;
 use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
 use Modules\Cleaning\Models\CleaningTimeWarning;
+use Modules\Cleaning\Services\CleaningAdministrativeOperationsService;
 use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
 use Modules\Cleaning\Services\CleaningMaterialInventoryService;
+use Modules\Cleaning\Services\CleaningSupervisorAssignmentService;
+use Modules\Cleaning\Services\SupervisedTeamService;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 final class ViewCleaningBooking extends ViewRecord
 {
@@ -212,6 +217,62 @@ final class ViewCleaningBooking extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('assign_supervisor')
+                ->label('إسناد المشرف / تغييره')
+                ->icon('heroicon-o-user-group')
+                ->color('info')
+                ->visible(fn (): bool => $this->canManageSupervisor())
+                ->authorize(fn (): bool => $this->canManageSupervisor())
+                ->modalHeading('إسناد مشرف الحجز')
+                ->modalDescription('الإسناد يشمل جميع الزيارات؛ تتم مراجعة تعارض المواعيد والعهدة عند التأكيد. تدفق V2 متاح للعرض وإدارة العهدة فقط.')
+                ->form([
+                    Select::make('supervisor_user_id')
+                        ->label('المشرف المسؤول')
+                        ->options(fn (): array => User::role(SupervisedTeamService::ROLE)
+                            ->where('is_active', true)
+                            ->orderBy('name')->orderBy('id')
+                            ->get(['id', 'name', 'phone'])
+                            ->mapWithKeys(fn (User $user): array => [
+                                $user->id => $user->name.' ('.$user->phone.')',
+                            ])->all())
+                        ->default(fn (): ?int => app(CleaningSupervisorAssignmentService::class)
+                            ->activeSupervisorId($this->record))
+                        ->searchable()
+                        ->preload()
+                        ->live()
+                        ->required(),
+                    Textarea::make('reason')
+                        ->label('سبب تغيير المشرف')
+                        ->helperText('يُحفظ السبب في سجل الإسناد عند تغيير المشرف الحالي.')
+                        ->minLength(10)
+                        ->maxLength(500)
+                        ->required(fn (Get $get): bool => $this->isSupervisorReassignment($get('supervisor_user_id')))
+                        ->visible(fn (Get $get): bool => $this->isSupervisorReassignment($get('supervisor_user_id'))),
+                ])
+                ->action(function (array $data): void {
+                    try {
+                        $result = app(CleaningSupervisorAssignmentService::class)->assign(
+                            auth()->user(),
+                            (int) $this->record->getKey(),
+                            (int) $data['supervisor_user_id'],
+                            $data['reason'] ?? null,
+                            ! $this->record->isSupervisedTeam(),
+                            fromDashboard: true,
+                        );
+                    } catch (HttpExceptionInterface $exception) {
+                        Notification::make()
+                            ->title('تعذر إسناد المشرف')
+                            ->body($exception->getMessage() ?: 'راجع حالة الحجز ومواعيد المشرف وعهدة المواد والمعدات.')
+                            ->danger()->send();
+
+                        return;
+                    }
+
+                    $this->record = $this->record->fresh() ?? $this->record;
+                    Notification::make()
+                        ->title($result['unchanged'] ? 'المشرف معيّن مسبقاً' : 'تم حفظ إسناد المشرف')
+                        ->success()->send();
+                }),
             Action::make('terminate_open_time')
                 ->label('إنهاء العمل بالوقت المفتوح')
                 ->icon('heroicon-o-stop-circle')
@@ -220,6 +281,7 @@ final class ViewCleaningBooking extends ViewRecord
                     if (! CleaningBookingResource::canEdit($this->record) || $this->record->booking_kind !== 'open_time') {
                         return false;
                     }
+
                     return ($this->record->work_started_at !== null
                         && $this->record->work_finished_at === null
                         && $this->record->open_time_finalized_at === null)
@@ -243,6 +305,7 @@ final class ViewCleaningBooking extends ViewRecord
                             if ($sessions->isEmpty()) {
                                 return ['0' => 'الطلب الرئيسي (بدون جلسات منفصلة)'];
                             }
+
                             return $sessions->mapWithKeys(fn ($session): array => [
                                 (string) $session->id => 'جلسة '.(int) $session->sequence.' — '.($session->scheduled_date?->format('Y-m-d') ?? '-'),
                             ])->all();
@@ -552,5 +615,24 @@ final class ViewCleaningBooking extends ViewRecord
         return $currency === '' || $currency === 'SYP'
             ? $formatted.' ل.س'
             : $formatted.' '.$currency;
+    }
+
+    private function canManageSupervisor(): bool
+    {
+        $user = auth()->user();
+        $assignments = app(CleaningSupervisorAssignmentService::class);
+
+        return $user instanceof User
+            && $assignments->canAssign($user, fromDashboard: true)
+            && CleaningBookingResource::canEdit($this->record)
+            && $assignments->isEligible($this->record)
+            && ! in_array($this->record->status, [CleaningBookingStatus::Completed, CleaningBookingStatus::Cancelled], true);
+    }
+
+    private function isSupervisorReassignment(mixed $supervisorUserId): bool
+    {
+        $current = app(CleaningSupervisorAssignmentService::class)->activeSupervisorId($this->record);
+
+        return $current !== null && (int) $supervisorUserId !== $current;
     }
 }

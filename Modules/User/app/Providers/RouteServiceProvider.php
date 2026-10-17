@@ -59,6 +59,7 @@ final class RouteServiceProvider extends ServiceProvider
             'api',
             'auth:sanctum',
             AppendCleaningBookingScheduleResponse::class,
+            RequireSessionScopedCleaningLifecycle::class,
         ])->prefix('api/v1/user')->name('api.')->group(function (): void {
             Route::prefix('cleaning/orders/{booking}/sessions/{session}')->scopeBindings()->group(function (): void {
                 Route::post('start-verification/confirm', [UserCleaningOrderSessionController::class, 'confirmStart'])->name('user.cleaning.sessions.start-verification.confirm');

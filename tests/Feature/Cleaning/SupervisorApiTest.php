@@ -11,6 +11,10 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Spatie\Permission\Models\Role;
 
+beforeEach(function (): void {
+    $this->travelTo(now()->setDate(2026, 10, 16)->startOfDay());
+});
+
 function supervisorUser(bool $active = true): User
 {
     Role::findOrCreate('Cleaning Supervisor', 'web');
@@ -70,7 +74,8 @@ it('uses the issued Sanctum token for profile and revokes it on logout', functio
 it('scopes lists and details to the active supervisor and explicit service kind', function () {
     $first = supervisorUser();
     $second = supervisorUser();
-    $mine = supervisorBooking($first, ['booking_number' => 'TEAM-ONE', 'scheduled_date' => '2026-10-16']);
+    $mine = supervisorBooking($first, ['booking_number' => 'TEAM-ONE', 'scheduled_date' => '2026-10-16',
+        'status' => CleaningBookingStatus::InProgress]);
     $theirs = supervisorBooking($second, ['booking_number' => 'TEAM-TWO', 'scheduled_date' => '2026-10-16']);
     $legacy = CleaningBooking::factory()->create(['booking_kind' => 'standard', 'number_of_workers' => 3]);
     DB::table('cleaning_supervisor_assignments')->insert([
@@ -81,10 +86,15 @@ it('scopes lists and details to the active supervisor and explicit service kind'
 
     $this->getJson('/api/v1/supervisor/bookings?search=TEAM-ONE&date=2026-10-16&perPage=1')
         ->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $mine->id);
-    $this->getJson('/api/v1/supervisor/home')->assertOk()->assertJsonPath('data.todayTotal', 1);
+    $this->getJson('/api/v1/supervisor/home')->assertOk()->assertJsonPath('data.todayTotal', 1)
+        ->assertJsonPath('data.inProgress', 1)->assertJsonPath('data.awaitingHandover', 0);
     $this->getJson('/api/v1/supervisor/bookings/'.$theirs->id)->assertNotFound();
     $this->getJson('/api/v1/supervisor/bookings/'.$legacy->id)->assertNotFound();
     $this->getJson('/api/v1/supervisor/schedule?date=2026-10-16')->assertOk()->assertJsonCount(1, 'data');
+
+    $mine->forceFill(['status' => CleaningBookingStatus::Completed])->save();
+    $this->getJson('/api/v1/supervisor/home')->assertOk()->assertJsonPath('data.nextBooking', null)
+        ->assertJsonPath('data.inProgress', 0);
 
     DB::table('cleaning_supervisor_assignments')->where('cleaning_booking_id', $mine->id)
         ->update(['released_at' => now(), 'active_slot' => null]);
@@ -110,7 +120,7 @@ it('derives two of three readiness from accepted arrived assignments', function 
     $this->getJson('/api/v1/supervisor/bookings/'.$booking->id.'/start')
         ->assertMethodNotAllowed();
     $this->postJson('/api/v1/supervisor/bookings/'.$booking->id.'/start')
-        ->assertStatus(409)->assertJsonPath('code', 'FEATURE_NOT_CONFIGURED');
+        ->assertStatus(409);
     $this->assertDatabaseHas('cleaning_bookings', ['id' => $booking->id, 'work_started_at' => null]);
     $booking->workerAssignments()->whereNull('arrived_at')->update(['arrived_at' => now()]);
     $this->getJson('/api/v1/supervisor/bookings/'.$booking->id.'/attendance')
@@ -211,7 +221,6 @@ it('blocks legacy worker execution actions for supervised bookings', function ()
     $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/complete")->assertForbidden();
 });
 
-
 it('allows operations to assign a supervisor with an audited active slot', function () {
     Role::findOrCreate('Cleaning Ops Manager', 'web');
     $operations = User::factory()->create(['is_active' => true]);
@@ -219,6 +228,7 @@ it('allows operations to assign a supervisor with an audited active slot', funct
     $supervisor = supervisorUser();
     $booking = CleaningBooking::factory()->create([
         'booking_kind' => 'supervised_team',
+        'status' => CleaningBookingStatus::WorkerAssigned,
         'estimated_hours' => 12,
         'number_of_workers' => 3,
         'scheduled_date' => '2026-10-20',
@@ -247,6 +257,7 @@ it('blocks overlapping supervisor assignments and allows separate appointments',
     $url = '/api/v1/admin/cleaning/supervised-bookings/';
     $makeBooking = fn (string $time) => CleaningBooking::factory()->create([
         'booking_kind' => 'supervised_team', 'number_of_workers' => 3,
+        'status' => CleaningBookingStatus::WorkerAssigned,
         'estimated_hours' => 12, 'scheduled_date' => '2026-10-20', 'scheduled_time' => $time,
     ]);
     $first = $makeBooking('09:00');

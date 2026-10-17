@@ -26,6 +26,33 @@ final class RejectSupervisedWorkerLifecycle
             ], 403);
         }
 
+        if ($booking?->isV2OperationalGroup() && $this->isExecutionMutation($request)) {
+            return response()->json([
+                'code' => 'CLEANING_V2_VISIT_EXECUTION_UNAVAILABLE',
+                'message' => 'تنفيذ مجموعة التنظيف يتطلب مسار زيارة مهيأ ومعتمداً. إجراءات القبول والحضور والاستغاثة تبقى مستقلة.',
+            ], 422);
+        }
+
         return $next($request);
+    }
+
+    private function isExecutionMutation(Request $request): bool
+    {
+        $path = '/'.$request->path();
+        if ($request->isMethod('GET')) {
+            return preg_match(
+                '#/cleaning-bookings/[^/]+/security-code$#',
+                $path,
+            ) === 1;
+        }
+
+        if (! in_array($request->method(), ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
+            return false;
+        }
+
+        return preg_match(
+            '#/cleaning-bookings/[^/]+/(security-code|price-adjustment-requests|start-work|complete|finish|cancel|open-time/|materials/receive)#',
+            $path,
+        ) === 1;
     }
 }

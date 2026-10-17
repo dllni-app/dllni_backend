@@ -34,6 +34,7 @@ it('scopes supervised team worker details and never reveals cleaning materials o
     Sanctum::actingAs($outsider->user);
     $this->getJson('/api/v1/cleaning/supervised-worker/bookings/'.$booking->id)
         ->assertNotFound();
+    $this->getJson('/api/v1/cleaning-bookings')->assertJsonMissing(['id' => $booking->id]);
 
     Sanctum::actingAs($member->user);
     $result = $this->getJson('/api/v1/cleaning/supervised-worker/bookings/'.$booking->id)
@@ -41,7 +42,7 @@ it('scopes supervised team worker details and never reveals cleaning materials o
         ->assertJsonPath('data.serviceType', 'supervised_team')
         ->assertJsonPath('data.scopeRooms.0.cleaningMode', 'deep')
         ->assertJsonPath('data.scopeRooms.0.title', 'غرفة النوم')
-        ->assertJsonPath('data.allowedActions', ['view']);
+        ->assertJsonPath('data.allowedActions', ['view', 'sos']);
 
     expect($result->json('data'))->not->toHaveKeys(['materials', 'totalPrice', 'adminMargin']);
     expect(json_encode($result->json()))->not->toContain('secret-kit');

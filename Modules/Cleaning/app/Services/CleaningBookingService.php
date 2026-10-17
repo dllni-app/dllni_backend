@@ -55,9 +55,28 @@ final class CleaningBookingService
     public function store(CleaningBookingData $data): CleaningBooking
     {
         return DB::transaction(function () use ($data): CleaningBooking {
-            $attributes = $data->onlyModelAttributes();
+            $attributes = array_intersect_key($data->onlyModelAttributes(), array_flip([
+                'customer_id',
+                'preferred_worker_id',
+                'assignment_mode',
+                'number_of_workers',
+                'gender_preference',
+                'cancellation_policy_id',
+                'billing_policy_id',
+                'booking_number',
+                'property_type',
+                'property_details',
+                'estimated_sqm',
+                'estimated_hours',
+                'scheduled_date',
+                'scheduled_time',
+                'total_hours',
+                'terms_accepted',
+            ]));
             $attributes['gender_preference'] = $attributes['gender_preference'] ?? GenderPreference::Any->value;
             $attributes['number_of_workers'] = $attributes['number_of_workers'] ?? 1;
+            $attributes['status'] = CleaningBookingStatus::Pending->value;
+            $attributes['worker_id'] = null;
 
             $booking = CleaningBooking::create($attributes);
 
@@ -67,25 +86,67 @@ final class CleaningBookingService
         });
     }
 
-    public function update(CleaningBookingData $data, CleaningBooking $booking): CleaningBooking
+    /** @param array<string, mixed> $validated */
+    public function update(array $validated, CleaningBooking $booking): CleaningBooking
     {
-        return DB::transaction(function () use ($data, $booking): CleaningBooking {
-            $attributes = $data->onlyModelAttributes();
-            if (array_key_exists('gender_preference', $attributes) && $attributes['gender_preference'] === null) {
-                $attributes['gender_preference'] = GenderPreference::Any->value;
+        return DB::transaction(function () use ($validated, $booking): CleaningBooking {
+            $locked = CleaningBooking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
+            $this->assertGenericMutationAllowed($locked);
+
+            $attributes = [];
+            if (array_key_exists('propertyDetails', $validated)) {
+                $details = is_array($locked->property_details) ? $locked->property_details : [];
+                foreach (['kitchens', 'cleaning_mode'] as $key) {
+                    if (array_key_exists($key, $validated['propertyDetails'])) {
+                        $details[$key] = $validated['propertyDetails'][$key];
+                    }
+                }
+                $attributes['property_details'] = $details;
             }
-            if (array_key_exists('number_of_workers', $attributes) && $attributes['number_of_workers'] === null) {
-                $attributes['number_of_workers'] = 1;
+            if (array_key_exists('termsAccepted', $validated)) {
+                $attributes['terms_accepted'] = (bool) $validated['termsAccepted'];
+            }
+            if ($attributes !== []) {
+                $locked->update($attributes);
+                if (array_key_exists('property_details', $attributes) && ! $locked->acceptedWorkerAssignments()->exists()) {
+                    $this->teamService->syncRooms($locked->fresh());
+                }
             }
 
-            tap($booking)->update($attributes);
+            return $this->freshBooking($locked);
+        }, 3);
+    }
 
-            if (array_intersect(array_keys($attributes), ['property_type', 'property_details']) !== [] && ! $booking->acceptedWorkerAssignments()->exists()) {
-                $this->teamService->syncRooms($booking->fresh());
-            }
+    public function destroyGeneric(CleaningBooking $booking): void
+    {
+        DB::transaction(function () use ($booking): void {
+            $locked = CleaningBooking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
+            $this->assertGenericMutationAllowed($locked);
+            $locked->delete();
+        }, 3);
+    }
 
-            return $this->freshBooking($booking);
-        });
+    public function assertGenericMutationAllowed(CleaningBooking $booking): void
+    {
+        $status = $booking->status instanceof CleaningBookingStatus
+            ? $booking->status
+            : CleaningBookingStatus::tryFrom((string) $booking->status);
+        $details = is_array($booking->property_details) ? $booking->property_details : [];
+        $hasSignedV2Pricing = array_key_exists('_room_period_v2_approved_total', $details)
+            || array_key_exists('_time_period_v2', $details)
+            || array_key_exists('_supervisor_pricing', $details);
+
+        abort_if(
+            $booking->isV2OperationalGroup()
+            || $hasSignedV2Pricing
+            || $booking->started_travel_at !== null
+            || $booking->arrived_at !== null
+            || $booking->work_started_at !== null
+            || $booking->work_finished_at !== null
+            || in_array($status, [CleaningBookingStatus::InProgress, CleaningBookingStatus::Completed, CleaningBookingStatus::Cancelled], true),
+            409,
+            'Generic booking mutation is unavailable after signed V2 pricing or lifecycle execution begins.',
+        );
     }
 
     public function accept(CleaningBooking $booking, ?array $roomIds = null): CleaningBooking

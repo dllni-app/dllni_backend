@@ -57,13 +57,13 @@ it('computes distance-based pricing with percent admin margin', function (): voi
         $worker->id,
     );
 
-    expect($pricing['basePrice'])->toBe(275.0);
+    expect($pricing['basePrice'])->toBe(282.0);
     expect($pricing['distanceKm'])->toBe(11.119);
     expect($pricing['travelFee'])->toBe(112.0);
     expect($pricing['addonsTotal'])->toBe(0.0);
-    expect($pricing['adminMargin'])->toBe(28.0);
+    expect($pricing['adminMargin'])->toBe(29.0);
     expect($pricing['isPricingFinal'])->toBeTrue();
-    expect($pricing['totalPrice'])->toBe(415.0);
+    expect($pricing['totalPrice'])->toBe(423.0);
     expect($pricing['currency'])->toBe((string) config('app.currency', 'SYP'));
 });
 
@@ -100,12 +100,12 @@ it('computes distance-based pricing with fixed admin margin', function (): void 
         $worker->id,
     );
 
-    expect($pricing['basePrice'])->toBe(275.0);
+    expect($pricing['basePrice'])->toBe(282.0);
     expect($pricing['distanceKm'])->toBe(0.0);
     expect($pricing['travelFee'])->toBe(10.0);
     expect($pricing['adminMargin'])->toBe(75.0);
     expect($pricing['isPricingFinal'])->toBeTrue();
-    expect($pricing['totalPrice'])->toBe(360.0);
+    expect($pricing['totalPrice'])->toBe(367.0);
 });
 
 it('returns provisional pricing when preferred worker is not selected', function (): void {
@@ -124,12 +124,12 @@ it('returns provisional pricing when preferred worker is not selected', function
         null,
     );
 
-    expect($pricing['basePrice'])->toBe(275.0);
+    expect($pricing['basePrice'])->toBe(282.0);
     expect($pricing['distanceKm'])->toBeNull();
     expect($pricing['travelFee'])->toBe(0.0);
     expect($pricing['adminMargin'])->toBe(0.0);
     expect($pricing['isPricingFinal'])->toBeFalse();
-    expect($pricing['totalPrice'])->toBe(275.0);
+    expect($pricing['totalPrice'])->toBe(282.0);
 });
 
 it('computes event assistance pricing per worker per hour', function (): void {
@@ -220,9 +220,9 @@ it('keeps managed cleaning service prices out of room-based order totals', funct
         [$serviceA->id, $serviceB->id],
     );
 
-    expect($pricing['basePrice'])->toBe(275.0);
+    expect($pricing['basePrice'])->toBe(282.0);
     expect($pricing['addonsTotal'])->toBe(0.0);
-    expect($pricing['totalPrice'])->toBe(275.0);
+    expect($pricing['totalPrice'])->toBe(282.0);
     expect($pricing['serviceLines'])->toHaveCount(0);
 });
 
@@ -293,10 +293,10 @@ it('uses configured deep room pricing and time estimates while keeping add-ons u
     expect($deepEstimation['sizeTier'])->toBe($regularEstimation['sizeTier']);
     expect($regularEstimation['estimatedHours'])->toBe(2.5);
     expect($deepEstimation['estimatedHours'])->toBe(4.5);
-    expect($regularPricing['basePrice'])->toBe(275.0);
-    expect($deepPricing['basePrice'])->toBe(1100.0);
+    expect($regularPricing['basePrice'])->toBe(282.0);
+    expect($deepPricing['basePrice'])->toBe(1125.0);
     expect($deepPricing['addonsTotal'])->toBe($regularPricing['addonsTotal']);
-    expect($deepPricing['totalPrice'])->toBe(1100.0);
+    expect($deepPricing['totalPrice'])->toBe(1125.0);
     expect($deepPricing['serviceLines'])->toHaveCount(0);
 });
 

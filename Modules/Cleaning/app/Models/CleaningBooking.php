@@ -201,6 +201,25 @@ final class CleaningBooking extends Model
         return $this->hasMany(CleaningSupervisorAssignment::class, 'cleaning_booking_id');
     }
 
+    public function sessionSupervisorAssignments(): \Illuminate\Database\Eloquent\Relations\HasManyThrough
+    {
+        return $this->hasManyThrough(
+            CleaningBookingSessionSupervisorAssignment::class,
+            CleaningBookingSession::class,
+            'cleaning_booking_id',
+            'cleaning_booking_session_id',
+        );
+    }
+
+    public function isV2OperationalGroup(): bool
+    {
+        return in_array((string) $this->booking_kind, ['standard', 'open_time'], true)
+            && (int) $this->number_of_workers > 1
+            && ($this->sessions()->exists()
+                || $this->roomSchedules()->exists()
+                || $this->roomPeriods()->exists());
+    }
+
     public function isSupervisedTeam(): bool
     {
         return (string) $this->booking_kind === 'supervised_team';

@@ -12,6 +12,7 @@ use Modules\Cleaning\Services\CleaningPricingCalculator;
 use Modules\Cleaning\Services\CleaningSpecialServiceQuoteService;
 use Modules\Cleaning\Models\CleaningSpecialService;
 use Modules\Cleaning\Support\CleaningRuntimeSettings;
+use Modules\Cleaning\Services\CleaningSupervisorHourlyPricing;
 
 /**
  * Deterministic period-level quote shared by estimate and create.
@@ -54,6 +55,7 @@ final class RoomPeriodPricingService
         $firstStart = null;
         $latestEnd = null;
         $workMinutes = 0;
+        $supervisorIntervals = [];
 
         foreach ($periods as $index => $period) {
             $type = (string) $period['roomType'];
@@ -68,6 +70,9 @@ final class RoomPeriodPricingService
                     $type => [$size => 1],
                 ],
             ];
+            if (isset($period['estimatedHours'])) {
+                $singleRoomDetails['room_estimated_hours'] = [$type.'.'.$size.'.1' => $period['estimatedHours']];
+            }
             // Use the production room pricing algorithm. Read its raw room
             // line, NEVER its booking-level minimum or individual travel fee.
             $singleQuote = $this->estimator->price('apartment', $singleRoomDetails, null, null, null, null, false, [], $workers);
@@ -122,6 +127,7 @@ final class RoomPeriodPricingService
                 throw new InvalidArgumentException('Invalid room-period date or time.');
             }
             $end = $start->addMinutes($duration);
+            $supervisorIntervals[] = ['startAt' => $start->toIso8601String(), 'endAt' => $end->toIso8601String()];
             $firstStart = $firstStart === null || $start->lessThan($firstStart) ? $start : $firstStart;
             $latestEnd = $latestEnd === null || $end->greaterThan($latestEnd) ? $end : $latestEnd;
             $events[] = ['at' => $start->getTimestamp(), 'delta' => $workers];
@@ -163,6 +169,13 @@ final class RoomPeriodPricingService
         $materialsTotal = round(array_sum($materialKitMaxByVisit), 2);
         $addons = round($materialsTotal + $specials, 2);
         $base = $this->calculator->roundMoney($base);
+        $supervisor = null;
+        if ($maximumWorkers > 1) {
+            $supervisor = app(CleaningSupervisorHourlyPricing::class)->forMinutes(
+                app(CleaningSupervisorHourlyPricing::class)->unionMinutes($supervisorIntervals),
+            );
+            $base = $this->calculator->roundMoney($base + $supervisor['fee']);
+        }
         $priced = $this->calculator->provisional($base, $addons, 0.0, max(1, $maximumWorkers));
         $minimum = max(0.0, (float) (CleaningRuntimeSettings::financial()->cleaning_minimum_order_price ?? 0));
         if ($minimum > 0 && (float) $priced['totalPrice'] < $minimum) {
@@ -174,6 +187,7 @@ final class RoomPeriodPricingService
             'algorithmVersion' => 'room-period-v2-2026-10-14',
             'roomPeriods' => $rows,
             'basePrice' => $base,
+            'supervisor' => $supervisor,
             'addonsTotal' => $addons,
             'materialsTotal' => $materialsTotal,
             'specialServicesTotal' => round($specials, 2),

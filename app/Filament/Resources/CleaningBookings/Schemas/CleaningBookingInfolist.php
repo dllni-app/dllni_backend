@@ -122,6 +122,35 @@ final class CleaningBookingInfolist
                                         TextEntry::make('remaining_workers')
                                             ->label('العاملون المتبقون')
                                             ->state(fn ($record): string => self::integer($record->remainingWorkerCount())),
+                                        TextEntry::make('active_supervisor')
+                                            ->label('المشرف المسؤول')
+                                            ->state(static function (CleaningBooking $record): string {
+                                                $active = $record->supervisorAssignments()
+                                                    ->whereNull('released_at')
+                                                    ->with('supervisor')
+                                                    ->latest('assigned_at')
+                                                    ->first();
+
+                                                return $active?->supervisor?->name ?: 'لم يتم تعيين مشرف';
+                                            })
+                                            ->badge()
+                                            ->color(static fn (CleaningBooking $record): string => $record->supervisorAssignments()
+                                                ->whereNull('released_at')->exists() ? 'info' : 'warning')
+                                            ->visible(static fn (CleaningBooking $record): bool => $record->isSupervisedTeam() || (int) $record->number_of_workers > 1),
+                                        TextEntry::make('material_kit_status')
+                                            ->label('تسليم مواد التنظيف')
+                                            ->state(static fn (CleaningBooking $record): string => match ($record->materialKit?->status) {
+                                                'preparing' => 'قيد التجهيز',
+                                                'ready' => 'جاهزة للتسليم',
+                                                'received' => 'تم التسليم',
+                                                default => 'لم تُجهّز بعد',
+                                            })
+                                            ->badge()
+                                            ->color(static fn (CleaningBooking $record): string => match ($record->materialKit?->status) {
+                                                'received' => 'success',
+                                                'ready' => 'info',
+                                                default => 'warning',
+                                            }),
                                         TextEntry::make('room_coverage')
                                             ->label('تغطية الغرف')
                                             ->state(fn ($record): string => self::roomCoverageLabel($record))
@@ -142,6 +171,25 @@ final class CleaningBookingInfolist
                                         TextEntry::make('financial_service')
                                             ->label('قيمة الخدمة')
                                             ->state(fn (CleaningBooking $record): string => self::financialServiceSummary($record)),
+                                        TextEntry::make('supervisor_billable_time')
+                                            ->label('وقت الإشراف المحتسب')
+                                            ->state(static fn (CleaningBooking $record): string => sprintf(
+                                                '%s ساعة',
+                                                number_format((float) data_get($record->property_details, '_supervisor_pricing.hours', 0), 2),
+                                            ))
+                                            ->visible(static fn (CleaningBooking $record): bool => (int) data_get($record->property_details, '_supervisor_pricing.billableMinutes', 0) > 0),
+                                        TextEntry::make('supervisor_price')
+                                            ->label('أجرة المشرف بالساعة')
+                                            ->state(static fn (CleaningBooking $record): string => self::money(
+                                                data_get($record->property_details, '_supervisor_pricing.hourlyRate', 0),
+                                            ))
+                                            ->visible(static fn (CleaningBooking $record): bool => (int) data_get($record->property_details, '_supervisor_pricing.billableMinutes', 0) > 0),
+                                        TextEntry::make('supervisor_charge')
+                                            ->label('رسوم الإشراف ضمن السعر')
+                                            ->state(static fn (CleaningBooking $record): string => self::money(
+                                                data_get($record->property_details, '_supervisor_pricing.fee', 0),
+                                            ))
+                                            ->visible(static fn (CleaningBooking $record): bool => (int) data_get($record->property_details, '_supervisor_pricing.billableMinutes', 0) > 0),
                                         TextEntry::make('financial_travel')
                                             ->label('رسوم التنقل')
                                             ->state(fn (CleaningBooking $record): string => self::money($record->travel_fee))

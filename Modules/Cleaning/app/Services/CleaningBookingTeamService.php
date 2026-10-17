@@ -395,7 +395,12 @@ final class CleaningBookingTeamService
             $totalRoomWeight = round((float) $rooms->sum(fn (CleaningBookingRoom $room): float => (float) $room->weight), 2);
         }
 
-        $subtotal = round(((float) ($booking->base_price ?? 0)) + ((float) ($booking->addons_total ?? 0)), 2);
+        // Supervisor charges are collected for the supervisor's group hours,
+        // not part of the workers' distributable cleaning wage.
+        $supervisorFee = max(0.0, (float) data_get($booking->property_details, '_supervisor_pricing.fee', 0));
+        $subtotal = round(max(0.0,
+            ((float) ($booking->base_price ?? 0)) + ((float) ($booking->addons_total ?? 0)) - $supervisorFee
+        ), 2);
         $isEventAssistance = (string) $booking->property_type === 'event_assistance';
         $includedAdminMarginBase = $this->pricingCalculator->minimumOrderAdminMarginBase(
             (float) ($booking->base_price ?? 0),
@@ -486,7 +491,7 @@ final class CleaningBookingTeamService
                 'worker_id' => $primaryWorkerId,
                 'travel_fee' => round($totalTravelFee, 2),
                 'admin_margin_amount' => round($totalAdminMargin, 2),
-                'total_price' => $customerPriceLock ?? round($acceptedAssignments->sum(
+                'total_price' => $customerPriceLock ?? round($supervisorFee + $acceptedAssignments->sum(
                     fn (CleaningBookingWorkerAssignment $assignment): float =>
                         (float) $assignment->worker_amount + (float) $assignment->admin_margin_amount
                 ), 2),
@@ -505,7 +510,7 @@ final class CleaningBookingTeamService
                 'worker_id' => null,
                 'travel_fee' => 0,
                 'admin_margin_amount' => round((float) $provisionalPricing['adminMargin'], 2),
-                'total_price' => $customerPriceLock ?? round((float) $provisionalPricing['totalPrice'], 2),
+                'total_price' => $customerPriceLock ?? round((float) $provisionalPricing['totalPrice'] + $supervisorFee, 2),
                 'travel_distance_km' => null,
                 'is_pricing_final' => false,
             ])->save();

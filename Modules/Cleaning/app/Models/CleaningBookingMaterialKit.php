@@ -11,12 +11,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 final class CleaningBookingMaterialKit extends Model
 {
     public const PREPARING = 'preparing';
+
     public const READY = 'ready';
+
     public const RECEIVED = 'received';
 
     protected $fillable = [
         'cleaning_booking_id', 'status', 'prepared_at', 'prepared_by_id',
-        'received_by_worker_id', 'received_at', 'notes',
+        'received_by_worker_id', 'received_by_supervisor_user_id', 'received_at', 'notes',
     ];
 
     public function booking(): BelongsTo
@@ -27,6 +29,11 @@ final class CleaningBookingMaterialKit extends Model
     public function receivedByWorker(): BelongsTo
     {
         return $this->belongsTo(Worker::class, 'received_by_worker_id');
+    }
+
+    public function receivedBySupervisor(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\User::class, 'received_by_supervisor_user_id');
     }
 
     public function casts(): array

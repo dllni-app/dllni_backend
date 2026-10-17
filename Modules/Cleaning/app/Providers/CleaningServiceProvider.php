@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\ServiceProvider;
 use Modules\Cleaning\Console\DeleteCleaningOrdersCommand;
 use Modules\Cleaning\Console\DispatchDueCleaningBookingNotificationsCommand;
+use Modules\Cleaning\Console\InitializeCleaningBookingVisitsCommand;
 use Modules\Cleaning\Console\RepairCleaningCouponPricingCommand;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Observers\CleaningAgentBOperationalObserver;
@@ -92,6 +93,7 @@ final class CleaningServiceProvider extends ServiceProvider
         $this->commands([
             DeleteCleaningOrdersCommand::class,
             DispatchDueCleaningBookingNotificationsCommand::class,
+            InitializeCleaningBookingVisitsCommand::class,
             RepairCleaningCouponPricingCommand::class,
         ]);
     }
