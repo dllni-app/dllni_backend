@@ -74,6 +74,7 @@ jobs:
             tests/Feature/UserModule/CleaningSpecialServiceCustomerEditPhase4Test.php \
             tests/Feature/Filament/CleaningSpecialOperationsReportPageTest.php \
             tests/Feature/Filament/CleaningV2AdminResourcesTest.php \
+            tests/Feature/Filament/AdminAccountPasswordResetTest.php \
             --log-junit release2-sqlite-junit.xml --colors=never 2>&1 | tee release2-sqlite.log
       - uses: actions/upload-artifact@v4
         if: always()

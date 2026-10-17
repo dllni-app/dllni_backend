@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Workers\Pages;
 
+use App\Filament\Resources\SystemUsers\Support\ResetAccountPasswordAction;
 use App\Filament\Resources\Workers\Support\WorkerSuspensionActions;
 use App\Filament\Resources\Workers\WorkerResource;
 use Filament\Actions\EditAction;
@@ -17,6 +18,7 @@ final class ViewWorker extends ViewRecord
     {
         return [
             ...WorkerSuspensionActions::make(),
+            ResetAccountPasswordAction::make(),
             EditAction::make(),
         ];
     }

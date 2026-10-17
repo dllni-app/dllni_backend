@@ -6,6 +6,7 @@ namespace App\Filament\Resources\CleaningWorkers\Tables;
 
 use App\Enums\WorkerCustomerRatingType;
 use App\Filament\Resources\CleaningWorkers\Support\WorkerDepositActions;
+use App\Filament\Resources\SystemUsers\Support\ResetAccountPasswordAction;
 use App\Filament\Resources\Workers\Support\WorkerSuspensionActions;
 use App\Filament\Support\ArabicDashboardLabels;
 use App\Models\CleaningDepositSetting;
@@ -206,6 +207,7 @@ final class CleaningWorkersTable
             ->recordActions([
                 ViewAction::make()->label('عرض'),
                 ...WorkerSuspensionActions::make(),
+                ResetAccountPasswordAction::make(),
                 EditAction::make()->label('تعديل'),
                 ...WorkerDepositActions::make(),
             ]);
