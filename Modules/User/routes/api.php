@@ -201,7 +201,7 @@ Route::prefix('v1/user')->group(function (): void {
     Route::get('offers', UserMarketingOffersIndexController::class);
     Route::get('offers/{marketingOffer}', UserMarketingOfferShowController::class);
 
-    Route::middleware(['auth:sanctum'])->group(function (): void {
+    Route::middleware(['auth:sanctum', \App\Http\Middleware\EnsureCustomerAccount::class])->group(function (): void {
 
         Route::post('products/normalize-text', UserNormalizeProductTextController::class);
         Route::post('smart-search', UserSmartSearchController::class);
