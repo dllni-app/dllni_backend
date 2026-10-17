@@ -201,7 +201,7 @@ final class CleaningBookingsTable
                         ], true) && ! self::isEventAssistance($record)
                             && (string) ($record->booking_kind ?? '') !== 'open_time'
                             && $record->started_travel_at === null
-                            && ! $record->sessions()->exists()
+                            && ! (method_exists($record, 'sessions') && $record->sessions()->exists())
         && CleaningBookingResource::canEdit($record))
                         ->modalHeading('تعديل عدد الغرف وإعادة احتساب السعر')
                         ->modalDescription('أدخل العدد النهائي لغرف نوع وحجم محددين. سيحسب النظام مدة التنفيذ والسعر وحصص العمال من جديد. لا يُسمح بالتعديل بعد بدء الرحلة.')
@@ -260,7 +260,7 @@ final class CleaningBookingsTable
                         ], true) && ! self::isEventAssistance($record)
                             && (string) ($record->booking_kind ?? '') !== 'open_time'
                             && $record->started_travel_at === null
-                            && ! $record->sessions()->exists()
+                            && ! (method_exists($record, 'sessions') && $record->sessions()->exists())
         && CleaningBookingResource::canEdit($record))
                         ->modalHeading('تعديل السعر الأساسي للطلب')
                         ->modalDescription('تعديل إداري للسعر الأساسي؛ يتم إعادة حساب الإجمالي وحصص العمال والعمولة ورسوم التنقل قبل إتمام الطلب.')
