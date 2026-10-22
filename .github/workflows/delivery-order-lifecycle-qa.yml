@@ -1,0 +1,53 @@
+name: Delivery order lifecycle QA
+
+on:
+  push:
+    branches:
+      - fix/full-order-lifecycle-e2e-20261022
+    paths:
+      - '.github/workflows/delivery-order-lifecycle-qa.yml'
+      - 'Modules/Delivery/**'
+      - 'tests/Feature/Delivery/**'
+      - 'config/delivery.php'
+      - 'composer.json'
+      - 'composer.lock'
+  workflow_dispatch:
+
+jobs:
+  delivery-qa:
+    name: PHP delivery lifecycle verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout tested branch
+        uses: actions/checkout@v4
+
+      - name: Install PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, bcmath, intl, gd
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare isolated test application
+        run: |
+          cp .env.example .env
+          touch database/database.sqlite
+          php artisan key:generate
+
+      - name: Lint dispatch code and regression tests
+        run: |
+          php -l config/delivery.php
+          php -l Modules/Delivery/app/Services/DriverDispatchService.php
+          php -l tests/Feature/Delivery/UnansweredOfferRetryTest.php
+
+      - name: Run delivery integration suite
+        env:
+          APP_ENV: testing
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          QUEUE_CONNECTION: sync
+        run: php artisan test tests/Feature/Delivery --no-ansi
