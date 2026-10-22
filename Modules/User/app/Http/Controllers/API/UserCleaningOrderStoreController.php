@@ -10,6 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
+use Modules\Cleaning\Services\CleaningCouponPricingService;
 use Modules\User\Http\Requests\UserCleaningOrderStoreRequest;
 use Modules\User\Http\Resources\UserCleaningBookingResource;
 use Modules\User\Services\UserCleaningOrderEstimationService;
@@ -23,6 +24,7 @@ final class UserCleaningOrderStoreController
         UserCleaningOrderService $service,
         UserCleaningOrderEstimationService $estimationService,
         PlatformCouponRedemptionService $platformCoupons,
+        CleaningCouponPricingService $couponPricing,
     ): JsonResponse {
         $couponCode = $request->input('couponCode');
         Validator::make(['couponCode' => $couponCode], [
@@ -32,22 +34,26 @@ final class UserCleaningOrderStoreController
         $validated = $this->withEventWorkerCount($validated);
         $this->assertWorkerCapacity($validated, $estimationService);
 
-        $order = DB::transaction(function () use ($request, $service, $platformCoupons, $couponCode, $validated) {
+        $order = DB::transaction(function () use ($request, $service, $platformCoupons, $couponPricing, $couponCode, $validated) {
             $order = $service->store($request->user(), $validated);
 
             if (is_string($couponCode) && trim($couponCode) !== '') {
                 // The saved price is already the authoritative customer quote:
                 // minimum-order pricing can include platform commission.
                 $subtotal = round(max(0.0, (float) $order->total_price), 2);
-                $discountableSubtotal = round(max(
+                $serviceSubtotal = round(max(0.0, (float) $order->base_price)
+                    + max(0.0, (float) $order->addons_total), 2);
+                $travelFee = round(max(0.0, (float) $order->travel_fee), 2);
+                $grossAdminMargin = round(max(0.0, (float) $order->admin_margin_amount), 2);
+                $includedAdminMargin = round(min($grossAdminMargin, max(
                     0.0,
-                    $subtotal - max(0.0, (float) $order->travel_fee),
-                ), 2);
+                    $serviceSubtotal + $travelFee + $grossAdminMargin - $subtotal,
+                )), 2);
                 $quote = $platformCoupons->quoteForPlacement(
                     userId: (int) $request->user()->id,
                     section: PlatformCoupon::SECTION_CLEANING,
                     couponCode: $couponCode,
-                    subtotal: $discountableSubtotal,
+                    subtotal: $subtotal,
                     context: [
                         'propertyType' => (string) $order->property_type,
                         'cleaningMode' => $order->property_details['cleaning_mode'] ?? null,
@@ -56,7 +62,16 @@ final class UserCleaningOrderStoreController
                     required: true,
                 );
 
-                $discount = (float) $quote['discount'];
+                // Eligibility uses the customer total, but the discount only
+                // applies to the cleaning service and included platform margin.
+                $allocation = $couponPricing->allocation(
+                    $quote['coupon'],
+                    $serviceSubtotal,
+                    $travelFee,
+                    $grossAdminMargin,
+                    $includedAdminMargin,
+                );
+                $discount = (float) $allocation['discountAmount'];
                 $order->forceFill([
                     'subtotal_before_discount' => $subtotal,
                     'discount_amount' => $discount,

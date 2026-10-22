@@ -319,6 +319,8 @@ final class CleaningBookingResource extends JsonResource
 
     private function propertyDetailsWithLabels(array $details): array
     {
+        // Coupon margin provenance is internal accounting, not customer/worker data.
+        unset($details['_coupon_pricing']);
         foreach (['living_room_size', 'room_size', 'room_type', 'cleaning_mode', 'event_type', 'venue_type'] as $key) {
             if (array_key_exists($key, $details)) $details[$key.'_label'] = $this->label($details[$key]);
         }
