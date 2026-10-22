@@ -11,6 +11,7 @@ use Modules\Cleaning\Console\DeleteCleaningOrdersCommand;
 use Modules\Cleaning\Console\DispatchDueCleaningBookingNotificationsCommand;
 use Modules\Cleaning\Console\InitializeCleaningBookingVisitsCommand;
 use Modules\Cleaning\Console\RepairCleaningCouponPricingCommand;
+use Modules\Cleaning\Console\RepairInclusiveCouponBookingCommand;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Observers\CleaningAgentBOperationalObserver;
 use Modules\Cleaning\Observers\CleaningCustomerPricingObserver;
@@ -95,6 +96,7 @@ final class CleaningServiceProvider extends ServiceProvider
             DispatchDueCleaningBookingNotificationsCommand::class,
             InitializeCleaningBookingVisitsCommand::class,
             RepairCleaningCouponPricingCommand::class,
+            RepairInclusiveCouponBookingCommand::class,
         ]);
     }
 
