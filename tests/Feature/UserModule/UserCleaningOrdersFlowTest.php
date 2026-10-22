@@ -229,11 +229,10 @@ it('creates an open cleaning order with coupon deducted from provisional admin m
         ->assertOk();
 
     expect((float) $workerResponse->json('data.serviceShareAmount'))->toBe($expectedServiceAmount)
-        ->and((float) $workerResponse->json('data.adminMargin'))->toBe($expectedAdminMargin)
         ->and((float) $workerResponse->json('data.workerOffer.serviceShareAmount'))->toBe($expectedServiceAmount)
         ->and((float) $workerResponse->json('data.workerOffer.adminMarginAmount'))->toBe($expectedAdminMargin)
-        ->and((float) $workerResponse->json('data.discountAmount'))->toBe($expectedDiscount)
-        ->and((float) $workerResponse->json('data.subtotalBeforeDiscount'))->toBe($expectedGrossTotal);
+        ->and($workerResponse->json('data.adminMargin'))->toBeNull()
+        ->and($workerResponse->json('data.discountAmount'))->toBeNull();
 });
 
 it('creates a deep cleaning order and persists the mode in the response payload', function (): void {

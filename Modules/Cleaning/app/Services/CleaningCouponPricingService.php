@@ -445,11 +445,8 @@ final class CleaningCouponPricingService
                 $previousAssignmentWorkerNetFactor,
                 $currentAssignmentValuesAreGross,
             );
-            $grossTravelFee = $this->assignmentGrossValue(
-                (float) ($assignment->travel_fee ?? 0),
-                $previousAssignmentWorkerNetFactor,
-                $currentAssignmentValuesAreGross,
-            );
+            // Travel was never discounted; never gross it up with the service ratio.
+            $grossTravelFee = round(max(0.0, (float) ($assignment->travel_fee ?? 0)), 2);
             $grossAdminMargin = $this->assignmentGrossValue(
                 (float) ($assignment->admin_margin_amount ?? 0),
                 $previousAdminNetFactor,

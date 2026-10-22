@@ -109,12 +109,12 @@ it('synchronizes the discounted booking and worker financial shares when a coupo
     $assignment->refresh();
 
     expect((float) $booking->subtotal_before_discount)->toBe(115000.0)
-        ->and((float) $booking->discount_amount)->toBe(23000.0)
+        ->and((float) $booking->discount_amount)->toBe(22000.0)
         ->and((float) $booking->travel_fee)->toBe(5000.0)
         ->and((float) $booking->admin_margin_amount)->toBe(0.0)
-        ->and((float) $booking->total_price)->toBe(92000.0)
-        ->and((float) $assignment->service_share_amount)->toBe(87000.0)
+        ->and((float) $booking->total_price)->toBe(93000.0)
+        ->and((float) $assignment->service_share_amount)->toBe(88000.0)
         ->and((float) $assignment->travel_fee)->toBe(5000.0)
         ->and((float) $assignment->admin_margin_amount)->toBe(0.0)
-        ->and((float) $assignment->worker_amount)->toBe(92000.0);
+        ->and((float) $assignment->worker_amount)->toBe(93000.0);
 });

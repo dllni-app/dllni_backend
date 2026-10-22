@@ -24,6 +24,9 @@ it('does not add commission again when coupon applies to a minimum-inclusive cle
     $coupon = PlatformCoupon::query()->create([
         'code' => 'MINIMUM10',
         'title_ar' => 'خصم الحد الأدنى',
+        'title_en' => 'Minimum cleaning discount',
+        'description_ar' => 'اختبار حسم الحد الأدنى',
+        'description_en' => 'Minimum price regression',
         'section' => PlatformCoupon::SECTION_CLEANING,
         'discount_type' => PlatformCoupon::DISCOUNT_PERCENTAGE,
         'discount_value' => 10,
