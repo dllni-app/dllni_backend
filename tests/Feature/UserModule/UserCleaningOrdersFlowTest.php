@@ -221,16 +221,36 @@ it('creates an open cleaning order with coupon deducted from provisional admin m
 
     $serviceAmount = (float) $response->json('order.basePrice')
         + (float) $response->json('order.addonsTotal');
-    $grossAdminMargin = (float) app(CleaningPricingCalculator::class)
-        ->provisional($serviceAmount, 0.0)['adminMargin'];
-    $expectedGrossTotal = round($serviceAmount + $grossAdminMargin, 2);
-    $expectedDiscount = round($expectedGrossTotal * 0.10, 2);
+    $pricingCalculator = app(CleaningPricingCalculator::class);
+    $grossAdminMargin = (float) $pricingCalculator->provisional($serviceAmount, 0.0)['adminMargin'];
+    $undiscountedQuote = app(UserCleaningOrderEstimationService::class)->price(
+        'apartment',
+        [
+            'address' => 'Damascus - Mazzeh',
+            'location_name' => 'Home',
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+        ],
+        33.5138,
+        36.2765,
+        null,
+    );
+    $expectedGrossTotal = round((float) $undiscountedQuote['totalPrice'], 2);
+    $transport = (float) $undiscountedQuote['travelFee'];
+    $expectedDiscount = round(($expectedGrossTotal - $transport) * 0.10, 2);
+    $expectedIncludedMargin = min(
+        $grossAdminMargin,
+        max(0.0, $serviceAmount + $transport + $grossAdminMargin - $expectedGrossTotal),
+    );
     $expectedAdminMargin = round(max(0.0, $grossAdminMargin - $expectedDiscount), 2);
     $expectedServiceAmount = round(
-        max(0.0, $serviceAmount - max(0.0, $expectedDiscount - $grossAdminMargin)),
+        max(0.0, $serviceAmount - $expectedIncludedMargin
+            - max(0.0, $expectedDiscount - $grossAdminMargin)),
         2,
     );
-    $expectedTotal = round($expectedServiceAmount + $expectedAdminMargin, 2);
+    $expectedTotal = round($expectedGrossTotal - $expectedDiscount, 2);
 
     expect((float) $response->json('order.discountAmount'))->toBe($expectedDiscount)
         ->and((float) $response->json('order.subtotalBeforeDiscount'))->toBe($expectedGrossTotal)
