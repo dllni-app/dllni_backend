@@ -47,6 +47,8 @@ jobs:
           npm audit --audit-level=moderate
       - name: Build frontend against installed Filament assets
         run: npm run build
+      - name: Prepare test-only Laravel environment
+        run: cp .env.example .env
       - name: Run security and supervisor regression tests
         env:
           APP_ENV: testing
