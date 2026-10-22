@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Support\Broadcast;
 
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -15,6 +16,28 @@ final class BroadcastAfterResponse
      * Pusher/network errors so they never fail the primary request.
      */
     public static function send(ShouldBroadcast $event): void
+    {
+        try {
+            $connection = DB::connection();
+
+            if ($connection->transactionLevel() > 0) {
+                $connection->afterCommit(static function () use ($event): void {
+                    self::registerAfterResponse($event);
+                });
+
+                return;
+            }
+
+            self::registerAfterResponse($event);
+        } catch (Throwable $e) {
+            Log::warning('Broadcast after-response registration failed.', [
+                'event' => $event::class,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private static function registerAfterResponse(ShouldBroadcast $event): void
     {
         try {
             // The application container is reused across multiple HTTP requests
