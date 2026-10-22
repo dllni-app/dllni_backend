@@ -103,8 +103,8 @@ final class OrderResource extends JsonResource
                 'product' => $item->relationLoaded('product') && $item->product ? [
                     'id' => $item->product->id,
                     'name' => $item->product->name,
-                    'primaryImage' => $item->product->getFirstMediaUrl('primary-image'),
-                    'imageUrl' => $item->product->getFirstMediaUrl('primary-image') ?: null,
+                    'primaryImage' => $item->product->displayImageUrl(),
+                    'imageUrl' => $item->product->displayImageUrl() ?: null,
                 ] : null,
             ])->values()->all()),
             'orderStatusLogs' => $this->whenLoaded('orderStatusLogs'),

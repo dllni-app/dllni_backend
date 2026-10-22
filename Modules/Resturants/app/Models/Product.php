@@ -132,6 +132,16 @@ final class Product extends Model implements HasMedia
             ->values();
     }
 
+    /**
+     * Prefer the primary image, then the first gallery image when products
+     * were uploaded only to the "images" media collection.
+     */
+    public function displayImageUrl(): ?string
+    {
+        return $this->getFirstMediaUrl('primary-image')
+            ?: ($this->getFirstMediaUrl('images') ?: null);
+    }
+
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection('primary-image')->singleFile();

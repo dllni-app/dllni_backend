@@ -56,7 +56,7 @@ final class ProductResource extends JsonResource
             ]),
             'modifierGroups' => $this->whenLoaded('modifierGroups'),
             'substitutions' => $this->whenLoaded('substitutions'),
-            'primaryImage' => $this->getFirstMediaUrl('primary-image'),
+            'primaryImage' => $this->displayImageUrl(),
             'images' => $this->getMedia('images')->map(fn ($media) => $media->getUrl())->values()->all(),
             'createdAt' => $this->created_at->toDateTimeString(),
             'updatedAt' => $this->updated_at->toDateTimeString(),

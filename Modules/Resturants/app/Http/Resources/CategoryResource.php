@@ -22,7 +22,7 @@ final class CategoryResource extends JsonResource
         if ($imageUrl === null && $this->relationLoaded('products')) {
             $firstProduct = $this->products->first();
             if ($firstProduct instanceof Product) {
-                $imageUrl = $firstProduct->getFirstMediaUrl('primary-image') ?: null;
+                $imageUrl = $firstProduct->displayImageUrl() ?: null;
             }
         }
 

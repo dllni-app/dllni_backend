@@ -48,7 +48,7 @@ final class RestaurantOwnerOrderPayload
                 'orderId' => $item->order_id,
                 'productId' => $item->product_id,
                 'name' => $item->product?->name,
-                'imageUrl' => $item->product?->getFirstMediaUrl('primary-image') ?: null,
+                'imageUrl' => $item->product?->displayImageUrl() ?: null,
                 'quantity' => (int) $item->quantity,
                 'unitPrice' => (float) ($item->unit_price ?? 0),
                 'totalPrice' => (float) ($item->total_price ?? 0),
