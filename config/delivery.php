@@ -16,6 +16,8 @@ return [
         'stop_when_no_driver' => filter_var(env('DELIVERY_STOP_WHEN_NO_DRIVER', false), FILTER_VALIDATE_BOOL),
         'no_candidate_retry_seconds' => (int) env('DELIVERY_NO_CANDIDATE_RETRY_SECONDS', 60),
         'max_no_candidate_retries' => (int) env('DELIVERY_MAX_NO_CANDIDATE_RETRIES', 10),
+        // Give nearby drivers a second chance after an unanswered offer, never after a rejection.
+        'max_timed_out_reoffers_per_driver' => (int) env('DELIVERY_MAX_TIMED_OUT_REOFFERS_PER_DRIVER', 1),
     ],
     'trust' => [
         'default_score' => (int) env('DELIVERY_DRIVER_DEFAULT_TRUST_SCORE', 100),
