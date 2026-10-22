@@ -46,6 +46,7 @@ use Modules\Cleaning\Http\Controllers\API\WorkerStatisticsController;
 use Modules\Cleaning\Http\Controllers\API\WorkerTransactionsController;
 use Modules\Cleaning\Http\Controllers\API\WorkerWorkAreasController;
 use Modules\Cleaning\Http\Controllers\API\WorkerWorkingHoursController;
+use Modules\Cleaning\Http\Middleware\EnsureCleaningDepositAdmin;
 use Modules\Cleaning\Http\Middleware\EnsureSupervisor;
 use Modules\Cleaning\Http\Middleware\RejectSupervisedWorkerLifecycle;
 use Modules\Cleaning\Http\Middleware\RejectUnsupportedV2SupervisorExecution;
@@ -150,7 +151,7 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('cleaning-services.pricing', ServicePricingController::class)->only(['store', 'update', 'destroy'])->scoped();
         Route::apiResource('cleaning-billing-policies', CleaningBillingPolicyController::class)->only(['store', 'update', 'destroy']);
 
-        Route::prefix('admin/cleaning/deposits')->group(function (): void {
+        Route::middleware(EnsureCleaningDepositAdmin::class)->prefix('admin/cleaning/deposits')->group(function (): void {
             Route::get('settings', [DepositManagementController::class, 'getSettings']);
             Route::put('settings', [DepositManagementController::class, 'updateSettings']);
             Route::post('{worker}/deposit', [DepositManagementController::class, 'recordDeposit']);
