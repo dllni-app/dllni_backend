@@ -18,12 +18,14 @@ final class CleaningCouponPricingService
     ) {}
 
     /**
-     * Apply cleaning coupons against the full customer order total, then fund the
+     * Apply cleaning coupons to the service charge (including its platform margin),
      * discount from the administration margin first. Only the amount that remains
      * after administration reaches zero may reduce the service share. Travel is
      * never reduced as a component.
      *
-     * Example: service 960 + admin 240 = order total 1,200. A 10% coupon is 120.
+     * Travel never increases the coupon discount. Included margin is not added twice.
+     * Example: commission-inclusive service 1,500 + travel 300, with a 375 margin,
+     * receives a 150 discount; admin receives 225 and worker receives 1,125 + 300.
      * Admin becomes 120, service remains 960, and the customer pays 1,080.
      */
     public function allocation(
@@ -31,17 +33,20 @@ final class CleaningCouponPricingService
         float $serviceAmount,
         float $travelFee,
         float $adminMargin,
+        float $includedAdminMargin = 0.0,
     ): array {
-        $grossServiceAmount = round(max(0.0, $serviceAmount), 2);
+        $customerServiceAmount = round(max(0.0, $serviceAmount), 2);
         $grossTravelFee = round(max(0.0, $travelFee), 2);
         $grossAdminMargin = round(max(0.0, $adminMargin), 2);
+        $includedAdminMargin = round(min($customerServiceAmount, $grossAdminMargin, max(0.0, $includedAdminMargin)), 2);
+        // The minimum-price service charge already contains this portion of the margin.
+        $grossServiceAmount = round($customerServiceAmount - $includedAdminMargin, 2);
         $grossTotal = round($grossServiceAmount + $grossTravelFee + $grossAdminMargin, 2);
 
         $eligibleAmount = round($grossServiceAmount + $grossAdminMargin, 2);
         if ($coupon->discount_type === PlatformCoupon::DISCOUNT_PERCENTAGE) {
-            // The advertised percentage is calculated from the full amount the
-            // customer would pay before the coupon (service + travel + admin).
-            $discountAmount = $this->couponEligibility->calculateDiscount($coupon, $grossTotal);
+            // Percentage discounts apply to cleaning only, never transportation.
+            $discountAmount = $this->couponEligibility->calculateDiscount($coupon, $eligibleAmount);
         } else {
             $discountAmount = min(max(0.0, (float) $coupon->discount_value), $grossTotal);
         }
@@ -65,6 +70,8 @@ final class CleaningCouponPricingService
 
         return [
             'grossServiceAmount' => $grossServiceAmount,
+            'includedAdminMargin' => $includedAdminMargin,
+            'discountableSubtotal' => $eligibleAmount,
             'grossTravelFee' => $grossTravelFee,
             'grossAdminMargin' => $grossAdminMargin,
             'grossTotal' => $grossTotal,
@@ -76,7 +83,9 @@ final class CleaningCouponPricingService
             'adminDiscountAmount' => $adminDiscountAmount,
             'workerDiscountAmount' => $workerDiscountAmount,
             'customerWorkerNetFactor' => $serviceNetFactor,
-            'assignmentWorkerNetFactor' => $serviceNetFactor,
+            'assignmentWorkerNetFactor' => $customerServiceAmount > 0.0
+                ? max(0.0, min(1.0, $serviceNet / $customerServiceAmount))
+                : 1.0,
             'adminNetFactor' => $adminNetFactor,
             'serviceAmount' => $serviceNet,
             'travelFee' => $travelNet,
@@ -90,40 +99,19 @@ final class CleaningCouponPricingService
      */
     public function storedBreakdown(CleaningBooking $booking): ?array
     {
-        $couponId = (int) ($booking->platform_coupon_id ?? 0);
-        if ($couponId <= 0) {
-            return null;
-        }
-
-        $coupon = PlatformCoupon::query()->find($couponId);
+        $coupon = PlatformCoupon::query()->find((int) ($booking->platform_coupon_id ?? 0));
         if (! $coupon instanceof PlatformCoupon) {
             return null;
         }
 
-        $grossServiceAmount = round(
-            max(0.0, (float) ($booking->base_price ?? 0))
-            + max(0.0, (float) ($booking->addons_total ?? 0)),
-            2,
-        );
-        $storedDiscount = max(0.0, (float) ($booking->discount_amount ?? 0));
-        $grossTotal = round(max(
-            0.0,
-            (float) ($booking->subtotal_before_discount
-                ?? ((float) ($booking->total_price ?? 0) + $storedDiscount)),
-        ), 2);
-        $grossTravelFee = round(max(0.0, (float) ($booking->travel_fee ?? 0)), 2);
-        $grossAdminMargin = round(max(0.0, $grossTotal - $grossServiceAmount - $grossTravelFee), 2);
-
-        if (! (bool) $booking->is_pricing_final && $grossAdminMargin <= 0.0) {
-            $grossAdminMargin = (float) $this->pricingCalculator
-                ->provisional($grossServiceAmount, 0.0)['adminMargin'];
-        }
+        $parts = $this->snapshotPricing($booking);
 
         return $this->allocation(
             $coupon,
-            $grossServiceAmount,
-            $grossTravelFee,
-            $grossAdminMargin,
+            $parts['serviceAmount'],
+            $parts['travelFee'],
+            $parts['grossAdminMargin'],
+            $parts['includedAdminMargin'],
         );
     }
 
@@ -147,51 +135,59 @@ final class CleaningCouponPricingService
         $couponWasJustAttached = $booking->isDirty('platform_coupon_id')
             || empty($booking->getOriginal('platform_coupon_id'));
         $assignmentPricingWasRecalculated = $booking->isDirty([
-            'base_price',
-            'addons_total',
-            'travel_fee',
-            'admin_margin_amount',
-            'is_pricing_final',
+            'base_price', 'addons_total', 'travel_fee', 'admin_margin_amount', 'is_pricing_final',
         ]);
 
-        // base_price and addons_total intentionally remain gross snapshots. They
-        // are used by the team pricing engine whenever workers are recalculated.
-        $grossServiceAmount = round(
+        $serviceAmount = round(
             max(0.0, (float) ($booking->base_price ?? 0))
             + max(0.0, (float) ($booking->addons_total ?? 0)),
             2,
         );
-        $grossTravelFee = round(max(0.0, (float) ($booking->travel_fee ?? 0)), 2);
-        $currentAdminMargin = round(max(0.0, (float) ($booking->admin_margin_amount ?? 0)), 2);
-        if (! (bool) $booking->is_pricing_final && $currentAdminMargin <= 0.0) {
-            // Open-count bookings are initially stored without an admin margin
-            // until a worker is assigned. Coupons still consume the configured
-            // provisional administration margin first, otherwise the pending
-            // user/worker APIs would incorrectly deduct the coupon from service.
-            $grossAdminMargin = (float) $this->pricingCalculator
-                ->provisional($grossServiceAmount, 0.0)['adminMargin'];
-        } elseif ($couponWasJustAttached || $booking->isDirty('admin_margin_amount')) {
-            $grossAdminMargin = $currentAdminMargin;
+        $travelFee = round(max(0.0, (float) ($booking->travel_fee ?? 0)), 2);
+        $priorParts = $this->snapshotPricing($booking, true);
+        $priorDetails = $booking->getOriginal('property_details');
+        $priorSnapshot = is_array($priorDetails) ? ($priorDetails['_coupon_pricing'] ?? null) : null;
+
+        if ($couponWasJustAttached) {
+            $grossAdminMargin = round(max(0.0, (float) ($booking->admin_margin_amount ?? 0)), 2);
+            if (! (bool) $booking->is_pricing_final && $grossAdminMargin <= 0.0) {
+                $grossAdminMargin = (float) $this->pricingCalculator
+                    ->provisional($serviceAmount, 0.0)['adminMargin'];
+            }
+            $originalCustomerTotal = round(max(0.0, (float) (
+                $booking->subtotal_before_discount
+                ?? $booking->getOriginal('total_price')
+                ?? $booking->total_price
+            )), 2);
+            $includedAdminMargin = min($grossAdminMargin, max(
+                0.0,
+                $serviceAmount + $travelFee + $grossAdminMargin - $originalCustomerTotal,
+            ));
+        } elseif ($assignmentPricingWasRecalculated) {
+            $grossAdminMargin = $booking->isDirty('admin_margin_amount')
+                ? round(max(0.0, (float) $booking->admin_margin_amount), 2)
+                : $priorParts['grossAdminMargin'];
+            $includedAdminMargin = min($grossAdminMargin, $priorParts['includedAdminMargin']);
         } else {
-            // The subtotal snapshot is the reliable source for the original admin
-            // margin, including the case where the coupon reduced net admin to 0.
-            $originalGrossTotal = max(0.0, (float) ($booking->getOriginal('subtotal_before_discount') ?? 0));
-            $originalServiceAmount = round(
-                max(0.0, (float) ($booking->getOriginal('base_price') ?? 0))
-                + max(0.0, (float) ($booking->getOriginal('addons_total') ?? 0)),
-                2,
-            );
-            $originalTravelFee = round(max(0.0, (float) ($booking->getOriginal('travel_fee') ?? 0)), 2);
-            $grossAdminMargin = $originalGrossTotal > 0.0
-                ? round(max(0.0, $originalGrossTotal - $originalServiceAmount - $originalTravelFee), 2)
-                : $currentAdminMargin;
+            $grossAdminMargin = $priorParts['grossAdminMargin'];
+            $includedAdminMargin = $priorParts['includedAdminMargin'];
         }
+
+        // Persist financial provenance so later saves and changed pricing settings
+        // cannot silently reinterpret the original commission-inclusive quote.
+        $details = is_array($booking->property_details) ? $booking->property_details : [];
+        $details['_coupon_pricing'] = [
+            'grossAdminMargin' => round($grossAdminMargin, 2),
+            'includedAdminMargin' => round($includedAdminMargin, 2),
+        ];
+        $booking->property_details = $details;
 
         $allocation = $this->allocation(
             $coupon,
-            $grossServiceAmount,
-            $grossTravelFee,
+            $serviceAmount,
+            $travelFee,
             $grossAdminMargin,
+            $includedAdminMargin,
         );
 
         $this->applyToWorkerAssignments(
@@ -213,6 +209,69 @@ final class CleaningCouponPricingService
     }
 
     /**
+     * Rebuild the customer quote from its persisted components, without assuming
+     * that a commission-inclusive minimum was an additional customer charge.
+     *
+     * @return array{serviceAmount:float,travelFee:float,grossAdminMargin:float,includedAdminMargin:float}
+     */
+    private function snapshotPricing(CleaningBooking $booking, bool $original = false): array
+    {
+        $value = static fn (string $key): mixed => $original
+            ? $booking->getOriginal($key)
+            : $booking->getAttribute($key);
+        $serviceAmount = round(max(0.0, (float) $value('base_price'))
+            + max(0.0, (float) $value('addons_total')), 2);
+        $travelFee = round(max(0.0, (float) $value('travel_fee')), 2);
+        $grossTotal = round(max(0.0, (float) (
+            $value('subtotal_before_discount')
+            ?? ((float) $value('total_price') + (float) $value('discount_amount'))
+        )), 2);
+        $details = $value('property_details');
+        $snapshot = is_array($details) ? ($details['_coupon_pricing'] ?? null) : null;
+
+        if (is_array($snapshot)
+            && isset($snapshot['grossAdminMargin'], $snapshot['includedAdminMargin'])) {
+            return [
+                'serviceAmount' => $serviceAmount,
+                'travelFee' => $travelFee,
+                'grossAdminMargin' => round(max(0.0, (float) $snapshot['grossAdminMargin']), 2),
+                'includedAdminMargin' => round(max(0.0, (float) $snapshot['includedAdminMargin']), 2),
+            ];
+        }
+
+        // Old additive quotes can be read directly from the recorded subtotal.
+        $additiveMargin = round(max(0.0, $grossTotal - $serviceAmount - $travelFee), 2);
+        if ($additiveMargin > 0.0) {
+            return [
+                'serviceAmount' => $serviceAmount,
+                'travelFee' => $travelFee,
+                'grossAdminMargin' => $additiveMargin,
+                'includedAdminMargin' => 0.0,
+            ];
+        }
+
+        // Legacy commission-inclusive minimum without an explicit snapshot.
+        // Use the recorded net margin/discount, bounded by the configured
+        // commission. Do not modify historical rows while reading them.
+        $configuredMargin = (float) $this->pricingCalculator
+            ->provisional($serviceAmount, 0.0)['adminMargin'];
+        $netMargin = max(0.0, (float) $value('admin_margin_amount'));
+        $discount = max(0.0, (float) $value('discount_amount'));
+        $grossAdminMargin = round(min($configuredMargin, $netMargin + $discount), 2);
+        $included = round(min($grossAdminMargin, max(
+            0.0,
+            $serviceAmount + $travelFee + $grossAdminMargin - $grossTotal,
+        )), 2);
+
+        return [
+            'serviceAmount' => $serviceAmount,
+            'travelFee' => $travelFee,
+            'grossAdminMargin' => $grossAdminMargin,
+            'includedAdminMargin' => $included,
+        ];
+    }
+
+    /**
      * @return array{customerWorkerNetFactor: float, assignmentWorkerNetFactor: float, adminNetFactor: float}
      */
     private function previousDiscountFactors(CleaningBooking $booking, PlatformCoupon $coupon): array
@@ -224,20 +283,17 @@ final class CleaningCouponPricingService
             return $this->fullFactors();
         }
 
-        $grossServiceAmount = round(
-            max(0.0, (float) ($booking->getOriginal('base_price') ?? 0))
-            + max(0.0, (float) ($booking->getOriginal('addons_total') ?? 0)),
-            2,
-        );
-        $grossTravelFee = round(max(0.0, (float) ($booking->getOriginal('travel_fee') ?? 0)), 2);
-        $netAdminMargin = round(max(0.0, (float) ($booking->getOriginal('admin_margin_amount') ?? 0)), 2);
-        $grossAdminMargin = round(max(0.0, $grossTotal - $grossServiceAmount - $grossTravelFee), 2);
+        $parts = $this->snapshotPricing($booking, true);
         $currentAllocation = $this->allocation(
             $coupon,
-            $grossServiceAmount,
-            $grossTravelFee,
-            $grossAdminMargin,
+            $parts['serviceAmount'],
+            $parts['travelFee'],
+            $parts['grossAdminMargin'],
+            $parts['includedAdminMargin'],
         );
+        $grossServiceAmount = $parts['serviceAmount'];
+        $grossAdminMargin = $parts['grossAdminMargin'];
+        $netAdminMargin = round(max(0.0, (float) ($booking->getOriginal('admin_margin_amount') ?? 0)), 2);
 
         $assignmentFactor = (float) $currentAllocation['assignmentWorkerNetFactor'];
         $expectedDiscount = (float) $currentAllocation['discountAmount'];
