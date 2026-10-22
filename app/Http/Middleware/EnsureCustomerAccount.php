@@ -15,7 +15,9 @@ final class EnsureCustomerAccount
     {
         $user = $request->user();
 
-        if (! $user instanceof User || $user->module_type !== null) {
+        if (! $user instanceof User
+            || ! array_key_exists('module_type', $user->getAttributes())
+            || $user->module_type !== null) {
             return response()->json([
                 'message' => 'هذا الحساب غير مصرح له باستخدام تطبيق العميل.',
             ], Response::HTTP_FORBIDDEN);
