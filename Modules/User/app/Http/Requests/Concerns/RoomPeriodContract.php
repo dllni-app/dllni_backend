@@ -23,7 +23,7 @@ final class RoomPeriodContract
             'quoteSignature' => ['sometimes', 'string', 'size:64'],
             'roomPeriods' => ['sometimes', 'array', 'min:1', 'max:30'],
             'roomPeriods.*' => ['required', 'array:clientKey,visitSequence,roomType,size,cleaningMode,estimatedHours,scheduledDate,scheduledTime,numberOfWorkers,materials,specialServices,notes'],
-            'roomPeriods.*.clientKey' => ['required', 'string', 'max:64', 'regex:/^[a-z][a-z0-9_]*\.[1-9][0-9]{0,2}$/D'],
+            'roomPeriods.*.clientKey' => ['required', 'string', 'max:68', 'regex:/^[a-z][a-z0-9_-]{0,63}\.[1-9][0-9]{0,2}$/D'],
             'roomPeriods.*.visitSequence' => ['required', 'integer', 'min:1', 'max:30'],
             'roomPeriods.*.roomType' => ['required', Rule::in(CleaningRoomType::availableCodes())],
             'roomPeriods.*.size' => ['required', Rule::in(['small', 'medium', 'large'])],
@@ -81,8 +81,7 @@ final class RoomPeriodContract
 
         // Recurrence has visit-level schedule and billing rules not yet wired
         // to room periods; never silently materialize orphan visit sequences.
-        if (collect($periods)->contains(static fn ($p): bool =>
-            is_array($p) && (int) ($p['visitSequence'] ?? 0) !== 1
+        if (collect($periods)->contains(static fn ($p): bool => is_array($p) && (int) ($p['visitSequence'] ?? 0) !== 1
         )) {
             $validator->errors()->add('roomPeriods', 'Room periods for recurring visits are not available yet.');
         }
@@ -108,7 +107,7 @@ final class RoomPeriodContract
                 $validator->errors()->add("roomPeriods.$idx.clientKey", 'Duplicate room period in the same visit.');
             }
             $seen[$identity] = true;
-            if (preg_match('/^([a-z_]+)\.([1-9][0-9]{0,2})$/D', $key, $parts)) {
+            if (preg_match('/^([a-z][a-z0-9_-]{0,63})\.([1-9][0-9]{0,2})$/D', $key, $parts)) {
                 if (($period['roomType'] ?? '') !== $parts[1]) {
                     $validator->errors()->add("roomPeriods.$idx.roomType", 'Room type must match the stable client key.');
                 }
@@ -166,5 +165,4 @@ final class RoomPeriodContract
             }
         }
     }
-
 }

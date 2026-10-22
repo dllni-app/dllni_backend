@@ -100,7 +100,8 @@ final class CleaningRoomTypeResource extends Resource
                 ->description('سعر مستقل لكل ساعة عمل للغرفة في وضع الحوسة والتعزيل. مدة الغرفة المقترحة تحسب آلياً ويمكن تعديلها في الحجز.')
                 ->columns(2)
                 ->schema([
-                    TextInput::make('code')->label('رمز الغرفة في API')->required()->alphaDash()->maxLength(64)->unique(ignoreRecord: true)->disabledOn('edit'),
+                    TextInput::make('code')->label('رمز الغرفة في API')->required()->regex('/^[a-z][a-z0-9_-]{0,63}$/D')->maxLength(64)->unique(ignoreRecord: true)->disabledOn('edit')
+                        ->helperText('استخدم أحرفاً إنجليزية صغيرة وأرقاماً وشرطة أو شرطة سفلية، وابدأ بحرف إنجليزي.'),
                     TextInput::make('name')->label('الاسم الظاهر')->required()->maxLength(150),
                     TextInput::make('icon_key')->label('مفتاح الأيقونة')->maxLength(80)->helperText('اختر وصفاً مدعوماً مثل bedroom أو kitchen أو office أو garden أو laundry أو stairs. يظهر رمز معاينة في القائمة؛ الرموز غير المعروفة تظهر بأيقونة افتراضية في التطبيق.'),
                     TextInput::make('sort_order')->label('الترتيب')->integer()->minValue(0)->default(0),

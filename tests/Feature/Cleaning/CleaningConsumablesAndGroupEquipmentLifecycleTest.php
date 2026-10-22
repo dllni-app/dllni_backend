@@ -108,7 +108,9 @@ it('audits explicit physical stock adjustments without duplicating no-op ledger 
 
 it('assigns reusable group equipment and material kits to the active supervisor, with per-asset partial returns', function (): void {
     $admin = lifecycleAdmin();
-    $supervisor = User::factory()->create();
+    Role::findOrCreate('Cleaning Supervisor', 'web');
+    $supervisor = User::factory()->create(['is_active' => true]);
+    $supervisor->assignRole('Cleaning Supervisor');
     $booking = CleaningBooking::factory()->create(['booking_kind' => 'supervised_team']);
     CleaningSupervisorAssignment::query()->create([
         'cleaning_booking_id' => $booking->id, 'supervisor_user_id' => $supervisor->id,

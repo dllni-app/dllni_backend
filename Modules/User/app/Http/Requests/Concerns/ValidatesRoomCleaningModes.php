@@ -55,7 +55,7 @@ trait ValidatesRoomCleaningModes
         }
 
         foreach ($modes as $key => $mode) {
-            if (! is_string($key) || ! preg_match('/^([a-z][a-z0-9_]*)\.(small|medium|large)\.([1-9][0-9]{0,2})$/D', $key, $matches) || ! in_array($matches[1] ?? '', CleaningRoomType::availableCodes(), true)) {
+            if (! is_string($key) || ! preg_match('/^([a-z][a-z0-9_-]{0,63})\.(small|medium|large)\.([1-9][0-9]{0,2})$/D', $key, $matches) || ! in_array($matches[1] ?? '', CleaningRoomType::availableCodes(), true)) {
                 $validator->errors()->add('propertyDetails.room_cleaning_modes', 'يوجد معرّف غرفة غير صالح.');
 
                 continue;
@@ -84,7 +84,7 @@ trait ValidatesRoomCleaningModes
         $breakdown = $this->input('propertyDetails.room_size_breakdown');
         foreach ($hours as $key => $value) {
             if (! is_string($key)
-                || ! preg_match('/^([a-z][a-z0-9_]*)\.(small|medium|large)\.([1-9][0-9]{0,2})$/D', $key, $parts)
+                || ! preg_match('/^([a-z][a-z0-9_-]{0,63})\.(small|medium|large)\.([1-9][0-9]{0,2})$/D', $key, $parts)
                 || ! in_array($parts[1] ?? '', CleaningRoomType::availableCodes(), true)
                 || ! is_array($breakdown)
                 || (int) ($breakdown[$parts[1]][$parts[2]] ?? 0) < (int) ($parts[3] ?? 1)

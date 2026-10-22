@@ -13,7 +13,9 @@ final class CleaningTimePeriodContract
 {
     public static function rules(): array
     {
-        $key = ['required', 'string', 'max:64', 'regex:/^[a-zA-Z0-9_.-]+$/D'];
+        $opaqueKey = ['required', 'string', 'max:64', 'regex:/^[a-zA-Z0-9_.-]+$/D'];
+        $roomKey = ['required', 'string', 'max:68', 'regex:/^[a-zA-Z0-9_.-]+$/D'];
+        $scheduleKey = ['required', 'string', 'max:77', 'regex:/^[a-zA-Z0-9_.-]+$/D'];
 
         return [
             'contractVersion' => ['sometimes', 'integer', Rule::in([2])],
@@ -28,7 +30,7 @@ final class CleaningTimePeriodContract
             'workEnvironmentConfirmation.pledgeVersion' => ['sometimes', 'string', 'max:100'],
             'rooms' => ['required_if:contractVersion,2', 'array', 'min:1', 'max:30'],
             'rooms.*' => ['array:roomKey,roomType,size,cleaningMode,estimatedHours'],
-            'rooms.*.roomKey' => [...$key, 'distinct'],
+            'rooms.*.roomKey' => [...$roomKey, 'distinct'],
             'rooms.*.roomType' => ['required', Rule::in(CleaningRoomType::availableCodes())],
             'rooms.*.size' => ['required', Rule::in(['small', 'medium', 'large'])],
             'rooms.*.cleaningMode' => ['required', Rule::in(['regular', 'deep'])],
@@ -36,20 +38,20 @@ final class CleaningTimePeriodContract
             'recurrence' => ['sometimes', 'array:cadence'],
             'recurrence.cadence' => ['required_with:recurrence', Rule::in(['once', 'weekly', 'monthly', 'custom'])],            'visits' => ['required_if:contractVersion,2', 'array', 'min:1', 'max:30'],
             'visits.*' => ['array:visitKey,sequence,roomSchedules,timePeriods'],
-            'visits.*.visitKey' => [...$key, 'distinct'],
+            'visits.*.visitKey' => [...$opaqueKey, 'distinct'],
             'visits.*.sequence' => ['required', 'integer', 'min:1', 'max:30', 'distinct'],
             'visits.*.roomSchedules' => ['required', 'array', 'min:1', 'max:30'],
             'visits.*.roomSchedules.*' => ['array:scheduleKey,roomKey,scheduledDate,scheduledTime,numberOfWorkers'],
-            'visits.*.roomSchedules.*.scheduleKey' => $key,
-            'visits.*.roomSchedules.*.roomKey' => $key,
+            'visits.*.roomSchedules.*.scheduleKey' => $scheduleKey,
+            'visits.*.roomSchedules.*.roomKey' => $roomKey,
             'visits.*.roomSchedules.*.scheduledDate' => ['required', 'date_format:Y-m-d'],
             'visits.*.roomSchedules.*.scheduledTime' => ['required', 'date_format:H:i'],
             'visits.*.roomSchedules.*.numberOfWorkers' => ['required', 'integer', 'min:1', 'max:'.config('cleaning_booking_v2.max_workers', 20)],
             'visits.*.timePeriods' => ['sometimes', 'array', 'max:30'],
             'visits.*.timePeriods.*' => ['array:periodKey,roomScheduleKeys,materials,specialServices'],
-            'visits.*.timePeriods.*.periodKey' => $key,
+            'visits.*.timePeriods.*.periodKey' => $opaqueKey,
             'visits.*.timePeriods.*.roomScheduleKeys' => ['required', 'array', 'min:1', 'max:30'],
-            'visits.*.timePeriods.*.roomScheduleKeys.*' => $key,
+            'visits.*.timePeriods.*.roomScheduleKeys.*' => $scheduleKey,
             'visits.*.timePeriods.*.materials' => ['required', 'array:choice,materialTypeIds'],
             'visits.*.timePeriods.*.materials.choice' => ['required', Rule::in(['customer_all', 'customer_partial', 'platform_all'])],
             'visits.*.timePeriods.*.materials.materialTypeIds' => ['present', 'array', 'max:64'],
@@ -57,10 +59,10 @@ final class CleaningTimePeriodContract
             'visits.*.timePeriods.*.materials.materialTypeIds.*' => ['integer', Rule::exists('cleaning_material_types', 'id')->where('is_active', true)],
             'visits.*.timePeriods.*.specialServices' => ['present', 'array', 'max:30'],
             'visits.*.timePeriods.*.specialServices.*' => ['array:serviceKey,specialServiceId,targetRoomKeys,quantity,dirtinessLevel'],
-            'visits.*.timePeriods.*.specialServices.*.serviceKey' => $key,
+            'visits.*.timePeriods.*.specialServices.*.serviceKey' => $opaqueKey,
             'visits.*.timePeriods.*.specialServices.*.specialServiceId' => ['required', 'integer', Rule::exists('cleaning_special_services', 'id')->where('is_active', true)],
             'visits.*.timePeriods.*.specialServices.*.targetRoomKeys' => ['required', 'array', 'min:1', 'max:30'],
-            'visits.*.timePeriods.*.specialServices.*.targetRoomKeys.*' => $key,
+            'visits.*.timePeriods.*.specialServices.*.targetRoomKeys.*' => $roomKey,
             'visits.*.timePeriods.*.specialServices.*.quantity' => ['required', 'numeric', 'gt:0', 'max:10000'],
             'visits.*.timePeriods.*.specialServices.*.dirtinessLevel' => ['present', 'nullable', Rule::in(['light', 'heavy'])],
         ];

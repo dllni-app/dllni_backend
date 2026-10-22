@@ -3,8 +3,14 @@
 declare(strict_types=1);
 
 use App\Models\CleaningFinancialSetting;
+use Modules\Cleaning\Models\CleaningRoomType;
 use Modules\Cleaning\Support\CleaningFinancialDefaults;
 use Modules\User\Services\UserCleaningOrderEstimationService;
+
+beforeEach(function (): void {
+    // These tests assert the documented legacy fallback catalog, not seeded database overrides.
+    CleaningRoomType::query()->delete();
+});
 
 it('keeps the booking at the configured minimum until room pricing exceeds it', function (): void {
     $pricingUnits = CleaningFinancialDefaults::roomPricingUnits();
@@ -88,7 +94,6 @@ it('uses the deep-cleaning multiplier configured for each room type and size', f
         ->and((float) $lines['kitchen']['totalPrice'])->toBe(150.0);
 });
 
-
 it('treats the configured minimum as the final customer service price including commission', function (): void {
     CleaningFinancialSetting::query()->updateOrCreate(['id' => 1], [
         'default_commission_rate' => 25,
@@ -128,13 +133,13 @@ it('applies the minimum to the whole booking after special service charges', fun
         'cleaning_room_time_minutes' => CleaningFinancialDefaults::roomTimeMinutes(),
     ]);
 
-    $addon = \Modules\Cleaning\Models\CleaningSpecialService::query()->create([
+    $addon = Modules\Cleaning\Models\CleaningSpecialService::query()->create([
         'name' => 'QA booking minimum service',
         'pricing_unit' => 'piece',
         'base_unit_price' => 85,
         'is_active' => true,
     ]);
-    \Modules\Cleaning\Models\CleaningSpecialServiceDirtinessRule::query()->create([
+    Modules\Cleaning\Models\CleaningSpecialServiceDirtinessRule::query()->create([
         'cleaning_special_service_id' => $addon->id,
         'dirtiness_level' => 'light',
         'price_multiplier' => 1,
