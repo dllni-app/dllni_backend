@@ -67,7 +67,6 @@ final class CleaningBookingResource extends JsonResource
         $canViewCustomerPhone = $isCustomerOwner
             || ($myAssignmentModel instanceof CleaningBookingWorkerAssignment
                 && in_array($myAssignmentModel->status, CleaningBookingWorkerAssignmentStatus::acceptedStatuses(), true))
-            || $hasCurrentWorkerSessionAcceptance
             || ((int) ($this->worker_id ?? 0) === (int) $currentWorkerId
                 && (int) $currentWorkerId > 0
                 && $globalOrderStatus !== CleaningBookingStatus::Pending->value);
