@@ -5,15 +5,20 @@ declare(strict_types=1);
 use App\Models\CleaningFinancialSetting;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
+use Modules\Cleaning\Models\CleaningRoomType;
 use Modules\Cleaning\Services\CleaningV2VisitApprovalProofService;
 use Modules\Cleaning\Support\CleaningFinancialDefaults;
 
-function approvalProofBooking(): array
+function approvalProofBooking(bool $workerOwnedSibling = false): array
 {
     $date = now('Asia/Damascus')->addDays(4);
     $rooms = [
@@ -26,8 +31,8 @@ function approvalProofBooking(): array
             'visitKey' => 'proof.visit.'.$sequence,
             'sequence' => $sequence,
             'roomSchedules' => [
-                ['scheduleKey' => 'proof.'.$sequence.'.bedroom', 'roomKey' => 'proof.bedroom', 'scheduledDate' => $date->copy()->addDays($sequence - 1)->toDateString(), 'scheduledTime' => '09:00', 'numberOfWorkers' => 2],
-                ['scheduleKey' => 'proof.'.$sequence.'.bathroom', 'roomKey' => 'proof.bathroom', 'scheduledDate' => $date->copy()->addDays($sequence - 1)->toDateString(), 'scheduledTime' => '09:00', 'numberOfWorkers' => 2],
+                ['scheduleKey' => 'proof.'.$sequence.'.bedroom', 'roomKey' => 'proof.bedroom', 'scheduledDate' => $date->copy()->addDays($sequence - 1)->toDateString(), 'scheduledTime' => '09:00', 'numberOfWorkers' => $workerOwnedSibling && $sequence === 2 ? 1 : 2],
+                ['scheduleKey' => 'proof.'.$sequence.'.bathroom', 'roomKey' => 'proof.bathroom', 'scheduledDate' => $date->copy()->addDays($sequence - 1)->toDateString(), 'scheduledTime' => $workerOwnedSibling && $sequence === 2 ? '13:00' : '09:00', 'numberOfWorkers' => $workerOwnedSibling && $sequence === 2 ? 1 : 2],
             ],
             'timePeriods' => [],
         ];
@@ -48,9 +53,17 @@ function approvalProofBooking(): array
     ];
 }
 
-function createApprovalProofBooking(bool $withPeriods = false): array
+function createApprovalProofBooking(bool $withPeriods = false, bool $workerOwnedSibling = false, bool $nonHourlyDuration = false): array
 {
-    $input = approvalProofBooking();
+    if ($nonHourlyDuration) {
+        $minutes = CleaningFinancialDefaults::roomTimeMinutes();
+        $minutes['bedroom']['medium']['regular'] = 125;
+        CleaningFinancialSetting::query()->whereKey(1)->update(['cleaning_room_time_minutes' => $minutes]);
+        CleaningRoomType::query()->where('code', 'bedroom')->update([
+            'suggested_minutes_by_size' => json_encode($minutes['bedroom'], JSON_THROW_ON_ERROR),
+        ]);
+    }
+    $input = approvalProofBooking($workerOwnedSibling);
     $quote = test()->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)->assertOk()->json();
     if ($withPeriods) {
         foreach ($input['visits'] as $index => &$visit) {
@@ -70,22 +83,17 @@ function createApprovalProofBooking(bool $withPeriods = false): array
     return [$booking, $session];
 }
 
-function approvalProofRelevantCounts(): array
+function approvalProofDatabaseRows(): array
 {
-    $tables = [
-        'cleaning_booking_quotes', 'cleaning_bookings', 'cleaning_booking_sessions', 'cleaning_booking_rooms',
-        'cleaning_room_schedules', 'cleaning_time_periods', 'cleaning_booking_session_tasks',
-        'cleaning_booking_session_worker_assignments', 'cleaning_booking_session_supervisor_assignments',
-        'cleaning_booking_session_supervisor_attendances', 'cleaning_booking_session_verifications',
-        'cleaning_booking_session_supervisor_work_segments', 'cleaning_booking_session_payments',
-        'cleaning_booking_session_deposits', 'cleaning_booking_material_kits', 'cleaning_booking_material_issues',
-    ];
-
     $counts = [];
-    foreach ($tables as $table) {
-        if (Schema::hasTable($table)) {
-            $counts[$table] = DB::table($table)->count();
+    foreach (DB::select("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'") as $tableRow) {
+        $table = (string) $tableRow->name;
+        if (! Schema::hasTable($table)) {
+            continue;
         }
+        $rows = DB::table($table)->get()->map(static fn (object $row): array => (array) $row)->all();
+        usort($rows, static fn (array $left, array $right): int => json_encode($left) <=> json_encode($right));
+        $counts[$table] = $rows;
     }
 
     return $counts;
@@ -105,7 +113,7 @@ beforeEach(function (): void {
         'cleaning_room_time_minutes' => $minutes,
     ]);
     foreach (['bedroom', 'bathroom'] as $roomType) {
-        \Modules\Cleaning\Models\CleaningRoomType::query()->where('code', $roomType)->update([
+        CleaningRoomType::query()->where('code', $roomType)->update([
             'suggested_minutes_by_size' => json_encode($minutes[$roomType], JSON_THROW_ON_ERROR),
         ]);
     }
@@ -116,11 +124,15 @@ it('verifies accepted multi-visit signed proof stably across UTC and Damascus wi
     [$booking, $session] = createApprovalProofBooking();
     $quoteExpiry = DB::table('cleaning_booking_quotes')->where('cleaning_booking_id', $booking->id)->value('expires_at');
     $this->travel(2)->hours();
-    $before = approvalProofRelevantCounts();
+    $before = approvalProofDatabaseRows();
     $service = app(CleaningV2VisitApprovalProofService::class);
 
     $originalTimezone = date_default_timezone_get();
     $originalAppTimezone = config('app.timezone');
+    Event::fake();
+    Mail::fake();
+    Notification::fake();
+    Queue::fake();
     try {
         date_default_timezone_set('UTC');
         config(['app.timezone' => 'UTC']);
@@ -146,11 +158,19 @@ it('verifies accepted multi-visit signed proof stably across UTC and Damascus wi
         ->and(array_column($utc['taskCandidates'], 'taskKey'))->toBe(['schedule:proof.1.bathroom', 'schedule:proof.1.bedroom'])
         ->and(array_column($utc['taskCandidates'], 'startsAt'))->each->toMatch('/Z$/')
         ->and($quoteExpiry)->toBeLessThan(now()->toDateTimeString())
-        ->and(approvalProofRelevantCounts())->toBe($before);
+        ->and(approvalProofDatabaseRows())->toBe($before);
+    $dispatchedEventNames = array_keys(Event::dispatchedEvents());
+    expect(array_values(array_filter($dispatchedEventNames, static fn (string $event): bool => ! str_starts_with($event, 'eloquent.retrieved:'))))->toBe([]);
+    Mail::assertNothingOutgoing();
+    Notification::assertNothingSent();
+    Queue::assertNothingPushed();
 });
 
 it('fails closed without proof output when retained quote or required financial evidence is tampered', function (string $case): void {
     [$booking, $session] = createApprovalProofBooking();
+    $originalAppKey = config('app.key');
+    $initial = app(CleaningV2VisitApprovalProofService::class)->verify($booking->fresh(), $session->fresh());
+    expect($initial['valid'])->toBeTrue();
     $quoteId = DB::table('cleaning_booking_quotes')->where('cleaning_booking_id', $booking->id)->value('id');
     if ($case === 'missing_signature') {
         DB::table('cleaning_booking_quotes')->where('id', $quoteId)->update(['signature' => str_repeat('0', 64)]);
@@ -160,6 +180,14 @@ it('fails closed without proof output when retained quote or required financial 
         DB::table('cleaning_booking_quotes')->where('id', $quoteId)->update(['expires_at' => '2026-02-31 25:61:00']);
     } elseif ($case === 'malformed_snapshot') {
         DB::table('cleaning_booking_quotes')->where('id', $quoteId)->update(['snapshot' => '{broken']);
+    } elseif ($case === 'missing_quote') {
+        DB::table('cleaning_booking_quotes')->where('id', $quoteId)->delete();
+    } elseif ($case === 'wrong_quote_customer') {
+        DB::table('cleaning_booking_quotes')->where('id', $quoteId)->update(['customer_id' => User::factory()->create()->id]);
+    } elseif ($case === 'missing_key') {
+        config(['app.key' => null]);
+    } elseif ($case === 'rotated_key') {
+        config(['app.key' => 'base64:'.base64_encode(str_repeat('r', 32))]);
     } elseif ($case === 'missing_included_admin_margin') {
         $snapshot = $session->pricing_snapshot;
         unset($snapshot['includedAdminMargin']);
@@ -173,6 +201,7 @@ it('fails closed without proof output when retained quote or required financial 
     }
 
     $result = app(CleaningV2VisitApprovalProofService::class)->verify($booking->fresh(), $session->fresh());
+    config(['app.key' => $originalAppKey]);
     expect($result['valid'])->toBeFalse()
         ->and($result['reasonCodes'])->not->toBe([])
         ->and($result['evidenceDigest'])->toBeNull()
@@ -183,9 +212,176 @@ it('fails closed without proof output when retained quote or required financial 
     'changed request hash' => 'changed_request_hash',
     'invalid raw expiry' => 'malformed_expiry',
     'malformed signed snapshot' => 'malformed_snapshot',
+    'missing quote linkage' => 'missing_quote',
+    'wrong quote customer' => 'wrong_quote_customer',
+    'missing signing key' => 'missing_key',
+    'rotated signing key' => 'rotated_key',
     'missing included admin margin key' => 'missing_included_admin_margin',
     'missing cash rounding adjustment key' => 'missing_cash_rounding_adjustment',
     'tampered source duration' => 'tampered_source_duration',
+]);
+
+it('keeps a visit verifiable when another signed sibling is completed or worker-owned', function (string $case): void {
+    [$booking, $session] = createApprovalProofBooking(workerOwnedSibling: $case === 'worker_owned');
+    $sibling = $booking->sessions()->where('sequence', 2)->firstOrFail();
+    $service = app(CleaningV2VisitApprovalProofService::class);
+    expect($service->verify($booking->fresh(), $session->fresh())['valid'])->toBeTrue();
+
+    if ($case === 'completed') {
+        $sibling->forceFill(['status' => 'completed'])->save();
+        $result = $service->verify($booking->fresh(), $session->fresh());
+    } else {
+        expect($sibling->supervision_mode)->toBe(CleaningBookingSession::SUPERVISION_MODE_WORKER)
+            ->and($service->verify($booking->fresh(), $session->fresh())['valid'])->toBeTrue();
+    }
+
+    if ($case === 'completed') {
+        expect($result['valid'])->toBeTrue();
+    }
+})->with([
+    'completed sibling' => 'completed',
+    'worker-owned sibling' => 'worker_owned',
+]);
+
+it('continues to reject a terminal selected visit', function (): void {
+    [$booking, $session] = createApprovalProofBooking();
+    $service = app(CleaningV2VisitApprovalProofService::class);
+    expect($service->verify($booking->fresh(), $session->fresh())['valid'])->toBeTrue();
+
+    $session->forceFill(['status' => 'completed'])->save();
+    $result = $service->verify($booking->fresh(), $session->fresh());
+
+    expect($result['valid'])->toBeFalse()
+        ->and($result['evidenceDigest'])->toBeNull()
+        ->and($result['taskCandidates'])->toBe([]);
+});
+
+it('rejects a sibling supervisor mode that conflicts with its signed worker requirement', function (): void {
+    [$booking, $session] = createApprovalProofBooking();
+    $sibling = $booking->sessions()->where('sequence', 2)->firstOrFail();
+    $service = app(CleaningV2VisitApprovalProofService::class);
+    expect($service->verify($booking->fresh(), $session->fresh())['valid'])->toBeTrue();
+
+    $sibling->forceFill(['supervision_mode' => CleaningBookingSession::SUPERVISION_MODE_WORKER])->save();
+    $result = $service->verify($booking->fresh(), $session->fresh());
+    expect($result['valid'])->toBeFalse()
+        ->and($result['evidenceDigest'])->toBeNull()
+        ->and($result['taskCandidates'])->toBe([]);
+});
+
+it('binds signed non-hour-aligned duration to every persisted visit', function (string $case): void {
+    [$booking, $session] = createApprovalProofBooking(nonHourlyDuration: true);
+    $sibling = $booking->sessions()->where('sequence', 2)->firstOrFail();
+    $service = app(CleaningV2VisitApprovalProofService::class);
+    $signed = json_decode(DB::table('cleaning_booking_quotes')->where('cleaning_booking_id', $booking->id)->value('snapshot'), true, 512, JSON_THROW_ON_ERROR);
+    $durationMinutes = $signed['visits'][0]['estimatedDurationMinutes'];
+    $expectedHours = round($durationMinutes / 60, 2);
+    $hasSignedZero = collect($signed['visits'])->contains(static fn (array $visit): bool => is_numeric($visit['financial']['cashRoundingAdjustment'] ?? null)
+        && (float) $visit['financial']['cashRoundingAdjustment'] === 0.0);
+    expect($service->verify($booking->fresh(), $session->fresh())['valid'])->toBeTrue()
+        ->and($hasSignedZero)->toBeTrue()
+        ->and((float) $session->pricing_snapshot['cashRoundingAdjustment'])->toBe(0.0)
+        ->and($durationMinutes % 60)->not->toBe(0)
+        ->and((float) $session->duration_hours)->toBe($expectedHours);
+
+    $target = $case === 'selected' ? $session : $sibling;
+    $target->forceFill(['duration_hours' => round($expectedHours + 0.01, 2)])->save();
+    $result = $service->verify($booking->fresh(), $session->fresh());
+
+    expect($result['valid'])->toBeFalse()
+        ->and($result['evidenceDigest'])->toBeNull()
+        ->and($result['taskCandidates'])->toBe([]);
+})->with([
+    'selected duration tamper' => 'selected',
+    'sibling duration tamper' => 'sibling',
+]);
+
+it('binds each sibling financial snapshot margin and rounding evidence', function (string $case): void {
+    [$booking, $session] = createApprovalProofBooking();
+    $sibling = $booking->sessions()->where('sequence', 2)->firstOrFail();
+    $service = app(CleaningV2VisitApprovalProofService::class);
+    expect($service->verify($booking->fresh(), $session->fresh())['valid'])->toBeTrue();
+    $snapshot = $sibling->pricing_snapshot;
+    $key = str_contains($case, 'margin') ? 'includedAdminMargin' : 'cashRoundingAdjustment';
+    if (str_starts_with($case, 'missing')) {
+        unset($snapshot[$key]);
+    } else {
+        $snapshot[$key] = (float) $snapshot[$key] + 1;
+    }
+    $sibling->forceFill(['pricing_snapshot' => $snapshot])->save();
+
+    $result = $service->verify($booking->fresh(), $session->fresh());
+    expect($result['valid'])->toBeFalse()
+        ->and($result['evidenceDigest'])->toBeNull()
+        ->and($result['taskCandidates'])->toBe([]);
+})->with([
+    'missing sibling margin' => 'missing_margin',
+    'altered sibling margin' => 'altered_margin',
+    'missing sibling rounding' => 'missing_rounding',
+    'altered sibling rounding' => 'altered_rounding',
+]);
+
+it('continues to verify the original approval after live pricing inputs change', function (): void {
+    [$booking, $session] = createApprovalProofBooking();
+    $service = app(CleaningV2VisitApprovalProofService::class);
+    expect($service->verify($booking->fresh(), $session->fresh())['valid'])->toBeTrue();
+
+    $setting = CleaningFinancialSetting::query()->findOrFail(1);
+    $minutes = $setting->cleaning_room_time_minutes;
+    $minutes['bedroom']['medium']['regular'] = 300;
+    CleaningFinancialSetting::query()->whereKey(1)->update([
+        'cleaning_base_unit_price' => 900,
+        'cleaning_minimum_order_price' => 800,
+        'cleaning_room_time_minutes' => $minutes,
+    ]);
+    CleaningRoomType::query()->where('code', 'bedroom')->update([
+        'suggested_minutes_by_size' => json_encode($minutes['bedroom'], JSON_THROW_ON_ERROR),
+    ]);
+
+    $result = $service->verify($booking->fresh(), $session->fresh());
+    expect($result['valid'])->toBeTrue()
+        ->and($result['evidenceDigest'])->toMatch('/^[a-f0-9]{64}$/');
+});
+
+it('rejects unsupported approval families after a valid baseline proof', function (string $case): void {
+    [$booking, $session] = createApprovalProofBooking();
+    $service = app(CleaningV2VisitApprovalProofService::class);
+    expect($service->verify($booking->fresh(), $session->fresh())['valid'])->toBeTrue();
+
+    if ($case === 'legacy') {
+        $booking->forceFill(['booking_kind' => 'supervised_team'])->save();
+    } elseif ($case === 'open_time') {
+        $session->forceFill(['session_type' => CleaningBookingSession::TYPE_OPEN_TIME])->save();
+    } elseif ($case === 'room_period') {
+        $room = DB::table('cleaning_booking_rooms')->where('cleaning_booking_id', $booking->id)->first();
+        DB::table('cleaning_booking_room_periods')->insert([
+            'cleaning_booking_id' => $booking->id,
+            'cleaning_booking_session_id' => $session->id,
+            'cleaning_booking_room_id' => $room->id,
+            'client_key' => 'unsupported.room-period',
+            'visit_sequence' => 1,
+            'room_type' => $room->room_type,
+            'room_size' => $room->room_size,
+            'cleaning_mode' => $room->cleaning_mode,
+            'scheduled_date' => now()->addDay()->toDateString(),
+            'scheduled_time' => '09:00:00',
+            'required_workers' => 2,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    } elseif ($case === 'provisional') {
+        $session->forceFill(['is_pricing_final' => false])->save();
+    }
+
+    $result = $service->verify($booking->fresh(), $session->fresh());
+    expect($result['valid'])->toBeFalse()
+        ->and($result['evidenceDigest'])->toBeNull()
+        ->and($result['taskCandidates'])->toBe([]);
+})->with([
+    'legacy booking' => 'legacy',
+    'open-time visit' => 'open_time',
+    'room-period source' => 'room_period',
+    'provisional visit' => 'provisional',
 ]);
 
 it('rejects duplicate quote links and mismatched visit binding', function (string $case): void {
@@ -220,6 +416,8 @@ it('rejects duplicate quote links and mismatched visit binding', function (strin
 
 it('rejects mutation of a sibling visit source even when the selected visit is untouched', function (string $case): void {
     [$booking, $session] = createApprovalProofBooking();
+    $initial = app(CleaningV2VisitApprovalProofService::class)->verify($booking->fresh(), $session->fresh());
+    expect($initial['valid'])->toBeTrue();
     $sibling = $booking->sessions()->where('sequence', 2)->firstOrFail();
     $source = DB::table('cleaning_room_schedules')
         ->where('cleaning_booking_session_id', $sibling->id)->orderBy('id')->first();
@@ -231,6 +429,29 @@ it('rejects mutation of a sibling visit source even when the selected visit is u
         DB::table('cleaning_room_schedules')->where('id', $source->id)->update(['visit_key' => 'forged.visit']);
     } elseif ($case === 'deleted_source') {
         DB::table('cleaning_room_schedules')->where('id', $source->id)->delete();
+    } elseif ($case === 'malformed_start') {
+        DB::table('cleaning_room_schedules')->where('id', $source->id)->update(['starts_at' => 'not-a-utc-time']);
+    } elseif ($case === 'extra_source') {
+        $room = DB::table('cleaning_booking_rooms')->where('id', $source->cleaning_booking_room_id)->first();
+        $roomValues = (array) $room;
+        unset($roomValues['id']);
+        $roomValues['room_key'] .= '.extra';
+        $roomValues['client_key'] = $roomValues['room_key'];
+        $roomValues['created_at'] = now();
+        $roomValues['updated_at'] = now();
+        $extraRoomId = DB::table('cleaning_booking_rooms')->insertGetId($roomValues);
+        $sourceValues = (array) $source;
+        unset($sourceValues['id']);
+        $sourceValues['cleaning_booking_room_id'] = $extraRoomId;
+        $sourceValues['schedule_key'] .= '.extra';
+        $sourceValues['created_at'] = now();
+        $sourceValues['updated_at'] = now();
+        DB::table('cleaning_room_schedules')->insert($sourceValues);
+    } elseif ($case === 'cross_booking_source') {
+        $other = CleaningBooking::factory()->create();
+        DB::table('cleaning_room_schedules')->where('id', $source->id)->update(['cleaning_booking_id' => $other->id]);
+    } elseif ($case === 'duplicate_visit_key') {
+        DB::table('cleaning_room_schedules')->where('id', $source->id)->update(['visit_key' => DB::table('cleaning_room_schedules')->where('cleaning_booking_session_id', $session->id)->value('visit_key')]);
     } elseif ($case === 'tampered_sibling_financial') {
         $sibling->forceFill(['total_price' => (float) $sibling->total_price + 1])->save();
     }
@@ -244,6 +465,10 @@ it('rejects mutation of a sibling visit source even when the selected visit is u
     'sibling workers' => 'altered_worker_requirement',
     'sibling visit link' => 'altered_visit_key',
     'missing sibling row' => 'deleted_source',
+    'malformed UTC source' => 'malformed_start',
+    'extra source' => 'extra_source',
+    'cross-booking source' => 'cross_booking_source',
+    'duplicate visit identity' => 'duplicate_visit_key',
     'sibling financials' => 'tampered_sibling_financial',
 ]);
 

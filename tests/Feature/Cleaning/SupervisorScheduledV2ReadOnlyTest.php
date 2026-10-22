@@ -415,11 +415,15 @@ it('assigns eligible V2 visibility through ops with overlap checks across visits
     $filamentAdmin = User::factory()->create(['is_active' => true]);
     $filamentAdmin->assignRole('admin');
     $supervisor = scheduledSupervisor();
-    $v2 = scheduledAssignableV2Booking();
-    $conflicting = scheduledAssignableV2Booking('2026-10-27');
+    // Keep both the first visit and its week-later overlap in the future.
+    // Fixed October 2026 dates expire and leave only one eligible visit.
+    $firstVisitDate = now()->addDays(2)->toDateString();
+    $overlappingVisitDate = now()->addDays(9)->toDateString();
+    $v2 = scheduledAssignableV2Booking($firstVisitDate);
+    $conflicting = scheduledAssignableV2Booking($overlappingVisitDate);
     $legacy = CleaningBooking::factory()->create([
         'booking_kind' => 'supervised_team', 'number_of_workers' => 2,
-        'scheduled_date' => '2026-10-27', 'scheduled_time' => '09:30',
+        'scheduled_date' => $overlappingVisitDate, 'scheduled_time' => '09:30',
         'estimated_hours' => 4,
     ]);
     $standard = CleaningBooking::factory()->create(['booking_kind' => 'standard', 'number_of_workers' => 2]);

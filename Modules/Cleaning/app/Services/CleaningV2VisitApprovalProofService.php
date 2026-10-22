@@ -214,8 +214,9 @@ final class CleaningV2VisitApprovalProofService
                 || ($sessionSnapshot['visitKey'] ?? null) !== $signedVisit['visitKey']
                 || ! $persistedSession->is_pricing_final
                 || ! $persistedSession->isSupervisionInitialized()
-                || (string) $persistedSession->supervision_mode !== CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR
-                || $persistedSession->isTerminal()
+                || (string) $persistedSession->supervision_mode !== ((int) ($signedVisit['requiredSimultaneousWorkers'] ?? 0) > 1
+                    ? CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR
+                    : CleaningBookingSession::SUPERVISION_MODE_WORKER)
                 || ! $this->signedVisitSourcesMatch($booking, $persistedSession, $signedVisit, $snapshot['rooms'])
                 || ! $this->signedVisitPeriodsMatch($booking, $persistedSession, $signedVisit)) {
                 return null;
@@ -390,11 +391,25 @@ final class CleaningV2VisitApprovalProofService
     private function signedVisitSourcesMatch(CleaningBooking $booking, CleaningBookingSession $session, array $visit, array $signedRooms): bool
     {
         $schedules = $visit['roomSchedules'] ?? null;
+        $financial = $visit['financial'] ?? null;
+        $sessionSnapshot = is_array($session->pricing_snapshot) ? $session->pricing_snapshot : [];
+        $durationMinutes = $visit['estimatedDurationMinutes'] ?? null;
+        $expectedDurationHours = $this->isInteger($durationMinutes) && (int) $durationMinutes > 0
+            ? round((int) $durationMinutes / 60, 2)
+            : null;
         if (! is_array($schedules) || $schedules === []
             || ! $this->sessionAnchorMatches($session, $schedules)
             || (int) ($visit['requiredSimultaneousWorkers'] ?? 0) !== $session->requiredWorkerCount()
-            || ! is_array($visit['financial'] ?? null)
-            || ! $this->sessionFinancialsMatch($session, $visit['financial'])) {
+            || ! is_array($financial)
+            || ! array_key_exists('includedAdminMargin', $financial)
+            || ! array_key_exists('cashRoundingAdjustment', $financial)
+            || ! array_key_exists('includedAdminMargin', $sessionSnapshot)
+            || ! array_key_exists('cashRoundingAdjustment', $sessionSnapshot)
+            || $expectedDurationHours === null
+            || abs((float) $session->duration_hours - $expectedDurationHours) > 0.0005
+            || ! $this->moneyEquals($sessionSnapshot['includedAdminMargin'], $financial['includedAdminMargin'])
+            || ! $this->moneyEquals($sessionSnapshot['cashRoundingAdjustment'], $financial['cashRoundingAdjustment'])
+            || ! $this->sessionFinancialsMatch($session, $financial)) {
             return false;
         }
 
