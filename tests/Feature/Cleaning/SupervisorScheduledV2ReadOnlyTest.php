@@ -426,7 +426,11 @@ it('assigns eligible V2 visibility through ops with overlap checks across visits
         'scheduled_date' => $overlappingVisitDate, 'scheduled_time' => '09:30',
         'estimated_hours' => 4,
     ]);
-    $standard = CleaningBooking::factory()->create(['booking_kind' => 'standard', 'number_of_workers' => 2]);
+    $standard = CleaningBooking::factory()->create([
+        'booking_kind' => 'standard',
+        'number_of_workers' => 2,
+        'status' => CleaningBookingStatus::WorkerAssigned,
+    ]);
     $v2Url = fn (CleaningBooking $booking): string => "/api/v1/admin/cleaning/supervisor-v2-bookings/{$booking->id}/supervisor";
     Sanctum::actingAs($supervisor);
     $this->postJson($v2Url($v2), ['supervisorUserId' => $supervisor->id])->assertForbidden();
