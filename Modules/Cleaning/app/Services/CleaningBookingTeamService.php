@@ -222,9 +222,9 @@ final class CleaningBookingTeamService
         });
     }
 
-    public function rejectWorker(CleaningBooking $booking, Worker $worker, ?string $reason = null): CleaningBooking
+    public function rejectWorker(CleaningBooking $booking, Worker $worker, ?string $reason = null, bool $applyWorkerPenalty = true): CleaningBooking
     {
-        return DB::transaction(function () use ($booking, $worker, $reason): CleaningBooking {
+        return DB::transaction(function () use ($booking, $worker, $reason, $applyWorkerPenalty): CleaningBooking {
             $booking = $this->lockBooking($booking->id);
 
             if (! in_array($booking->status, [CleaningBookingStatus::Pending, CleaningBookingStatus::WorkerAssigned], true)) {
@@ -277,7 +277,7 @@ final class CleaningBookingTeamService
 
             $booking = $this->recalculateBookingTeam($booking, finalizeBooking: false);
 
-            if ($hadAccepted) {
+            if ($hadAccepted && $applyWorkerPenalty) {
                 $this->workerTrustService->applyRejectAfterAcceptPenalty($worker, $booking);
             }
 
@@ -298,6 +298,52 @@ final class CleaningBookingTeamService
     /**
      * @param  array<int, array{roomId:int, workerId:?int}>  $assignments
      */
+    /**
+     * Replace a team member atomically without a voluntary cancellation penalty.
+     */
+    public function replaceWorkerByAdmin(
+        CleaningBooking $booking,
+        Worker $outgoing,
+        Worker $incoming,
+        ?string $reason = null,
+    ): CleaningBooking {
+        return DB::transaction(function () use ($booking, $outgoing, $incoming, $reason): CleaningBooking {
+            $booking = $this->lockBooking($booking->id);
+            if (! in_array($booking->status, [
+                CleaningBookingStatus::Pending,
+                CleaningBookingStatus::WorkerAssigned,
+            ], true) || $booking->started_travel_at !== null || $booking->work_started_at !== null) {
+                throw new InvalidArgumentException('لا يمكن استبدال عامل بعد بدء رحلة الفريق أو تنفيذ الطلب.');
+            }
+            if ((int) $outgoing->id === (int) $incoming->id) {
+                throw new InvalidArgumentException('يجب اختيار عامل بديل مختلف عن العامل الحالي.');
+            }
+            $outgoingAssignment = $this->acceptedAssignmentForWorker($booking->id, $outgoing->id);
+            if ($outgoingAssignment === null) {
+                throw new InvalidArgumentException('العامل المطلوب استبداله لم يعد ضمن الفريق.');
+            }
+            if ($outgoingAssignment->started_travel_at !== null || $outgoingAssignment->work_started_at !== null) {
+                throw new InvalidArgumentException('لا يمكن استبدال عامل بعد بدء رحلته أو عمله.');
+            }
+
+            $booking = $this->rejectWorker($booking, $outgoing, $reason, false);
+
+            // Keep customer-selected worker scope consistent with the replacement.
+            $newWorkerIds = array_values(array_unique(array_map(
+                static fn (int $workerId): int => $workerId === (int) $outgoing->id
+                    ? (int) $incoming->id : $workerId,
+                $booking->specificWorkerIds(),
+            )));
+            $booking->forceFill([
+                'specific_worker_ids' => $newWorkerIds,
+                'preferred_worker_id' => (int) ($booking->preferred_worker_id ?? 0) === (int) $outgoing->id
+                    ? (int) $incoming->id : $booking->preferred_worker_id,
+            ])->save();
+
+            return $this->acceptWorker($booking->fresh(), $incoming);
+        });
+    }
+
     public function assignRoomsFromCustomer(CleaningBooking $booking, array $assignments): CleaningBooking
     {
         return DB::transaction(function () use ($booking, $assignments): CleaningBooking {

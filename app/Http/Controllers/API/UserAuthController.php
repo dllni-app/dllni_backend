@@ -57,6 +57,11 @@ final class UserAuthController
         }
 
         $user->loadMissing('worker');
+        // Only one authenticated cleaning-worker device is allowed at a time.
+        // Revoke legacy token names too, otherwise an older worker login survives.
+        if ($requestedModule === UserModuleType::CleaningWorker->value) {
+            $user->tokens()->delete();
+        }
         $token = $user->createToken('user-api')->plainTextToken;
 
         $payload = [

@@ -230,7 +230,7 @@ final class CleaningBookingService
 
         $this->dispatchTrackingUpdate($updated);
 
-        if ($shouldNotifyCustomer) {
+        if ($shouldNotifyCustomer && $updated->status !== CleaningBookingStatus::Cancelled) {
             $this->lifecycleNotifications->notifyCustomer(
                 booking: $updated,
                 canonicalType: $isPreferredWorkerRejection
@@ -267,8 +267,12 @@ final class CleaningBookingService
     {
         $fromStatus = (string) $booking->status->value;
 
-        $updated = DB::transaction(function () use ($booking): CleaningBooking {
+        $newlyStarted = false;
+        $startedAt = null;
+        $workerId = null;
+        $updated = DB::transaction(function () use ($booking, &$newlyStarted, &$startedAt, &$workerId): CleaningBooking {
             $worker = $this->currentWorker();
+            $workerId = (int) $worker->id;
             $lockedBooking = $this->lockBooking($booking);
 
             if (! in_array($lockedBooking->status, [
@@ -276,18 +280,20 @@ final class CleaningBookingService
                 CleaningBookingStatus::AwaitingStartVerification,
                 CleaningBookingStatus::AwaitingWorkerStartConfirmation,
             ], true)) {
-                throw new InvalidArgumentException('Booking cannot start travel in current status.');
+                throw new InvalidArgumentException('لا يمكن بدء الرحلة في حالة الطلب الحالية. حدّث بيانات الطلب وحاول مجددًا.');
             }
 
             $assignment = $this->activeAssignmentForWorker($lockedBooking->id, $worker->id, true);
 
             if ($assignment instanceof CleaningBookingWorkerAssignment) {
                 if ($assignment->started_travel_at === null) {
+                    $newlyStarted = true;
                     $assignment->forceFill([
                         'started_travel_at' => now(),
                     ])->save();
                 }
 
+                $startedAt = $assignment->started_travel_at?->toIso8601String();
                 if ($lockedBooking->started_travel_at === null) {
                     $lockedBooking->forceFill(['started_travel_at' => $assignment->started_travel_at ?? now()])->save();
                 }
@@ -296,23 +302,30 @@ final class CleaningBookingService
             }
 
             if ((int) $lockedBooking->worker_id !== (int) $worker->id) {
-                throw new InvalidArgumentException('Worker must accept the booking before starting travel.');
+                throw new InvalidArgumentException('يجب قبول الطلب قبل بدء الرحلة.');
             }
 
-            $lockedBooking->update(['started_travel_at' => now()]);
+            if ($lockedBooking->started_travel_at === null) {
+                $newlyStarted = true;
+                $lockedBooking->update(['started_travel_at' => now()]);
+            }
+            $startedAt = $lockedBooking->started_travel_at?->toIso8601String();
 
             return $this->freshBooking($lockedBooking);
         });
 
-        $this->dispatchTrackingUpdate($updated);
-        $this->lifecycleNotifications->notifyCustomer(
+        if ($newlyStarted) {
+            $this->dispatchTrackingUpdate($updated);
+            $this->lifecycleNotifications->notifyCustomer(
             booking: $updated,
             canonicalType: 'cleaning.booking.worker_started_travel',
             action: 'worker_started_travel',
             actorRole: 'worker',
             fromStatus: $fromStatus,
-            occurredAt: $updated->started_travel_at?->toIso8601String() ?? $updated->updated_at?->toIso8601String(),
-        );
+            occurredAt: $startedAt ?? $updated->updated_at?->toIso8601String(),
+            extraData: ['workerId' => $workerId],
+            );
+        }
 
         return $updated;
     }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\SystemUsers\Pages;
 
+use App\Filament\Resources\SystemUsers\Support\ResetAccountPasswordAction;
 use App\Filament\Resources\SystemUsers\SystemUserResource;
 use Filament\Resources\Pages\ViewRecord;
 use Illuminate\Contracts\Support\Htmlable;
@@ -15,5 +16,12 @@ final class ViewSystemUser extends ViewRecord
     public function getTitle(): string|Htmlable
     {
         return 'تفاصيل المستخدم';
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            ResetAccountPasswordAction::make(),
+        ];
     }
 }

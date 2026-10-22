@@ -3,7 +3,10 @@
 declare(strict_types=1);
 
 use Modules\Cleaning\Models\CleaningBanner;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\Request;
 use Modules\Cleaning\Models\CleaningHomeType;
+use Modules\User\Http\Resources\UserCleaningHomeTypeResource;
 
 it('returns public cleaning home content with active types ordered by section sort order', function (): void {
     CleaningHomeType::query()->forceDelete();
@@ -108,4 +111,31 @@ it('serves icon-only cleaning cards without changing their booking values', func
             'iconKey' => 'large_gathering',
             'imageUrl' => null,
         ]);
+});
+
+it('serializes cleaning home types even if optional display attributes are missing', function (): void {
+    $type = (new CleaningHomeType())->newFromBuilder([
+        'id' => 999,
+        'section' => CleaningHomeType::SECTION_PROPERTY,
+        'code' => 'apartment',
+        'booking_value' => 'apartment',
+        'title' => 'شقة',
+        'image_path' => null,
+        'external_image_url' => null,
+        'sort_order' => 1,
+    ]);
+
+    $wasStrict = Model::preventsAccessingMissingAttributes();
+    Model::preventAccessingMissingAttributes(true);
+
+    try {
+        $response = (new UserCleaningHomeTypeResource($type))->toArray(Request::create('/'));
+
+        expect($response['description'])->toBeNull()
+            ->and($response['iconKey'])->toBe('apartment')
+            ->and($response['value'])->toBe('apartment')
+            ->and($response['imageUrl'])->toBeNull();
+    } finally {
+        Model::preventAccessingMissingAttributes($wasStrict);
+    }
 });

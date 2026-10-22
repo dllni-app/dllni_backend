@@ -17,6 +17,10 @@ final class UserCleaningHomeTypeResource extends JsonResource
     {
         /** @var CleaningHomeType $type */
         $type = $this->resource;
+        // Some deployed databases still lack the optional display columns.
+        // Reading an absent Eloquent attribute throws MissingAttributeException
+        // when strict attribute access is enabled.
+        $attributes = $type->getAttributes();
 
         return [
             'id' => $type->id,
@@ -25,8 +29,8 @@ final class UserCleaningHomeTypeResource extends JsonResource
             'contentCode' => $type->code,
             'value' => $type->booking_value,
             'title' => $type->title,
-            'description' => $type->description,
-            'iconKey' => $type->icon_key ?: $type->booking_value,
+            'description' => $attributes['description'] ?? null,
+            'iconKey' => ($attributes['icon_key'] ?? null) ?: $type->booking_value,
             'imageUrl' => $type->imageUrl(),
             'sortOrder' => $type->sort_order,
         ];

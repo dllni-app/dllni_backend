@@ -1,0 +1,63 @@
+name: Restored Cleaning Backend Regressions
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - 'Modules/User/app/Http/Controllers/API/LoginController.php'
+      - 'Modules/User/app/Http/Controllers/API/LoginVerifyController.php'
+      - 'Modules/User/app/Http/Controllers/API/VerifyAccountController.php'
+      - 'app/Http/Controllers/API/UserAuthController.php'
+      - 'Modules/Cleaning/app/Http/Resources/CleaningBookingResource.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingService.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingTeamService.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingAdminPricingService.php'
+      - 'app/Filament/Resources/CleaningBookings/Tables/CleaningBookingsTable.php'
+      - 'tests/Feature/Auth/CleaningWorkerSingleDeviceTest.php'
+      - 'tests/Feature/Cleaning/CleaningAdminPricingRegressionTest.php'
+      - '.github/workflows/restored-cleaning-backend-regressions.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-restored-fixes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, bcmath, intl, gd
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Prepare application
+        run: |
+          cp .env.example .env
+          touch database/database.sqlite
+          php artisan key:generate
+          php artisan migrate --force
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+      - name: Validate changed PHP syntax
+        run: |
+          for path in \
+            Modules/User/app/Http/Controllers/API/LoginController.php \
+            Modules/User/app/Http/Controllers/API/LoginVerifyController.php \
+            Modules/User/app/Http/Controllers/API/VerifyAccountController.php \
+            app/Http/Controllers/API/UserAuthController.php \
+            Modules/Cleaning/app/Http/Resources/CleaningBookingResource.php \
+            Modules/Cleaning/app/Services/CleaningBookingService.php \
+            Modules/Cleaning/app/Services/CleaningBookingTeamService.php \
+            Modules/Cleaning/app/Services/CleaningBookingAdminPricingService.php \
+            app/Filament/Resources/CleaningBookings/Tables/CleaningBookingsTable.php; do
+            php -l "$path"
+          done
+      - name: Run restored feature regressions
+        run: php artisan test tests/Feature/Auth/CleaningWorkerSingleDeviceTest.php tests/Feature/Cleaning/CleaningAdminPricingRegressionTest.php
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite

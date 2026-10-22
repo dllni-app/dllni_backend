@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Workers\Tables;
 
 use App\Enums\WorkerPreferredWorkType;
+use App\Filament\Resources\SystemUsers\Support\ResetAccountPasswordAction;
 use App\Filament\Resources\Workers\Support\WorkerSuspensionActions;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
@@ -100,6 +101,7 @@ final class WorkersTable
                     ->label(__('cleaning_admin.workers.view'))
                     ->modal(),
                 ...WorkerSuspensionActions::make(),
+                ResetAccountPasswordAction::make(),
                 EditAction::make()
                     ->label(__('cleaning_admin.workers.edit'))
                     ->modal(),
