@@ -47,12 +47,23 @@ it('rejects a cleaning worker bearer token on authenticated customer endpoints',
 });
 
 it('allows a customer bearer token on authenticated customer endpoints', function (): void {
-    $customer = User::factory()->phoneVerified()->create(['module_type' => null]);
+    $customer = User::factory()->phoneVerified()->create();
+    expect($customer->getAttributes())->toHaveKey('module_type')
+        ->and($customer->module_type)->toBeNull();
     Sanctum::actingAs($customer);
 
     $this->getJson('/api/v1/user/me')
         ->assertOk()
         ->assertJsonPath('user.id', $customer->id);
+});
+
+it('rejects a seller bearer token on authenticated customer endpoints', function (): void {
+    $seller = User::factory()->create([
+        'module_type' => UserModuleType::RestaurantSeller,
+    ]);
+    Sanctum::actingAs($seller);
+
+    $this->getJson('/api/v1/user/me')->assertForbidden();
 });
 
 it('requires authentication for protected customer endpoints', function (): void {
