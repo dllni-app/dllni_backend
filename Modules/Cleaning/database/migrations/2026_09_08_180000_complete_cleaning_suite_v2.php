@@ -146,7 +146,7 @@ return new class extends Migration
                 ->constrained('cleaning_booking_sessions', indexName: 'clean_book_special_session_booking_fk')
                 ->cascadeOnDelete();
             $table->timestamps();
-            $table->unique(['cleaning_booking_special_service_id', 'cleaning_booking_session_id'], 'clean_book_special_session_unique');
+            $table->unique(['cleaning_booking_special_service_id', 'cleaning_booking_session_id'], 'clean_book_special_link_session_unique');
         });
 
         Schema::create('cleaning_worker_special_service_skills', function (Blueprint $table): void {
