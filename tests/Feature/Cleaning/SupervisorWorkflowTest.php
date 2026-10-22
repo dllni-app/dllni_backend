@@ -2,12 +2,16 @@
 
 declare(strict_types=1);
 
+use App\Models\CleaningDepositTransaction;
 use App\Models\User;
 use App\Models\Worker;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
+use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingSession;
 use Spatie\Permission\Models\Role;
 
 function workflowPeopleAndBooking(int $arrived = 3): array
@@ -108,6 +112,143 @@ it('completes verified team execution, customer decisions and a team-level repor
     expect($booking->workerAssignments()->where('status', 'completed')->count())->toBe(3);
     expect($booking->workerAssignments()->whereNull('work_finished_at')->count())->toBe(0);
 });
+
+it('rolls back supervisor report completion if mandatory team commission insertion fails', function (): void {
+    [$supervisor, $customer, $booking] = workflowPeopleAndBooking();
+    $booking->workerAssignments()->get()->each(function ($assignment): void {
+        $assignment->forceFill(['admin_margin_amount' => 80])->saveQuietly();
+    });
+    $supervisorUrl = "/api/v1/supervisor/bookings/{$booking->id}";
+    $customerUrl = "/api/v1/supervised-team/customer/bookings/{$booking->id}";
+
+    Sanctum::actingAs($supervisor);
+    $this->postJson("$supervisorUrl/verification-requests")->assertOk();
+    Sanctum::actingAs($customer);
+    $code = $this->getJson("$customerUrl/verification-code")->assertOk()->json('data.code');
+    Sanctum::actingAs($supervisor);
+    $this->postJson("$supervisorUrl/verification/confirm", ['code' => $code])->assertOk();
+    $this->postJson("$supervisorUrl/start")->assertOk();
+    $this->postJson("$supervisorUrl/handover-requests")->assertCreated();
+    Sanctum::actingAs($customer);
+    $this->postJson("$customerUrl/handover-decision", ['decision' => 'confirmed'])->assertOk();
+
+    $rejected = 0;
+    DB::listen(static function (QueryExecuted $event) use (&$rejected): void {
+        if (str_contains(mb_strtolower($event->sql), 'insert into')
+            && str_contains(mb_strtolower($event->sql), 'cleaning_deposit_transactions')
+            && in_array('commission', $event->bindings, true)) {
+            $rejected++;
+            throw new RuntimeException('QA_SUPERVISOR_MANDATORY_COMMISSION_FAILURE');
+        }
+    });
+    Sanctum::actingAs($supervisor);
+    $this->postJson("$supervisorUrl/reports", ['summary' => 'فريقنا أنهى العمل بشكل سليم'])
+        ->assertStatus(500);
+
+    expect($rejected)->toBeGreaterThanOrEqual(2)
+        ->and($booking->fresh()->status)->toBe(CleaningBookingStatus::AwaitingCustomerCompletion)
+        ->and(DB::table('cleaning_supervisor_reports')->where('cleaning_booking_id', $booking->id)->count())->toBe(0)
+        ->and(CleaningDepositTransaction::query()->where('type', 'commission')->count())->toBe(0);
+});
+
+it('settles one commission per supervised worker and does not debit again on report retry', function (): void {
+    [$supervisor, $customer, $booking] = workflowPeopleAndBooking();
+    $booking->workerAssignments()->get()->each(function ($assignment): void {
+        $assignment->forceFill(['admin_margin_amount' => 80])->saveQuietly();
+    });
+    $supervisorUrl = "/api/v1/supervisor/bookings/{$booking->id}";
+    $customerUrl = "/api/v1/supervised-team/customer/bookings/{$booking->id}";
+
+    Sanctum::actingAs($supervisor);
+    $this->postJson("$supervisorUrl/verification-requests")->assertOk();
+    Sanctum::actingAs($customer);
+    $code = $this->getJson("$customerUrl/verification-code")->assertOk()->json('data.code');
+    Sanctum::actingAs($supervisor);
+    $this->postJson("$supervisorUrl/verification/confirm", ['code' => $code])->assertOk();
+    $this->postJson("$supervisorUrl/start")->assertOk();
+    $this->postJson("$supervisorUrl/handover-requests")->assertCreated();
+    Sanctum::actingAs($customer);
+    $this->postJson("$customerUrl/handover-decision", ['decision' => 'confirmed'])->assertOk();
+    Sanctum::actingAs($supervisor);
+    $this->postJson("$supervisorUrl/reports", ['summary' => 'تقرير فريق العمل مع تصفية العمولة'])->assertCreated();
+    $this->postJson("$supervisorUrl/reports", ['summary' => 'تقرير مكرر للاختبار فقط'])->assertOk();
+
+    $workerIds = $booking->workerAssignments()->pluck('worker_id')->map(fn ($id) => (int) $id)->all();
+    $commissions = CleaningDepositTransaction::query()
+        ->whereIn('worker_id', $workerIds)->where('type', 'commission')->get();
+    expect($booking->fresh()->status)->toBe(CleaningBookingStatus::Completed)
+        ->and(DB::table('cleaning_supervisor_reports')->where('cleaning_booking_id', $booking->id)->count())->toBe(1)
+        ->and($commissions)->toHaveCount(3)
+        ->and((float) $commissions->sum('amount'))->toBe(240.0)
+        ->and($commissions->pluck('worker_id')->unique()->count())->toBe(3);
+});
+
+it('rejects a supervisor report with positive booking commission and no worker recipient', function (): void {
+    [$supervisor, , $booking] = workflowPeopleAndBooking();
+    $booking->workerAssignments()->delete();
+    $booking->forceFill([
+        'status' => CleaningBookingStatus::AwaitingCustomerCompletion,
+        'supervised_state' => 'handover_confirmed',
+        'customer_confirmed_at' => now(),
+        'worker_id' => null,
+        'admin_margin_amount' => 100,
+    ])->saveQuietly();
+
+    Sanctum::actingAs($supervisor);
+    $this->postJson("/api/v1/supervisor/bookings/{$booking->id}/reports", [
+        'summary' => 'تقرير نهائي بلا عامل مستحق للعمولة',
+    ])->assertUnprocessable();
+
+    expect($booking->fresh()->status)->toBe(CleaningBookingStatus::AwaitingCustomerCompletion)
+        ->and(DB::table('cleaning_supervisor_reports')->where('cleaning_booking_id', $booking->id)->count())->toBe(0)
+        ->and(CleaningDepositTransaction::query()->where('type', 'commission')->count())->toBe(0);
+});
+
+it('rejects legacy supervisor report completion for any session-owning booking', function (
+    string $sessionStatus,
+    float $sessionMargin,
+): void {
+    [$supervisor, , $booking] = workflowPeopleAndBooking();
+    $booking->forceFill([
+        'status' => CleaningBookingStatus::AwaitingCustomerCompletion,
+        'supervised_state' => 'handover_confirmed',
+        'customer_confirmed_at' => now(),
+    ])->saveQuietly();
+    $session = CleaningBookingSession::query()->create([
+        'cleaning_booking_id' => $booking->id,
+        'sequence' => 1,
+        'session_type' => 'event_day',
+        'calculation_mode' => 'hours',
+        'scheduled_date' => now()->addDay()->toDateString(),
+        'scheduled_time' => '10:00',
+        'duration_hours' => 2,
+        'required_workers' => 3,
+        'coverage_status' => 'fully_covered',
+        'status' => $sessionStatus,
+        'base_price' => 900,
+        'addons_total' => 0,
+        'materials_total' => 0,
+        'special_services_total' => 0,
+        'travel_fee' => 0,
+        'admin_margin_amount' => $sessionMargin,
+        'extension_fee_total' => 0,
+        'cancellation_fee' => 0,
+        'total_price' => 900 + $sessionMargin,
+        'is_pricing_final' => true,
+    ]);
+
+    Sanctum::actingAs($supervisor);
+    $this->postJson("/api/v1/supervisor/bookings/{$booking->id}/reports", [
+        'summary' => 'يجب رفض تقرير الحجز عندما لم يتم إنهاء الزيارة',
+    ])->assertUnprocessable();
+
+    expect($booking->fresh()->status)->toBe(CleaningBookingStatus::AwaitingCustomerCompletion)
+        ->and($session->fresh()->status)->toBe(CleaningBookingSessionStatus::from($sessionStatus))
+        ->and(DB::table('cleaning_supervisor_reports')->where('cleaning_booking_id', $booking->id)->count())->toBe(0);
+})->with([
+    'pending positive-fee visit' => ['scheduled', 240.0],
+    'completed zero-fee visit without a proved ledger contract' => ['completed', 0.0],
+]);
 
 it('restricts handover decisions to booking customer and retains disputes', function () {
     [$supervisor, $customer, $booking] = workflowPeopleAndBooking();

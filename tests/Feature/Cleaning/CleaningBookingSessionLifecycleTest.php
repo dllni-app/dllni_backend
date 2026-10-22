@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Models\CleaningDepositTransaction;
 use App\Models\User;
 use App\Models\Worker;
 use Illuminate\Support\Facades\Event;
@@ -551,6 +552,121 @@ it('completes the parent only when the final required event session is completed
 
     expect($booking->fresh()->status)->toBe(CleaningBookingStatus::Completed)
         ->and($second->fresh()->status)->toBe(CleaningBookingSessionStatus::Completed);
+});
+
+it('refuses to settle a positive-fee session without a worker assignment', function (): void {
+    [$customer, , , $booking] = makeLifecycleScenario();
+    $session = makeLifecycleSession($booking, 1, now()->addDay()->toDateString(), '10:00');
+    $session->forceFill([
+        'status' => CleaningBookingSessionStatus::AwaitingCustomerCompletion,
+        'admin_margin_amount' => 300,
+        'work_started_at' => now()->subHours(2),
+        'work_finished_at' => now(),
+        'payment_status' => 'ready',
+    ])->save();
+
+    Sanctum::actingAs($customer);
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}/completion/confirm")
+        ->assertUnprocessable();
+
+    expect($session->fresh()->status)->toBe(CleaningBookingSessionStatus::AwaitingCustomerCompletion)
+        ->and($session->fresh()->payment_status)->toBe('ready')
+        ->and($session->fresh()->payment_settled_at)->toBeNull()
+        ->and($booking->fresh()->status)->not->toBe(CleaningBookingStatus::Completed);
+});
+
+it('refuses to settle a positive-fee session whose completed worker allocation is zero', function (): void {
+    [$customer, , $worker, $booking] = makeLifecycleScenario();
+    $session = makeLifecycleSession($booking, 1, now()->addDay()->toDateString(), '10:00');
+    $session->forceFill([
+        'status' => CleaningBookingSessionStatus::AwaitingCustomerCompletion,
+        'admin_margin_amount' => 300,
+        'work_finished_at' => now(),
+        'payment_status' => 'ready',
+    ])->save();
+    $assignment = makeLifecycleAssignment($session, $worker);
+    $assignment->forceFill([
+        'status' => CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion,
+        'admin_margin_amount' => 0,
+        'work_finished_at' => now(),
+    ])->save();
+
+    Sanctum::actingAs($customer);
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}/completion/confirm")
+        ->assertUnprocessable();
+
+    expect($session->fresh()->status)->toBe(CleaningBookingSessionStatus::AwaitingCustomerCompletion)
+        ->and($assignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion)
+        ->and($session->fresh()->payment_status)->toBe('ready')
+        ->and($session->fresh()->payment_settled_at)->toBeNull();
+});
+
+it('does not settle a finalized event session when worker fees fail to reconcile with its margin', function (): void {
+    [$customer, , $worker, $booking] = makeLifecycleScenario();
+    $session = makeLifecycleSession($booking, 1, now()->addDay()->toDateString(), '10:00');
+    $session->forceFill([
+        'status' => CleaningBookingSessionStatus::AwaitingCustomerCompletion,
+        'admin_margin_amount' => 300,
+        'is_pricing_final' => true,
+        'work_finished_at' => now(),
+        'payment_status' => 'ready',
+    ])->save();
+    $assignment = makeLifecycleAssignment($session, $worker);
+    $assignment->forceFill([
+        'status' => CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion,
+        'admin_margin_amount' => 0.01,
+        'work_finished_at' => now(),
+    ])->save();
+
+    Sanctum::actingAs($customer);
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}/completion/confirm")
+        ->assertUnprocessable();
+
+    expect($session->fresh()->status)->toBe(CleaningBookingSessionStatus::AwaitingCustomerCompletion)
+        ->and($assignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion)
+        ->and($session->fresh()->payment_status)->toBe('ready')
+        ->and($session->fresh()->payment_settled_at)->toBeNull();
+});
+
+it('settles balanced worker commissions for a finalized event day only once', function (): void {
+    [$customer, , $worker, $booking] = makeLifecycleScenario();
+    $secondWorker = Worker::factory()->create([
+        'is_active' => true,
+        'is_suspended' => false,
+        'trust_score' => 90,
+    ]);
+    $session = makeLifecycleSession($booking, 1, now()->addDay()->toDateString(), '10:00');
+    $session->forceFill([
+        'status' => CleaningBookingSessionStatus::AwaitingCustomerCompletion,
+        'admin_margin_amount' => 300,
+        'is_pricing_final' => true,
+        'required_workers' => 2,
+        'work_finished_at' => now(),
+        'payment_status' => 'ready',
+    ])->save();
+    foreach ([$worker, $secondWorker] as $recipient) {
+        makeLifecycleAssignment($session, $recipient)->forceFill([
+            'status' => CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion,
+            'admin_margin_amount' => 150,
+            'work_finished_at' => now(),
+        ])->save();
+    }
+
+    Sanctum::actingAs($customer);
+    $route = "/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}/completion/confirm";
+    $this->postJson($route)->assertOk();
+    $this->postJson($route)->assertOk();
+
+    $workerIds = [$worker->id, $secondWorker->id];
+    $fees = CleaningDepositTransaction::query()
+        ->whereIn('worker_id', $workerIds)
+        ->where('type', 'commission')
+        ->get();
+    expect($session->fresh()->status)->toBe(CleaningBookingSessionStatus::Completed)
+        ->and($session->fresh()->payment_status)->toBe('settled')
+        ->and($fees)->toHaveCount(2)
+        ->and($fees->pluck('worker_id')->unique()->count())->toBe(2)
+        ->and((float) $fees->sum('amount'))->toBe(300.0);
 });
 
 it('rejects a session lifecycle action when the session belongs to another parent booking', function (): void {

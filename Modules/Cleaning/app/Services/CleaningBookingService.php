@@ -725,7 +725,7 @@ final class CleaningBookingService
 
             $note = is_string($reasonNote) && mb_trim($reasonNote) !== '' ? mb_trim($reasonNote) : null;
             $category = $this->normalizeFinishCategory($reasonType);
-            $description = trim((string) $category.($note !== null ? PHP_EOL.PHP_EOL.$note : ''));
+            $description = mb_trim((string) $category.($note !== null ? PHP_EOL.PHP_EOL.$note : ''));
 
             $lockedBooking->update([
                 'status' => CleaningBookingStatus::UnderDispute,
@@ -883,8 +883,14 @@ final class CleaningBookingService
 
     private function finalizeWorkerAdminFees(CleaningBooking $booking): void
     {
+        // Session charges have their own settlement identity.
+        if ($booking->sessions()->exists()) {
+            return;
+        }
+
         $booking->loadMissing('workerAssignments.worker');
 
+        $hasAcceptedAssignments = false;
         foreach ($booking->workerAssignments as $assignment) {
             $status = $assignment->status instanceof CleaningBookingWorkerAssignmentStatus ? $assignment->status->value : (string) $assignment->status;
 
@@ -892,9 +898,24 @@ final class CleaningBookingService
                 continue;
             }
 
+            $hasAcceptedAssignments = true;
             $worker = $assignment->worker;
             $adminFee = (float) $assignment->admin_margin_amount;
 
+            if ($adminFee > 0 && ! $worker instanceof Worker) {
+                throw new InvalidArgumentException('Cannot finalize a commission-bearing assignment without a worker.');
+            }
+            if ($worker instanceof Worker && $adminFee > 0) {
+                $this->depositService->recordAdminFeeDebit($worker, $booking, $adminFee);
+            }
+        }
+
+        if (! $hasAcceptedAssignments) {
+            $worker = $booking->worker;
+            $adminFee = (float) ($booking->admin_margin_amount ?? 0);
+            if ($adminFee > 0 && ! $worker instanceof Worker) {
+                throw new InvalidArgumentException('Cannot finalize a commission-bearing booking without a worker.');
+            }
             if ($worker instanceof Worker && $adminFee > 0) {
                 $this->depositService->recordAdminFeeDebit($worker, $booking, $adminFee);
             }
@@ -1006,8 +1027,7 @@ final class CleaningBookingService
         ?string $reason,
         bool $convertedToOpen = false,
         bool $requiresDecision = false,
-    ): array
-    {
+    ): array {
         $extraData = [
             'workerId' => (int) $worker->id,
             'propertyType' => (string) $booking->property_type,

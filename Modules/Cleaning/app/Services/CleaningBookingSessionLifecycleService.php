@@ -869,9 +869,39 @@ final class CleaningBookingSessionLifecycleService
                 ->where('status', CleaningBookingWorkerAssignmentStatus::Completed->value)
                 ->get();
 
+            // A payable session cannot be declared settled without any
+            // completed assignment carrying a positive commission.
+            if ((float) $locked->admin_margin_amount > 0
+                && $assignments->sum(static fn (CleaningBookingSessionWorkerAssignment $assignment): float => max(0.0, (float) $assignment->admin_margin_amount)) <= 0) {
+                throw ValidationException::withMessages([
+                    'worker' => ['A payable session requires at least one completed worker commission.'],
+                ]);
+            }
+
+            // For finalized event days, session pricing explicitly derives the
+            // margin from accepted workers' fee allocations. A stale/incomplete
+            // allocation must not be marked settled by the presence of 0.01.
+            // Do not apply this rule to provisional or Open-Time pricing.
+            if ($locked->session_type === 'event_day' && $locked->is_pricing_final) {
+                $sessionFeeCents = (int) round(max(0.0, (float) $locked->admin_margin_amount) * 100);
+                $workerFeeCents = $assignments->sum(
+                    static fn (CleaningBookingSessionWorkerAssignment $assignment): int => (int) round(max(0.0, (float) $assignment->admin_margin_amount) * 100),
+                );
+                if ($sessionFeeCents !== $workerFeeCents) {
+                    throw ValidationException::withMessages([
+                        'worker' => ['Finalized event session commissions do not match the payable worker allocations.'],
+                    ]);
+                }
+            }
+
             foreach ($assignments as $assignment) {
                 $worker = $assignment->worker;
                 $adminFee = (float) $assignment->admin_margin_amount;
+                if ($adminFee > 0 && ! $worker instanceof Worker) {
+                    throw ValidationException::withMessages([
+                        'worker' => ['A completed commission-bearing session assignment requires a worker.'],
+                    ]);
+                }
                 if ($worker instanceof Worker && $adminFee > 0) {
                     $this->depositService->recordSessionAdminFeeDebit(
                         $worker,

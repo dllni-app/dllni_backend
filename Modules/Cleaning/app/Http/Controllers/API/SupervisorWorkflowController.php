@@ -11,15 +11,20 @@ use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use LogicException;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Services\CleaningBookingWorkerCompletionService;
 use Modules\Cleaning\Services\SupervisedTeamService;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 final class SupervisorWorkflowController
 {
-    public function __construct(private readonly SupervisedTeamService $teams) {}
+    public function __construct(
+        private readonly SupervisedTeamService $teams,
+        private readonly CleaningBookingWorkerCompletionService $completion,
+    ) {}
 
     public function verificationRequest(Request $request, int $booking): JsonResponse
     {
@@ -365,6 +370,14 @@ final class SupervisorWorkflowController
             $this->failUnless($order->status === CleaningBookingStatus::AwaitingCustomerCompletion &&
                 $order->supervised_state === 'handover_confirmed' &&
                 $order->customer_confirmed_at !== null, 'يجب انتظار تأكيد العميل قبل اعتماد التقرير.');
+            // This legacy report finalizes a whole booking. Sessions own their
+            // own execution and fee references; never finalize them by skipping
+            // the booking-level fee without verifying session settlement.
+            abort_if(
+                $order->sessions()->exists(),
+                422,
+                'لا يمكن اعتماد تقرير الحجز الكلي لطلب يحتوي على جلسات. يجب استخدام مسار إنهاء الجلسات المعتمد.',
+            );
             $id = DB::table('cleaning_supervisor_reports')->insertGetId([
                 'cleaning_booking_id' => $booking, 'supervisor_user_id' => $request->user()->id,
                 'summary' => $data['summary'], 'quality_notes' => $data['qualityNotes'] ?? null,
@@ -375,6 +388,9 @@ final class SupervisorWorkflowController
             $order->workerAssignments()->whereIn('status', CleaningBookingWorkerAssignmentStatus::activeValues())
                 ->update(['status' => CleaningBookingWorkerAssignmentStatus::Completed->value,
                     'work_finished_at' => $order->work_finished_at, 'updated_at' => now()]);
+            $this->completion->enforceAdminFeesInCompletionTransaction(
+                $order->fresh() ?? throw new LogicException('Completed supervisor booking is missing.')
+            );
             $this->teams->activity($booking, $request->user()->id, 'report_submitted', ['reportId' => $id]);
 
             return ['id' => $id, 'status' => 'submitted'];

@@ -8,6 +8,7 @@ use App\Models\Worker;
 use App\Support\Broadcast\BroadcastAfterResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use LogicException;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Enums\CleaningTimeWarningResponse;
@@ -48,7 +49,10 @@ final class CleaningBookingWorkerCompletionService
                     'customer_confirmed_at' => now(),
                 ])->save();
 
-                return $this->freshBooking($lockedBooking);
+                $completed = $this->freshBooking($lockedBooking);
+                $this->recordAdminFees($completed);
+
+                return $completed;
             }
 
             $decisionWorkerId = (int) $assignment->worker_id;
@@ -71,12 +75,14 @@ final class CleaningBookingWorkerCompletionService
 
             $lockedBooking->forceFill($updates)->save();
 
-            return $this->freshBooking($lockedBooking);
-        });
+            $updated = $this->freshBooking($lockedBooking);
+            if ($updated->status === CleaningBookingStatus::Completed) {
+                // Keep the completed status and mandatory fee in one transaction.
+                $this->recordAdminFees($updated);
+            }
 
-        if ($updated->status === CleaningBookingStatus::Completed) {
-            $this->recordAdminFees($updated);
-        }
+            return $updated;
+        });
 
         $this->dispatchTrackingUpdate($updated, $decisionWorkerId, $decisionAssignmentId);
         BroadcastAfterResponse::send(new CompletionDecisionMade(
@@ -324,6 +330,20 @@ final class CleaningBookingWorkerCompletionService
         return CleaningBookingStatus::WorkerAssigned;
     }
 
+    /**
+     * Enforce legacy booking fee settlement while the caller still owns the
+     * booking transaction. Other completion entrypoints must not treat the
+     * observer's catch-and-report debit as mandatory fee confirmation.
+     */
+    public function enforceAdminFeesInCompletionTransaction(CleaningBooking $booking): void
+    {
+        if (DB::transactionLevel() < 1) {
+            throw new LogicException('Automatic completion fees require an active booking transaction.');
+        }
+
+        $this->recordAdminFees($booking);
+    }
+
     private function resolvePendingCompletionAssignment(CleaningBooking $booking, ?int $workerId = null, ?int $assignmentId = null, bool $lock = false): ?CleaningBookingWorkerAssignment
     {
         $query = CleaningBookingWorkerAssignment::query()
@@ -366,8 +386,15 @@ final class CleaningBookingWorkerCompletionService
 
     private function recordAdminFees(CleaningBooking $booking): void
     {
+        // Sessions own their own commission identities; never charge the
+        // booking-level reference in addition to session fees.
+        if ($booking->sessions()->exists()) {
+            return;
+        }
+
         $booking->loadMissing(['workerAssignments.worker']);
 
+        $hasAcceptedAssignments = false;
         foreach ($booking->workerAssignments as $assignment) {
             $status = $this->assignmentStatus($assignment);
 
@@ -375,9 +402,27 @@ final class CleaningBookingWorkerCompletionService
                 continue;
             }
 
+            $hasAcceptedAssignments = true;
             $worker = $assignment->worker;
             $adminFee = (float) $assignment->admin_margin_amount;
 
+            if ($adminFee > 0 && ! $worker instanceof Worker) {
+                throw ValidationException::withMessages([
+                    'worker' => ['Cannot finalize a commission-bearing assignment without a worker.'],
+                ]);
+            }
+            if ($worker instanceof Worker && $adminFee > 0) {
+                $this->depositService->recordAdminFeeDebit($worker, $booking, $adminFee);
+            }
+        }
+        if (! $hasAcceptedAssignments) {
+            $worker = $booking->worker;
+            $adminFee = (float) ($booking->admin_margin_amount ?? 0);
+            if ($adminFee > 0 && ! $worker instanceof Worker) {
+                throw ValidationException::withMessages([
+                    'worker' => ['Cannot finalize a commission-bearing booking without a worker.'],
+                ]);
+            }
             if ($worker instanceof Worker && $adminFee > 0) {
                 $this->depositService->recordAdminFeeDebit($worker, $booking, $adminFee);
             }
