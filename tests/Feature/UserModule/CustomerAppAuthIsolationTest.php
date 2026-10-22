@@ -66,6 +66,19 @@ it('rejects a seller bearer token on authenticated customer endpoints', function
     $this->getJson('/api/v1/user/me')->assertForbidden();
 });
 
+it('rejects an authenticated account with an unselected module type', function (): void {
+    $worker = User::factory()->create([
+        'module_type' => UserModuleType::CleaningWorker,
+    ]);
+    $partiallyLoadedWorker = User::query()
+        ->select(['id', 'name'])
+        ->findOrFail($worker->id);
+
+    Sanctum::actingAs($partiallyLoadedWorker);
+
+    $this->getJson('/api/v1/user/me')->assertForbidden();
+});
+
 it('requires authentication for protected customer endpoints', function (): void {
     $this->getJson('/api/v1/user/me')->assertUnauthorized();
 });
