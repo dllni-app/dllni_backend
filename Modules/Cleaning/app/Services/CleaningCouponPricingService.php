@@ -173,6 +173,17 @@ final class CleaningCouponPricingService
             $includedAdminMargin = $priorParts['includedAdminMargin'];
         }
 
+        $recurringMargin = $this->recurringSessionAdminMargin($booking);
+        if ($recurringMargin !== null) {
+            $grossAdminMargin = $recurringMargin;
+            $quotedTotal = round(max(0.0, (float) (
+                $booking->subtotal_before_discount ?? $booking->getOriginal('total_price')
+            )), 2);
+            $includedAdminMargin = round(min($grossAdminMargin, max(
+                0.0, $serviceAmount + $travelFee + $grossAdminMargin - $quotedTotal,
+            )), 2);
+        }
+
         // Persist financial provenance so later saves and changed pricing settings
         // cannot silently reinterpret the original commission-inclusive quote.
         $details = is_array($booking->property_details) ? $booking->property_details : [];
@@ -241,6 +252,20 @@ final class CleaningCouponPricingService
         )), 2);
         $details = $value('property_details');
         $snapshot = is_array($details) ? ($details['_coupon_pricing'] ?? null) : null;
+
+        // Recurring session totals already contain their platform margin.
+        // Preserve that contract rather than treating the margin as a new charge.
+        $recurringMargin = $this->recurringSessionAdminMargin($booking);
+        if ($recurringMargin !== null && ! is_array($snapshot)) {
+            return [
+                'serviceAmount' => $serviceAmount,
+                'travelFee' => $travelFee,
+                'grossAdminMargin' => $recurringMargin,
+                'includedAdminMargin' => round(min($recurringMargin, max(
+                    0.0, $serviceAmount + $travelFee + $recurringMargin - $grossTotal,
+                )), 2),
+            ];
+        }
 
         if (is_array($snapshot)
             && isset($snapshot['grossAdminMargin'], $snapshot['includedAdminMargin'])) {
