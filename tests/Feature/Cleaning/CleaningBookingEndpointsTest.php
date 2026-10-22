@@ -187,6 +187,9 @@ it('deletes a cleaning booking', function () {
 
     $booking = CleaningBooking::factory()->create([
         'billing_policy_id' => $billingPolicy->id,
+        // The factory randomizes status, while delete intentionally rejects
+        // completed, cancelled and already-executing bookings with HTTP 409.
+        'status' => CleaningBookingStatus::Pending->value,
     ]);
 
     $this->deleteJson("/api/v1/cleaning-bookings/{$booking->id}")->assertForbidden();
@@ -794,7 +797,11 @@ it('returns zeros for worker homepage when user has no worker', function () {
 
 it('returns worker homepage with todayEarnings newOrdersCount and pendingExtensionRequestsCount', function () {
     $workerUser = User::factory()->create(['email' => 'worker-homepage-extended@example.com']);
-    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create([
+        'user_id' => $workerUser->id,
+        'trust_score' => 90,
+        'open_disputes_count' => 0,
+    ]);
     Sanctum::actingAs($workerUser);
 
     $neighborhood = createCleaningNeighborhoodCoverage($worker, 'Homepage Coverage');

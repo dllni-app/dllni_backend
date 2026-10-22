@@ -656,6 +656,25 @@ final class CleaningBookingController
             $safe['addressLatitude'] = $payload['addressLatitude'] ?? null;
             $safe['addressLongitude'] = $payload['addressLongitude'] ?? null;
             $safe['roomAssignments'] = $ownedRooms;
+        } elseif ((int) $booking->worker_id === (int) $worker->id
+            && (int) $booking->number_of_workers === 1
+            && (string) $booking->booking_kind !== 'supervised_team'
+            && ! $booking->isV2OperationalGroup()
+            && ! array_key_exists('_time_period_v2', (array) ($booking->property_details ?? []))
+            && ! array_key_exists('_room_period_v2_approved_total', (array) ($booking->property_details ?? []))
+            && ! $this->shouldScopeV2WorkerRooms($booking)
+            && ! $booking->sessions()->exists()) {
+            // Pre-session legacy single-worker bookings have no visit proof.
+            // Restore only the worker's own room identities here; never turn
+            // this compatibility path into V2 group room or address discovery.
+            $safe['roomAssignments'] = collect($payload['roomAssignments'] ?? [])
+                ->filter(static fn (mixed $room): bool => is_array($room)
+                    && (int) ($room['assignedWorkerId'] ?? 0) === (int) $worker->id)
+                ->map(static fn (array $room): array => Arr::only($room, [
+                    'id', 'roomKey', 'roomType', 'roomSize', 'displayLabel',
+                    'assignedWorkerId', 'assignmentSource',
+                ]))
+                ->values()->all();
         }
         if ($this->shouldScopeV2WorkerRooms($booking)) {
             $safe = $this->scopeNestedWorkerRoomData($safe, $ownedRooms);

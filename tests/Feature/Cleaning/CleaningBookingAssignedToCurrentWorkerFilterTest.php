@@ -292,6 +292,22 @@ it('returns partially completed assigned bookings when a legacy room uses system
         'updated_at' => now(),
     ]);
 
+    $otherWorker = Worker::factory()->create();
+    DB::table('cleaning_booking_rooms')->insert([
+        'cleaning_booking_id' => $booking->id,
+        'room_key' => 'legacy.other.room.2',
+        'room_type' => 'bathroom',
+        'room_size' => 'small',
+        'display_label' => 'Other worker room',
+        'weight' => 1,
+        'planned_worker_slot' => 2,
+        'planned_preferred_worker_id' => null,
+        'assigned_worker_id' => $otherWorker->id,
+        'assignment_source' => 'admin',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
     $legacyRoom = CleaningBookingRoom::query()
         ->where('cleaning_booking_id', $booking->id)
         ->firstOrFail();
@@ -310,5 +326,56 @@ it('returns partially completed assigned bookings when a legacy room uses system
         ->firstWhere('id', $booking->id);
 
     expect($item)->not->toBeNull()
-        ->and(data_get($item, 'roomAssignments.0.assignmentSource'))->toBe('auto');
+        ->and(data_get($item, 'roomAssignments.0.assignmentSource'))->toBe('auto')
+        ->and(data_get($item, 'roomAssignments.0.roomKey'))->toBe('legacy.system.room.1')
+        ->and(collect(data_get($item, 'roomAssignments', []))->pluck('roomKey'))->not->toContain('legacy.other.room.2')
+        ->and(collect(data_get($item, 'roomAssignments', [])))->toHaveCount(1)
+        ->and(array_key_exists('address', $item))->toBeFalse();
+});
+
+it('does not use legacy room discovery for a supervised team without accepted visit proof', function (): void {
+    $workerUser = User::factory()->create();
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'booking_kind' => 'supervised_team',
+        'number_of_workers' => 2,
+        'status' => CleaningBookingStatus::PartiallyCompleted->value,
+    ]);
+
+    CleaningBookingWorkerAssignment::query()->create([
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $worker->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
+        'accepted_at' => now(),
+        'room_count' => 1,
+        'rooms_weight' => 1,
+        'service_share_amount' => 100,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 0,
+        'worker_amount' => 100,
+        'currency' => 'SYP',
+    ]);
+    CleaningBookingRoom::query()->create([
+        'cleaning_booking_id' => $booking->id,
+        'room_key' => 'team.private.room.1',
+        'room_type' => 'bedroom',
+        'room_size' => 'small',
+        'display_label' => 'Private team room',
+        'weight' => 1,
+        'assigned_worker_id' => $worker->id,
+        'assignment_source' => 'auto',
+    ]);
+
+    Sanctum::actingAs($workerUser);
+    $response = getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[assignedToCurrentWorker]=1&filter[status]=partially_completed');
+    $response->assertOk();
+    $visible = collect($response->json('data'))->firstWhere('id', $booking->id);
+
+    if ($visible !== null) {
+        expect(array_key_exists('roomAssignments', $visible))->toBeFalse()
+            ->and(array_key_exists('address', $visible))->toBeFalse();
+    } else {
+        expect(collect($response->json('data'))->pluck('id'))->not->toContain($booking->id);
+    }
 });

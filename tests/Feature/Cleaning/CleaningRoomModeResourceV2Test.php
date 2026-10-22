@@ -3,12 +3,16 @@
 declare(strict_types=1);
 
 use App\Models\User;
+use App\Models\Worker;
 use Laravel\Sanctum\Sanctum;
+use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
 
 it('exposes the requested cleaning mode for each persisted worker room', function (): void {
     $customer = User::factory()->create();
+    $workerUser = User::factory()->create();
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($customer);
 
     $policy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
@@ -17,6 +21,8 @@ it('exposes the requested cleaning mode for each persisted worker room', functio
     ]);
     $booking = CleaningBooking::factory()->create([
         'customer_id' => $customer->id,
+        'worker_id' => $worker->id,
+        'status' => CleaningBookingStatus::WorkerAssigned,
         'billing_policy_id' => $policy->id,
         'property_type' => 'apartment',
         'property_details' => [
@@ -40,6 +46,10 @@ it('exposes the requested cleaning mode for each persisted worker room', functio
         ]);
     }
 
+    // The operational worker endpoint is not the customer's detail endpoint.
+    $this->getJson('/api/v1/cleaning-bookings/'.$booking->id)->assertForbidden();
+
+    Sanctum::actingAs($workerUser);
     $response = $this->getJson('/api/v1/cleaning-bookings/'.$booking->id);
     $response->assertOk()
         ->assertJsonPath('data.propertyDetails.cleaning_mode_label', 'حوسة وتعزيل')

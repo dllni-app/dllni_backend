@@ -205,7 +205,13 @@ final class CleaningBookingWorkerSessionVisibilityService
         // persisted compatibility session passes every session-level
         // eligibility rule. Acceptance itself still performs the authoritative
         // worker/financial/conflict validation.
-        return $status === 'pending' && ! $booking->isTeamFulfilled();
+        // A pending one-visit session does not by itself grant access to every
+        // authenticated worker. Reuse the parent booking dispatch audience
+        // (gender, financial eligibility, geography and actor identity) so a
+        // suspended/unmatched worker cannot inspect a private offer schedule.
+        return $status === 'pending'
+            && ! $booking->isTeamFulfilled()
+            && $this->isPendingOfferVisibleToWorker($booking, $worker);
     }
 
     private function canViewLegacyBooking(CleaningBooking $booking, Worker $worker): bool
