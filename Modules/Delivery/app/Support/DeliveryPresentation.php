@@ -274,6 +274,7 @@ final class DeliveryPresentation
         return [
             self::stage('created', $createdAt, true, true),
             self::stage('searching_driver', $createdAt, in_array($status, [
+                DeliveryOrderStatus::SearchingForDriver->value,
                 DeliveryOrderStatus::Dispatching->value,
                 DeliveryOrderStatus::Offered->value,
                 DeliveryOrderStatus::Accepted->value,
@@ -283,7 +284,7 @@ final class DeliveryPresentation
                 DeliveryOrderStatus::ReturnedToMerchant->value,
                 DeliveryOrderStatus::Delivered->value,
                 DeliveryOrderStatus::Completed->value,
-            ], true), $status === DeliveryOrderStatus::Dispatching->value || $status === DeliveryOrderStatus::Offered->value),
+            ], true), $status === DeliveryOrderStatus::SearchingForDriver->value || $status === DeliveryOrderStatus::Dispatching->value || $status === DeliveryOrderStatus::Offered->value),
             self::stage('driver_en_route', $acceptedAt, in_array($status, [
                 DeliveryOrderStatus::Accepted->value,
                 DeliveryOrderStatus::InProgress->value,
