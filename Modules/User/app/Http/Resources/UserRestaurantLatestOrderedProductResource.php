@@ -38,7 +38,7 @@ final class UserRestaurantLatestOrderedProductResource extends JsonResource
             'originalPrice' => $hasDiscount ? $price : null,
             'lastOrderedLineUnitPrice' => $line->unit_price !== null ? (float) $line->unit_price : null,
             'currency' => config('app.currency', 'IQD'),
-            'primaryImageUrl' => $product->getFirstMediaUrl('primary-image') ?: null,
+            'primaryImageUrl' => $product->displayImageUrl() ?: null,
             'lastOrderId' => $line->order_id,
             'lastOrderedAt' => $orderedAt->toDateTimeString(),
         ];

@@ -70,7 +70,7 @@ final class UserRestaurantSuggestedProductResource extends JsonResource
             'displayPrice' => $displayPrice,
             'originalPrice' => $hasDiscount ? $price : null,
             'currency' => config('app.currency', 'IQD'),
-            'primaryImageUrl' => $product->getFirstMediaUrl('primary-image') ?: null,
+            'primaryImageUrl' => $product->displayImageUrl() ?: null,
             'restaurant' => [
                 'id' => $restaurant->id,
                 'name' => $restaurant->name,
