@@ -7,7 +7,7 @@
 - Audited current `dev` / `origin/dev` at `f5b45aeb6e08b539e4a481a4910deb94291c15be`.
 - Audited published `feat/supervisor-backend-20261016` / `origin/feat/supervisor-backend-20261016` at `06af76e253906a83491d44ce2fd3bbf43021705b`.
 - Merge base: `29bbd297a02b351eb7d01873cf3ebe6849bc0415`; divergence **33 dev-only commits, one stale-branch-only commit**, `06af76e2` (28 changed paths, 1,473 added lines).
-- The original product gap plan was referred to as an attachment by `/dllni/CLEANING_V2_CODEX_MULTI_AGENT_PLAN.md`; its standalone contents were not present in the inspected local docs. The multi-agent plan and `/dllni/AGENTS.md` are the available requirements baseline.
+- **Authoritative original:** `/dllni/docs/ORIGINAL_CLEANING_V2_PLAN.md` (135 lines), read alongside `/dllni/CLEANING_V2_CODEX_MULTI_AGENT_PLAN.md` and `/dllni/AGENTS.md`. Original **line 16** preserves `booking_kind=standard` for compatible V2 bookings; **Phase 2, lines 30–40** requires initialized visit supervision and separate active supervisor responsibility; **Phase 3, lines 42–54** forbids booking-wide execution from advancing another visit; **Phase 4, lines 56–72** requires reuse of the shared extension ledger while preserving signed original prices. The public interface contract at **lines 101–109** retains the V2 execution-unavailable guard until the relevant visit is initialized and enabled, while keeping booking-wide execution blocked for V2.
 
 ## Complete old-commit feature inventory and disposition
 
@@ -30,6 +30,6 @@
 
 ## Safe integrated change and validation scope
 
-The only safe delta from this review is **test coverage and this audit document**. `tests/Feature/Cleaning/SupervisorStaleBranchIntegrationSafetyTest.php` freezes canonical supervisor route/auth/hold middleware, incompatible migration-column evidence and a SQLite-backed negative booking-wide V2 transition. It does not register endpoints, change schema, bypass release HOLD, alter signed prices or create new money/stock transitions.
+The only safe delta from this review is **test coverage and this audit document**. `tests/Feature/Cleaning/SupervisorStaleBranchIntegrationSafetyTest.php` freezes canonical supervisor route/auth/hold middleware, incompatible migration-column evidence and two **independent** SQLite-backed booking-wide V2 guards: (1) a genuinely initialized, room-scheduled, session-owned visit with no booking-level assignment, proving the primary `SupervisorScheduledV2Service::assignedQuery` path and `422` HOLD, and (2) an uninitialized session with only a booking-level assignment, proving the legacy fallback separately. Neither guard may mutate booking/session execution state. It does not register endpoints, change schema, bypass release HOLD, alter signed prices or create new money/stock transitions.
 
 **Release status remains HOLD.** Independent security review, clean/upgrade MySQL migration evidence, visit execution acceptance, shared extension/financial and custody reconciliation, authenticated browser/mobile flow and required online Android builds remain separate sign-off gates under the main plan. This branch is an isolated review candidate; do not merge or push until the prime's gate decision.
