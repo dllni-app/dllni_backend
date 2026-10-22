@@ -351,6 +351,14 @@ final class DriverDispatchService
             return $this->wavePlan($nextWave, $currentRadius, 'fallback', $eligibleRows);
         }
 
+        // Do not stop a paid merchant order immediately because the sole nearby driver
+        // missed a short offer window. After geographic expansion is exhausted, allow
+        // a bounded second chance for timed-out (unanswered) offers only.
+        $retryRows = $this->timedOutReofferCandidates($order, $eligibleRows);
+        if ($retryRows->isNotEmpty()) {
+            return $this->wavePlan($nextWave, $currentRadius, 'timeout_retry', $retryRows);
+        }
+
         return $this->wavePlan($nextWave, $currentRadius, (string) $order->dispatch_phase, collect(), true);
     }
 
@@ -366,6 +374,38 @@ final class DriverDispatchService
     private function withinRadius(Collection $locatedRows, float $radius): Collection
     {
         return $locatedRows->filter(fn (array $row): bool => (float) $row['distanceKm'] <= $radius)->values();
+    }
+
+    /**
+     * @param Collection<int, array<string, mixed>> $eligibleRows
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function timedOutReofferCandidates(DeliveryOrder $order, Collection $eligibleRows): Collection
+    {
+        $maxReoffers = max(0, (int) config('delivery.dispatch.max_timed_out_reoffers_per_driver', 1));
+        if ($maxReoffers === 0) {
+            return collect();
+        }
+
+        $attemptsByDriver = $order->assignmentAttempts()
+            ->get(['driver_id', 'status'])
+            ->groupBy('driver_id');
+
+        return $eligibleRows->filter(function (array $row) use ($attemptsByDriver, $maxReoffers): bool {
+            $driverAttempts = $attemptsByDriver->get($row['driver']->id, collect());
+            if ($driverAttempts->isEmpty()) {
+                return false;
+            }
+
+            // A deliberate refusal must not be overridden by an automated retry.
+            if ($driverAttempts->contains('status', DeliveryAssignmentAttemptStatus::Rejected->value)) {
+                return false;
+            }
+
+            $timedOutCount = $driverAttempts->where('status', DeliveryAssignmentAttemptStatus::TimedOut->value)->count();
+
+            return $timedOutCount > 0 && $timedOutCount <= $maxReoffers;
+        })->values();
     }
 
     /** @param Collection<int, array<string, mixed>> $fallbackRows */
