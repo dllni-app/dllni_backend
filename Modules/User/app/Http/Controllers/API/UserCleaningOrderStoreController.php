@@ -10,7 +10,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
-use Modules\Cleaning\Services\CleaningPricingCalculator;
 use Modules\User\Http\Requests\UserCleaningOrderStoreRequest;
 use Modules\User\Http\Resources\UserCleaningBookingResource;
 use Modules\User\Services\EventAssistanceScheduleService;
@@ -31,7 +30,6 @@ final class UserCleaningOrderStoreController
         RecurringCleaningScheduleService $recurringSchedule,
         OpenTimeScheduleService $openTimeSchedule,
         PlatformCouponRedemptionService $platformCoupons,
-        CleaningPricingCalculator $pricingCalculator,
         RoomPeriodBookingCreationService $periodCreation,
     ): JsonResponse {
         $couponCode = $request->input('couponCode');
@@ -126,7 +124,6 @@ final class UserCleaningOrderStoreController
             $openTimeSchedule,
             $openTimePlan,
             $platformCoupons,
-            $pricingCalculator,
             $couponCode,
             $validated,
         ) {
@@ -256,27 +253,18 @@ final class UserCleaningOrderStoreController
             }
 
             if (is_string($couponCode) && mb_trim($couponCode) !== '') {
-                $serviceSubtotal = round(
-                    (float) $order->base_price + (float) $order->addons_total,
-                    2,
-                );
-                // A recurring quote already includes the configured minimum
-                // and its administration component in the customer total.
-                $subtotal = $recurringPlan !== null
-                    ? round((float) $order->total_price, 2)
-                    : round(
-                        $serviceSubtotal
-                        + (float) $order->travel_fee
-                        + ((bool) $order->is_pricing_final
-                            ? max(0.0, (float) $order->admin_margin_amount)
-                            : (float) $pricingCalculator->provisional($serviceSubtotal, 0.0)['adminMargin']),
-                        2,
-                    );
+                // The saved price is already the authoritative customer quote:
+                // minimum-order pricing can include platform commission.
+                $subtotal = round(max(0.0, (float) $order->total_price), 2);
+                $discountableSubtotal = round(max(
+                    0.0,
+                    $subtotal - max(0.0, (float) $order->travel_fee),
+                ), 2);
                 $quote = $platformCoupons->quoteForPlacement(
                     userId: (int) $request->user()->id,
                     section: PlatformCoupon::SECTION_CLEANING,
                     couponCode: $couponCode,
-                    subtotal: $subtotal,
+                    subtotal: $discountableSubtotal,
                     context: [
                         'propertyType' => (string) $order->property_type,
                         'cleaningMode' => $order->property_details['cleaning_mode'] ?? null,
