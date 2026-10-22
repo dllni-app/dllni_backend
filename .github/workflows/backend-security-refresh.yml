@@ -1,0 +1,61 @@
+name: Backend dependency security gate
+
+on:
+  pull_request:
+    paths:
+      - 'composer.json'
+      - 'composer.lock'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'public/js/filament/**'
+      - 'public/css/filament/**'
+      - 'public/fonts/filament/**'
+      - '.github/workflows/backend-security-refresh.yml'
+  push:
+    branches: [fix/backend-security-refresh-20261022]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dependencies-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4.27'
+          extensions: mbstring, pdo_sqlite, bcmath, intl, gd
+          coverage: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Verify minimum patched PHP release
+        run: php -r 'if (version_compare(PHP_VERSION, "8.4.27", "<")) { fwrite(STDERR, "PHP 8.4.27+ required\n"); exit(1); }'
+      - name: Install locked PHP dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Verify PHP platform requirements and security advisories
+        run: |
+          composer check-platform-reqs --lock
+          composer audit --locked --abandoned=ignore
+      - name: Install and audit frontend dependencies
+        run: |
+          npm ci --no-fund
+          npm audit --audit-level=moderate
+      - name: Build frontend against installed Filament assets
+        run: npm run build
+      - name: Run security and supervisor regression tests
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+        run: |
+          php artisan test --compact \
+            tests/Feature/UserModule/CustomerAppAuthIsolationTest.php \
+            tests/Feature/Cleaning/SupervisorStaleBranchIntegrationSafetyTest.php \
+            tests/Feature/Cleaning/SupervisorScheduledV2ReadOnlyTest.php \
+            tests/Feature/Cleaning/SupervisorVisitAssignmentTest.php
