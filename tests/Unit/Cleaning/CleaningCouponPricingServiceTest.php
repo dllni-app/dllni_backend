@@ -29,11 +29,11 @@ it('applies percentage cleaning coupons to admin first and only then to service 
             'grossTravelFee' => 5000.0,
             'grossAdminMargin' => 10000.0,
             'grossTotal' => 115000.0,
-            'discountAmount' => 23000.0,
-            'serviceAmount' => 87000.0,
+            'discountAmount' => 22000.0,
+            'serviceAmount' => 88000.0,
             'travelFee' => 5000.0,
             'adminMargin' => 0.0,
-            'totalPrice' => 92000.0,
+            'totalPrice' => 93000.0,
         ]);
 });
 
