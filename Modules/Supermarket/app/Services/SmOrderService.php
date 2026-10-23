@@ -256,36 +256,37 @@ final class SmOrderService
 
     public function cancelAfterAcceptance(SmOrder $order, string $reason, ?int $actorUserId): SmOrder
     {
-        $cancelled = DB::transaction(function () use ($order, $reason, $actorUserId): SmOrder {
+        // Keep source cancellation and linked courier cancellation atomic.
+        // Otherwise a courier pickup racing with store cancellation can leave
+        // the supermarket order cancelled while the delivery is still picked up.
+        return DB::transaction(function () use ($order, $reason, $actorUserId): SmOrder {
             $lockedOrder = SmOrder::query()->lockForUpdate()->findOrFail($order->id);
 
-            if ($lockedOrder->status === SmOrderStatus::Cancelled) {
-                return $lockedOrder->refresh();
+            if ($lockedOrder->status !== SmOrderStatus::Cancelled) {
+                if (! in_array($lockedOrder->status, [
+                    SmOrderStatus::Accepted,
+                    SmOrderStatus::Preparing,
+                    SmOrderStatus::ReadyForPickup,
+                ], true)) {
+                    throw new InvalidArgumentException('Only accepted, preparing, or ready-for-pickup orders can be cancelled by the store.');
+                }
+
+                $from = $lockedOrder->status;
+                $lockedOrder->forceFill([
+                    'status' => SmOrderStatus::Cancelled,
+                    'cancelled_at' => now(),
+                    'cancellation_reason' => $reason,
+                ])->save();
+
+                $this->logStatus($lockedOrder, $from, SmOrderStatus::Cancelled, $reason, $actorUserId);
             }
 
-            if (! in_array($lockedOrder->status, [
-                SmOrderStatus::Accepted,
-                SmOrderStatus::Preparing,
-                SmOrderStatus::ReadyForPickup,
-            ], true)) {
-                throw new InvalidArgumentException('Only accepted, preparing, or ready-for-pickup orders can be cancelled by the store.');
-            }
-
-            $from = $lockedOrder->status;
-            $lockedOrder->forceFill([
-                'status' => SmOrderStatus::Cancelled,
-                'cancelled_at' => now(),
-                'cancellation_reason' => $reason,
-            ])->save();
-
-            $this->logStatus($lockedOrder, $from, SmOrderStatus::Cancelled, $reason, $actorUserId);
+            // A failed delivery cancellation must roll back the source status
+            // and its status log, not merely return an error to the caller.
+            $this->merchantDelivery->cancelled($lockedOrder, $reason, $actorUserId);
 
             return $lockedOrder->refresh();
         });
-
-        $this->merchantDelivery->cancelled($cancelled, $reason, $actorUserId);
-
-        return $cancelled->refresh();
     }
 
     public function handOverToCourier(SmOrder $order, ?int $actorUserId): SmOrder
