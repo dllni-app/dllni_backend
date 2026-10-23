@@ -10,6 +10,7 @@ use Modules\Delivery\Services\MerchantOrderDeliveryService;
 use Modules\Resturants\Data\OrderData;
 use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Models\Order;
+use Modules\Resturants\Models\InventoryItem;
 
 final class OrderService
 {
@@ -51,6 +52,25 @@ final class OrderService
             $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
             if ($lockedOrder->status !== OrderStatus::Pending) {
                 throw new InvalidArgumentException('Only pending restaurant orders can be accepted.');
+            }
+
+            // Consume the ingredient recipe exactly once, within the acceptance transaction.
+            // Each ordered unit consumes the configured quantity_used on its product pivot.
+            foreach ($lockedOrder->orderItems()->get() as $line) {
+                $productId = (int) ($line->substitute_product_id ?: $line->product_id);
+                $ingredients = InventoryItem::query()
+                    ->where('restaurant_id', $lockedOrder->restaurant_id)
+                    ->whereHas('products', fn ($query) => $query->whereKey($productId))
+                    ->lockForUpdate()
+                    ->get();
+                foreach ($ingredients as $ingredient) {
+                    $recipe = $ingredient->products()->whereKey($productId)->first();
+                    if ($recipe === null) continue;
+                    $used = (float) $recipe->pivot->quantity_used * (int) $line->quantity;
+                    if ($used <= 0) continue;
+                    $ingredient->quantity = max(0, round((float) $ingredient->quantity - $used, 4));
+                    $ingredient->save();
+                }
             }
 
             $acceptedAt = now();
