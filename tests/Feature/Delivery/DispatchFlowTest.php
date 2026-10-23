@@ -199,6 +199,29 @@ it('runs the full driver order lifecycle', function (): void {
     ]);
 });
 
+it('returns 409 when rejecting an expired but still open offer', function (): void {
+    Queue::fake();
+    $company = DeliveryCompany::factory()->create();
+    $driver = createDeliveryDriverWithLocation($company);
+    Sanctum::actingAs($driver->user);
+
+    $order = app(DeliveryOrderService::class)->create($company, deliveryOrderPayload());
+    app(DriverDispatchService::class)->dispatchByOrderId($order->id);
+    $attempt = DeliveryAssignmentAttempt::query()->where('order_id', $order->id)->firstOrFail();
+
+    $this->travel(config('delivery.dispatch.offer_timeout_seconds') + 1)->seconds();
+    $this->postJson("/api/v1/delivery/driver/offers/{$attempt->id}/reject", [
+        'reason' => 'Expired',
+    ])->assertStatus(409);
+
+    $this->assertDatabaseHas('delivery_assignment_attempts', [
+        'id' => $attempt->id,
+        'status' => DeliveryAssignmentAttemptStatus::Open->value,
+    ]);
+    expect($order->fresh()->status)->toBe(DeliveryOrderStatus::Offered->value);
+    Queue::assertPushed(DispatchDeliveryOrderJob::class, 1);
+});
+
 it('returns 409 when accepting an expired offer', function (): void {
     $company = DeliveryCompany::factory()->create();
     $driver = createDeliveryDriverWithLocation($company);

@@ -244,7 +244,7 @@ final class DriverDispatchService
             if ((int) $attempt->driver_id !== (int) $driver->id) {
                 throw new RuntimeException('Unauthorized');
             }
-            if ($attempt->status !== DeliveryAssignmentAttemptStatus::Open->value) {
+            if ($attempt->status !== DeliveryAssignmentAttemptStatus::Open->value || $attempt->expires_at?->isPast()) {
                 throw new RuntimeException('Offer no longer available');
             }
             $order = DeliveryOrder::query()->lockForUpdate()->findOrFail($attempt->order_id);

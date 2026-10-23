@@ -18,7 +18,7 @@ return new class extends Migration
             $table->dropUnique('clean_book_special_unique');
             $table->unique(
                 ['cleaning_booking_id', 'cleaning_special_service_id', 'cleaning_booking_session_id'],
-                'clean_book_special_session_unique'
+                'clean_book_special_services_session_unique'
             );
         });
     }
@@ -26,7 +26,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('cleaning_booking_special_services', function (Blueprint $table): void {
-            $table->dropUnique('clean_book_special_session_unique');
+            $table->dropUnique('clean_book_special_services_session_unique');
             $table->unique(
                 ['cleaning_booking_id', 'cleaning_special_service_id'],
                 'clean_book_special_unique'
