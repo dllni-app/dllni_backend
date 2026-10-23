@@ -10,23 +10,31 @@ return new class extends Migration
 {
     public function up(): void
     {
+        $indexName = Schema::getConnection()->getDriverName() === 'sqlite'
+            ? 'clean_book_special_services_session_unique'
+            : 'clean_book_special_session_unique';
+
         Schema::table('cleaning_booking_special_services', function (Blueprint $table): void {
             $table->index('cleaning_booking_id', 'clean_book_special_booking_idx');
         });
 
-        Schema::table('cleaning_booking_special_services', function (Blueprint $table): void {
+        Schema::table('cleaning_booking_special_services', function (Blueprint $table) use ($indexName): void {
             $table->dropUnique('clean_book_special_unique');
             $table->unique(
                 ['cleaning_booking_id', 'cleaning_special_service_id', 'cleaning_booking_session_id'],
-                'clean_book_special_services_session_unique'
+                $indexName
             );
         });
     }
 
     public function down(): void
     {
-        Schema::table('cleaning_booking_special_services', function (Blueprint $table): void {
-            $table->dropUnique('clean_book_special_services_session_unique');
+        $indexName = Schema::getConnection()->getDriverName() === 'sqlite'
+            ? 'clean_book_special_services_session_unique'
+            : 'clean_book_special_session_unique';
+
+        Schema::table('cleaning_booking_special_services', function (Blueprint $table) use ($indexName): void {
+            $table->dropUnique($indexName);
             $table->unique(
                 ['cleaning_booking_id', 'cleaning_special_service_id'],
                 'clean_book_special_unique'
