@@ -142,6 +142,23 @@ it('rejects an offer and redispatches to another driver', function (): void {
         ->exists())->toBeTrue();
 });
 
+it('does not re-offer an order to a driver who rejected it', function (): void {
+    Queue::fake();
+    $company = DeliveryCompany::factory()->create();
+    $first = createDeliveryDriverWithLocation($company, 33.5140, 36.2767);
+    createDeliveryDriverWithLocation($company, 33.5145, 36.2770);
+    Sanctum::actingAs($first->user);
+
+    $order = app(DeliveryOrderService::class)->create($company, deliveryOrderPayload());
+    app(DriverDispatchService::class)->dispatchByOrderId($order->id);
+    $attempt = $order->assignmentAttempts()->where('driver_id', $first->id)->firstOrFail();
+    $this->postJson("/api/v1/delivery/driver/offers/{$attempt->id}/reject", ['reason' => 'Not available'])->assertOk();
+    app(DriverDispatchService::class)->dispatchByOrderId($order->id);
+
+    expect($order->assignmentAttempts()->where('driver_id', $first->id)->count())->toBe(1);
+    expect($order->assignmentAttempts()->count())->toBe(2);
+});
+
 it('expires an open attempt and moves to the next driver', function (): void {
     $company = DeliveryCompany::factory()->create();
     $firstDriver = createDeliveryDriverWithLocation($company, 33.5140, 36.2767);
