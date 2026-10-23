@@ -18,15 +18,22 @@ return new class extends Migration
             $table->dropUnique('clean_book_special_unique');
             $table->unique(
                 ['cleaning_booking_id', 'cleaning_special_service_id', 'cleaning_booking_session_id'],
-                'clean_book_special_session_unique'
+                'clean_book_special_booking_session_unique'
             );
         });
     }
 
     public function down(): void
     {
-        Schema::table('cleaning_booking_special_services', function (Blueprint $table): void {
-            $table->dropUnique('clean_book_special_session_unique');
+        // Older deployments may already have applied this migration before the
+        // fresh-SQLite-install index-name collision was corrected.
+        $sessionIndex = Schema::hasIndex(
+            'cleaning_booking_special_services',
+            'clean_book_special_booking_session_unique'
+        ) ? 'clean_book_special_booking_session_unique' : 'clean_book_special_session_unique';
+
+        Schema::table('cleaning_booking_special_services', function (Blueprint $table) use ($sessionIndex): void {
+            $table->dropUnique($sessionIndex);
             $table->unique(
                 ['cleaning_booking_id', 'cleaning_special_service_id'],
                 'clean_book_special_unique'
