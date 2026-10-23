@@ -53,6 +53,31 @@ final class RestaurantSellerAuthExtras
         ];
     }
 
+    /** @return array{id: int, name: string, branch: string|null, primaryImage: string|null}|null */
+    public static function restaurantPayload(User $user): ?array
+    {
+        $restaurant = $user->restaurants()->orderBy('id')->first();
+        if ($restaurant === null) {
+            $restaurant = RestaurantStaff::query()
+                ->where('user_id', $user->id)
+                ->where('is_active', true)
+                ->with('restaurant')
+                ->orderBy('id')
+                ->first()?->restaurant;
+        }
+
+        if ($restaurant === null) {
+            return null;
+        }
+
+        return [
+            'id' => (int) $restaurant->id,
+            'name' => (string) $restaurant->name,
+            'branch' => $restaurant->district ?: ($restaurant->city ?: $restaurant->address),
+            'primaryImage' => $restaurant->getFirstMediaUrl('primary-image'),
+        ];
+    }
+
     /**
      * @return list<array{id: int, name: string, slug: string|null, group: string|null}>
      */

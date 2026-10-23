@@ -10,6 +10,8 @@ use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Services\RestaurantSellerAuthExtras;
 use App\Services\SupermarketSellerAuthExtras;
+use App\Support\SyrianPhoneNumber;
+use Modules\Resturants\Models\RestaurantStaff;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -27,7 +29,13 @@ final class UserAuthController
 
     public function login(UserLoginRequest $request): JsonResponse
     {
-        $user = User::query()->where('phone', $request->validated('phone'))->first();
+        $phone = (string) $request->validated('phone');
+        $canonicalPhone = SyrianPhoneNumber::normalize($phone);
+        $user = User::query()->where('phone', $canonicalPhone)->first();
+        if ($user === null) {
+            // Support records created before employee phone normalization.
+            $user = User::query()->whereIn('phone', SyrianPhoneNumber::aliases($phone))->first();
+        }
 
         if (! $user instanceof User || ! Hash::check($request->validated('password'), $user->password)) {
             $this->throwValidationError('phone', self::INVALID_CREDENTIALS_MESSAGE);
@@ -49,6 +57,13 @@ final class UserAuthController
             }
         }
 
+        if ($user->module_type === UserModuleType::RestaurantSeller &&
+            ! $user->restaurants()->exists() &&
+            RestaurantStaff::query()->where('user_id', $user->id)->exists() &&
+            ! RestaurantStaff::query()->where('user_id', $user->id)->where('is_active', true)->exists()) {
+            $this->throwValidationError('phone', self::ACCOUNT_NOT_ACTIVE_MESSAGE);
+        }
+
         $fcmToken = $request->validated('fcmToken');
         if (is_string($fcmToken) && $fcmToken !== '') {
             $user->forceFill([
@@ -67,6 +82,7 @@ final class UserAuthController
         if ($user->module_type === UserModuleType::RestaurantSeller) {
             $payload['role'] = RestaurantSellerAuthExtras::rolePayload($user);
             $payload['permissions'] = RestaurantSellerAuthExtras::permissionsPayload($user);
+            $payload['restaurant'] = RestaurantSellerAuthExtras::restaurantPayload($user);
         }
 
         if ($user->module_type === UserModuleType::SupermarketSeller) {
