@@ -11,6 +11,7 @@ use App\Support\DashboardAdminRecipients;
 use Illuminate\Support\Facades\Notification;
 use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Models\Order;
+use Modules\Resturants\Services\RestaurantInventoryConsumptionService;
 
 final class OrderObserver
 {
@@ -35,6 +36,9 @@ final class OrderObserver
         if (! $order->wasChanged('status') || $order->status !== OrderStatus::Cancelled) {
             return;
         }
+
+        // Restore recorded ingredient consumption once for any cancellation path.
+        app(RestaurantInventoryConsumptionService::class)->restore($order);
 
         $this->platformCoupons->reverseForOrder(
             $order,
