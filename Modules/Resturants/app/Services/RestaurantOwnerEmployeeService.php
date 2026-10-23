@@ -6,6 +6,7 @@ namespace Modules\Resturants\Services;
 
 use App\Enums\UserModuleType;
 use App\Models\User;
+use App\Support\SyrianPhoneNumber;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Modules\Resturants\Models\Restaurant;
@@ -22,6 +23,9 @@ final class RestaurantOwnerEmployeeService
         bool $isActive,
         array $permissionIds = []
     ): RestaurantStaff {
+        // Reuse the same canonicalization as the login endpoint.
+        $phone = SyrianPhoneNumber::normalize($phone);
+
         return DB::transaction(function () use ($restaurant, $name, $email, $phone, $password, $isActive, $permissionIds) {
             $user = null;
 
