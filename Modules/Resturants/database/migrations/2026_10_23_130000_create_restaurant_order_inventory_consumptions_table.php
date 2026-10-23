@@ -12,8 +12,10 @@ return new class extends Migration
     {
         Schema::create('restaurant_order_inventory_consumptions', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('order_id')->constrained('orders')->cascadeOnDelete();
-            $table->foreignId('inventory_item_id')->constrained('inventory_items')->cascadeOnDelete();
+            $table->foreignId('order_id');
+            $table->foreign('order_id', 'rest_order_inventory_order_fk')->references('id')->on('orders')->cascadeOnDelete();
+            $table->foreignId('inventory_item_id');
+            $table->foreign('inventory_item_id', 'rest_order_inventory_item_fk')->references('id')->on('inventory_items')->cascadeOnDelete();
             $table->decimal('quantity_consumed', 12, 4);
             $table->timestamp('restored_at')->nullable();
             $table->timestamps();
