@@ -180,6 +180,23 @@ it('expires an open attempt and moves to the next driver', function (): void {
     expect(DeliveryAssignmentAttempt::query()->where('order_id', $order->id)->count())->toBe(2);
 });
 
+it('does not re-offer an order to a timed-out driver', function (): void {
+    Queue::fake();
+    $company = DeliveryCompany::factory()->create();
+    $first = createDeliveryDriverWithLocation($company, 33.5140, 36.2767);
+    createDeliveryDriverWithLocation($company, 33.5145, 36.2770);
+
+    $order = app(DeliveryOrderService::class)->create($company, deliveryOrderPayload());
+    app(DriverDispatchService::class)->dispatchByOrderId($order->id);
+    $attempt = $order->assignmentAttempts()->where('driver_id', $first->id)->firstOrFail();
+    $this->travel(config('delivery.dispatch.offer_timeout_seconds') + 1)->seconds();
+    app(DriverDispatchService::class)->expireAttempt($attempt->id);
+    app(DriverDispatchService::class)->dispatchByOrderId($order->id);
+
+    expect($order->assignmentAttempts()->where('driver_id', $first->id)->count())->toBe(1);
+    expect($order->assignmentAttempts()->count())->toBe(2);
+});
+
 it('runs the full driver order lifecycle', function (): void {
     $company = DeliveryCompany::factory()->create();
     $driver = createDeliveryDriverWithLocation($company);
