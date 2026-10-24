@@ -10,9 +10,18 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 final class CleaningMaterialInventoryMovement extends Model
 {
     public const RESERVED = 'reserved';
+
     public const RELEASED = 'released';
+
     public const CONSUMED = 'consumed';
+
     public const ADJUSTED = 'adjusted';
+
+    public const RETURNED_UNUSED = 'returned_unused';
+
+    public const DAMAGED = 'damaged';
+
+    public const LOST = 'lost';
 
     protected $fillable = [
         'cleaning_material_id',

@@ -38,6 +38,40 @@ return [
                 ],
             ],
         ],
+        'cleaning.booking.last_hour_team_decision_required' => [
+            'legacy_type' => 'cleaning_last_hour_team_decision_required',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'قرار مطلوب بشأن فريق التنظيف',
+                    'body' => 'اقترب موعد طلبك رقم :booking_number. اختر إن كنت تريد من العامل المتاح تنفيذ كامل المهام أو متابعة مهامه المحددة.',
+                ],
+                'en' => [
+                    'title' => 'Cleaning team decision needed',
+                    'body' => 'Your cleaning booking :booking_number starts soon. Review the available worker task coverage.',
+                ],
+            ],
+        ],
+        'cleaning.booking.last_hour_tasks_expanded' => [
+            'legacy_type' => 'cleaning_last_hour_tasks_expanded',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'تم تحديث مهام طلب التنظيف',
+                    'body' => 'اختار العميل إسناد جميع المهام إليك في الطلب رقم :booking_number. افتح تفاصيل الطلب للاطلاع على المهام والأجرة المحدثة.',
+                ],
+                'en' => [
+                    'title' => 'Your cleaning tasks have changed',
+                    'body' => 'All tasks for cleaning booking :booking_number are now assigned to you. Open the booking to review.',
+                ],
+            ],
+        ],
         'cleaning.booking.worker_changed' => [
             'legacy_type' => 'cleaning_worker_changed',
             'module' => 'cleaning',

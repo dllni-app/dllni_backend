@@ -172,6 +172,14 @@ final class CleaningBookingSessionCancellationService
                 ])->save();
             }
 
+            foreach ($affectedWorkerIds as $workerId) {
+                $worker = \App\Models\Worker::query()->findOrFail($workerId);
+                app(CleaningSpecialistEquipmentReservationService::class)
+                    ->releaseForSessionWorker($booking, $locked, $worker);
+                app(CleaningSpecialistEquipmentReservationService::class)
+                    ->releaseIfNoActiveSessions($booking, $worker);
+            }
+
             $locked->forceFill([
                 'coverage_status' => CleaningBookingSessionCoverageStatus::Searching,
                 'status' => CleaningBookingSessionStatus::Skipped,
@@ -413,6 +421,9 @@ final class CleaningBookingSessionCancellationService
         $startsAt = $session->startsAt();
         if ($startsAt === null || ! $startsAt->isFuture()) {
             throw new InvalidArgumentException('Only a future recurring session can be skipped.');
+        }
+        if ($startsAt->lt(now()->addHours(24))) {
+            throw new InvalidArgumentException('A recurring session can only be skipped at least 24 hours before it starts.');
         }
         if ($session->started_travel_at !== null || $session->work_started_at !== null) {
             throw new InvalidArgumentException('A recurring session cannot be skipped after worker travel starts.');

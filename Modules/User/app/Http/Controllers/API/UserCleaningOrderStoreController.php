@@ -10,7 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
-use Modules\Cleaning\Services\CleaningPricingCalculator;
+use Modules\Cleaning\Services\CleaningCouponPricingService;
 use Modules\User\Http\Requests\UserCleaningOrderStoreRequest;
 use Modules\User\Http\Resources\UserCleaningBookingResource;
 use Modules\User\Services\EventAssistanceScheduleService;
@@ -18,6 +18,7 @@ use Modules\User\Services\OpenTimeScheduleService;
 use Modules\User\Services\RecurringCleaningScheduleService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 use Modules\User\Services\UserCleaningOrderService;
+use Modules\User\Services\RoomPeriodBookingCreationService;
 use Modules\User\Support\CleaningWorkerCapacity;
 
 final class UserCleaningOrderStoreController
@@ -30,13 +31,77 @@ final class UserCleaningOrderStoreController
         RecurringCleaningScheduleService $recurringSchedule,
         OpenTimeScheduleService $openTimeSchedule,
         PlatformCouponRedemptionService $platformCoupons,
-        CleaningPricingCalculator $pricingCalculator,
+        CleaningCouponPricingService $couponPricing,
+        RoomPeriodBookingCreationService $periodCreation,
     ): JsonResponse {
         $couponCode = $request->input('couponCode');
         Validator::make(['couponCode' => $couponCode], [
             'couponCode' => ['nullable', 'string', 'max:50'],
         ])->validate();
         $validated = $this->normalizeWorkerCount($request->validated());
+        if (($validated['serviceType'] ?? null) === 'supervised_team' && ! config('cleaning_supervisor.booking_enabled')) {
+            return response()->json([
+                'code' => 'FEATURE_NOT_CONFIGURED',
+                'message' => 'حجز فريق تحت الإشراف غير متاح حتى اعتماد آلية التحقق والموافقات.',
+            ], 409);
+        }
+        if (($validated['serviceType'] ?? null) === 'supervised_team') {
+            if ((int) ($validated['numberOfWorkers'] ?? 0) < 2
+                || (int) ($validated['contractVersion'] ?? 0) === 2
+                || ! empty($validated['openTime']) || ! empty($validated['roomPeriods'])
+                || ! empty($validated['recurringSchedule']) || ! empty($validated['workerRoomAssignments'])
+                || ! empty($validated['preferredWorkerIds']) || ! empty($validated['preferredWorkerId'])
+                || ($validated['assignmentMode'] ?? 'open_count') !== 'open_count'
+                || $estimationService->isEventAssistanceType((string) $validated['propertyType'])) {
+                throw ValidationException::withMessages(['serviceType' => ['يجب اختيار عاملين على الأقل وخدمة فريق بموعد واحد.']]);
+            }
+        }
+        if ((int) ($validated['contractVersion'] ?? 0) === 2) {
+            $booking = app(\Modules\User\Services\CleaningTimePeriodBookingService::class)->create($request->user(), $validated);
+            $details = app(\Modules\User\Services\CleaningTimePeriodCustomerDetailService::class)->forBooking($booking);
+            if ($details === null) {
+                throw new \LogicException('Persisted V2 booking schedules are missing.');
+            }
+
+            return response()->json(['order' => UserCleaningBookingResource::make($booking), 'contractVersion' => 2, ...$details], 201);
+        }
+        if (is_array($validated['roomPeriods'] ?? null)) {
+            if ($request->filled('couponCode')) {
+                throw ValidationException::withMessages([
+                    'couponCode' => ['Period-level coupon support is not available yet; no booking was created.'],
+                ]);
+            }
+
+            $booking = $periodCreation->create(
+                $request->user(),
+                $validated,
+                (string) $validated['quoteSignature'],
+            );
+            $booking->load([
+                'worker.user', 'preferredWorker.user',
+                'rooms.assignedWorker.user', 'workerAssignments.worker.user',
+                'timeWarnings', 'disputes', 'addons', 'billingPolicy',
+            ]);
+
+            return response()->json([
+                'order' => UserCleaningBookingResource::make($booking),
+                'roomPeriods' => $booking->roomPeriods()
+                    ->get()
+                    ->map(static fn ($period): array => [
+                        'clientKey' => $period->client_key,
+                        'visitSequence' => $period->visit_sequence,
+                        'roomType' => $period->room_type,
+                        'size' => $period->room_size,
+                        'cleaningMode' => $period->cleaning_mode,
+                        'scheduledDate' => $period->scheduled_date?->format('Y-m-d'),
+                        'scheduledTime' => substr((string) $period->scheduled_time, 0, 5),
+                        'numberOfWorkers' => $period->required_workers,
+                        'estimatedDurationMinutes' => $period->estimated_duration_minutes,
+                        'materials' => $period->materials,
+                        'specialServices' => $period->special_services,
+                    ])->values()->all(),
+            ], 201);
+        }
         $validated = $this->withEventWorkerCount($validated);
         $this->assertWorkerCapacity($validated, $estimationService);
         $isEventAssistance = $estimationService->isEventAssistanceType((string) ($validated['propertyType'] ?? ''));
@@ -61,7 +126,7 @@ final class UserCleaningOrderStoreController
             $openTimeSchedule,
             $openTimePlan,
             $platformCoupons,
-            $pricingCalculator,
+            $couponPricing,
             $couponCode,
             $validated,
         ) {
@@ -174,6 +239,7 @@ final class UserCleaningOrderStoreController
                         null,
                         (bool) ($validated['requestMaterials'] ?? false),
                         is_array($validated['specialServices'] ?? null) ? $validated['specialServices'] : [],
+                        max(1, (int) $order->number_of_workers),
                     );
                 }
 
@@ -190,19 +256,17 @@ final class UserCleaningOrderStoreController
             }
 
             if (is_string($couponCode) && mb_trim($couponCode) !== '') {
-                $serviceSubtotal = round(
-                    (float) $order->base_price + (float) $order->addons_total,
-                    2,
-                );
-                $couponAdminMargin = (bool) $order->is_pricing_final
-                    ? max(0.0, (float) $order->admin_margin_amount)
-                    : (float) $pricingCalculator->provisional($serviceSubtotal, 0.0)['adminMargin'];
-                $subtotal = round(
-                    $serviceSubtotal
-                    + (float) $order->travel_fee
-                    + $couponAdminMargin,
-                    2,
-                );
+                // The saved price is already the authoritative customer quote:
+                // minimum-order pricing can include platform commission.
+                $subtotal = round(max(0.0, (float) $order->total_price), 2);
+                $serviceSubtotal = round(max(0.0, (float) $order->base_price)
+                    + max(0.0, (float) $order->addons_total), 2);
+                $travelFee = round(max(0.0, (float) $order->travel_fee), 2);
+                $grossAdminMargin = round(max(0.0, (float) $order->admin_margin_amount), 2);
+                $includedAdminMargin = round(min($grossAdminMargin, max(
+                    0.0,
+                    $serviceSubtotal + $travelFee + $grossAdminMargin - $subtotal,
+                )), 2);
                 $quote = $platformCoupons->quoteForPlacement(
                     userId: (int) $request->user()->id,
                     section: PlatformCoupon::SECTION_CLEANING,
@@ -216,7 +280,16 @@ final class UserCleaningOrderStoreController
                     required: true,
                 );
 
-                $discount = (float) $quote['discount'];
+                // Coupon eligibility uses the customer subtotal. The discount
+                // itself excludes transport and consumes platform margin first.
+                $allocation = $couponPricing->allocation(
+                    $quote['coupon'],
+                    $serviceSubtotal,
+                    $travelFee,
+                    $grossAdminMargin,
+                    $includedAdminMargin,
+                );
+                $discount = (float) $allocation['discountAmount'];
                 $order->forceFill([
                     'subtotal_before_discount' => $subtotal,
                     'discount_amount' => $discount,

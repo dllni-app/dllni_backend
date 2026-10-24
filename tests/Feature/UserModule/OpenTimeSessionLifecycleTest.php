@@ -121,6 +121,28 @@ it('runs the session extension and agreed end lifecycle idempotently through HTT
         ->and($booking->open_time_finalized_at)->not->toBeNull();
 });
 
+it('preserves a replacement extension when the worker decides an already expired request', function (): void {
+    [$customer, $workerUser, , $booking, $session] = makeOpenTimeSessionLifecycleScenario();
+    $url = "/api/v1/user/cleaning/orders/{$booking->id}/sessions/{$session->id}/open-time/extensions";
+    Sanctum::actingAs($customer);
+    $oldId = (int) $this->withHeader('Idempotency-Key', 'qa-outdated-session-extension-a')
+        ->postJson($url, ['minutes' => 30])
+        ->assertCreated()->json('data.extension.id');
+    $newId = (int) $this->withHeader('Idempotency-Key', 'qa-outdated-session-extension-b')
+        ->postJson($url, ['minutes' => 30])
+        ->assertCreated()->json('data.extension.id');
+
+    Sanctum::actingAs($workerUser);
+    $this->postJson("/api/v1/cleaning-bookings/open-time/extensions/{$oldId}/decision", [
+        'decision' => 'rejected',
+    ])->assertOk()->assertJsonPath('data.extension.status', 'expired');
+
+    expect(CleaningOpenTimeExtension::query()->findOrFail($oldId)->status)->toBe('expired')
+        ->and(CleaningOpenTimeExtension::query()->findOrFail($newId)->status)->toBe('pending')
+        ->and($session->fresh()->open_time_expected_max_minutes)->toBe(120)
+        ->and(CleaningOpenTimeExtension::query()->where('cleaning_booking_session_id', $session->id)->count())->toBe(2);
+});
+
 it('records a rejected session end without stopping the running timer', function (): void {
     [$customer, $workerUser, , $booking, $session] = makeOpenTimeSessionLifecycleScenario();
 
@@ -203,6 +225,78 @@ it('keeps the legacy parent open-time end lifecycle idempotent', function (): vo
         ->and($booking->fresh()->open_time_actual_minutes)->toBe(31)
         ->and($booking->fresh()->open_time_billable_minutes)->toBe(60)
         ->and($booking->fresh()->open_time_final_amount)->toBe(120.0);
+});
+
+it('preserves a legacy replacement extension when the worker decides the expired request', function (): void {
+    [$customer, $workerUser, $worker, $booking, $session] = makeOpenTimeSessionLifecycleScenario();
+    $session->delete();
+    $booking->forceFill([
+        'worker_id' => $worker->id,
+        'open_time_expected_max_minutes' => 120,
+        'open_time_hard_max_minutes' => 240,
+        'open_time_extension_options' => [15, 30, 60],
+        'work_started_at' => now()->subMinutes(30),
+    ])->saveQuietly();
+
+    $url = "/api/v1/user/cleaning/orders/{$booking->id}/open-time/extensions";
+    Sanctum::actingAs($customer);
+    $oldId = (int) $this->withHeader('Idempotency-Key', 'qa-legacy-parent-old')
+        ->postJson($url, ['minutes' => 30])
+        ->assertCreated()->json('data.extension.id');
+    $newId = (int) $this->withHeader('Idempotency-Key', 'qa-legacy-parent-new')
+        ->postJson($url, ['minutes' => 30])
+        ->assertCreated()->json('data.extension.id');
+
+    Sanctum::actingAs($workerUser);
+    $this->postJson("/api/v1/cleaning-bookings/open-time/extensions/{$oldId}/decision", [
+        'decision' => 'rejected',
+    ])->assertOk()->assertJsonPath('data.extension.status', 'expired');
+
+    expect(CleaningOpenTimeExtension::query()->findOrFail($oldId)->status)->toBe('expired')
+        ->and(CleaningOpenTimeExtension::query()->findOrFail($newId)->status)->toBe('pending')
+        ->and($booking->fresh()->open_time_expected_max_minutes)->toBe(120)
+        ->and(CleaningOpenTimeExtension::query()->where('cleaning_booking_id', $booking->id)->count())->toBe(2);
+
+    Sanctum::actingAs($customer);
+    $replayedId = (int) $this->withHeader('Idempotency-Key', 'qa-legacy-parent-new')
+        ->postJson($url, ['minutes' => 30])
+        ->assertCreated()->json('data.extension.id');
+    expect($replayedId)->toBe($newId);
+
+    Sanctum::actingAs($workerUser);
+    $decisionUrl = "/api/v1/cleaning-bookings/open-time/extensions/{$newId}/decision";
+    $this->postJson($decisionUrl, ['decision' => 'accepted'])
+        ->assertOk()->assertJsonPath('data.extension.status', 'accepted');
+    $this->postJson($decisionUrl, ['decision' => 'accepted'])
+        ->assertOk()->assertJsonPath('data.extension.status', 'accepted');
+    expect($booking->fresh()->open_time_expected_max_minutes)->toBe(150);
+});
+
+it('denies a different worker access to a pending legacy Open-Time extension', function (): void {
+    [$customer, , $worker, $booking, $session] = makeOpenTimeSessionLifecycleScenario();
+    $session->delete();
+    $booking->forceFill([
+        'worker_id' => $worker->id,
+        'open_time_expected_max_minutes' => 120,
+        'open_time_hard_max_minutes' => 240,
+        'open_time_extension_options' => [15, 30, 60],
+        'work_started_at' => now()->subMinutes(30),
+    ])->saveQuietly();
+    Sanctum::actingAs($customer);
+    $id = (int) $this->withHeader('Idempotency-Key', 'qa-legacy-permissions')
+        ->postJson("/api/v1/user/cleaning/orders/{$booking->id}/open-time/extensions", [
+            'minutes' => 30,
+        ])->assertCreated()->json('data.extension.id');
+
+    $otherUser = User::factory()->create(['is_active' => true]);
+    Worker::factory()->create(['user_id' => $otherUser->id, 'is_active' => true]);
+    Sanctum::actingAs($otherUser);
+    $this->postJson("/api/v1/cleaning-bookings/open-time/extensions/{$id}/decision", [
+        'decision' => 'accepted',
+    ])->assertForbidden();
+
+    expect(CleaningOpenTimeExtension::query()->findOrFail($id)->status)->toBe('pending')
+        ->and($booking->fresh()->open_time_expected_max_minutes)->toBe(120);
 });
 
 /**

@@ -9,12 +9,15 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\User\Http\Requests\Concerns\ResolvesEventVenueTypes;
 use Modules\User\Http\Requests\Concerns\ValidatesEventAssistanceSchedule;
 use Modules\User\Services\FemaleWorkerSafetyPolicyService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderUpdateRequest extends FormRequest
 {
+    use \Modules\User\Http\Requests\Concerns\ValidatesRoomCleaningModes;
+    use ResolvesEventVenueTypes;
     use ValidatesEventAssistanceSchedule;
 
     public function authorize(): bool
@@ -31,7 +34,7 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
 
         return [
             'propertyType' => ['sometimes', 'string', Rule::in(UserCleaningOrderEstimationService::PROPERTY_TYPES)],
-            'propertyDetails' => ['sometimes', 'array:address,location_name,bedrooms,rooms,bathrooms,toilets,kitchens,balconies,sheds,living_room_size,cleaning_mode,room_size_breakdown,eventType,guestCount,venueType,customService,hours,specialRequirement,notes'],
+            'propertyDetails' => ['sometimes', 'array:address,location_name,bedrooms,rooms,bathrooms,toilets,kitchens,balconies,sheds,living_room_size,cleaning_mode,room_cleaning_modes,room_size_breakdown,eventType,guestCount,venueType,customService,hours,specialRequirement,notes'],
             'propertyDetails.address' => ['sometimes', 'string', 'max:500'],
             'propertyDetails.location_name' => ['nullable', 'string', 'max:255'],
             'propertyDetails.bedrooms' => ['nullable', 'integer', 'min:0', 'max:20'],
@@ -43,6 +46,7 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
             'propertyDetails.sheds' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.living_room_size' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::LIVING_ROOM_SIZES)],
             'propertyDetails.cleaning_mode' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::CLEANING_MODES)],
+            ...$this->roomCleaningModeRules(),
             'propertyDetails.room_size_breakdown' => ['nullable', 'array:bedroom,bathroom,toilet,kitchen,living_room,balcony,corridor,shed'],
             'propertyDetails.room_size_breakdown.bedroom' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.bathroom' => ['sometimes', 'array:small,medium,large'],
@@ -68,11 +72,26 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
             'serviceIds.*' => ['prohibited'],
             'requestMaterials' => ['sometimes', 'boolean'],
             'specialServices' => ['sometimes', 'array', 'max:10'],
-            'specialServices.*' => ['array:specialServiceId,quantity,dirtinessLevel,notes'],
-            'specialServices.*.specialServiceId' => ['required', 'integer', 'distinct', 'exists:cleaning_special_services,id'],
-            'specialServices.*.quantity' => ['required', 'numeric', 'gt:0', 'max:10000'],
-            'specialServices.*.dirtinessLevel' => ['required', 'string', 'max:32'],
+            'specialServices.*' => ['array:specialServiceId,serviceId,quantity,dirtinessLevel,notes,sessionIds,items'],
+            'specialServices.*.specialServiceId' => ['required_without:specialServices.*.serviceId', 'integer', 'exists:cleaning_special_services,id'],
+            'specialServices.*.serviceId' => ['required_without:specialServices.*.specialServiceId', 'integer', 'exists:cleaning_special_services,id'],
+            'specialServices.*.quantity' => ['required_without:specialServices.*.items', 'numeric', 'gt:0', 'max:10000'],
+            'specialServices.*.dirtinessLevel' => ['nullable', 'string', 'max:64'],
             'specialServices.*.notes' => ['nullable', 'string', 'max:2000'],
+            'specialServices.*.sessionIds' => ['sometimes', 'array', 'max:30'],
+            'specialServices.*.sessionIds.*' => ['integer', 'min:1', 'distinct'],
+            'specialServices.*.items' => ['sometimes', 'array', 'min:1', 'max:50'],
+            'specialServices.*.items.*' => ['array:quantity,dirtinessLevelId,dirtinessLevel,notes,attachments,beforeImages,afterImages'],
+            'specialServices.*.items.*.quantity' => ['required', 'numeric', 'gt:0', 'max:10000'],
+            'specialServices.*.items.*.dirtinessLevelId' => ['nullable', 'integer', 'exists:cleaning_dirtiness_levels,id'],
+            'specialServices.*.items.*.dirtinessLevel' => ['nullable', 'string', 'max:64'],
+            'specialServices.*.items.*.notes' => ['nullable', 'string', 'max:2000'],
+            'specialServices.*.items.*.attachments' => ['sometimes', 'array', 'max:10'],
+            'specialServices.*.items.*.attachments.*' => ['string', 'max:2048'],
+            'specialServices.*.items.*.beforeImages' => ['sometimes', 'array', 'max:10'],
+            'specialServices.*.items.*.beforeImages.*' => ['string', 'max:2048'],
+            'specialServices.*.items.*.afterImages' => ['sometimes', 'array', 'max:10'],
+            'specialServices.*.items.*.afterImages.*' => ['string', 'max:2048'],
             'openTime' => ['prohibited'],
             'scheduledDate' => ['sometimes', 'date', 'after_or_equal:'.$today],
             'scheduledTime' => ['sometimes', 'date_format:H:i'],
@@ -102,7 +121,19 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
+            $this->validateRoomCleaningModes($validator);
             $this->validateEventAssistanceSchedule($validator);
+
+            $bookingId = $this->route('order');
+            if ($this->has('specialServices') && is_numeric($bookingId)
+                && is_array($this->input('specialServices'))
+                && $this->input('specialServices') === []
+                && CleaningBooking::query()
+                    ->whereKey((int) $bookingId)
+                    ->where('customer_id', (int) ($this->user()?->id ?? 0))
+                    ->where('booking_kind', 'special_service')->exists()) {
+                $validator->errors()->add('specialServices', 'A standalone special-service booking must retain at least one service.');
+            }
 
             $assignmentMode = $this->normalizedAssignmentMode();
             $preferredWorkerId = $this->input('preferredWorkerId');
@@ -201,13 +232,5 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
         }
 
         $validator->errors()->add('genderPreference', 'Order gender preference cannot be changed after workers have accepted.');
-    }
-
-    private function availableVenueTypes(): array
-    {
-        return array_values(array_filter(
-            UserCleaningOrderEstimationService::PROPERTY_TYPES,
-            static fn (string $type): bool => $type !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE
-        ));
     }
 }

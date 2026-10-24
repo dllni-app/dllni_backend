@@ -31,6 +31,7 @@ final class RouteServiceProvider extends ServiceProvider
     public function mapApiRoutes(): void
     {
         Route::middleware('api')->prefix('api')->name('api.')->group(module_path($this->name, '/routes/api.php'));
+        Route::middleware('api')->prefix('api')->name('api.')->group(module_path($this->name, '/routes/inventory.php'));
     }
 
     public function mapSessionRoutes(): void

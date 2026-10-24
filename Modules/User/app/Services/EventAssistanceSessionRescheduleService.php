@@ -153,6 +153,13 @@ final class EventAssistanceSessionRescheduleService
                 'version' => max(0, (int) $lockedSession->version) + 1,
             ])->save();
 
+            foreach ($activeAssignments as $assignment) {
+                if ($assignment->worker !== null) {
+                    app(\Modules\Cleaning\Services\CleaningSpecialistEquipmentReservationService::class)
+                        ->confirmForSession($lockedBooking, $lockedSession, $assignment->worker);
+                }
+            }
+
             $this->financialAggregation->sync($lockedBooking);
             $this->syncParentScheduleMetadata($lockedBooking);
 

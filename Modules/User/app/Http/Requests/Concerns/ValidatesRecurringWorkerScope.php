@@ -56,8 +56,11 @@ trait ValidatesRecurringWorkerScope
         ];
 
         if ($preferredWorkerIds !== []) {
-            $merge['numberOfWorkers'] = count($preferredWorkerIds);
-            $merge['assignmentMode'] = count($preferredWorkerIds) === 1
+            // Preserve the team size selected by the customer.
+            if ($this->has('numberOfWorkers')) {
+                $merge['numberOfWorkers'] = max(1, (int) $this->input('numberOfWorkers'));
+            }
+            $merge['assignmentMode'] = (($this->input('assignmentMode') === 'preferred_worker') || ((int) $this->input('numberOfWorkers', 0) === 1)) && count($preferredWorkerIds) === 1
                 ? 'preferred_worker'
                 : 'open_count';
         }
@@ -76,7 +79,7 @@ trait ValidatesRecurringWorkerScope
         $isRecurring = is_array($schedule)
             && mb_strtolower(mb_trim((string) ($schedule['mode'] ?? ''))) === 'recurring';
 
-        if (! $isRecurring) {
+        if (! $isRecurring && (int) $this->input('contractVersion') !== 2) {
             $validator->errors()->add(
                 'workerScope',
                 'Worker scope can only be selected for a recurring cleaning booking.',

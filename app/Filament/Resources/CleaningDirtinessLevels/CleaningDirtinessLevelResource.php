@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningDirtinessLevels;
 
+use App\Filament\Clusters\CleaningCatalogCluster;
 use App\Filament\Resources\CleaningDirtinessLevels\Pages\CreateCleaningDirtinessLevel;
 use App\Filament\Resources\CleaningDirtinessLevels\Pages\EditCleaningDirtinessLevel;
 use App\Filament\Resources\CleaningDirtinessLevels\Pages\ListCleaningDirtinessLevels;
@@ -22,6 +23,8 @@ use Modules\Cleaning\Models\CleaningDirtinessLevel;
 final class CleaningDirtinessLevelResource extends Resource
 {
     protected static ?string $model = CleaningDirtinessLevel::class;
+
+    protected static ?string $cluster = CleaningCatalogCluster::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedAdjustmentsHorizontal;
 

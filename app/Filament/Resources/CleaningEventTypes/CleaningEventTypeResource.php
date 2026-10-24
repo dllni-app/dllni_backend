@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningEventTypes;
 
+use App\Filament\Clusters\CleaningCatalogCluster;
 use App\Filament\Resources\CleaningEventTypes\Pages\CreateCleaningEventType;
 use App\Filament\Resources\CleaningEventTypes\Pages\EditCleaningEventType;
 use App\Filament\Resources\CleaningEventTypes\Pages\ListCleaningEventTypes;
@@ -25,6 +26,8 @@ use Modules\Cleaning\Models\CleaningEventType;
 final class CleaningEventTypeResource extends Resource
 {
     protected static ?string $model = CleaningEventType::class;
+
+    protected static ?string $cluster = CleaningCatalogCluster::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCalendarDays;
 

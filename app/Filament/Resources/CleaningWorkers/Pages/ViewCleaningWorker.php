@@ -7,6 +7,7 @@ namespace App\Filament\Resources\CleaningWorkers\Pages;
 use App\Filament\Resources\CleaningWorkers\CleaningWorkerResource;
 use App\Filament\Resources\CleaningWorkers\Support\AdjustWorkerTrustScoreAction;
 use App\Filament\Resources\CleaningWorkers\Widgets\CleaningWorkerPenaltyStats;
+use App\Filament\Resources\SystemUsers\Support\ResetAccountPasswordAction;
 use App\Filament\Resources\Workers\Support\WorkerSuspensionActions;
 use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
@@ -27,6 +28,7 @@ final class ViewCleaningWorker extends ViewRecord
         return [
             AdjustWorkerTrustScoreAction::make(),
             ...WorkerSuspensionActions::make(),
+            ResetAccountPasswordAction::make(),
             EditAction::make(),
         ];
     }

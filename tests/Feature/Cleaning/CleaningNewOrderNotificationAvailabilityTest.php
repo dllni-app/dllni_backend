@@ -130,7 +130,9 @@ it('deletes every new-order notification when a single-worker booking is accepte
     expect(DatabaseNotification::query()->whereKey($otherNotification->id)->exists())->toBeFalse();
 
     Sanctum::actingAs($otherUser);
-    getJson("/api/v1/cleaning-bookings/{$booking->id}")->assertStatus(409);
+    // A worker who did not accept a filled booking must not be able to
+    // enumerate that booking; the read endpoint deliberately returns 404.
+    getJson("/api/v1/cleaning-bookings/{$booking->id}")->assertNotFound();
 
     Sanctum::actingAs($acceptedUser);
     getJson("/api/v1/cleaning-bookings/{$booking->id}")->assertOk();
@@ -175,7 +177,8 @@ it('keeps notifications available until all required workers accept a multi-work
     expect(DatabaseNotification::query()->whereKey($otherNotification->id)->exists())->toBeFalse();
 
     Sanctum::actingAs($otherUser);
-    getJson("/api/v1/cleaning-bookings/{$booking->id}")->assertStatus(409);
+    // A third worker must not discover a fully staffed team booking by ID.
+    getJson("/api/v1/cleaning-bookings/{$booking->id}")->assertNotFound();
 
     Sanctum::actingAs($workerOneUser);
     getJson("/api/v1/cleaning-bookings/{$booking->id}")->assertOk();

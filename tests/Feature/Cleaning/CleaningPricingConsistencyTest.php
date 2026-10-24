@@ -206,3 +206,22 @@ it('does not overwrite an explicitly approved final price adjustment', function 
         ->and((float) $booking->admin_margin_amount)->toBe(625.0)
         ->and((float) $booking->total_price)->toBe(4125.0);
 });
+
+it('does not include commission in the minimum when the raw subtotal happens to equal it', function (): void {
+    CleaningFinancialSetting::query()->updateOrCreate(['id' => 1], [
+        'default_commission_rate' => 25,
+        'commission_type' => 'percent',
+        'travel_markup_type' => 'none',
+        'cleaning_minimum_order_price' => 150,
+    ]);
+    $booking = CleaningBooking::factory()->create([
+        'property_type' => 'apartment',
+        'base_price' => 150,
+        'addons_total' => 0,
+        'admin_margin_amount' => 38,
+        'total_price' => 188,
+        'travel_fee' => 0,
+        'is_pricing_final' => false,
+    ])->fresh();
+    expect((float) $booking->total_price)->toBe(188.0);
+});

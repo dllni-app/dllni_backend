@@ -25,8 +25,8 @@ use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Models\CleaningService;
-use Modules\Cleaning\Services\CleaningPricingCalculator;
 use Modules\Cleaning\Models\ServicePricing;
+use Modules\Cleaning\Services\CleaningPricingCalculator;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 use function Pest\Laravel\getJson;
@@ -170,16 +170,36 @@ it('creates an open cleaning order with coupon deducted from provisional admin m
 
     $serviceAmount = (float) $response->json('order.basePrice')
         + (float) $response->json('order.addonsTotal');
-    $grossAdminMargin = (float) app(CleaningPricingCalculator::class)
-        ->provisional($serviceAmount, 0.0)['adminMargin'];
-    $expectedGrossTotal = round($serviceAmount + $grossAdminMargin, 2);
-    $expectedDiscount = round($expectedGrossTotal * 0.10, 2);
+    $pricingCalculator = app(CleaningPricingCalculator::class);
+    $grossAdminMargin = (float) $pricingCalculator->provisional($serviceAmount, 0.0)['adminMargin'];
+    $undiscountedQuote = app(UserCleaningOrderEstimationService::class)->price(
+        'apartment',
+        [
+            'address' => 'Damascus - Mazzeh',
+            'location_name' => 'Home',
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+        ],
+        33.5138,
+        36.2765,
+        null,
+    );
+    $expectedGrossTotal = round((float) $undiscountedQuote['totalPrice'], 2);
+    $transport = (float) $undiscountedQuote['travelFee'];
+    $expectedDiscount = round(($expectedGrossTotal - $transport) * 0.10, 2);
+    $expectedIncludedMargin = min(
+        $grossAdminMargin,
+        max(0.0, $serviceAmount + $transport + $grossAdminMargin - $expectedGrossTotal),
+    );
     $expectedAdminMargin = round(max(0.0, $grossAdminMargin - $expectedDiscount), 2);
     $expectedServiceAmount = round(
-        max(0.0, $serviceAmount - max(0.0, $expectedDiscount - $grossAdminMargin)),
+        max(0.0, $serviceAmount - $expectedIncludedMargin
+            - max(0.0, $expectedDiscount - $grossAdminMargin)),
         2,
     );
-    $expectedTotal = round($expectedServiceAmount + $expectedAdminMargin, 2);
+    $expectedTotal = round($expectedGrossTotal - $expectedDiscount, 2);
 
     expect((float) $response->json('order.discountAmount'))->toBe($expectedDiscount)
         ->and((float) $response->json('order.subtotalBeforeDiscount'))->toBe($expectedGrossTotal)
@@ -209,11 +229,10 @@ it('creates an open cleaning order with coupon deducted from provisional admin m
         ->assertOk();
 
     expect((float) $workerResponse->json('data.serviceShareAmount'))->toBe($expectedServiceAmount)
-        ->and((float) $workerResponse->json('data.adminMargin'))->toBe($expectedAdminMargin)
         ->and((float) $workerResponse->json('data.workerOffer.serviceShareAmount'))->toBe($expectedServiceAmount)
         ->and((float) $workerResponse->json('data.workerOffer.adminMarginAmount'))->toBe($expectedAdminMargin)
-        ->and((float) $workerResponse->json('data.discountAmount'))->toBe($expectedDiscount)
-        ->and((float) $workerResponse->json('data.subtotalBeforeDiscount'))->toBe($expectedGrossTotal);
+        ->and($workerResponse->json('data.adminMargin'))->toBeNull()
+        ->and($workerResponse->json('data.discountAmount'))->toBeNull();
 });
 
 it('creates a deep cleaning order and persists the mode in the response payload', function (): void {
@@ -270,6 +289,8 @@ it('creates an open count order when preferred worker mode is requested without 
         'assignmentMode' => 'preferred_worker',
         'scheduledDate' => now()->addDay()->format('Y-m-d'),
         'scheduledTime' => '09:00',
+        'addressLatitude' => 33.5138,
+        'addressLongitude' => 36.2765,
         'termsAccepted' => true,
     ]);
 
@@ -799,6 +820,8 @@ it('creates order with room_size_breakdown and persists normalized breakdown-der
         ],
         'scheduledDate' => now()->addDay()->format('Y-m-d'),
         'scheduledTime' => '10:00',
+        'addressLatitude' => 33.5138,
+        'addressLongitude' => 36.2765,
         'termsAccepted' => true,
     ]);
 
@@ -890,6 +913,8 @@ it('creates order with partial room_size_breakdown and persists zero-filled norm
         ],
         'scheduledDate' => now()->addDay()->format('Y-m-d'),
         'scheduledTime' => '10:00',
+        'addressLatitude' => 33.5138,
+        'addressLongitude' => 36.2765,
         'termsAccepted' => true,
     ]);
 
@@ -947,6 +972,8 @@ it('creates team order with worker room assignments and persists planned slots',
         ],
         'scheduledDate' => now()->addDay()->format('Y-m-d'),
         'scheduledTime' => '10:00',
+        'addressLatitude' => 33.5138,
+        'addressLongitude' => 36.2765,
         'termsAccepted' => true,
     ]);
 
@@ -1330,6 +1357,8 @@ it('creates regular cleaning order with selected service names', function (): vo
         'cleaning_services' => ['Balcony cleaning', 'Window cleaning'],
         'scheduledDate' => now()->addDay()->format('Y-m-d'),
         'scheduledTime' => '10:30',
+        'addressLatitude' => 33.5138,
+        'addressLongitude' => 36.2765,
         'termsAccepted' => true,
     ]);
 
@@ -1479,6 +1508,8 @@ it('updates regular cleaning order service names', function (): void {
         'cleaning_services' => ['Regular service A'],
         'scheduledDate' => now()->addDay()->format('Y-m-d'),
         'scheduledTime' => '16:00',
+        'addressLatitude' => 33.5138,
+        'addressLongitude' => 36.2765,
         'termsAccepted' => true,
     ])->assertCreated();
 
@@ -1727,6 +1758,8 @@ it('creates event assistance order with custom service and does not sync booking
         'scheduledDate' => now()->addDay()->format('Y-m-d'),
         'scheduledTime' => '18:30',
         'genderPreference' => 'male',
+        'addressLatitude' => 33.5138,
+        'addressLongitude' => 36.2765,
         'termsAccepted' => true,
     ]);
 
@@ -1770,6 +1803,8 @@ it('updates event assistance hours and custom service without service-based pric
         ],
         'scheduledDate' => now()->addDay()->format('Y-m-d'),
         'scheduledTime' => '16:00',
+        'addressLatitude' => 33.5138,
+        'addressLongitude' => 36.2765,
         'termsAccepted' => true,
     ])->assertCreated();
 

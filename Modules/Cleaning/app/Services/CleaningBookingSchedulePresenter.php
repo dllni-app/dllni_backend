@@ -73,7 +73,6 @@ final class CleaningBookingSchedulePresenter
         $isCustomerView = ! $viewerWorker instanceof Worker;
         $canPauseRecurring = $isCustomerView
             && $isRecurring
-            && ! $isRecurringPaused
             && $sessions->contains(fn (CleaningBookingSession $session): bool => $this->canPauseRecurringSession($session));
         $canResumeRecurring = $isCustomerView
             && $isRecurringPaused
@@ -217,7 +216,7 @@ final class CleaningBookingSchedulePresenter
             ], true)
             && ! $session->isTerminal()
             && $startsAt !== null
-            && $startsAt->gt($now)
+            && $startsAt->gte($now->copy()->addHours(24))
             && $session->started_travel_at === null
             && $session->work_started_at === null
             && ! $hasStartedTravelAssignment;
@@ -460,7 +459,7 @@ final class CleaningBookingSchedulePresenter
         $startsAt = $session->startsAt();
         if (
             $startsAt === null
-            || ! $startsAt->isFuture()
+            || $startsAt->lt(now()->addHours(24))
             || $session->started_travel_at !== null
             || $session->work_started_at !== null
         ) {

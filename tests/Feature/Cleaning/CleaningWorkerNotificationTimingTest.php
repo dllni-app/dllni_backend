@@ -26,6 +26,9 @@ it('notifies only workers available during configured working hours', function (
         $outsideUser = \App\Models\User::factory()->create(['email' => 'worker-outside-hours@example.com']);
         $outsideWorker = Worker::factory()->financiallyEligible()->create([
             'user_id' => $outsideUser->id,
+            'home_address' => 'Test worker home',
+            'home_latitude' => 36.2100,
+            'home_longitude' => 37.1600,
             'default_working_hours' => [
                 $dayKey => ['available' => true, 'data' => [['09:00' => '11:00']]],
             ],
@@ -39,6 +42,9 @@ it('notifies only workers available during configured working hours', function (
         $insideUser = \App\Models\User::factory()->create(['email' => 'worker-inside-hours@example.com']);
         $insideWorker = Worker::factory()->financiallyEligible()->create([
             'user_id' => $insideUser->id,
+            'home_address' => 'Test worker home',
+            'home_latitude' => 36.2100,
+            'home_longitude' => 37.1600,
             'default_working_hours' => [
                 $dayKey => ['available' => true, 'data' => [['14:00' => '18:00']]],
             ],

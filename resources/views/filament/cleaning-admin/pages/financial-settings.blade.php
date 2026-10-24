@@ -3,14 +3,7 @@
         <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">{{ __('cleaning_settings.pricing.description') }}</p>
 
         <div class="grid gap-4 md:grid-cols-2">
-            <label class="flex flex-col gap-1">
-                <span class="text-sm">{{ __('cleaning_settings.pricing.base_unit_price') }}</span>
-                <input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="cleaningBaseUnitPrice">
-                <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('cleaning_settings.pricing.base_unit_price_hint') }}</span>
-                @error('cleaningBaseUnitPrice') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
-            </label>
-
-            <label class="flex flex-col gap-1">
+<label class="flex flex-col gap-1">
                 <span class="text-sm">{{ __('cleaning_settings.pricing.minimum_order_price') }}</span>
                 <input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="cleaningMinimumOrderPrice">
                 <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('cleaning_settings.pricing.minimum_order_price_hint') }}</span>
@@ -18,55 +11,7 @@
             </label>
         </div>
 
-        <div class="mt-6 space-y-4">
-            @foreach ($roomTypes as $roomType)
-                <div class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
-                    <div class="border-b border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/60">
-                        <h3 class="text-sm font-semibold text-gray-950 dark:text-white">{{ __('cleaning_settings.room_types.'.$roomType) }}</h3>
-                    </div>
-
-                    <div class="overflow-x-auto">
-                        <table class="w-full min-w-[920px] divide-y divide-gray-200 text-sm dark:divide-gray-700">
-                            <thead class="bg-white dark:bg-gray-900">
-                                <tr>
-                                    <th class="px-4 py-3 text-start font-medium text-gray-700 dark:text-gray-300">{{ __('cleaning_settings.pricing.room_size') }}</th>
-                                    <th class="px-4 py-3 text-start font-medium text-gray-700 dark:text-gray-300">{{ __('cleaning_settings.pricing.pricing_unit') }}</th>
-                                    <th class="px-4 py-3 text-start font-medium text-gray-700 dark:text-gray-300">{{ __('cleaning_settings.pricing.room_deep_multiplier') }}</th>
-                                    <th class="px-4 py-3 text-start font-medium text-gray-700 dark:text-gray-300">{{ __('cleaning_settings.pricing.regular_minutes') }}</th>
-                                    <th class="px-4 py-3 text-start font-medium text-gray-700 dark:text-gray-300">{{ __('cleaning_settings.pricing.deep_minutes') }}</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
-                                @foreach ($roomSizes as $roomSize)
-                                    <tr>
-                                        <td class="whitespace-nowrap px-4 py-3 font-medium text-gray-950 dark:text-white">{{ __('cleaning_settings.room_sizes.'.$roomSize) }}</td>
-                                        <td class="px-4 py-3">
-                                            <input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="roomPricingSettings.{{ $roomType }}.{{ $roomSize }}.pricingUnit">
-                                            @error('roomPricingSettings.'.$roomType.'.'.$roomSize.'.pricingUnit') <span class="mt-1 block text-xs text-danger-600">{{ $message }}</span> @enderror
-                                        </td>
-                                        <td class="px-4 py-3">
-                                            <input type="number" min="1" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="roomPricingSettings.{{ $roomType }}.{{ $roomSize }}.deepMultiplier">
-                                            @error('roomPricingSettings.'.$roomType.'.'.$roomSize.'.deepMultiplier') <span class="mt-1 block text-xs text-danger-600">{{ $message }}</span> @enderror
-                                        </td>
-                                        <td class="px-4 py-3">
-                                            <input type="number" min="1" step="1" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="roomPricingSettings.{{ $roomType }}.{{ $roomSize }}.regularMinutes">
-                                            @error('roomPricingSettings.'.$roomType.'.'.$roomSize.'.regularMinutes') <span class="mt-1 block text-xs text-danger-600">{{ $message }}</span> @enderror
-                                        </td>
-                                        <td class="px-4 py-3">
-                                            <input type="number" min="1" step="1" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="roomPricingSettings.{{ $roomType }}.{{ $roomSize }}.deepMinutes">
-                                            @error('roomPricingSettings.'.$roomType.'.'.$roomSize.'.deepMinutes') <span class="mt-1 block text-xs text-danger-600">{{ $message }}</span> @enderror
-                                        </td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            @endforeach
-        </div>
-
-        <p class="mt-4 text-xs text-gray-500 dark:text-gray-400">{{ __('cleaning_settings.pricing.formula_hint') }}</p>
-        @error('roomPricingSettings') <span class="mt-2 block text-xs text-danger-600">{{ $message }}</span> @enderror
+        <p class="mt-4 text-sm text-gray-500 dark:text-gray-400">تتم إدارة أنواع الغرف وأيقوناتها وسعر ساعة الحوسة وسعر ساعة التعزيل والدقائق المقترحة لكل حجم من صفحة «أنواع الغرف وأسعار الساعة» في كتالوج التنظيف. السعر النهائي لكل غرفة = الساعات المختارة × سعر الساعة المقابل.</p>
     </x-filament::section>
 
     <x-filament::section :heading="__('cleaning_admin.financial.sections.revenue_model')">
@@ -137,6 +82,17 @@
                 </div>
                 <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('cleaning_admin.financial.hints.event_assistance_default') }}</span>
                 @error('eventAssistanceHourlyRatePerWorker') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
+            </label>
+        </div>
+    </x-filament::section>
+
+    <x-filament::section heading="سعر ساعة المشرف">
+        <div class="grid gap-4 md:grid-cols-2">
+            <label class="flex flex-col gap-1">
+                <span class="text-sm font-medium">تكلفة ساعة إشراف الفريق (ل.س)</span>
+                <input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="supervisorHourlyRate">
+                <span class="text-xs text-gray-500 dark:text-gray-400">تُضاف مرة واحدة لساعات المشرف الفعلية في حجز الفريق تحت الإشراف: مدة عمل الفريق = إجمالي دقائق العمل ÷ عدد العمال (مقرّبة لأعلى إلى دقيقة). لا تُضاعف التكلفة بعدد العمال.</span>
+                @error('supervisorHourlyRate') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
             </label>
         </div>
     </x-filament::section>

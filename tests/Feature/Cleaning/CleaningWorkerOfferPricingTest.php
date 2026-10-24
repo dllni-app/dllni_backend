@@ -26,6 +26,8 @@ it('returns the current worker complete pricing before accepting the cleaning or
     $workerUser = User::factory()->create();
     $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
+        'trust_score' => 90,
+        'open_disputes_count' => 0,
         'home_address' => 'Worker home',
         'home_latitude' => 33.5,
         'home_longitude' => 36.3,
@@ -35,6 +37,8 @@ it('returns the current worker complete pricing before accepting the cleaning or
         'customer_id' => User::factory()->create()->id,
         'worker_id' => null,
         'status' => CleaningBookingStatus::Pending,
+        'gender_preference' => 'any',
+        'created_at' => now()->subMinutes(16),
         'number_of_workers' => 2,
         'base_price' => 10000,
         'addons_total' => 0,
@@ -53,17 +57,13 @@ it('returns the current worker complete pricing before accepting the cleaning or
     $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}");
 
     $response->assertOk()
-        ->assertJsonPath('data.basePrice', 5000)
         ->assertJsonPath('data.travelFee', 11120)
-        ->assertJsonPath('data.adminMargin', 500)
         ->assertJsonPath('data.workerAmount', 16120)
-        ->assertJsonPath('data.totalPrice', 16120)
-        ->assertJsonPath('data.isPricingFinal', false)
+        ->assertJsonPath('data.serviceShareAmount', 5000)
         ->assertJsonPath('data.totalHours', 2)
-        ->assertJsonPath('data.bookingTotalHours', 4)
-        ->assertJsonPath('data.bookingBasePrice', 10000)
-        ->assertJsonPath('data.bookingAdminMargin', 1000)
-        ->assertJsonPath('data.bookingTotalPrice', 11000)
+        ->assertJsonPath('data.workerOffer.serviceShareAmount', 5000)
+        ->assertJsonPath('data.workerOffer.travelFee', 11120)
+        ->assertJsonPath('data.workerOffer.adminMarginAmount', 500)
         ->assertJsonPath('data.myAssignment.workerId', $worker->id)
         ->assertJsonPath('data.myAssignment.serviceShareAmount', 5000)
         ->assertJsonPath('data.myAssignment.travelFee', 11120)
@@ -74,6 +74,8 @@ it('returns the current worker complete pricing before accepting the cleaning or
         ->assertJsonPath('data.myAssignment.totalHours', 2)
         ->assertJsonPath('data.myAssignment.isPreview', true)
         ->assertJsonPath('data.myAssignment.isPricingFinal', false);
+    $response->assertJsonMissingPath('data.bookingBasePrice')
+        ->assertJsonMissingPath('data.bookingTotalPrice');
 });
 
 it('calculates the cleaning worker offer time and service share from the planned room weight', function (): void {
@@ -91,6 +93,8 @@ it('calculates the cleaning worker offer time and service share from the planned
     $workerUser = User::factory()->create();
     Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
+        'trust_score' => 90,
+        'open_disputes_count' => 0,
         'home_address' => 'Worker home',
         'home_latitude' => 33.5,
         'home_longitude' => 36.3,
@@ -100,6 +104,8 @@ it('calculates the cleaning worker offer time and service share from the planned
         'customer_id' => User::factory()->create()->id,
         'worker_id' => null,
         'status' => CleaningBookingStatus::Pending,
+        'gender_preference' => 'any',
+        'created_at' => now()->subMinutes(16),
         'assignment_mode' => 'open_count',
         'number_of_workers' => 2,
         'base_price' => 400,
@@ -145,7 +151,7 @@ it('calculates the cleaning worker offer time and service share from the planned
 
     $response->assertOk();
     expect((float) $response->json('data.totalHours'))->toBe(2.0);
-    expect((float) $response->json('data.basePrice'))->toBe(100.0);
+    expect((float) $response->json('data.serviceShareAmount'))->toBe(100.0);
     expect((float) $response->json('data.workerOffer.totalHours'))->toBe(2.0);
     expect((float) $response->json('data.workerOffer.serviceShareAmount'))->toBe(100.0);
 });
@@ -166,7 +172,8 @@ it('keeps every event worker on the full event duration and preserves the worker
     $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'home_address' => 'Worker home',
-        'home_latitude' => 33.5,
+        // Keep this acceptance fixture within the initial 10 km dispatch radius.
+        'home_latitude' => 33.52,
         'home_longitude' => 36.3,
     ]);
 
@@ -245,6 +252,8 @@ it('uses the discounted admin margin in pending worker api offers without reduci
     $workerUser = User::factory()->create();
     Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
+        'trust_score' => 90,
+        'open_disputes_count' => 0,
         'home_address' => 'Worker home',
         'home_latitude' => 33.5,
         'home_longitude' => 36.3,
@@ -254,6 +263,8 @@ it('uses the discounted admin margin in pending worker api offers without reduci
         'customer_id' => User::factory()->create()->id,
         'worker_id' => null,
         'status' => CleaningBookingStatus::Pending,
+        'gender_preference' => 'any',
+        'created_at' => now()->subMinutes(16),
         'number_of_workers' => 1,
         'base_price' => 960,
         'addons_total' => 0,
@@ -276,18 +287,14 @@ it('uses the discounted admin margin in pending worker api offers without reduci
     $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}");
 
     $response->assertOk()
-        ->assertJsonPath('data.basePrice', 960)
         ->assertJsonPath('data.serviceShareAmount', 960)
-        ->assertJsonPath('data.adminMargin', 120)
         ->assertJsonPath('data.workerOffer.serviceShareAmount', 960)
         ->assertJsonPath('data.workerOffer.adminMarginAmount', 120)
         ->assertJsonPath('data.myAssignment.serviceShareAmount', 960)
         ->assertJsonPath('data.myAssignment.adminMarginAmount', 120)
-        ->assertJsonPath('data.myAssignment.workerAmount', 960)
-        ->assertJsonPath('data.couponApplied', true)
-        ->assertJsonPath('data.couponCode', 'WORKER10')
-        ->assertJsonPath('data.discountAmount', 120)
-        ->assertJsonPath('data.subtotalBeforeDiscount', 1200);
+        ->assertJsonPath('data.myAssignment.workerAmount', 960);
+    $response->assertJsonMissingPath('data.couponCode')
+        ->assertJsonMissingPath('data.subtotalBeforeDiscount');
 });
 
 it('reduces pending worker service share only by coupon excess above admin margin', function (): void {
@@ -320,6 +327,8 @@ it('reduces pending worker service share only by coupon excess above admin margi
     $workerUser = User::factory()->create();
     Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
+        'trust_score' => 90,
+        'open_disputes_count' => 0,
         'home_address' => 'Worker home',
         'home_latitude' => 33.5,
         'home_longitude' => 36.3,
@@ -329,6 +338,8 @@ it('reduces pending worker service share only by coupon excess above admin margi
         'customer_id' => User::factory()->create()->id,
         'worker_id' => null,
         'status' => CleaningBookingStatus::Pending,
+        'gender_preference' => 'any',
+        'created_at' => now()->subMinutes(16),
         'number_of_workers' => 1,
         'base_price' => 1000,
         'addons_total' => 0,
@@ -351,9 +362,7 @@ it('reduces pending worker service share only by coupon excess above admin margi
     $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}");
 
     $response->assertOk()
-        ->assertJsonPath('data.basePrice', 935)
         ->assertJsonPath('data.serviceShareAmount', 935)
-        ->assertJsonPath('data.adminMargin', 0)
         ->assertJsonPath('data.workerOffer.serviceShareAmount', 935)
         ->assertJsonPath('data.workerOffer.adminMarginAmount', 0);
 });

@@ -25,6 +25,87 @@ beforeEach(function (): void {
     ]);
 });
 
+it('allows pausing a second selected range without reprocessing an earlier paused visit', function (): void {
+    [$customer, $worker, $booking] = makeRecurringPauseRetryScenario();
+    $first = makeRecurringPauseRetrySession($booking, 1);
+    $second = makeRecurringPauseRetrySession($booking, 2);
+    makeRecurringPauseRetryAssignment($first, $worker);
+    makeRecurringPauseRetryAssignment($second, $worker);
+    Sanctum::actingAs($customer);
+
+    $firstDate = $first->scheduled_date->toDateString();
+    $secondDate = $second->scheduled_date->toDateString();
+
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/recurring/pause", [
+        'reason' => 'First interval', 'fromDate' => $firstDate, 'toDate' => $firstDate,
+    ])->assertOk()
+        ->assertJsonPath('data.schedule.canPause', true)
+        ->assertJsonPath('data.schedule.canResume', true);
+
+    $firstVersion = (int) $first->fresh()->version;
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/recurring/pause", [
+        'reason' => 'Second interval', 'fromDate' => $secondDate, 'toDate' => $secondDate,
+    ])->assertOk()->assertJsonPath('data.seriesAction.pausedSessionIds', [$second->id]);
+    expect($first->fresh()->version)->toBe($firstVersion)
+        ->and($second->fresh()->status)->toBe(CleaningBookingSessionStatus::Paused);
+
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/recurring/resume")
+        ->assertOk()->assertJsonCount(2, 'data.seriesAction.resumedSessionIds');
+});
+
+it('pauses exactly the customer-selected date range and leaves other sessions and assignments intact', function (): void {
+    [$customer, $worker, $booking] = makeRecurringPauseRetryScenario();
+    $first = makeRecurringPauseRetrySession($booking, 1);
+    $second = makeRecurringPauseRetrySession($booking, 2);
+    $third = makeRecurringPauseRetrySession($booking, 3);
+    $firstAssignment = makeRecurringPauseRetryAssignment($first, $worker);
+    $secondAssignment = makeRecurringPauseRetryAssignment($second, $worker);
+    $thirdAssignment = makeRecurringPauseRetryAssignment($third, $worker);
+
+    Sanctum::actingAs($customer);
+    $date = $second->scheduled_date->toDateString();
+
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/recurring/pause", [
+        'reason' => 'Specific family leave',
+        'fromDate' => $date,
+        'toDate' => $date,
+    ])->assertOk()
+        ->assertJsonPath('data.seriesAction.pausedSessionIds', [$second->id])
+        ->assertJsonPath('data.seriesAction.releasedWorkerIds', [$worker->id]);
+
+    expect($first->fresh()->status)->toBe(CleaningBookingSessionStatus::WorkerAssigned)
+        ->and($third->fresh()->status)->toBe(CleaningBookingSessionStatus::WorkerAssigned)
+        ->and($firstAssignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart)
+        ->and($thirdAssignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart)
+        ->and($second->fresh()->status)->toBe(CleaningBookingSessionStatus::Paused)
+        ->and($secondAssignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::Cancelled);
+
+    $version = $second->fresh()->version;
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/recurring/pause", [
+        'reason' => 'Specific family leave',
+        'fromDate' => $date,
+        'toDate' => $date,
+    ])->assertOk()->assertJsonPath('data.seriesAction.releasedWorkerIds', []);
+    expect($second->fresh()->version)->toBe($version);
+
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/recurring/resume")
+        ->assertOk()->assertJsonPath('data.seriesAction.resumedSessionIds', [$second->id]);
+});
+
+it('rejects invalid recurring pause ranges and keeps all sessions unchanged', function (): void {
+    [$customer, $worker, $booking] = makeRecurringPauseRetryScenario();
+    $session = makeRecurringPauseRetrySession($booking, 1);
+    makeRecurringPauseRetryAssignment($session, $worker);
+    Sanctum::actingAs($customer);
+    $date = $session->scheduled_date->toDateString();
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/recurring/pause", [
+        'reason' => 'invalid',
+        'fromDate' => $date,
+        'toDate' => now()->toDateString(),
+    ])->assertUnprocessable()->assertJsonValidationErrors('toDate');
+    expect($session->fresh()->status)->toBe(CleaningBookingSessionStatus::WorkerAssigned);
+});
+
 it('treats a repeated recurring pause request as an idempotent retry', function (): void {
     [$customer, $worker, $booking] = makeRecurringPauseRetryScenario();
     $firstSession = makeRecurringPauseRetrySession($booking, 1);
@@ -175,6 +256,58 @@ it('forbids another customer from pausing or resuming the recurring series', fun
 
     expect($booking->fresh()->recurring_paused_at)->not->toBeNull()
         ->and($session->fresh()->status)->toBe(CleaningBookingSessionStatus::Paused);
+});
+
+it('enforces the 24-hour cutoff when a customer skips a recurring visit', function (): void {
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-10-10 10:00:00'));
+    [$customer, $worker, $booking] = makeRecurringPauseRetryScenario();
+    $soon = makeRecurringPauseRetrySession($booking, 1);
+    $allowed = makeRecurringPauseRetrySession($booking, 2);
+    $soon->forceFill(['scheduled_date' => '2026-10-11', 'scheduled_time' => '09:00'])->save();
+    $allowed->forceFill(['scheduled_date' => '2026-10-11', 'scheduled_time' => '11:00'])->save();
+    $soonAssignment = makeRecurringPauseRetryAssignment($soon, $worker);
+    $allowedAssignment = makeRecurringPauseRetryAssignment($allowed, $worker);
+
+    Sanctum::actingAs($customer);
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/sessions/{$soon->id}/skip",
+        ['reason' => 'Skip shortly before arrival'],
+    )->assertUnprocessable();
+
+    expect($soon->fresh()->status)->toBe(CleaningBookingSessionStatus::WorkerAssigned)
+        ->and($soonAssignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart);
+
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/sessions/{$allowed->id}/skip",
+        ['reason' => 'Skip with enough notice'],
+    )->assertOk();
+
+    expect($allowed->fresh()->status)->toBe(CleaningBookingSessionStatus::Skipped)
+        ->and($allowedAssignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::Cancelled);
+});
+
+it('keeps visits inside the 24-hour cutoff unchanged when pausing a recurring series', function (): void {
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-10-10 10:00:00'));
+    [$customer, $worker, $booking] = makeRecurringPauseRetryScenario();
+    $soon = makeRecurringPauseRetrySession($booking, 1);
+    $allowed = makeRecurringPauseRetrySession($booking, 2);
+    $soon->forceFill(['scheduled_date' => '2026-10-11', 'scheduled_time' => '09:00'])->save();
+    $allowed->forceFill(['scheduled_date' => '2026-10-11', 'scheduled_time' => '11:00'])->save();
+    $soonAssignment = makeRecurringPauseRetryAssignment($soon, $worker);
+    $allowedAssignment = makeRecurringPauseRetryAssignment($allowed, $worker);
+
+    Sanctum::actingAs($customer);
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/recurring/pause",
+        ['reason' => 'Pause only eligible future visits'],
+    )->assertOk()
+        ->assertJsonPath('data.seriesAction.pausedSessionIds.0', $allowed->id)
+        ->assertJsonCount(1, 'data.seriesAction.pausedSessionIds');
+
+    expect($soon->fresh()->status)->toBe(CleaningBookingSessionStatus::WorkerAssigned)
+        ->and($soonAssignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart)
+        ->and($allowed->fresh()->status)->toBe(CleaningBookingSessionStatus::Paused)
+        ->and($allowedAssignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::Cancelled);
 });
 
 /** @return array{0:User,1:Worker,2:CleaningBooking} */

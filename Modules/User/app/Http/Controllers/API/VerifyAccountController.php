@@ -9,6 +9,7 @@ use App\Jobs\DispatchAvailablePlatformCouponNotificationsToUser;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Validation\ValidationException;
 use Modules\User\Enums\OtpPurpose;
 use Modules\User\Exceptions\AuthFlowException;
 use Modules\User\Http\Requests\VerifyAccountRequest;
@@ -22,13 +23,20 @@ final class VerifyAccountController
 
     public function __invoke(VerifyAccountRequest $request): JsonResponse
     {
+        $user = User::query()->where('phone', $request->validated('phone'))->firstOrFail();
+        if ($user->module_type !== null) {
+            throw ValidationException::withMessages([
+                'phone' => ['هذا الحساب مخصص لتطبيق آخر ولا يمكن استخدامه في تطبيق العميل.'],
+            ]);
+        }
+
         $this->otpService->verify(
             $request->validated('phone'),
             OtpPurpose::Register,
             $request->validated('otp'),
         );
 
-        $user = User::query()->where('phone', $request->validated('phone'))->firstOrFail();
+
         $wasUnverified = $user->phone_verified_at === null;
         $user->forceFill(['phone_verified_at' => CarbonImmutable::now()])->save();
 

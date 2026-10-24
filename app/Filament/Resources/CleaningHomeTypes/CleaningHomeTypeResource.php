@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningHomeTypes;
 
+use App\Filament\Clusters\CleaningCatalogCluster;
 use App\Filament\Resources\CleaningHomeTypes\Pages\CreateCleaningHomeType;
 use App\Filament\Resources\CleaningHomeTypes\Pages\EditCleaningHomeType;
 use App\Filament\Resources\CleaningHomeTypes\Pages\ListCleaningHomeTypes;
@@ -19,6 +20,8 @@ use Modules\Cleaning\Models\CleaningHomeType;
 final class CleaningHomeTypeResource extends Resource
 {
     protected static ?string $model = CleaningHomeType::class;
+
+    protected static ?string $cluster = CleaningCatalogCluster::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-squares-2x2';
 

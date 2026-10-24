@@ -22,6 +22,7 @@ final class CleaningHomeTypeSeeder extends Seeder
                     [
                         'booking_value' => $item['booking_value'],
                         'title' => $item['title'],
+                        'icon_key' => $item['booking_value'],
                         'image_path' => 'cleaning-home-types/'.$item['image'],
                         'external_image_url' => null,
                         'sort_order' => $item['sort_order'],

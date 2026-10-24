@@ -12,7 +12,7 @@ use Throwable;
 
 final class UserRecurringCleaningScheduleRevisionRequest extends FormRequest
 {
-    private const MAX_WINDOW_DAYS = 30;
+    private const MAX_WINDOW_DAYS = 90;
 
     public function authorize(): bool
     {
@@ -76,7 +76,7 @@ final class UserRecurringCleaningScheduleRevisionRequest extends FormRequest
             if (count($dates) >= 2) {
                 usort($dates, static fn (CarbonImmutable $left, CarbonImmutable $right): int => $left->getTimestamp() <=> $right->getTimestamp());
                 if ($dates[0]->diffInDays($dates[count($dates) - 1]) > self::MAX_WINDOW_DAYS) {
-                    $validator->errors()->add('schedule.sessions', 'يجب أن تقع جميع الزيارات المستقبلية المعدلة ضمن فترة لا تتجاوز 30 يوماً.');
+                    $validator->errors()->add('schedule.sessions', 'يجب أن تقع جميع الزيارات المستقبلية المعدلة ضمن فترة لا تتجاوز 90 يوماً.');
                 }
             }
         });

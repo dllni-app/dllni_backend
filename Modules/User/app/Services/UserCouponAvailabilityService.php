@@ -138,7 +138,11 @@ final class UserCouponAvailabilityService
         );
         $travelFee = round(max(0.0, (float) ($pricing['travelFee'] ?? 0)), 2);
         $adminMargin = round(max(0.0, (float) ($pricing['adminMargin'] ?? 0)), 2);
-        $subtotal = round($serviceAmount + $travelFee + $adminMargin, 2);
+        $subtotal = round(max(0.0, (float) $pricing['totalPrice']), 2);
+        $includedAdminMargin = round(min($adminMargin, max(
+            0.0,
+            $serviceAmount + $travelFee + $adminMargin - $subtotal,
+        )), 2);
 
         $coupon = $this->findPlatformCoupon($couponCode);
         if (! $coupon) {
@@ -158,6 +162,7 @@ final class UserCouponAvailabilityService
             $serviceAmount,
             $travelFee,
             $adminMargin,
+            $includedAdminMargin,
         );
 
         return $this->platformResult(

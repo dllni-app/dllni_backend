@@ -14,11 +14,24 @@ final class CleaningEquipmentReservation extends Model
         'cleaning_special_service_equipment_id', 'cleaning_booking_special_service_id',
         'cleaning_booking_session_id', 'worker_id', 'reserved_from', 'reserved_until',
         'status', 'handed_over_at', 'acknowledged_at', 'returned_at', 'failure_reason',
+        'handed_over_by_user_id', 'return_confirmed_by_user_id', 'return_confirmed_at',
+        'return_resolution', 'return_admin_note',
+        'cleaning_booking_id', 'supervisor_user_id',
     ];
 
     public function equipment(): BelongsTo
     {
         return $this->belongsTo(CleaningSpecialServiceEquipment::class, 'cleaning_special_service_equipment_id');
+    }
+
+    public function booking(): BelongsTo
+    {
+        return $this->belongsTo(CleaningBooking::class, 'cleaning_booking_id');
+    }
+
+    public function supervisor(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\User::class, 'supervisor_user_id');
     }
 
     public function bookingSpecialService(): BelongsTo
@@ -41,6 +54,7 @@ final class CleaningEquipmentReservation extends Model
         return [
             'reserved_from' => 'datetime', 'reserved_until' => 'datetime', 'handed_over_at' => 'datetime',
             'acknowledged_at' => 'datetime', 'returned_at' => 'datetime',
+            'return_confirmed_at' => 'datetime',
         ];
     }
 }

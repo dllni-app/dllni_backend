@@ -7,6 +7,11 @@ use App\Models\CleaningFinancialSetting;
 use App\Models\CleaningWorkerDeposit;
 use App\Models\User;
 use App\Models\Worker;
+use Illuminate\Support\Facades\DB;
+use Modules\Cleaning\Models\CleaningBookingSpecialService;
+use Modules\Cleaning\Models\CleaningSpecialService;
+use Modules\Cleaning\Models\CleaningSpecialServiceEquipment;
+use Modules\Cleaning\Models\CleaningEquipmentReservation;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -149,6 +154,108 @@ it('reports session acceptance as the current worker order status while the pare
             'data.worker_order_status',
             'accepted_waiting_for_order_start',
         );
+});
+
+it('reserves specialist equipment during the session acceptance transaction', function (): void {
+    $worker = makeSessionWorker();
+    $booking = makeSessionBooking();
+    $session = makeExecutionSession($booking, 1, now()->addDay()->toDateString(), '10:00', 2.0);
+    $service = CleaningSpecialService::query()->create([
+        'name' => 'Specialist equipment acceptance',
+        'slug' => 'specialist-accept-'.fake()->unique()->numerify('######'),
+        'pricing_unit' => 'piece',
+        'base_unit_price' => 100,
+        'estimated_duration_minutes' => 40,
+        'is_active' => true,
+    ]);
+    $equipment = CleaningSpecialServiceEquipment::query()->create([
+        'name' => 'Specialist accepted asset',
+        'status' => 'available',
+        'buffer_before_minutes' => 10,
+        'buffer_after_minutes' => 10,
+        'is_active' => true,
+    ]);
+    $service->equipment()->attach($equipment->id);
+    $line = CleaningBookingSpecialService::query()->create([
+        'cleaning_booking_id' => $booking->id,
+        'cleaning_booking_session_id' => $session->id,
+        'cleaning_special_service_id' => $service->id,
+        'service_name' => $service->name,
+        'pricing_unit' => 'piece',
+        'dirtiness_level' => 'normal',
+        'quantity' => 1,
+        'base_unit_price' => 100,
+        'price_multiplier' => 1,
+        'total_price' => 100,
+    ]);
+
+    $acceptance = app(CleaningBookingSessionAcceptanceService::class);
+    $denied = $acceptance->acceptSelectedSessions($booking, $worker, [$session->id]);
+    expect(collect($denied['rejected'])->pluck('reasonCode'))->toContain('special_service_skill_missing')
+        ->and($session->workerAssignments()->count())->toBe(0);
+
+    $stamp = now();
+    DB::table('cleaning_worker_special_service_skills')->insert([
+        'worker_id' => $worker->id, 'cleaning_special_service_id' => $service->id,
+        'is_active' => true, 'approved_at' => $stamp,
+        'created_at' => $stamp, 'updated_at' => $stamp,
+    ]);
+    $denied = $acceptance->acceptSelectedSessions($booking, $worker, [$session->id]);
+    expect(collect($denied['rejected'])->pluck('reasonCode'))->toContain('special_equipment_authorization_missing')
+        ->and($session->workerAssignments()->count())->toBe(0);
+
+    DB::table('cleaning_worker_equipment_authorizations')->insert([
+        'worker_id' => $worker->id, 'cleaning_special_service_equipment_id' => $equipment->id,
+        'is_active' => true, 'approved_at' => $stamp,
+        'created_at' => $stamp, 'updated_at' => $stamp,
+    ]);
+    $accepted = $acceptance->acceptSelectedSessions($booking, $worker, [$session->id]);
+    expect($accepted['acceptedSessionIds'])->toBe([$session->id])
+        ->and($line->fresh()->assigned_worker_id)->toBe($worker->id)
+        ->and(CleaningEquipmentReservation::query()->where('cleaning_booking_session_id', $session->id)->count())->toBe(1);
+});
+
+it('retains separate equipment windows for special services covering multiple sessions', function (): void {
+    $worker = makeSessionWorker();
+    $booking = makeSessionBooking();
+    $first = makeExecutionSession($booking, 1, now()->addDays(2)->toDateString(), '10:00', 2.0);
+    $second = makeExecutionSession($booking, 2, now()->addDays(3)->toDateString(), '10:00', 2.0);
+    $service = CleaningSpecialService::query()->create([
+        'name' => 'Multi-visit special service',
+        'slug' => 'multi-visit-'.fake()->unique()->numerify('######'),
+        'pricing_unit' => 'piece', 'base_unit_price' => 100,
+        'estimated_duration_minutes' => 60, 'is_active' => true,
+    ]);
+    $equipment = CleaningSpecialServiceEquipment::query()->create([
+        'name' => 'Multi-visit extractor', 'status' => 'available', 'is_active' => true,
+    ]);
+    $service->equipment()->attach($equipment->id);
+    $line = CleaningBookingSpecialService::query()->create([
+        'cleaning_booking_id' => $booking->id,
+        'cleaning_special_service_id' => $service->id,
+        'service_name' => $service->name,
+        'pricing_unit' => 'piece', 'dirtiness_level' => 'normal',
+        'quantity' => 1, 'base_unit_price' => 100,
+        'price_multiplier' => 1, 'total_price' => 100,
+    ]);
+    $line->sessions()->sync([$first->id, $second->id]);
+    $stamp = now();
+    DB::table('cleaning_worker_special_service_skills')->insert([
+        'worker_id' => $worker->id, 'cleaning_special_service_id' => $service->id,
+        'is_active' => true, 'approved_at' => $stamp, 'created_at' => $stamp, 'updated_at' => $stamp,
+    ]);
+    DB::table('cleaning_worker_equipment_authorizations')->insert([
+        'worker_id' => $worker->id, 'cleaning_special_service_equipment_id' => $equipment->id,
+        'is_active' => true, 'approved_at' => $stamp, 'created_at' => $stamp, 'updated_at' => $stamp,
+    ]);
+
+    $result = app(CleaningBookingSessionAcceptanceService::class)->acceptAllAvailableSessions($booking, $worker);
+
+    expect($result['allAccepted'])->toBeTrue()
+        ->and($result['acceptedSessionIds'])->toBe([$first->id, $second->id])
+        ->and(CleaningEquipmentReservation::query()->where('cleaning_booking_special_service_id', $line->id)->count())->toBe(2)
+        ->and(CleaningEquipmentReservation::query()->where('cleaning_booking_session_id', $first->id)->count())->toBe(1)
+        ->and(CleaningEquipmentReservation::query()->where('cleaning_booking_session_id', $second->id)->count())->toBe(1);
 });
 
 function makeSessionWorker(): Worker

@@ -9,6 +9,7 @@ use Modules\Cleaning\Enums\CleaningBookingSessionCoverageStatus;
 use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
+use Modules\Cleaning\Observers\CleaningBookingObserver;
 
 final class RecurringCleaningScheduleService
 {
@@ -104,8 +105,10 @@ final class RecurringCleaningScheduleService
         $specialLines = (array) ($singleVisitPricing['specialServices'] ?? []);
         $singleVisitSubtotal = max(0.01, $basePrice + (float) ($singleVisitPricing['addonsTotal'] ?? 0));
         $adminRate = max(0.0, (float) ($singleVisitPricing['adminMargin'] ?? 0)) / $singleVisitSubtotal;
+        $minimumIncludesCommission = (bool) data_get($singleVisitPricing, 'pricingAlgorithm.minimumOrderApplied', false);
         $scheduleSessions = [];
         $aggregateAddons = 0.0;
+        $aggregateSpecialServices = 0.0;
         $aggregateAdmin = 0.0;
         $aggregateTotal = 0.0;
 
@@ -125,8 +128,12 @@ final class RecurringCleaningScheduleService
             $sessionMaterialTotal = $index === 0 ? $materialTotal : 0.0;
             $sessionAddons = round($sessionMaterialTotal + $sessionSpecialTotal, 2);
             $sessionAdmin = round(($basePrice + $sessionAddons) * $adminRate, 2);
-            $sessionTotal = round($basePrice + $sessionAddons + $travelFee + $sessionAdmin, 2);
+            $sessionIncludedAdmin = $minimumIncludesCommission
+                ? min($sessionAdmin, (float) ($singleVisitPricing['adminMargin'] ?? 0))
+                : 0.0;
+            $sessionTotal = round($basePrice + $sessionAddons + $travelFee + $sessionAdmin - $sessionIncludedAdmin, 2);
             $aggregateAddons += $sessionAddons;
+            $aggregateSpecialServices += $sessionSpecialTotal;
             $aggregateAdmin += $sessionAdmin;
             $aggregateTotal += $sessionTotal;
             $scheduleSessions[] = [
@@ -148,6 +155,8 @@ final class RecurringCleaningScheduleService
             ...$singleVisitPricing,
             'basePrice' => round($basePrice * $count, 2),
             'addonsTotal' => round($aggregateAddons, 2),
+            'materialsTotal' => round($materialTotal, 2),
+            'specialServicesTotal' => round($aggregateSpecialServices, 2),
             'travelFee' => round($travelFee * $count, 2),
             'adminMargin' => round($aggregateAdmin, 2),
             'totalPrice' => round($aggregateTotal, 2),
@@ -197,7 +206,11 @@ final class RecurringCleaningScheduleService
             'travel_fee' => $aggregatePricing['travelFee'] ?? round($travelFee * $count, 2),
             'admin_margin_amount' => $aggregatePricing['adminMargin'] ?? round($adminMargin * $count, 2),
             'total_price' => $aggregatePricing['totalPrice'] ?? round($totalPrice * $count, 2),
-        ])->save();
+        ]);
+        // The aggregate must bypass single-booking price normalization, but
+        // its canonical date still needs the observer's urgent-order snapshot.
+        app(CleaningBookingObserver::class)->refreshHotOrderSnapshot($booking);
+        $booking->saveQuietly();
 
         $sessionPricingBySequence = collect((array) ($aggregatePricing['schedule']['sessions'] ?? []))->keyBy('sequence');
         foreach ($plan['sessions'] as $session) {
@@ -211,6 +224,10 @@ final class RecurringCleaningScheduleService
                 'scheduled_time' => $session['time'],
                 'duration_hours' => $sessionHours,
                 'required_workers' => max(1, (int) $booking->number_of_workers),
+                'supervision_mode' => max(1, (int) $booking->number_of_workers) > 1
+                    ? CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR
+                    : CleaningBookingSession::SUPERVISION_MODE_WORKER,
+                'supervision_initialized_at' => now(),
                 'coverage_status' => CleaningBookingSessionCoverageStatus::Searching,
                 'status' => CleaningBookingSessionStatus::Scheduled,
                 'base_price' => (float) ($sessionPricing['basePrice'] ?? $basePrice),

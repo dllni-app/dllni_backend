@@ -66,6 +66,7 @@ use Modules\User\Http\Controllers\API\UserCleaningOrderReviewController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderRoomAssignmentsController;
 use Modules\User\Http\Controllers\API\UserCleaningOrdersController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderShowController;
+use Modules\User\Http\Controllers\API\UserCleaningLastHourTeamDecisionController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderSosController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderStartVerificationConfirmController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderStoreController;
@@ -200,7 +201,7 @@ Route::prefix('v1/user')->group(function (): void {
     Route::get('offers', UserMarketingOffersIndexController::class);
     Route::get('offers/{marketingOffer}', UserMarketingOfferShowController::class);
 
-    Route::middleware(['auth:sanctum'])->group(function (): void {
+    Route::middleware(['auth:sanctum', \App\Http\Middleware\EnsureCustomerAccount::class])->group(function (): void {
 
         Route::post('products/normalize-text', UserNormalizeProductTextController::class);
         Route::post('smart-search', UserSmartSearchController::class);
@@ -247,17 +248,20 @@ Route::prefix('v1/user')->group(function (): void {
         Route::delete('favorites/products/{product}', UserProductFavoriteDestroyController::class);
 
         Route::get('cleaning/cancellation-fee', UserCleaningCancellationFeeController::class);
+        Route::get('cleaning/room-types', \Modules\User\Http\Controllers\API\UserCleaningRoomTypesController::class);
         Route::get('cleaning/orders', UserCleaningOrdersController::class);
         Route::post('cleaning/orders', UserCleaningOrderStoreController::class);
         Route::post('cleaning/orders/estimate-size', UserCleaningOrderEstimateSizeController::class);
         Route::get('cleaning/preferred-worker-rejection/decisions/pending', [UserCleaningPreferredWorkerRejectionDecisionController::class, 'pending']);
         Route::get('cleaning/orders/previous-workers', UserCleaningPreviousWorkersController::class);
+        Route::post('cleaning/orders/materials-preview', \Modules\User\Http\Controllers\API\UserCleaningMaterialsPreviewController::class);
         Route::post('cleaning/orders/estimate-price', UserCleaningOrderEstimatePriceController::class);
         Route::get('cleaning/orders/{order}', UserCleaningOrderShowController::class);
         Route::patch('cleaning/orders/{order}', UserCleaningOrderUpdateController::class);
         Route::post('cleaning/orders/{order}/recurring-schedule/preview', [UserRecurringCleaningScheduleRevisionController::class, 'preview']);
         Route::post('cleaning/orders/{order}/recurring-schedule/confirm', [UserRecurringCleaningScheduleRevisionController::class, 'confirm']);
         Route::patch('cleaning/orders/{order}/room-assignments', UserCleaningOrderRoomAssignmentsController::class);
+        Route::post('cleaning/orders/{order}/last-hour-team-decision', UserCleaningLastHourTeamDecisionController::class);
         Route::post('cleaning/orders/{order}/cancel', UserCleaningOrderCancelController::class);
         Route::post('cleaning/orders/{order}/preferred-worker-rejection/decision', [UserCleaningPreferredWorkerRejectionDecisionController::class, 'decide']);
         Route::post('cleaning/orders/{order}/sos', UserCleaningOrderSosController::class);

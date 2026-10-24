@@ -53,6 +53,8 @@ final class OrderService
                 throw new InvalidArgumentException('Only pending restaurant orders can be accepted.');
             }
 
+            app(RestaurantInventoryConsumptionService::class)->consume($lockedOrder);
+
             $acceptedAt = now();
             $lockedOrder->forceFill([
                 'status' => OrderStatus::Accepted,

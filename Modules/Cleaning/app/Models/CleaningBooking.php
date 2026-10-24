@@ -131,6 +131,10 @@ final class CleaningBooking extends Model
         'cancelled_at',
         'cancellation_reason',
         'cancelled_by_role',
+        'last_hour_team_prompted_at',
+        'last_hour_team_decision',
+        'last_hour_team_worker_id',
+        'last_hour_team_decided_at',
     ];
 
     public function customer(): BelongsTo
@@ -158,6 +162,14 @@ final class CleaningBooking extends Model
         return $this->hasMany(CleaningBookingRoom::class, 'cleaning_booking_id');
     }
 
+    public function roomPeriods(): HasMany
+    {
+        return $this->hasMany(CleaningBookingRoomPeriod::class, 'cleaning_booking_id')
+            ->orderBy('visit_sequence')
+            ->orderBy('scheduled_date')
+            ->orderBy('scheduled_time');
+    }
+
     public function sessions(): HasMany
     {
         return $this->hasMany(CleaningBookingSession::class, 'cleaning_booking_id')
@@ -169,9 +181,48 @@ final class CleaningBooking extends Model
         return $this->rooms();
     }
 
+    public function roomSchedules(): HasMany
+    {
+        return $this->hasMany(CleaningRoomSchedule::class, 'cleaning_booking_id');
+    }
+
+    public function timePeriods(): HasMany
+    {
+        return $this->hasMany(CleaningTimePeriod::class, 'cleaning_booking_id');
+    }
+
     public function workerAssignments(): HasMany
     {
         return $this->hasMany(CleaningBookingWorkerAssignment::class, 'cleaning_booking_id');
+    }
+
+    public function supervisorAssignments(): HasMany
+    {
+        return $this->hasMany(CleaningSupervisorAssignment::class, 'cleaning_booking_id');
+    }
+
+    public function sessionSupervisorAssignments(): \Illuminate\Database\Eloquent\Relations\HasManyThrough
+    {
+        return $this->hasManyThrough(
+            CleaningBookingSessionSupervisorAssignment::class,
+            CleaningBookingSession::class,
+            'cleaning_booking_id',
+            'cleaning_booking_session_id',
+        );
+    }
+
+    public function isV2OperationalGroup(): bool
+    {
+        return in_array((string) $this->booking_kind, ['standard', 'open_time'], true)
+            && (int) $this->number_of_workers > 1
+            && ($this->sessions()->exists()
+                || $this->roomSchedules()->exists()
+                || $this->roomPeriods()->exists());
+    }
+
+    public function isSupervisedTeam(): bool
+    {
+        return (string) $this->booking_kind === 'supervised_team';
     }
 
     public function acceptedWorkerAssignments(): HasMany
@@ -296,6 +347,10 @@ final class CleaningBooking extends Model
             'estimated_sqm' => 'decimal:2',
             'estimated_hours' => 'decimal:2',
             'scheduled_date' => 'date',
+            'supervised_base_minutes' => 'integer',
+            'supervised_duration_minutes' => 'integer',
+            'supervised_scheduled_end_at' => 'datetime',
+            'supervised_original_end_at' => 'datetime',
             'total_hours' => 'decimal:2',
             'base_price' => 'float',
             'open_time_hourly_rate' => 'float',
@@ -333,6 +388,8 @@ final class CleaningBooking extends Model
             'address_latitude' => 'decimal:8',
             'address_longitude' => 'decimal:8',
             'cancelled_at' => 'datetime',
+            'last_hour_team_prompted_at' => 'datetime',
+            'last_hour_team_decided_at' => 'datetime',
         ];
     }
 

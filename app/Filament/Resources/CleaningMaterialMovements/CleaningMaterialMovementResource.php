@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningMaterialMovements;
 
+use App\Filament\Clusters\CleaningMaterialsCluster;
 use App\Filament\Resources\CleaningMaterialMovements\Pages\ListCleaningMaterialMovements;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -17,6 +18,8 @@ use Modules\Cleaning\Models\CleaningMaterialInventoryMovement;
 final class CleaningMaterialMovementResource extends Resource
 {
     protected static ?string $model = CleaningMaterialInventoryMovement::class;
+
+    protected static ?string $cluster = CleaningMaterialsCluster::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArrowsRightLeft;
 
@@ -49,6 +52,8 @@ final class CleaningMaterialMovementResource extends Resource
                 TextColumn::make('material.name')->label(__('cleaning_catalog.materials.fields.material'))->searchable(),
                 TextColumn::make('movement_type')->label(__('cleaning_catalog.materials.fields.movement_type'))->badge()->formatStateUsing(fn (string $state): string => __('cleaning_catalog.materials.statuses.'.$state))->sortable(),
                 TextColumn::make('quantity_delta')->label(__('cleaning_catalog.materials.fields.quantity_delta'))->numeric(decimalPlaces: 3),
+                TextColumn::make('bookingMaterial.booking.booking_number')->label('رقم الطلب')->placeholder('—'),
+                TextColumn::make('note')->label('ملاحظات الحركة')->limit(45)->placeholder('—')->toggleable(),
                 TextColumn::make('reference_id')->label(__('cleaning_catalog.materials.fields.reference')),
                 TextColumn::make('created_at')->label(__('cleaning_catalog.materials.fields.created_at'))->dateTime()->sortable(),
             ])
@@ -60,6 +65,9 @@ final class CleaningMaterialMovementResource extends Resource
                         'released' => __('cleaning_catalog.materials.statuses.released'),
                         'consumed' => __('cleaning_catalog.materials.statuses.consumed'),
                         'adjusted' => __('cleaning_catalog.materials.statuses.adjusted'),
+                        'returned_unused' => 'مواد غير مستخدمة أُعيدت للمخزون',
+                        'damaged' => 'مواد تالفة',
+                        'lost' => 'مواد مفقودة',
                     ]),
             ])
             ->defaultSort('created_at', 'desc');

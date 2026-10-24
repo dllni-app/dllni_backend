@@ -1,0 +1,17 @@
+{
+  "contractVersion": 2,
+  "rooms": [
+    {
+      "roomKey": "bedroom.1",
+      "roomType": "bedroom",
+      "size": "medium",
+      "cleaningMode": "deep"
+    },
+    {
+      "roomKey": "bathroom.1",
+      "roomType": "bathroom",
+      "size": "small",
+      "cleaningMode": "regular"
+    }
+  ]
+}

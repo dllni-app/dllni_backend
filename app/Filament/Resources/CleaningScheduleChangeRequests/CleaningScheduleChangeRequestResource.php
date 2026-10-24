@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningScheduleChangeRequests;
 
+use App\Filament\Clusters\CleaningOperationsCluster;
 use App\Filament\Resources\CleaningScheduleChangeRequests\Pages\ListCleaningScheduleChangeRequests;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -17,6 +18,8 @@ use Modules\Cleaning\Models\CleaningScheduleChangeRequest;
 final class CleaningScheduleChangeRequestResource extends Resource
 {
     protected static ?string $model = CleaningScheduleChangeRequest::class;
+
+    protected static ?string $cluster = CleaningOperationsCluster::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentCheck;
 

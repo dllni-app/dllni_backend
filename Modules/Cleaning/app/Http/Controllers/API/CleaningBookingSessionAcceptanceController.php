@@ -33,7 +33,7 @@ final class CleaningBookingSessionAcceptanceController
                 : 'All sessions could not be accepted. Review the rejected sessions and select the sessions you can accept.',
             'data' => [
                 'acceptance' => $result,
-                'coverage' => $this->coverage($cleaning_booking),
+                'coverage' => $this->coverage($cleaning_booking, $worker),
             ],
         ], $result['allAccepted'] ? Response::HTTP_OK : Response::HTTP_UNPROCESSABLE_ENTITY);
     }
@@ -67,7 +67,7 @@ final class CleaningBookingSessionAcceptanceController
                             'message' => 'You must be available for and accept all event days.',
                         ]],
                     ],
-                    'coverage' => $this->coverage($cleaning_booking),
+                    'coverage' => $this->coverage($cleaning_booking, $worker),
                 ],
             ], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
@@ -82,7 +82,7 @@ final class CleaningBookingSessionAcceptanceController
                 : 'Some selected sessions could not be accepted.',
             'data' => [
                 'acceptance' => $result,
-                'coverage' => $this->coverage($cleaning_booking),
+                'coverage' => $this->coverage($cleaning_booking, $worker),
             ],
         ]);
     }
@@ -114,27 +114,26 @@ final class CleaningBookingSessionAcceptanceController
     }
 
     /** @return array<int, array<string, mixed>> */
-    private function coverage(CleaningBooking $booking): array
+    private function coverage(CleaningBooking $booking, Worker $worker): array
     {
         return CleaningBookingSession::query()
             ->where('cleaning_booking_id', $booking->id)
             ->with('workerAssignments:id,cleaning_booking_session_id,worker_id,status,accepted_at')
             ->orderBy('sequence')
             ->get()
-            ->map(static function (CleaningBookingSession $session): array {
+            ->map(static function (CleaningBookingSession $session) use ($worker): array {
+                $ownAssignment = $session->workerAssignments
+                    ->first(static fn ($assignment): bool => (int) $assignment->worker_id === (int) $worker->id
+                        && $assignment->isAccepted());
+
                 return [
-                    'sessionId' => (int) $session->id,
+                    'sessionId' => $ownAssignment !== null ? (int) $session->id : null,
                     'sequence' => (int) $session->sequence,
                     'coverageStatus' => $session->coverage_status?->value ?? (string) $session->coverage_status,
                     'requiredWorkers' => $session->requiredWorkerCount(),
                     'acceptedWorkers' => $session->acceptedWorkerCount(),
                     'remainingWorkers' => $session->remainingWorkerCount(),
-                    'workerIds' => $session->workerAssignments
-                        ->filter(static fn ($assignment): bool => $assignment->isAccepted())
-                        ->pluck('worker_id')
-                        ->map(static fn (mixed $id): int => (int) $id)
-                        ->values()
-                        ->all(),
+                    'workerIds' => $ownAssignment !== null ? [(int) $worker->id] : [],
                 ];
             })
             ->all();

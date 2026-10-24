@@ -8,6 +8,7 @@ use App\Models\CleaningDepositTransaction;
 use App\Models\CleaningWorkerDeposit;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Modules\Cleaning\Services\CleaningTransactionAdmissionService;
 
 final class ReconcileCleaningWorkerFinancialBalances extends Command
 {
@@ -21,25 +22,66 @@ final class ReconcileCleaningWorkerFinancialBalances extends Command
     {
         $query = CleaningWorkerDeposit::query()->orderBy('id');
         $workerId = $this->option('worker');
-        if (is_numeric($workerId) && (int) $workerId > 0) {
-            $query->where('worker_id', (int) $workerId);
+        $effectiveWorkerId = is_numeric($workerId) && (int) $workerId > 0
+            ? (int) $workerId
+            : null;
+        if ($effectiveWorkerId !== null) {
+            $query->where('worker_id', $effectiveWorkerId);
         }
 
         $apply = (bool) $this->option('apply');
         $changed = 0;
         $rows = [];
 
-        $query->chunkById(100, function ($accounts) use ($apply, &$changed, &$rows): void {
+        $query->chunkById(100, function ($accounts) use ($apply, $effectiveWorkerId, &$changed, &$rows): void {
             foreach ($accounts as $account) {
                 if (! $account instanceof CleaningWorkerDeposit) {
                     continue;
                 }
 
-                $proposal = $this->proposalFor($account);
-                $isChanged = abs((float) $account->current_balance - $proposal['depositBalance']) > 0.009
-                    || abs((float) $account->debt_balance - $proposal['debtBalance']) > 0.009
-                    || abs((float) $account->deposited_total - $proposal['depositedTotal']) > 0.009
-                    || abs((float) $account->withdrawn_total - $proposal['withdrawnTotal']) > 0.009;
+                if ($apply) {
+                    // The chunk is only an advisory candidate scan. Admission
+                    // starts a fresh root, takes the shared sentinel first, and
+                    // then locks/reloads this account before reading its ledger.
+                    $accountId = (int) $account->getKey();
+                    $lockedEvaluation = CleaningTransactionAdmissionService::run(
+                        function (CleaningTransactionAdmissionService $context) use ($accountId, $effectiveWorkerId): ?array {
+                            $accountQuery = CleaningWorkerDeposit::query()->whereKey($accountId);
+                            if ($effectiveWorkerId !== null) {
+                                $accountQuery->where('worker_id', $effectiveWorkerId);
+                            }
+
+                            $current = $accountQuery->lockForUpdate()->first();
+
+                            if (! $current instanceof CleaningWorkerDeposit) {
+                                return null;
+                            }
+
+                            $freshProposal = $this->proposalFor($current);
+                            if ($this->balancesChanged($current, $freshProposal)) {
+                                CleaningWorkerDeposit::query()->whereKey($current->id)->update([
+                                    'current_balance' => $freshProposal['depositBalance'],
+                                    'debt_balance' => $freshProposal['debtBalance'],
+                                    'deposited_total' => $freshProposal['depositedTotal'],
+                                    'withdrawn_total' => $freshProposal['withdrawnTotal'],
+                                    'minimum_required' => 0,
+                                ]);
+                            }
+
+                            return [$current, $freshProposal];
+                        },
+                    );
+
+                    if ($lockedEvaluation === null) {
+                        continue;
+                    }
+
+                    [$account, $proposal] = $lockedEvaluation;
+                } else {
+                    // Dry-run reports a non-atomic snapshot without changing data.
+                    $proposal = $this->proposalFor($account);
+                }
+                $isChanged = $this->balancesChanged($account, $proposal);
 
                 if ($isChanged) {
                     $changed++;
@@ -55,20 +97,6 @@ final class ReconcileCleaningWorkerFinancialBalances extends Command
                     $isChanged ? 'yes' : 'no',
                 ];
 
-                if ($apply && $isChanged) {
-                    DB::transaction(function () use ($account, $proposal): void {
-                        CleaningWorkerDeposit::query()
-                            ->whereKey($account->id)
-                            ->lockForUpdate()
-                            ->update([
-                                'current_balance' => $proposal['depositBalance'],
-                                'debt_balance' => $proposal['debtBalance'],
-                                'deposited_total' => $proposal['depositedTotal'],
-                                'withdrawn_total' => $proposal['withdrawnTotal'],
-                                'minimum_required' => 0,
-                            ]);
-                    });
-                }
             }
         });
 
@@ -82,6 +110,14 @@ final class ReconcileCleaningWorkerFinancialBalances extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    private function balancesChanged(CleaningWorkerDeposit $account, array $proposal): bool
+    {
+        return abs((float) $account->current_balance - $proposal['depositBalance']) > 0.009
+            || abs((float) $account->debt_balance - $proposal['debtBalance']) > 0.009
+            || abs((float) $account->deposited_total - $proposal['depositedTotal']) > 0.009
+            || abs((float) $account->withdrawn_total - $proposal['withdrawnTotal']) > 0.009;
     }
 
     private function proposalFor(CleaningWorkerDeposit $account): array

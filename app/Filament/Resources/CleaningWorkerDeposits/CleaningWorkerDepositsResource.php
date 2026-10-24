@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningWorkerDeposits;
 
+use App\Filament\Clusters\CleaningFinanceCluster;
 use App\Filament\Resources\CleaningWorkerDeposits\Pages\CreateCleaningWorkerDeposit;
 use App\Filament\Resources\CleaningWorkerDeposits\Pages\ListCleaningWorkerDeposits;
 use App\Filament\Resources\CleaningWorkerDeposits\Schemas\CleaningTransactionForm;
@@ -22,6 +23,8 @@ use Illuminate\Database\Eloquent\Builder;
 final class CleaningWorkerDepositsResource extends Resource
 {
     protected static ?string $model = CleaningDepositTransaction::class;
+
+    protected static ?string $cluster = CleaningFinanceCluster::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;
 

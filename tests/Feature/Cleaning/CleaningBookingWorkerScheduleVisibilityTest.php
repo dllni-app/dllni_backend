@@ -78,9 +78,9 @@ it('keeps a pending single-session booking readable when session eligibility is 
         CleaningBookingSessionStatus::Scheduled,
     );
 
-    // Reproduce the production failure class: the booking details are still
-    // readable as a pending legacy offer, while the persisted child session is
-    // not currently acceptable under the stricter session eligibility rules.
+    // A worker who already owns the parent retains read access even after
+    // suspension, but cannot see an unaccepted child session.
+    $booking->forceFill(['worker_id' => $worker->id])->save();
     $worker->forceFill(['is_suspended' => true])->save();
 
     Sanctum::actingAs($worker->user);
@@ -93,6 +93,24 @@ it('keeps a pending single-session booking readable when session eligibility is 
         ->assertJsonPath('data.schedule.bookingDaysCount', 1)
         ->assertJsonPath('data.schedule.daysCount', 0)
         ->assertJsonCount(0, 'data.schedule.sessions');
+});
+
+it('does not disclose a pending single-session offer to a suspended unassigned worker', function (): void {
+    $customer = User::factory()->create(['is_active' => true]);
+    $worker = makeVisibilityWorker();
+    $booking = makeVisibilityBooking($customer, CleaningBookingStatus::Pending, propertyType: 'villa');
+    makeVisibilitySession(
+        $booking,
+        1,
+        now()->addDay()->toDateString(),
+        CleaningBookingSessionStatus::Scheduled,
+    );
+
+    $worker->forceFill(['is_suspended' => true])->save();
+    Sanctum::actingAs($worker->user);
+
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")->assertNotFound();
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/schedule")->assertForbidden();
 });
 
 it('returns only assigned event days and resolves nextSession from the worker-visible scope', function (): void {
@@ -439,3 +457,42 @@ function makeVisibilityAssignment(
         'currency' => 'SYP',
     ]);
 }
+
+
+it('lets an eligible worker view a pending ordinary booking schedule before accepting when no child sessions exist', function (): void {
+    $customer = User::factory()->create(['is_active' => true]);
+    $worker = makeVisibilityWorker();
+    $worker->forceFill(['gender' => 'female', 'preferred_work_type' => 'cleaning'])->save();
+    $booking = makeVisibilityBooking(
+        $customer,
+        CleaningBookingStatus::Pending,
+        propertyType: 'studio',
+    );
+    $booking->forceFill(['gender_preference' => 'female'])->save();
+
+    expect($booking->sessions()->count())->toBe(0);
+    Sanctum::actingAs($worker->user);
+
+    $this->getJson('/api/v1/cleaning-bookings?filter[status]=pending')
+        ->assertOk()
+        ->assertJsonFragment(['id' => $booking->id]);
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/schedule")
+        ->assertOk()
+        ->assertJsonStructure(['data' => ['bookingId', 'schedule']]);
+});
+
+it('does not expose a pending ordinary booking schedule to a gender-ineligible worker', function (): void {
+    $customer = User::factory()->create(['is_active' => true]);
+    $worker = makeVisibilityWorker();
+    $worker->forceFill(['gender' => 'male', 'preferred_work_type' => 'cleaning'])->save();
+    $booking = makeVisibilityBooking(
+        $customer,
+        CleaningBookingStatus::Pending,
+        propertyType: 'studio',
+    );
+    $booking->forceFill(['gender_preference' => 'female'])->save();
+    Sanctum::actingAs($worker->user);
+
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/schedule")
+        ->assertForbidden();
+});

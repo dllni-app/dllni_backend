@@ -31,6 +31,7 @@ final class CleaningBookingCompleteController
     /** @throws Throwable */
     public function __invoke(CleaningBookingCompleteRequest $request, CleaningBooking $cleaning_booking): CleaningBookingResource|JsonResponse
     {
+        abort_if($cleaning_booking->isSupervisedTeam(), 403, 'إنهاء العمل من صلاحيات المشرف.');
         $this->ensureWorkerCanActOnBooking($cleaning_booking);
 
         $finishedServices = $request->finishedCleaningServices();

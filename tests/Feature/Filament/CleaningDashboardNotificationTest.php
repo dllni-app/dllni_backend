@@ -11,6 +11,7 @@ use App\Models\SupportCase;
 use App\Models\User;
 use App\Notifications\CleaningBookingStatusChangedDashboardNotification;
 use App\Notifications\NewSupportCaseDashboardNotification;
+use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Spatie\Permission\Models\Role;
@@ -108,6 +109,28 @@ it('stores cleaning booking status change dashboard notifications in Arabic rega
         ->and($payload['body'] ?? '')->toContain('قيد النزاع')
         ->and($payload['body'] ?? '')->not->toContain('pending')
         ->and($payload['body'] ?? '')->not->toContain('under_dispute');
+});
+
+it('rolls back a pending cleaning status dashboard notification with its booking transaction', function (): void {
+    $admin = createDashboardAdminForNotificationTest();
+    $booking = CleaningBooking::withoutEvents(fn (): CleaningBooking => CleaningBooking::factory()->create([
+        'status' => CleaningBookingStatus::InProgress,
+        'admin_margin_amount' => 0,
+    ]));
+
+    DB::beginTransaction();
+    try {
+        $booking->forceFill(['status' => CleaningBookingStatus::UnderDispute])->save();
+
+        expect($admin->notifications()
+            ->where('type', CleaningBookingStatusChangedDashboardNotification::class)->count())->toBe(1);
+    } finally {
+        DB::rollBack();
+    }
+
+    expect($booking->fresh()->status)->toBe(CleaningBookingStatus::InProgress)
+        ->and($admin->notifications()
+            ->where('type', CleaningBookingStatusChangedDashboardNotification::class)->count())->toBe(0);
 });
 
 it('returns dispute details for the live dashboard alert poller', function (): void {

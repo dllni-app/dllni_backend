@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\SystemUsers\Tables;
 
 use App\Enums\UserModuleType;
+use App\Filament\Resources\SystemUsers\Support\ResetAccountPasswordAction;
 use App\Filament\Support\ArabicDashboardLabels;
 use App\Models\User;
 use App\Services\UserAccountStatusService;
@@ -91,6 +92,7 @@ final class SystemUsersTable
             ])
             ->recordActions([
                 ViewAction::make()->label('عرض'),
+                ResetAccountPasswordAction::make(),
                 Action::make('verifyAccount')
                     ->label('توثيق الحساب')
                     ->icon('heroicon-o-shield-check')

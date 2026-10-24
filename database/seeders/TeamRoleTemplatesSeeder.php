@@ -16,6 +16,8 @@ final class TeamRoleTemplatesSeeder extends Seeder
 
         $allPermissions = Permission::query()->where('guard_name', $guardName)->pluck('name');
 
+        Role::firstOrCreate(['name' => 'Cleaning Supervisor', 'guard_name' => $guardName]);
+
         $superAdmin = Role::firstOrCreate(['name' => 'Super Admin', 'guard_name' => $guardName]);
         $superAdmin->syncPermissions($allPermissions);
 

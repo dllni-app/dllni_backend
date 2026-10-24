@@ -25,6 +25,8 @@ final class CleaningNeighborhoodResource extends Resource
 
     protected static ?int $navigationSort = 21;
 
+    protected static bool $shouldRegisterNavigation = false;
+
     public static function getNavigationGroup(): ?string
     {
         return \App\Filament\Support\AdminNavigationGroup::cleaning();
@@ -62,22 +64,22 @@ final class CleaningNeighborhoodResource extends Resource
 
     public static function canViewAny(): bool
     {
-        return self::hasPermission('settings.view');
+        return false;
     }
 
     public static function canCreate(): bool
     {
-        return self::hasPermission('settings.create');
+        return false;
     }
 
     public static function canEdit(Model $record): bool
     {
-        return self::hasPermission('settings.update');
+        return false;
     }
 
     public static function canDelete(Model $record): bool
     {
-        return self::hasPermission('settings.delete');
+        return false;
     }
 
     public static function getRelations(): array

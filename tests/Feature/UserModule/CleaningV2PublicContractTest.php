@@ -15,6 +15,7 @@ use Modules\Cleaning\Models\CleaningMaterialType;
 use Modules\Cleaning\Models\CleaningMaterialTypeQuantityRule;
 use Modules\Cleaning\Models\CleaningMaterialUnit;
 use Modules\Cleaning\Models\CleaningSpecialService;
+use Modules\User\Models\UserAddress;
 
 beforeEach(function (): void {
     CancellationPolicy::query()->create([
@@ -121,6 +122,9 @@ it('accepts canonical materials and special-service attachment contracts while p
     ])->assertCreated();
 
     $bookingId = (int) $response->json('order.id');
+    $response->assertJsonPath('order.specialServiceDurationPlan.totalWorkMinutes', 90)
+        ->assertJsonPath('order.specialServiceDurationPlan.maxSingleSessionMinutes', 90)
+        ->assertJsonPath('order.specialServiceDurationPlan.sessionPlans.0.parallelWorkerCount', 0);
     $materialLine = CleaningBookingMaterial::query()->where('cleaning_booking_id', $bookingId)->sole();
     $item = CleaningBookingSpecialServiceItem::query()
         ->whereHas('bookingSpecialService', fn ($query) => $query->where('cleaning_booking_id', $bookingId))
@@ -154,4 +158,96 @@ it('applies open-time incompatibility checks to the canonical materials object',
     ])
         ->assertUnprocessable()
         ->assertJsonValidationErrors('openTime');
+});
+
+it('quotes and reserves only the requested missing material types', function (): void {
+    $unit = CleaningMaterialUnit::query()->create([
+        'name' => 'Unit', 'code' => 'missing-quote-'.fake()->unique()->numerify('#####'),
+        'symbol' => 'u', 'is_active' => true,
+    ]);
+    $types = [];
+    foreach ([7.0, 13.0] as $price) {
+        $type = CleaningMaterialType::query()->create([
+            'name' => 'Material '.fake()->unique()->numerify('#####'),
+            'cleaning_material_unit_id' => $unit->id,
+            'price_per_unit' => $price,
+            'is_active' => true,
+        ]);
+        CleaningMaterialTypeQuantityRule::query()->create([
+            'cleaning_material_type_id' => $type->id,
+            'room_type' => 'bedroom', 'room_size' => 'small',
+            'cleaning_mode' => 'regular', 'quantity_per_room' => 1,
+            'is_active' => true, 'requires_admin_resolution' => false,
+        ]);
+        CleaningMaterial::query()->create([
+            'name' => 'Stock '.fake()->unique()->numerify('#####'),
+            'cleaning_material_type_id' => $type->id, 'stock_quantity' => 10,
+            'low_stock_threshold' => 1, 'is_active' => true,
+        ]);
+        $types[] = $type;
+    }
+
+    $customer = User::factory()->create();
+    Sanctum::actingAs($customer);
+    $address = UserAddress::factory()->for($customer)->create([
+        'label' => 'Home',
+        'city' => 'Damascus',
+        'street' => 'Main Street',
+        'building' => '12',
+        'floor' => '3',
+        'latitude' => 33.5138,
+        'longitude' => 36.2765,
+    ]);
+    $payload = [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'address' => 'Damascus materials request',
+            'bedrooms' => 1, 'bathrooms' => 0, 'kitchens' => 0,
+            'living_room_size' => 'small',
+            'cleaning_mode' => 'regular',
+            'room_size_breakdown' => [
+                'bedroom' => ['small' => 1, 'medium' => 0, 'large' => 0],
+            ],
+        ],
+        'materials' => [
+            'providedByPlatform' => true,
+            'materialTypeIds' => [(int) $types[0]->id],
+        ],
+        'scheduledDate' => now()->addDay()->toDateString(),
+        'scheduledTime' => '09:00',
+        'addressLatitude' => 33.5138,
+        'addressLongitude' => 36.2765,
+        'termsAccepted' => true,
+    ];
+
+    $estimate = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $payload)
+        ->assertOk();
+    expect($estimate->json('materialsPreview'))->toHaveCount(2);
+    expect($estimate->json('pricing.materials'))->toHaveCount(1);
+    expect((int) $estimate->json('pricing.materials.0.materialTypeId'))->toBe($types[0]->id);
+
+    $created = $this->postJson('/api/v1/user/cleaning/orders', $payload)->assertCreated();
+    $bookingId = (int) $created->json('order.id');
+    $lines = CleaningBookingMaterial::query()->where('cleaning_booking_id', $bookingId)->get();
+    expect($lines)->toHaveCount(1);
+    expect((int) $lines->first()->cleaning_material_type_id)->toBe($types[0]->id);
+
+    // The unrequested material is neither billed nor reserved.
+    expect((float) $types[1]->materials()->first()->stock_quantity)->toBe(10.0);
+
+    // Regression: saved-address normalization must not replace the material filter.
+    $withSavedAddress = $payload;
+    $withSavedAddress['addressId'] = $address->id;
+    unset($withSavedAddress['addressLatitude'], $withSavedAddress['addressLongitude']);
+    $withSavedAddress['materials']['materialTypeIds'] = [(int) $types[1]->id];
+    $savedOrder = $this->postJson('/api/v1/user/cleaning/orders', $withSavedAddress)
+        ->assertCreated();
+    $savedBookingId = (int) $savedOrder->json('order.id');
+    $savedMaterials = CleaningBookingMaterial::query()
+        ->where('cleaning_booking_id', $savedBookingId)
+        ->get();
+    expect($savedMaterials)->toHaveCount(1)
+        ->and((int) $savedMaterials->first()->cleaning_material_type_id)->toBe((int) $types[1]->id);
+    $savedBooking = Modules\Cleaning\Models\CleaningBooking::query()->findOrFail($savedBookingId);
+    expect($savedBooking->property_details['requested_material_type_ids'])->toBe([(int) $types[1]->id]);
 });

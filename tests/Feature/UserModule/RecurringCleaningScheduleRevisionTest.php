@@ -292,7 +292,7 @@ it('keeps accepted future workers assigned until every affected worker approves 
         ->and($session->fresh()?->scheduled_date?->toDateString())->toBe($schedule['sessions'][0]['date']);
 });
 
-it('blocks revisions while a recurring series is paused and enforces the thirty day future window', function (): void {
+it('blocks revisions while a recurring series is paused and enforces the ninety day future window', function (): void {
     $customer = User::factory()->create();
     $booking = createRecurringRevisionBooking($customer);
     $booking->forceFill([
@@ -308,7 +308,7 @@ it('blocks revisions while a recurring series is paused and enforces the thirty 
     $booking->forceFill(['recurring_paused_at' => null, 'recurring_pause_reason' => null])->save();
     postJson(
         "/api/v1/user/cleaning/orders/{$booking->id}/recurring-schedule/preview",
-        ['schedule' => revisionSchedule([2, 33])],
+        ['schedule' => revisionSchedule([2, 93])],
     )->assertUnprocessable()->assertJsonValidationErrors('schedule.sessions');
 });
 
@@ -385,7 +385,7 @@ it('rejects a revised visit that collides with a preserved in flight visit', fun
         ->assertJsonValidationErrors('schedule.sessions.0.time');
 });
 
-it('enforces the thirty day window across preserved history and proposed future visits', function (): void {
+it('enforces the ninety day window across preserved history and proposed future visits', function (): void {
     $customer = User::factory()->create();
     $booking = createRecurringRevisionBooking($customer);
     $preserved = CleaningBookingSession::query()
@@ -400,7 +400,7 @@ it('enforces the thirty day window across preserved history and proposed future 
 
     postJson(
         "/api/v1/user/cleaning/orders/{$booking->id}/recurring-schedule/preview",
-        ['schedule' => revisionSchedule([10, 33])],
+        ['schedule' => revisionSchedule([10, 93])],
     )
         ->assertUnprocessable()
         ->assertJsonValidationErrors('schedule.sessions');

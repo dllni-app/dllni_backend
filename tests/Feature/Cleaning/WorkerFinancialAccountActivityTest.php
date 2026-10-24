@@ -8,6 +8,7 @@ use App\Models\Worker;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Services\DepositService;
 use Modules\Cleaning\Services\WorkerFinancialAccountStatusService;
+use Spatie\Permission\Models\Role;
 
 function createFinancialAccount(Worker $worker, float $debt, float $limit): CleaningWorkerDeposit
 {
@@ -88,7 +89,10 @@ it('does not fall back to a removed global limit when the worker has no financia
 });
 
 it('keeps the legacy settings API response contract without applying global values', function (): void {
-    Sanctum::actingAs(User::factory()->create());
+    Role::findOrCreate('admin', 'web');
+    $admin = User::factory()->create(['is_active' => true]);
+    $admin->assignRole('admin');
+    Sanctum::actingAs($admin);
 
     $this->putJson('/api/v1/admin/cleaning/deposits/settings', [
         'allowed_debt_limit' => 999999,

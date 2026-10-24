@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningMaterialUnits;
 
+use App\Filament\Clusters\CleaningMaterialsCluster;
 use App\Filament\Resources\CleaningMaterialUnits\Pages\CreateCleaningMaterialUnit;
 use App\Filament\Resources\CleaningMaterialUnits\Pages\EditCleaningMaterialUnit;
 use App\Filament\Resources\CleaningMaterialUnits\Pages\ListCleaningMaterialUnits;
@@ -22,6 +23,8 @@ use Modules\Cleaning\Models\CleaningMaterialUnit;
 final class CleaningMaterialUnitResource extends Resource
 {
     protected static ?string $model = CleaningMaterialUnit::class;
+
+    protected static ?string $cluster = CleaningMaterialsCluster::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedScale;
 

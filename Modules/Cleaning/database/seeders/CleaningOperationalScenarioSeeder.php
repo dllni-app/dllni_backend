@@ -474,7 +474,7 @@ final class CleaningOperationalScenarioSeeder extends Seeder
 
         $reservedEquipment = $equipment->first();
         if ($reservedEquipment) {
-            $start = Carbon::parse($refs['progress']->scheduled_date.' '.$refs['progress']->scheduled_time)->subMinutes(30);
+            $start = Carbon::parse(Carbon::parse((string) $refs['progress']->scheduled_date)->toDateString().' '.$refs['progress']->scheduled_time)->subMinutes(30);
             DB::table('cleaning_equipment_reservations')->updateOrInsert(
                 [
                     'cleaning_special_service_equipment_id' => $reservedEquipment->id,
@@ -644,7 +644,7 @@ final class CleaningOperationalScenarioSeeder extends Seeder
             );
         }
 
-        $base = Carbon::parse($refs['progress']->scheduled_date.' '.$refs['progress']->scheduled_time);
+        $base = Carbon::parse(Carbon::parse((string) $refs['progress']->scheduled_date)->toDateString().' '.$refs['progress']->scheduled_time);
         foreach ([
             [36.2127, 37.1456, $base->copy()->subMinutes(35)],
             [36.2140, 37.1480, $base->copy()->subMinutes(20)],
@@ -688,7 +688,7 @@ final class CleaningOperationalScenarioSeeder extends Seeder
         );
 
         DB::table('system_alerts')->updateOrInsert(
-            ['booking_id' => $refs['progress']->id, 'booking_type' => self::MORPH, 'alert_type' => 'cleaning_sos'],
+            ['booking_id' => $refs['progress']->id, 'booking_type' => self::MORPH, 'alert_type' => \App\Enums\AlertType::SOSTriggered->value],
             [
                 'severity' => 'critical',
                 'status' => 'acknowledged',

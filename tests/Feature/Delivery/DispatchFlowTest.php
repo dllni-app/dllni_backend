@@ -142,6 +142,23 @@ it('rejects an offer and redispatches to another driver', function (): void {
         ->exists())->toBeTrue();
 });
 
+it('does not re-offer an order to a driver who rejected it', function (): void {
+    Queue::fake();
+    $company = DeliveryCompany::factory()->create();
+    $first = createDeliveryDriverWithLocation($company, 33.5140, 36.2767);
+    createDeliveryDriverWithLocation($company, 33.5145, 36.2770);
+    Sanctum::actingAs($first->user);
+
+    $order = app(DeliveryOrderService::class)->create($company, deliveryOrderPayload());
+    app(DriverDispatchService::class)->dispatchByOrderId($order->id);
+    $attempt = $order->assignmentAttempts()->where('driver_id', $first->id)->firstOrFail();
+    $this->postJson("/api/v1/delivery/driver/offers/{$attempt->id}/reject", ['reason' => 'Not available'])->assertOk();
+    app(DriverDispatchService::class)->dispatchByOrderId($order->id);
+
+    expect($order->assignmentAttempts()->where('driver_id', $first->id)->count())->toBe(1);
+    expect($order->assignmentAttempts()->count())->toBe(2);
+});
+
 it('expires an open attempt and moves to the next driver', function (): void {
     $company = DeliveryCompany::factory()->create();
     $firstDriver = createDeliveryDriverWithLocation($company, 33.5140, 36.2767);
@@ -161,6 +178,23 @@ it('expires an open attempt and moves to the next driver', function (): void {
 
     expect($attempt->fresh()->status)->toBe(DeliveryAssignmentAttemptStatus::TimedOut->value);
     expect(DeliveryAssignmentAttempt::query()->where('order_id', $order->id)->count())->toBe(2);
+});
+
+it('does not re-offer an order to a timed-out driver', function (): void {
+    Queue::fake();
+    $company = DeliveryCompany::factory()->create();
+    $first = createDeliveryDriverWithLocation($company, 33.5140, 36.2767);
+    createDeliveryDriverWithLocation($company, 33.5145, 36.2770);
+
+    $order = app(DeliveryOrderService::class)->create($company, deliveryOrderPayload());
+    app(DriverDispatchService::class)->dispatchByOrderId($order->id);
+    $attempt = $order->assignmentAttempts()->where('driver_id', $first->id)->firstOrFail();
+    $this->travel(config('delivery.dispatch.offer_timeout_seconds') + 1)->seconds();
+    app(DriverDispatchService::class)->expireAttempt($attempt->id);
+    app(DriverDispatchService::class)->dispatchByOrderId($order->id);
+
+    expect($order->assignmentAttempts()->where('driver_id', $first->id)->count())->toBe(1);
+    expect($order->assignmentAttempts()->count())->toBe(2);
 });
 
 it('runs the full driver order lifecycle', function (): void {
@@ -197,6 +231,29 @@ it('runs the full driver order lifecycle', function (): void {
         'reference_id' => $order->id,
         'transaction_type' => 'order_fee_debit',
     ]);
+});
+
+it('returns 409 when rejecting an expired but still open offer', function (): void {
+    Queue::fake();
+    $company = DeliveryCompany::factory()->create();
+    $driver = createDeliveryDriverWithLocation($company);
+    Sanctum::actingAs($driver->user);
+
+    $order = app(DeliveryOrderService::class)->create($company, deliveryOrderPayload());
+    app(DriverDispatchService::class)->dispatchByOrderId($order->id);
+    $attempt = DeliveryAssignmentAttempt::query()->where('order_id', $order->id)->firstOrFail();
+
+    $this->travel(config('delivery.dispatch.offer_timeout_seconds') + 1)->seconds();
+    $this->postJson("/api/v1/delivery/driver/offers/{$attempt->id}/reject", [
+        'reason' => 'Expired',
+    ])->assertStatus(409);
+
+    $this->assertDatabaseHas('delivery_assignment_attempts', [
+        'id' => $attempt->id,
+        'status' => DeliveryAssignmentAttemptStatus::Open->value,
+    ]);
+    expect($order->fresh()->status)->toBe(DeliveryOrderStatus::Offered->value);
+    Queue::assertPushed(DispatchDeliveryOrderJob::class, 1);
 });
 
 it('returns 409 when accepting an expired offer', function (): void {

@@ -55,7 +55,13 @@ final class DriverDispatchService
                 return;
             }
 
-            $eligibleRows = $this->eligibleDriverRows($order);
+            // Never re-offer the same order to a driver who already rejected or timed out.
+            $previousDriverIds = $order->assignmentAttempts()
+                ->whereIn('status', [DeliveryAssignmentAttemptStatus::Rejected->value, DeliveryAssignmentAttemptStatus::TimedOut->value])
+                ->pluck('driver_id');
+            $eligibleRows = $this->eligibleDriverRows($order)
+                ->reject(fn (array $row): bool => $previousDriverIds->contains($row['driver']->id))
+                ->values();
             if ($eligibleRows->isEmpty()) {
                 $this->retryWithoutCandidate($order, self::NO_ELIGIBLE_DRIVERS_NOTE, $redispatchOrderId, $redispatchDelaySeconds);
 
@@ -244,7 +250,7 @@ final class DriverDispatchService
             if ((int) $attempt->driver_id !== (int) $driver->id) {
                 throw new RuntimeException('Unauthorized');
             }
-            if ($attempt->status !== DeliveryAssignmentAttemptStatus::Open->value) {
+            if ($attempt->status !== DeliveryAssignmentAttemptStatus::Open->value || $attempt->expires_at?->isPast()) {
                 throw new RuntimeException('Offer no longer available');
             }
             $order = DeliveryOrder::query()->lockForUpdate()->findOrFail($attempt->order_id);

@@ -349,7 +349,7 @@ final class WorkerRoomAssignmentPlanner
     {
         $rooms = [];
 
-        foreach (self::ROOM_TYPE_ORDER as $roomType) {
+        foreach (array_values(array_unique([...self::ROOM_TYPE_ORDER, ...array_keys($breakdown)])) as $roomType) {
             $buckets = Arr::get($breakdown, $roomType);
             if (! is_array($buckets)) {
                 continue;

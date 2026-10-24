@@ -55,9 +55,28 @@ final class CleaningBookingService
     public function store(CleaningBookingData $data): CleaningBooking
     {
         return DB::transaction(function () use ($data): CleaningBooking {
-            $attributes = $data->onlyModelAttributes();
+            $attributes = array_intersect_key($data->onlyModelAttributes(), array_flip([
+                'customer_id',
+                'preferred_worker_id',
+                'assignment_mode',
+                'number_of_workers',
+                'gender_preference',
+                'cancellation_policy_id',
+                'billing_policy_id',
+                'booking_number',
+                'property_type',
+                'property_details',
+                'estimated_sqm',
+                'estimated_hours',
+                'scheduled_date',
+                'scheduled_time',
+                'total_hours',
+                'terms_accepted',
+            ]));
             $attributes['gender_preference'] = $attributes['gender_preference'] ?? GenderPreference::Any->value;
             $attributes['number_of_workers'] = $attributes['number_of_workers'] ?? 1;
+            $attributes['status'] = CleaningBookingStatus::Pending->value;
+            $attributes['worker_id'] = null;
 
             $booking = CleaningBooking::create($attributes);
 
@@ -67,25 +86,67 @@ final class CleaningBookingService
         });
     }
 
-    public function update(CleaningBookingData $data, CleaningBooking $booking): CleaningBooking
+    /** @param array<string, mixed> $validated */
+    public function update(array $validated, CleaningBooking $booking): CleaningBooking
     {
-        return DB::transaction(function () use ($data, $booking): CleaningBooking {
-            $attributes = $data->onlyModelAttributes();
-            if (array_key_exists('gender_preference', $attributes) && $attributes['gender_preference'] === null) {
-                $attributes['gender_preference'] = GenderPreference::Any->value;
+        return DB::transaction(function () use ($validated, $booking): CleaningBooking {
+            $locked = CleaningBooking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
+            $this->assertGenericMutationAllowed($locked);
+
+            $attributes = [];
+            if (array_key_exists('propertyDetails', $validated)) {
+                $details = is_array($locked->property_details) ? $locked->property_details : [];
+                foreach (['kitchens', 'cleaning_mode'] as $key) {
+                    if (array_key_exists($key, $validated['propertyDetails'])) {
+                        $details[$key] = $validated['propertyDetails'][$key];
+                    }
+                }
+                $attributes['property_details'] = $details;
             }
-            if (array_key_exists('number_of_workers', $attributes) && $attributes['number_of_workers'] === null) {
-                $attributes['number_of_workers'] = 1;
+            if (array_key_exists('termsAccepted', $validated)) {
+                $attributes['terms_accepted'] = (bool) $validated['termsAccepted'];
+            }
+            if ($attributes !== []) {
+                $locked->update($attributes);
+                if (array_key_exists('property_details', $attributes) && ! $locked->acceptedWorkerAssignments()->exists()) {
+                    $this->teamService->syncRooms($locked->fresh());
+                }
             }
 
-            tap($booking)->update($attributes);
+            return $this->freshBooking($locked);
+        }, 3);
+    }
 
-            if (array_intersect(array_keys($attributes), ['property_type', 'property_details']) !== [] && ! $booking->acceptedWorkerAssignments()->exists()) {
-                $this->teamService->syncRooms($booking->fresh());
-            }
+    public function destroyGeneric(CleaningBooking $booking): void
+    {
+        DB::transaction(function () use ($booking): void {
+            $locked = CleaningBooking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
+            $this->assertGenericMutationAllowed($locked);
+            $locked->delete();
+        }, 3);
+    }
 
-            return $this->freshBooking($booking);
-        });
+    public function assertGenericMutationAllowed(CleaningBooking $booking): void
+    {
+        $status = $booking->status instanceof CleaningBookingStatus
+            ? $booking->status
+            : CleaningBookingStatus::tryFrom((string) $booking->status);
+        $details = is_array($booking->property_details) ? $booking->property_details : [];
+        $hasSignedV2Pricing = array_key_exists('_room_period_v2_approved_total', $details)
+            || array_key_exists('_time_period_v2', $details)
+            || array_key_exists('_supervisor_pricing', $details);
+
+        abort_if(
+            $booking->isV2OperationalGroup()
+            || $hasSignedV2Pricing
+            || $booking->started_travel_at !== null
+            || $booking->arrived_at !== null
+            || $booking->work_started_at !== null
+            || $booking->work_finished_at !== null
+            || in_array($status, [CleaningBookingStatus::InProgress, CleaningBookingStatus::Completed, CleaningBookingStatus::Cancelled], true),
+            409,
+            'Generic booking mutation is unavailable after signed V2 pricing or lifecycle execution begins.',
+        );
     }
 
     public function accept(CleaningBooking $booking, ?array $roomIds = null): CleaningBooking
@@ -169,7 +230,7 @@ final class CleaningBookingService
 
         $this->dispatchTrackingUpdate($updated);
 
-        if ($shouldNotifyCustomer) {
+        if ($shouldNotifyCustomer && $updated->status !== CleaningBookingStatus::Cancelled) {
             $this->lifecycleNotifications->notifyCustomer(
                 booking: $updated,
                 canonicalType: $isPreferredWorkerRejection
@@ -206,8 +267,12 @@ final class CleaningBookingService
     {
         $fromStatus = (string) $booking->status->value;
 
-        $updated = DB::transaction(function () use ($booking): CleaningBooking {
+        $newlyStarted = false;
+        $startedAt = null;
+        $workerId = null;
+        $updated = DB::transaction(function () use ($booking, &$newlyStarted, &$startedAt, &$workerId): CleaningBooking {
             $worker = $this->currentWorker();
+            $workerId = (int) $worker->id;
             $lockedBooking = $this->lockBooking($booking);
 
             if (! in_array($lockedBooking->status, [
@@ -215,18 +280,20 @@ final class CleaningBookingService
                 CleaningBookingStatus::AwaitingStartVerification,
                 CleaningBookingStatus::AwaitingWorkerStartConfirmation,
             ], true)) {
-                throw new InvalidArgumentException('Booking cannot start travel in current status.');
+                throw new InvalidArgumentException('لا يمكن بدء الرحلة في حالة الطلب الحالية. حدّث بيانات الطلب وحاول مجددًا.');
             }
 
             $assignment = $this->activeAssignmentForWorker($lockedBooking->id, $worker->id, true);
 
             if ($assignment instanceof CleaningBookingWorkerAssignment) {
                 if ($assignment->started_travel_at === null) {
+                    $newlyStarted = true;
                     $assignment->forceFill([
                         'started_travel_at' => now(),
                     ])->save();
                 }
 
+                $startedAt = $assignment->started_travel_at?->toIso8601String();
                 if ($lockedBooking->started_travel_at === null) {
                     $lockedBooking->forceFill(['started_travel_at' => $assignment->started_travel_at ?? now()])->save();
                 }
@@ -235,23 +302,30 @@ final class CleaningBookingService
             }
 
             if ((int) $lockedBooking->worker_id !== (int) $worker->id) {
-                throw new InvalidArgumentException('Worker must accept the booking before starting travel.');
+                throw new InvalidArgumentException('يجب قبول الطلب قبل بدء الرحلة.');
             }
 
-            $lockedBooking->update(['started_travel_at' => now()]);
+            if ($lockedBooking->started_travel_at === null) {
+                $newlyStarted = true;
+                $lockedBooking->update(['started_travel_at' => now()]);
+            }
+            $startedAt = $lockedBooking->started_travel_at?->toIso8601String();
 
             return $this->freshBooking($lockedBooking);
         });
 
-        $this->dispatchTrackingUpdate($updated);
-        $this->lifecycleNotifications->notifyCustomer(
+        if ($newlyStarted) {
+            $this->dispatchTrackingUpdate($updated);
+            $this->lifecycleNotifications->notifyCustomer(
             booking: $updated,
             canonicalType: 'cleaning.booking.worker_started_travel',
             action: 'worker_started_travel',
             actorRole: 'worker',
             fromStatus: $fromStatus,
-            occurredAt: $updated->started_travel_at?->toIso8601String() ?? $updated->updated_at?->toIso8601String(),
-        );
+            occurredAt: $startedAt ?? $updated->updated_at?->toIso8601String(),
+            extraData: ['workerId' => $workerId],
+            );
+        }
 
         return $updated;
     }
@@ -664,7 +738,7 @@ final class CleaningBookingService
 
             $note = is_string($reasonNote) && mb_trim($reasonNote) !== '' ? mb_trim($reasonNote) : null;
             $category = $this->normalizeFinishCategory($reasonType);
-            $description = trim((string) $category.($note !== null ? PHP_EOL.PHP_EOL.$note : ''));
+            $description = mb_trim((string) $category.($note !== null ? PHP_EOL.PHP_EOL.$note : ''));
 
             $lockedBooking->update([
                 'status' => CleaningBookingStatus::UnderDispute,
@@ -729,6 +803,24 @@ final class CleaningBookingService
 
     public function cancel(CleaningBooking $booking, ?string $reason = null): CleaningBooking
     {
+        // A worker leaving a multi-worker booking must not cancel the customer's
+        // booking or the assignments already accepted by other workers.
+        // Reuse the team withdrawal lifecycle so rooms, pricing, replacement
+        // dispatch and customer notifications stay consistent.
+        if ((int) ($booking->number_of_workers ?? 1) > 1
+            && $booking->workerAssignments()->exists()) {
+            if (! in_array($booking->status, [
+                CleaningBookingStatus::Pending,
+                CleaningBookingStatus::WorkerAssigned,
+            ], true)) {
+                throw new InvalidArgumentException(
+                    'A worker cannot cancel a multi-worker booking after work has started.'
+                );
+            }
+
+            return $this->reject($booking, $reason);
+        }
+
         $fromStatus = (string) $booking->status->value;
 
         $updated = DB::transaction(function () use ($booking, $reason) {
@@ -804,8 +896,14 @@ final class CleaningBookingService
 
     private function finalizeWorkerAdminFees(CleaningBooking $booking): void
     {
+        // Session charges have their own settlement identity.
+        if ($booking->sessions()->exists()) {
+            return;
+        }
+
         $booking->loadMissing('workerAssignments.worker');
 
+        $hasAcceptedAssignments = false;
         foreach ($booking->workerAssignments as $assignment) {
             $status = $assignment->status instanceof CleaningBookingWorkerAssignmentStatus ? $assignment->status->value : (string) $assignment->status;
 
@@ -813,9 +911,24 @@ final class CleaningBookingService
                 continue;
             }
 
+            $hasAcceptedAssignments = true;
             $worker = $assignment->worker;
             $adminFee = (float) $assignment->admin_margin_amount;
 
+            if ($adminFee > 0 && ! $worker instanceof Worker) {
+                throw new InvalidArgumentException('Cannot finalize a commission-bearing assignment without a worker.');
+            }
+            if ($worker instanceof Worker && $adminFee > 0) {
+                $this->depositService->recordAdminFeeDebit($worker, $booking, $adminFee);
+            }
+        }
+
+        if (! $hasAcceptedAssignments) {
+            $worker = $booking->worker;
+            $adminFee = (float) ($booking->admin_margin_amount ?? 0);
+            if ($adminFee > 0 && ! $worker instanceof Worker) {
+                throw new InvalidArgumentException('Cannot finalize a commission-bearing booking without a worker.');
+            }
             if ($worker instanceof Worker && $adminFee > 0) {
                 $this->depositService->recordAdminFeeDebit($worker, $booking, $adminFee);
             }
@@ -927,8 +1040,7 @@ final class CleaningBookingService
         ?string $reason,
         bool $convertedToOpen = false,
         bool $requiresDecision = false,
-    ): array
-    {
+    ): array {
         $extraData = [
             'workerId' => (int) $worker->id,
             'propertyType' => (string) $booking->property_type,

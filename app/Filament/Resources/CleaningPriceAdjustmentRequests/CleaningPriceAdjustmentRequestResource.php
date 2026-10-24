@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningPriceAdjustmentRequests;
 
+use App\Filament\Clusters\CleaningOperationsCluster;
 use App\Filament\Resources\CleaningPriceAdjustmentRequests\Pages\ListCleaningPriceAdjustmentRequests;
 use App\Filament\Resources\CleaningPriceAdjustmentRequests\Pages\ViewCleaningPriceAdjustmentRequest;
 use App\Filament\Resources\CleaningPriceAdjustmentRequests\Schemas\CleaningPriceAdjustmentRequestInfolist;
@@ -20,6 +21,8 @@ use Modules\Cleaning\Models\CleaningBookingPriceAdjustmentRequest;
 final class CleaningPriceAdjustmentRequestResource extends Resource
 {
     protected static ?string $model = CleaningBookingPriceAdjustmentRequest::class;
+
+    protected static ?string $cluster = CleaningOperationsCluster::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCurrencyDollar;
 

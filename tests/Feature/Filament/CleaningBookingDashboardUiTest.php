@@ -60,6 +60,34 @@ it('allows admins to edit active and terminal bookings', function (): void {
         ->assertSuccessful();
 });
 
+it('lets authorized operations stop open-time billing from the booking detail action', function (): void {
+    Notification::fake();
+    $booking = CleaningBooking::factory()->create([
+        'status' => CleaningBookingStatus::InProgress,
+        'booking_kind' => 'open_time',
+        'work_started_at' => now()->subMinutes(80),
+        'work_finished_at' => null,
+        'open_time_hourly_rate' => 300,
+        'open_time_minimum_minutes' => 60,
+        'open_time_rounding_minutes' => 15,
+        'addons_total' => 0,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 0,
+    ]);
+
+    Livewire::test(ViewCleaningBooking::class, ['record' => $booking->getRouteKey()])
+        ->assertActionExists('terminate_open_time')
+        ->callAction('terminate_open_time', data: [
+            'session_id' => '0',
+            'reason' => 'Administrative emergency closeout',
+        ])
+        ->assertHasNoActionErrors();
+
+    expect($booking->fresh()->status)->toBe(CleaningBookingStatus::Completed)
+        ->and($booking->fresh()->open_time_terminated_at)->not->toBeNull()
+        ->and($booking->fresh()->open_time_finalized_at)->not->toBeNull();
+});
+
 it('shows customer phone mission time and coupon application details', function (): void {
     $customer = User::factory()->create([
         'name' => 'عميل الاختبار',

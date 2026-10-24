@@ -237,7 +237,20 @@ final class CleaningOpenTimeLifecycleService
         }
 
         return DB::transaction(function () use ($extension, $worker, $decision, $reason): CleaningOpenTimeExtension {
+            // Match requestExtension's booking -> extension lock order.
+            // Previously this branch locked E before B and could deadlock
+            // against a customer replacing a pending legacy extension.
+            $booking = CleaningBooking::query()
+                ->whereKey($extension->cleaning_booking_id)
+                ->lockForUpdate()
+                ->firstOrFail();
             $lockedExtension = CleaningOpenTimeExtension::query()->whereKey($extension->id)->lockForUpdate()->firstOrFail();
+            if ((int) $lockedExtension->cleaning_booking_id !== (int) $booking->id
+                || $lockedExtension->cleaning_booking_session_id !== null) {
+                throw ValidationException::withMessages([
+                    'extension' => ['Extension no longer belongs to this legacy booking.'],
+                ]);
+            }
             if ((int) $lockedExtension->worker_id !== (int) $worker->id) {
                 abort(403, 'This extension belongs to another worker.');
             }
@@ -245,7 +258,6 @@ final class CleaningOpenTimeLifecycleService
                 return $lockedExtension;
             }
 
-            $booking = CleaningBooking::query()->whereKey($lockedExtension->cleaning_booking_id)->lockForUpdate()->firstOrFail();
             $this->assertRunning($booking);
             $decision = $decision === 'accepted' ? 'accepted' : 'rejected';
             if ($decision === 'accepted') {
@@ -285,20 +297,26 @@ final class CleaningOpenTimeLifecycleService
         ?string $reason,
     ): CleaningOpenTimeExtension {
         return DB::transaction(function () use ($extension, $worker, $decision, $reason): CleaningOpenTimeExtension {
+            // Use the same booking -> session -> extension lock order as a
+            // customer's replacement request. Locking the extension first
+            // deadlocks against replacement's pending-extension expiry.
+            $booking = CleaningBooking::query()->whereKey($extension->cleaning_booking_id)->lockForUpdate()->firstOrFail();
+            $session = CleaningBookingSession::query()
+                ->whereKey($extension->cleaning_booking_session_id)
+                ->where('cleaning_booking_id', $booking->id)
+                ->lockForUpdate()
+                ->firstOrFail();
             $lockedExtension = CleaningOpenTimeExtension::query()->whereKey($extension->id)->lockForUpdate()->firstOrFail();
+            if ((int) $lockedExtension->cleaning_booking_id !== (int) $booking->id
+                || (int) $lockedExtension->cleaning_booking_session_id !== (int) $session->id) {
+                throw ValidationException::withMessages(['extension' => ['Extension no longer belongs to the requested session.']]);
+            }
             if ((int) $lockedExtension->worker_id !== (int) $worker->id) {
                 abort(403, 'This extension belongs to another worker.');
             }
             if ($lockedExtension->status !== 'pending') {
                 return $lockedExtension;
             }
-
-            $booking = CleaningBooking::query()->whereKey($lockedExtension->cleaning_booking_id)->lockForUpdate()->firstOrFail();
-            $session = CleaningBookingSession::query()
-                ->whereKey($lockedExtension->cleaning_booking_session_id)
-                ->where('cleaning_booking_id', $booking->id)
-                ->lockForUpdate()
-                ->firstOrFail();
             $this->assertSessionRunning($booking, $session);
 
             $decision = $decision === 'accepted' ? 'accepted' : 'rejected';

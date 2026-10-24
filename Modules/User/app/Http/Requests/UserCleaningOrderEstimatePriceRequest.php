@@ -8,8 +8,9 @@ use App\Enums\GenderPreference;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
-use Modules\User\Http\Requests\Concerns\ValidatesEventAssistanceSchedule;
+use Modules\User\Http\Requests\Concerns\ResolvesEventVenueTypes;
 use Modules\User\Http\Requests\Concerns\ValidatesDynamicCleaningEvent;
+use Modules\User\Http\Requests\Concerns\ValidatesEventAssistanceSchedule;
 use Modules\User\Http\Requests\Concerns\ValidatesRecurringWorkerScope;
 use Modules\User\Http\Requests\Concerns\ValidatesWorkerRoomAssignments;
 use Modules\User\Models\UserAddress;
@@ -17,12 +18,14 @@ use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderEstimatePriceRequest extends FormRequest
 {
-    use ValidatesEventAssistanceSchedule;
+    use \Modules\User\Http\Requests\Concerns\ValidatesRoomCleaningModes;
+    use ResolvesEventVenueTypes;
     use ValidatesDynamicCleaningEvent;
+    use ValidatesEventAssistanceSchedule;
     use ValidatesRecurringWorkerScope;
     use ValidatesWorkerRoomAssignments;
 
-    private const INCOMPLETE_ADDRESS_MESSAGE = 'يرجى تحديث العنوان المختار وإضافة الحي والإحداثيات قبل إنشاء الطلب.';
+    private const INCOMPLETE_ADDRESS_MESSAGE = 'يرجى تحديث العنوان المختار وتحديد موقعه على الخريطة قبل إنشاء الطلب.';
 
     public function authorize(): bool
     {
@@ -37,8 +40,14 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
         $isEventAssistance = $this->isEventAssistanceRequested();
 
         return [
+            ...\Modules\User\Http\Requests\Concerns\CleaningTimePeriodContract::rules(),
+            ...\Modules\User\Http\Requests\Concerns\RoomPeriodContract::rules(),
             'propertyType' => ['required', 'string', Rule::in(UserCleaningOrderEstimationService::PROPERTY_TYPES)],
             'propertyDetails' => ['required', 'array'],
+            'propertyDetails.address' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'propertyDetails.location_name' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'propertyDetails.notes' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'propertyDetails.specialRequirement' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'propertyDetails.bedrooms' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.rooms' => ['nullable', 'integer', 'min:0', 'max:30'],
             'propertyDetails.bathrooms' => ['nullable', 'integer', 'min:0', 'max:20'],
@@ -48,7 +57,10 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             'propertyDetails.sheds' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.living_room_size' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::LIVING_ROOM_SIZES)],
             'propertyDetails.cleaning_mode' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::CLEANING_MODES)],
-            'propertyDetails.room_size_breakdown' => ['nullable', 'array:bedroom,bathroom,toilet,kitchen,living_room,balcony,corridor,shed'],
+            ...$this->roomCleaningModeRules(),
+            ...$this->roomEstimatedHoursRules(),
+            'propertyDetails.room_size_breakdown' => ['nullable', 'array'],
+            'propertyDetails.room_size_breakdown.*' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.bedroom' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.bathroom' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.toilet' => ['sometimes', 'array:small,medium,large'],
@@ -69,7 +81,11 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             'serviceIds' => $isEventAssistance ? ['prohibited'] : ['sometimes', 'array', 'min:1'],
             'serviceIds.*' => $isEventAssistance ? ['prohibited'] : ['integer', 'distinct', 'exists:cleaning_services,id'],
             'requestMaterials' => ['sometimes', 'boolean'],
-            'materials' => ['sometimes', 'array:providedByPlatform'],
+            'materials' => ['sometimes', 'array:providedByPlatform,materialTypeIds'],
+            'materials.materialTypeIds' => ['sometimes', 'array', 'max:64'],
+            'materials.materialTypeIds.*' => ['integer', 'distinct', 'exists:cleaning_material_types,id'],
+            'propertyDetails.requested_material_type_ids' => ['sometimes', 'array', 'max:64'],
+            'propertyDetails.requested_material_type_ids.*' => ['integer', 'distinct', 'exists:cleaning_material_types,id'],
             'materials.providedByPlatform' => ['required_with:materials', 'boolean'],
             'bookingKind' => ['sometimes', 'string', Rule::in(['standard', 'special_service', 'open_time'])],
             'event' => ['sometimes', 'array:eventTypeId,dynamicAnswers'],
@@ -112,6 +128,9 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             ...$this->recurringWorkerScopeRules(),
             'assignmentMode' => ['nullable', 'string', Rule::in(['preferred_worker', 'open_count'])],
             'numberOfWorkers' => ['nullable', 'integer', 'min:1', 'max:20'],
+            'serviceType' => ['nullable', Rule::in(['standard', 'supervised_team'])],
+            'scheduledDate' => [Rule::requiredIf($this->input('serviceType') === 'supervised_team'), 'sometimes', 'date_format:Y-m-d', 'after_or_equal:'.now(config('app.timezone'))->toDateString()],
+            'scheduledTime' => [Rule::requiredIf($this->input('serviceType') === 'supervised_team'), 'sometimes', 'date_format:H:i'],
             'genderPreference' => ['nullable', 'string', Rule::in(array_column(GenderPreference::cases(), 'value'))],
             ...$this->workerRoomAssignmentRules(),
         ];
@@ -120,6 +139,13 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
+            \Modules\User\Http\Requests\Concerns\CleaningTimePeriodContract::validate($this->all(), $validator);
+            if ($this->exists('roomPeriods')) {
+                \Modules\User\Http\Requests\Concerns\RoomPeriodContract::validateConsistency($this->all(), $validator);
+            }
+            $this->validateRoomCleaningModes($validator);
+            $this->validateRoomEstimatedHours($validator);
+            $this->validateActiveRoomTypes($validator);
             $this->validateSelectedAddressCompleteness($validator);
             $this->validateEventAssistanceSchedule($validator);
             $this->validateDynamicCleaningEvent($validator);
@@ -140,6 +166,13 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
                 FILTER_VALIDATE_BOOL,
                 FILTER_NULL_ON_FAILURE,
             ) ?? $materials['providedByPlatform'];
+        }
+
+        if (is_array($materials) && array_key_exists('materialTypeIds', $materials)) {
+            $merge['propertyDetails'] = [
+                ...(array) $this->input('propertyDetails', []),
+                'requested_material_type_ids' => $materials['materialTypeIds'],
+            ];
         }
 
         $preferredWorkerIds = $this->normalizePreferredWorkerIds(
@@ -187,6 +220,22 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             if ($address instanceof UserAddress) {
                 $merge['addressLatitude'] = $address->latitude !== null ? (float) $address->latitude : null;
                 $merge['addressLongitude'] = $address->longitude !== null ? (float) $address->longitude : null;
+                if ((int) $this->input('contractVersion') === 2) {
+                    if (! $this->filled('neighborhoodId') && $address->neighborhood_id !== null) {
+                        $merge['neighborhoodId'] = (int) $address->neighborhood_id;
+                    }
+                    if (! $this->filled('neighborhood') && $address->neighborhood !== null) {
+                        $merge['neighborhood'] = $address->neighborhood;
+                    }
+                    $details = (array) $this->input('propertyDetails', []);
+                    if (trim((string) ($details['address'] ?? '')) === '') {
+                        $details['address'] = $this->formatUserAddress($address);
+                    }
+                    if (! array_key_exists('location_name', $details) && $address->label !== null) {
+                        $details['location_name'] = $address->label;
+                    }
+                    $merge['propertyDetails'] = $details;
+                }
             }
         }
 
@@ -286,11 +335,9 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
     private function isCompleteServiceAddress(UserAddress $address): bool
     {
         $hasAddressText = mb_trim($this->formatUserAddress($address)) !== '';
-        $hasNeighborhood = $address->neighborhood_id !== null
-            || mb_trim((string) $address->neighborhood) !== '';
         $hasCoordinates = $address->latitude !== null && $address->longitude !== null;
 
-        return $hasAddressText && $hasNeighborhood && $hasCoordinates;
+        return $hasAddressText && $hasCoordinates;
     }
 
     private function formatUserAddress(UserAddress $address): string
@@ -314,11 +361,4 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
     /**
      * @return array<int, string>
      */
-    private function availableVenueTypes(): array
-    {
-        return array_values(array_filter(
-            UserCleaningOrderEstimationService::PROPERTY_TYPES,
-            static fn (string $type): bool => $type !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE
-        ));
-    }
 }

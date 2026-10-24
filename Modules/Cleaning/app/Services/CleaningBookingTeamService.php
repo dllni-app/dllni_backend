@@ -154,6 +154,8 @@ final class CleaningBookingTeamService
                 ])->save();
             }
 
+            app(CleaningSpecialistEquipmentReservationService::class)->confirmForBooking($booking, $worker);
+
             if ($roomIds !== null) {
                 $this->claimRoomsForWorker($booking, $worker->id, $roomIds, CleaningBookingRoomAssignmentSource::Worker);
             }
@@ -220,9 +222,9 @@ final class CleaningBookingTeamService
         });
     }
 
-    public function rejectWorker(CleaningBooking $booking, Worker $worker, ?string $reason = null): CleaningBooking
+    public function rejectWorker(CleaningBooking $booking, Worker $worker, ?string $reason = null, bool $applyWorkerPenalty = true): CleaningBooking
     {
-        return DB::transaction(function () use ($booking, $worker, $reason): CleaningBooking {
+        return DB::transaction(function () use ($booking, $worker, $reason, $applyWorkerPenalty): CleaningBooking {
             $booking = $this->lockBooking($booking->id);
 
             if (! in_array($booking->status, [CleaningBookingStatus::Pending, CleaningBookingStatus::WorkerAssigned], true)) {
@@ -269,9 +271,13 @@ final class CleaningBookingTeamService
                     'assignment_source' => null,
                 ]);
 
+            if ($hadAccepted) {
+                app(CleaningSpecialistEquipmentReservationService::class)->releaseUnstartedForWorker($booking, $worker);
+            }
+
             $booking = $this->recalculateBookingTeam($booking, finalizeBooking: false);
 
-            if ($hadAccepted) {
+            if ($hadAccepted && $applyWorkerPenalty) {
                 $this->workerTrustService->applyRejectAfterAcceptPenalty($worker, $booking);
             }
 
@@ -292,6 +298,52 @@ final class CleaningBookingTeamService
     /**
      * @param  array<int, array{roomId:int, workerId:?int}>  $assignments
      */
+    /**
+     * Replace a team member atomically without a voluntary cancellation penalty.
+     */
+    public function replaceWorkerByAdmin(
+        CleaningBooking $booking,
+        Worker $outgoing,
+        Worker $incoming,
+        ?string $reason = null,
+    ): CleaningBooking {
+        return DB::transaction(function () use ($booking, $outgoing, $incoming, $reason): CleaningBooking {
+            $booking = $this->lockBooking($booking->id);
+            if (! in_array($booking->status, [
+                CleaningBookingStatus::Pending,
+                CleaningBookingStatus::WorkerAssigned,
+            ], true) || $booking->started_travel_at !== null || $booking->work_started_at !== null) {
+                throw new InvalidArgumentException('لا يمكن استبدال عامل بعد بدء رحلة الفريق أو تنفيذ الطلب.');
+            }
+            if ((int) $outgoing->id === (int) $incoming->id) {
+                throw new InvalidArgumentException('يجب اختيار عامل بديل مختلف عن العامل الحالي.');
+            }
+            $outgoingAssignment = $this->acceptedAssignmentForWorker($booking->id, $outgoing->id);
+            if ($outgoingAssignment === null) {
+                throw new InvalidArgumentException('العامل المطلوب استبداله لم يعد ضمن الفريق.');
+            }
+            if ($outgoingAssignment->started_travel_at !== null || $outgoingAssignment->work_started_at !== null) {
+                throw new InvalidArgumentException('لا يمكن استبدال عامل بعد بدء رحلته أو عمله.');
+            }
+
+            $booking = $this->rejectWorker($booking, $outgoing, $reason, false);
+
+            // Keep customer-selected worker scope consistent with the replacement.
+            $newWorkerIds = array_values(array_unique(array_map(
+                static fn (int $workerId): int => $workerId === (int) $outgoing->id
+                    ? (int) $incoming->id : $workerId,
+                $booking->specificWorkerIds(),
+            )));
+            $booking->forceFill([
+                'specific_worker_ids' => $newWorkerIds,
+                'preferred_worker_id' => (int) ($booking->preferred_worker_id ?? 0) === (int) $outgoing->id
+                    ? (int) $incoming->id : $booking->preferred_worker_id,
+            ])->save();
+
+            return $this->acceptWorker($booking->fresh(), $incoming);
+        });
+    }
+
     public function assignRoomsFromCustomer(CleaningBooking $booking, array $assignments): CleaningBooking
     {
         return DB::transaction(function () use ($booking, $assignments): CleaningBooking {
@@ -389,11 +441,19 @@ final class CleaningBookingTeamService
             $totalRoomWeight = round((float) $rooms->sum(fn (CleaningBookingRoom $room): float => (float) $room->weight), 2);
         }
 
-        $subtotal = round(((float) ($booking->base_price ?? 0)) + ((float) ($booking->addons_total ?? 0)), 2);
+        // Supervisor charges are collected for the supervisor's group hours,
+        // not part of the workers' distributable cleaning wage.
+        $supervisorFee = max(0.0, (float) data_get($booking->property_details, '_supervisor_pricing.fee', 0));
+        $subtotal = round(max(0.0,
+            ((float) ($booking->base_price ?? 0)) + ((float) ($booking->addons_total ?? 0)) - $supervisorFee
+        ), 2);
         $isEventAssistance = (string) $booking->property_type === 'event_assistance';
         $includedAdminMarginBase = $this->pricingCalculator->minimumOrderAdminMarginBase(
             (float) ($booking->base_price ?? 0),
             (string) $booking->property_type,
+            (float) ($booking->addons_total ?? 0),
+            (float) ($booking->travel_fee ?? 0),
+            (float) ($booking->total_price ?? 0),
         );
         $requiredWorkers = max(1, (int) ($booking->number_of_workers ?? 1));
         $totalTravelFee = 0.0;
@@ -466,13 +526,18 @@ final class CleaningBookingTeamService
             }
         }
 
+        $periodApprovedTotal = (array) ($booking->property_details ?? []);
+        $customerPriceLock = isset($periodApprovedTotal['_room_period_v2_approved_total'])
+            ? round((float) $periodApprovedTotal['_room_period_v2_approved_total'], 2)
+            : null;
+
         if ($finalizeBooking && $acceptedAssignments->isNotEmpty()) {
             $booking->forceFill([
                 'status' => CleaningBookingStatus::WorkerAssigned,
                 'worker_id' => $primaryWorkerId,
                 'travel_fee' => round($totalTravelFee, 2),
                 'admin_margin_amount' => round($totalAdminMargin, 2),
-                'total_price' => round($acceptedAssignments->sum(
+                'total_price' => $customerPriceLock ?? round($supervisorFee + $acceptedAssignments->sum(
                     fn (CleaningBookingWorkerAssignment $assignment): float =>
                         (float) $assignment->worker_amount + (float) $assignment->admin_margin_amount
                 ), 2),
@@ -491,7 +556,7 @@ final class CleaningBookingTeamService
                 'worker_id' => null,
                 'travel_fee' => 0,
                 'admin_margin_amount' => round((float) $provisionalPricing['adminMargin'], 2),
-                'total_price' => round((float) $provisionalPricing['totalPrice'], 2),
+                'total_price' => $customerPriceLock ?? round((float) $provisionalPricing['totalPrice'] + $supervisorFee, 2),
                 'travel_distance_km' => null,
                 'is_pricing_final' => false,
             ])->save();
@@ -651,6 +716,15 @@ final class CleaningBookingTeamService
 
         if ($booking->preferred_worker_id !== null && $booking->assignment_mode === null && (int) $booking->preferred_worker_id !== $worker->id && (int) ($booking->number_of_workers ?? 1) === 1) {
             throw new InvalidArgumentException('Booking is reserved for a different preferred worker.');
+        }
+
+        // Radius-free urgent dispatch must never override the customer's explicit worker scope.
+        if (
+            $booking->resolvedWorkerScope() === CleaningBooking::WORKER_SCOPE_SPECIFIC
+            && ! in_array((int) $worker->id, $booking->specificWorkerIds(), true)
+            && (int) $booking->preferred_worker_id !== (int) $worker->id
+        ) {
+            throw new InvalidArgumentException('Booking is reserved for customer-selected workers.');
         }
 
         $explicitlySelected = (int) $booking->preferred_worker_id === (int) $worker->id

@@ -1,0 +1,12 @@
+{
+  "contractVersion": 2,
+  "propertyType": "apartment",
+  "bookingKind": "standard",
+  "propertyDetails": {"address":"عنوان تجريبي","room_size_breakdown":{"bedroom":{"medium":2}}},
+  "addressLatitude":33.5138,
+  "addressLongitude":36.2765,
+  "genderPreference":"any",
+  "assignmentMode":"open_count",
+  "rooms":[{"roomKey":"bedroom.1","roomType":"bedroom","size":"medium","cleaningMode":"deep"},{"roomKey":"bedroom.2","roomType":"bedroom","size":"medium","cleaningMode":"regular"}],
+  "visits":[{"visitKey":"visit.1","sequence":1,"roomSchedules":[{"scheduleKey":"schedule.1","roomKey":"bedroom.1","scheduledDate":"2026-10-20","scheduledTime":"09:00","numberOfWorkers":2},{"scheduleKey":"schedule.2","roomKey":"bedroom.2","scheduledDate":"2026-10-20","scheduledTime":"09:00","numberOfWorkers":1}],"timePeriods":[]}]
+}

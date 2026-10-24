@@ -23,7 +23,7 @@ Artisan::command('cleaning:expand-geographic-dispatch', function (): int {
         ->whereNotNull('address_latitude')
         ->whereNotNull('address_longitude')
         ->whereDate('scheduled_date', '>=', today())
-        ->where('created_at', '<=', now()->subMinutes(20))
+        ->where('created_at', '<=', now()->subMinutes(15))
         ->orderBy('id')
         ->chunkById(100, function ($bookings): void {
             foreach ($bookings as $booking) {
@@ -34,9 +34,21 @@ Artisan::command('cleaning:expand-geographic-dispatch', function (): int {
         });
 
     return 0;
-})->purpose('Expand cleaning booking dispatch radius every twenty minutes up to 50 km');
+})->purpose('Expand cleaning booking dispatch radius every fifteen minutes up to 50 km; urgent same-day orders notify all eligible workers regardless of radius');
 
 Schedule::command('cleaning:expand-geographic-dispatch')->everyFiveMinutes()->withoutOverlapping();
+
+Artisan::command('cleaning:resolve-last-hour-coverage', function (
+    \Modules\Cleaning\Services\CleaningLastHourCoverageService $service
+): int {
+    $outcome = $service->processDue();
+    $this->info('Last-hour cleaning coverage: '.json_encode($outcome));
+
+    return 0;
+})->purpose('Cancel unmatched bookings only one hour before start, and ask customers about partial teams');
+
+Schedule::command('cleaning:resolve-last-hour-coverage')
+    ->everyMinute()->withoutOverlapping();
 
 Artisan::command('restaurant:generate-system-alerts', function (RestaurantSystemAlertGenerator $generator): int {
     $count = $generator->handle();

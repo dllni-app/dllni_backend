@@ -19,7 +19,8 @@ final class InventorySummaryController
 
         $totalItems = (clone $baseQuery)->count();
         $lowStockCount = (clone $baseQuery)->lowStock(true)->count();
-        $expiringCount = 0;
+        // The client labels this legacy field as exhausted inventory, not expiry.
+        $expiringCount = (clone $baseQuery)->where('quantity', '<=', 0)->count();
         $totalValue = (float) (clone $baseQuery)->get()->sum(fn ($item) => (float) $item->quantity * (float) $item->unit_cost);
 
         return response()->json([

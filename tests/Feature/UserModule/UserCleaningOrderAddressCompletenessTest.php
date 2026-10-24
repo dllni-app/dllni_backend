@@ -26,24 +26,24 @@ function cleaningAddressPayload(int $addressId, array $overrides = []): array
     ], $overrides);
 }
 
-it('rejects cleaning orders when the selected address has no neighborhood', function (): void {
+it('accepts cleaning order address validation without a neighborhood when map coordinates exist', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
     $address = UserAddress::factory()->create([
         'user_id' => $user->id,
         'label' => 'Home',
-        'city' => 'Aleppo',
+        'city' => null,
         'neighborhood' => null,
         'neighborhood_id' => null,
-        'street' => 'Test Street',
+        'street' => 'صافيتا النيرب، ناحية مركز جبل سمعان، منطقة جبل سمعان، محافظة حلب، سوريا',
+        'directions' => 'طابق أول، أول باب على اليسار',
         'latitude' => 36.2021,
         'longitude' => 37.1343,
     ]);
 
     $this->postJson('/api/v1/user/cleaning/orders', cleaningAddressPayload((int) $address->id))
-        ->assertUnprocessable()
-        ->assertJsonValidationErrors('addressId');
+        ->assertJsonMissingValidationErrors('addressId');
 });
 
 it('rejects event assistance orders when the selected address has no coordinates', function (): void {
@@ -74,6 +74,29 @@ it('rejects event assistance orders when the selected address has no coordinates
     ]))
         ->assertUnprocessable()
         ->assertJsonValidationErrors('addressId');
+});
+
+it('accepts price estimate address validation without a neighborhood when map coordinates exist', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $address = UserAddress::factory()->create([
+        'user_id' => $user->id,
+        'label' => 'Home',
+        'city' => null,
+        'neighborhood' => null,
+        'neighborhood_id' => null,
+        'street' => 'صافيتا النيرب، ناحية مركز جبل سمعان، منطقة جبل سمعان، محافظة حلب، سوريا',
+        'directions' => 'طابق أول، أول باب على اليسار',
+        'latitude' => 36.2021,
+        'longitude' => 37.1343,
+    ]);
+
+    $payload = cleaningAddressPayload((int) $address->id);
+    unset($payload['scheduledDate'], $payload['scheduledTime'], $payload['termsAccepted']);
+
+    $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $payload)
+        ->assertJsonMissingValidationErrors('addressId');
 });
 
 it('rejects price estimates when the selected address is incomplete', function (): void {

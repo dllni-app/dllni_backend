@@ -11,9 +11,10 @@ use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionLocationControll
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionScheduleController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionWorkerChangeController;
 use Modules\Cleaning\Http\Controllers\API\CleaningRecurringSeriesController;
+use Modules\Cleaning\Http\Middleware\RequireSessionScopedCleaningLifecycle;
 
 Route::prefix('v1')
-    ->middleware(['auth:sanctum'])
+    ->middleware(['auth:sanctum', RequireSessionScopedCleaningLifecycle::class])
     ->group(function (): void {
         Route::get(
             'cleaning-bookings/{cleaning_booking}/schedule',

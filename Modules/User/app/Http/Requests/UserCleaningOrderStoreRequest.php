@@ -7,8 +7,9 @@ namespace Modules\User\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
-use Modules\User\Http\Requests\Concerns\ValidatesEventAssistanceSchedule;
+use Modules\User\Http\Requests\Concerns\ResolvesEventVenueTypes;
 use Modules\User\Http\Requests\Concerns\ValidatesDynamicCleaningEvent;
+use Modules\User\Http\Requests\Concerns\ValidatesEventAssistanceSchedule;
 use Modules\User\Http\Requests\Concerns\ValidatesRecurringWorkerScope;
 use Modules\User\Http\Requests\Concerns\ValidatesWorkerRoomAssignments;
 use Modules\User\Models\UserAddress;
@@ -17,8 +18,10 @@ use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderStoreRequest extends FormRequest
 {
-    use ValidatesEventAssistanceSchedule;
+    use \Modules\User\Http\Requests\Concerns\ValidatesRoomCleaningModes;
+    use ResolvesEventVenueTypes;
     use ValidatesDynamicCleaningEvent;
+    use ValidatesEventAssistanceSchedule;
     use ValidatesRecurringWorkerScope;
     use ValidatesWorkerRoomAssignments;
 
@@ -36,8 +39,10 @@ final class UserCleaningOrderStoreRequest extends FormRequest
         $today = now(config('app.timezone'))->toDateString();
 
         return [
+            ...\Modules\User\Http\Requests\Concerns\CleaningTimePeriodContract::rules(),
+            ...\Modules\User\Http\Requests\Concerns\RoomPeriodContract::rules(),
             'propertyType' => ['required', 'string', Rule::in(UserCleaningOrderEstimationService::PROPERTY_TYPES)],
-            'propertyDetails' => ['required', 'array:address,location_name,bedrooms,rooms,bathrooms,toilets,kitchens,balconies,sheds,living_room_size,cleaning_mode,room_size_breakdown,eventType,eventTypeId,dynamicAnswers,guestCount,venueType,customService,hours,specialRequirement,notes'],
+            'propertyDetails' => ['required', 'array:address,location_name,bedrooms,rooms,bathrooms,toilets,kitchens,balconies,sheds,living_room_size,cleaning_mode,room_cleaning_modes,room_estimated_hours,room_size_breakdown,eventType,eventTypeId,dynamicAnswers,guestCount,venueType,customService,hours,specialRequirement,notes,requested_material_type_ids'],
             'propertyDetails.address' => ['required', 'string', 'max:500'],
             'propertyDetails.location_name' => ['nullable', 'string', 'max:255'],
             'propertyDetails.bedrooms' => ['nullable', 'integer', 'min:0', 'max:100'],
@@ -49,7 +54,10 @@ final class UserCleaningOrderStoreRequest extends FormRequest
             'propertyDetails.sheds' => ['nullable', 'integer', 'min:0', 'max:100'],
             'propertyDetails.living_room_size' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::LIVING_ROOM_SIZES)],
             'propertyDetails.cleaning_mode' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::CLEANING_MODES)],
-            'propertyDetails.room_size_breakdown' => ['nullable', 'array:bedroom,bathroom,toilet,kitchen,living_room,balcony,corridor,shed'],
+            ...$this->roomCleaningModeRules(),
+            ...$this->roomEstimatedHoursRules(),
+            'propertyDetails.room_size_breakdown' => ['nullable', 'array'],
+            'propertyDetails.room_size_breakdown.*' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.bedroom' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.bathroom' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.toilet' => ['sometimes', 'array:small,medium,large'],
@@ -77,7 +85,11 @@ final class UserCleaningOrderStoreRequest extends FormRequest
             'serviceIds' => ['prohibited'],
             'serviceIds.*' => ['prohibited'],
             'requestMaterials' => ['sometimes', 'boolean'],
-            'materials' => ['sometimes', 'array:providedByPlatform'],
+            'materials' => ['sometimes', 'array:providedByPlatform,materialTypeIds'],
+            'materials.materialTypeIds' => ['sometimes', 'array', 'max:64'],
+            'materials.materialTypeIds.*' => ['integer', 'distinct', 'exists:cleaning_material_types,id'],
+            'propertyDetails.requested_material_type_ids' => ['sometimes', 'array', 'max:64'],
+            'propertyDetails.requested_material_type_ids.*' => ['integer', 'distinct', 'exists:cleaning_material_types,id'],
             'materials.providedByPlatform' => ['required_with:materials', 'boolean'],
             'specialServices' => ['sometimes', 'array', 'max:10'],
             'specialServices.*' => ['array:specialServiceId,serviceId,quantity,dirtinessLevel,notes,sessionIds,items'],
@@ -122,6 +134,7 @@ final class UserCleaningOrderStoreRequest extends FormRequest
             ...$this->recurringWorkerScopeRules(),
             'assignmentMode' => ['nullable', 'string', Rule::in(['preferred_worker', 'open_count'])],
             'numberOfWorkers' => ['nullable', 'integer', 'min:1', 'max:20'],
+            'serviceType' => ['nullable', Rule::in(['standard', 'supervised_team'])],
             ...$this->workerRoomAssignmentRules(),
             'genderPreference' => ['nullable', 'string', Rule::in(['any', 'male', 'female'])],
             'workEnvironmentConfirmation' => [Rule::excludeIf(! $requiresFemaleWorkerSafetyConfirmation), Rule::requiredIf($requiresFemaleWorkerSafetyConfirmation), 'array:beneficiaryPresence,pledgeAccepted,pledgeVersion'],
@@ -144,6 +157,16 @@ final class UserCleaningOrderStoreRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
+            \Modules\User\Http\Requests\Concerns\CleaningTimePeriodContract::validate($this->all(), $validator, true);
+            if ($this->exists('roomPeriods')) {
+                \Modules\User\Http\Requests\Concerns\RoomPeriodContract::validateConsistency($this->all(), $validator);
+                if (! $this->filled('quoteSignature')) {
+                    $validator->errors()->add('quoteSignature', 'Review the newest price before submitting the booking.');
+                }
+            }
+            $this->validateRoomCleaningModes($validator);
+            $this->validateRoomEstimatedHours($validator);
+            $this->validateActiveRoomTypes($validator);
             $this->validateSelectedAddressCompleteness($validator);
             $this->validateEventAssistanceSchedule($validator);
             $this->validateDynamicCleaningEvent($validator);
@@ -171,6 +194,14 @@ final class UserCleaningOrderStoreRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $merge = [];
+        if ((int) $this->input('contractVersion') === 2) {
+            $schedules = collect((array) $this->input('visits', []))->flatMap(static fn ($visit): array => is_array($visit) ? (array) ($visit['roomSchedules'] ?? []) : []);
+            $first = $schedules->sortBy(static fn ($schedule): string => is_array($schedule) ? (string) ($schedule['scheduledDate'] ?? '').' '.($schedule['scheduledTime'] ?? '') : '')->first();
+            if (is_array($first)) {
+                $merge['scheduledDate'] = $first['scheduledDate'] ?? null;
+                $merge['scheduledTime'] = $first['scheduledTime'] ?? null;
+            }
+        }
 
         $materials = $this->input('materials');
         if (is_array($materials) && array_key_exists('providedByPlatform', $materials)) {
@@ -179,6 +210,13 @@ final class UserCleaningOrderStoreRequest extends FormRequest
                 FILTER_VALIDATE_BOOL,
                 FILTER_NULL_ON_FAILURE,
             ) ?? $materials['providedByPlatform'];
+        }
+
+        if (is_array($materials) && array_key_exists('materialTypeIds', $materials)) {
+            $merge['propertyDetails'] = [
+                ...(array) $this->input('propertyDetails', []),
+                'requested_material_type_ids' => $materials['materialTypeIds'],
+            ];
         }
 
         $preferredWorkerIds = $this->normalizePreferredWorkerIds(
@@ -235,9 +273,16 @@ final class UserCleaningOrderStoreRequest extends FormRequest
                     $merge['neighborhood'] = $address->neighborhood;
                 }
 
-                $propertyDetails = $this->input('propertyDetails');
+                // Preserve material type selections already merged above.
+                // Reading the original input here would silently drop them for saved addresses.
+                $propertyDetails = $merge['propertyDetails'] ?? $this->input('propertyDetails');
                 if (is_array($propertyDetails)) {
-                    if (! array_key_exists('address', $propertyDetails) || mb_trim((string) ($propertyDetails['address'] ?? '')) === '') {
+                    if ((string) ($merge['bookingKind'] ?? $this->input('bookingKind')) === 'open_time') {
+                        // Always use the same saved address as the coordinates for hourly bookings.
+                        // Do not trust a stale address label from the client-side selection.
+                        $propertyDetails['address'] = $this->formatUserAddress($address);
+                        $propertyDetails['location_name'] = $address->label;
+                    } elseif (! array_key_exists('address', $propertyDetails) || mb_trim((string) ($propertyDetails['address'] ?? '')) === '') {
                         $propertyDetails['address'] = $this->formatUserAddress($address);
                     }
 
@@ -333,8 +378,6 @@ final class UserCleaningOrderStoreRequest extends FormRequest
     private function isCompleteServiceAddress(UserAddress $address): bool
     {
         $hasAddressText = mb_trim($this->formatUserAddress($address)) !== '';
-        $hasNeighborhood = $address->neighborhood_id !== null
-            || mb_trim((string) $address->neighborhood) !== '';
         $hasCoordinates = $address->latitude !== null && $address->longitude !== null;
 
         return $hasAddressText && $hasCoordinates;
@@ -362,7 +405,6 @@ final class UserCleaningOrderStoreRequest extends FormRequest
             $validator->errors()->add('openTime', 'Hourly-worker requests cannot be combined with cleaning materials or cleaning services.');
         }
 
-
         if ($hasOpenTime && $isRepeated) {
             $validator->errors()->add('schedule', 'Use openTime.sessions for multi-day Open-Time requests.');
         }
@@ -375,13 +417,5 @@ final class UserCleaningOrderStoreRequest extends FormRequest
     private function requiresFemaleWorkerSafetyConfirmation(): bool
     {
         return mb_strtolower((string) $this->input('genderPreference')) === 'female';
-    }
-
-    private function availableVenueTypes(): array
-    {
-        return array_values(array_filter(
-            UserCleaningOrderEstimationService::PROPERTY_TYPES,
-            static fn (string $type): bool => $type !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE
-        ));
     }
 }

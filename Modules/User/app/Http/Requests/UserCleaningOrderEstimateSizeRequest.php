@@ -6,10 +6,19 @@ namespace Modules\User\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Modules\User\Http\Requests\Concerns\ResolvesEventVenueTypes;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderEstimateSizeRequest extends FormRequest
 {
+    use \Modules\User\Http\Requests\Concerns\ValidatesRoomCleaningModes;
+    use ResolvesEventVenueTypes;
+
+    public function withValidator(\Illuminate\Validation\Validator $validator): void
+    {
+        $validator->after(fn (\Illuminate\Validation\Validator $validator) => $this->validateRoomCleaningModes($validator));
+    }
+
     public function authorize(): bool
     {
         return true;
@@ -34,6 +43,7 @@ final class UserCleaningOrderEstimateSizeRequest extends FormRequest
             'propertyDetails.sheds' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.living_room_size' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::LIVING_ROOM_SIZES)],
             'propertyDetails.cleaning_mode' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::CLEANING_MODES)],
+            ...$this->roomCleaningModeRules(),
             'propertyDetails.room_size_breakdown' => ['nullable', 'array:bedroom,bathroom,toilet,kitchen,living_room,balcony,corridor,shed'],
             'propertyDetails.room_size_breakdown.bedroom' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.bathroom' => ['sometimes', 'array:small,medium,large'],
@@ -62,11 +72,4 @@ final class UserCleaningOrderEstimateSizeRequest extends FormRequest
     /**
      * @return array<int, string>
      */
-    private function availableVenueTypes(): array
-    {
-        return array_values(array_filter(
-            UserCleaningOrderEstimationService::PROPERTY_TYPES,
-            static fn (string $type): bool => $type !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE
-        ));
-    }
 }

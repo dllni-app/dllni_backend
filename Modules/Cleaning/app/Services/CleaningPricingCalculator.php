@@ -169,21 +169,40 @@ final class CleaningPricingCalculator
         ];
     }
 
-    public function minimumOrderAdminMarginBase(float $basePrice, string $propertyType): float
-    {
+    public function minimumOrderAdminMarginBase(
+        float $basePrice,
+        string $propertyType,
+        float $addonsTotal = 0.0,
+        float $travelFee = 0.0,
+        ?float $customerTotalPrice = null,
+    ): float {
         if ($propertyType === 'event_assistance') {
             return 0.0;
         }
 
-        $basePrice = $this->roundMoney(max(0.0, $basePrice));
+        $serviceSubtotal = $this->roundMoney(max(0.0, $basePrice) + max(0.0, $addonsTotal));
         $minimumOrderPrice = $this->roundMoney(max(
             0.0,
             (float) (CleaningRuntimeSettings::financial()->cleaning_minimum_order_price ?? 0.0),
         ));
 
-        return $minimumOrderPrice > 0.0 && $basePrice <= $minimumOrderPrice
-            ? $basePrice
-            : 0.0;
+        // Minimum is commission-inclusive only when the actual whole-order
+        // subtotal, including travel, was topped up to the configured floor.
+        $subtotalWithTravel = $serviceSubtotal + $this->roundMoney(max(0.0, $travelFee));
+        if ($minimumOrderPrice <= 0.0 || abs($subtotalWithTravel - $minimumOrderPrice) >= 0.01) {
+            return 0.0;
+        }
+
+        // Hitting the threshold naturally must not cancel the commission.
+        // A commission-inclusive minimum is identifiable because the stored
+        // customer total equals the base + extras + transport (no margin on top).
+        if ($customerTotalPrice !== null
+            && abs($this->roundMoney($customerTotalPrice) - $subtotalWithTravel) >= 0.01
+        ) {
+            return 0.0;
+        }
+
+        return $serviceSubtotal;
     }
 
     public function roundMoney(float $amount): float

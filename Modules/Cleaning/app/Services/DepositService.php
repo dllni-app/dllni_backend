@@ -136,11 +136,8 @@ final class DepositService
         }
 
         $reference = CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.hash('sha256', $worker->id.':'.$booking->id);
-        if (CleaningDepositTransaction::query()->where('worker_id', $worker->id)->where('reference', $reference)->exists()) {
-            return null;
-        }
 
-        return $this->recordCharge($worker, $amount, 'commission', $reference, null, $createdByAdminId);
+        return $this->recordAutomaticAdminFeeCharge($worker, $amount, $reference, $createdByAdminId);
     }
 
     public function recordSessionAdminFeeDebit(
@@ -162,11 +159,8 @@ final class DepositService
             'sha256',
             $worker->id.':'.$booking->id.':session:'.$session->id,
         );
-        if (CleaningDepositTransaction::query()->where('worker_id', $worker->id)->where('reference', $reference)->exists()) {
-            return null;
-        }
 
-        return $this->recordCharge($worker, $amount, 'commission', $reference, null, $createdByAdminId);
+        return $this->recordAutomaticAdminFeeCharge($worker, $amount, $reference, $createdByAdminId);
     }
 
     public function resolveLimits(Worker $worker): array
@@ -491,6 +485,38 @@ final class DepositService
             'createdAt' => $account?->created_at?->toIso8601String(),
             'updatedAt' => $account?->updated_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * The reference gate must be a locking/current read AFTER serializing on
+     * the worker's deposit account. A pre-lock exists() can let two simultaneous
+     * completions debit the same worker for one booking/session.
+     */
+    private function recordAutomaticAdminFeeCharge(
+        Worker $worker,
+        float $amount,
+        string $reference,
+        ?int $createdByAdminId,
+    ): ?CleaningDepositTransaction {
+        return DB::transaction(function () use ($worker, $amount, $reference, $createdByAdminId): ?CleaningDepositTransaction {
+            $this->accountForUpdate($worker);
+
+            // SELECT ... FOR UPDATE sees the current committed reference even
+            // if an enclosing REPEATABLE READ transaction had an older snapshot.
+            $alreadyRecorded = CleaningDepositTransaction::query()
+                ->where('worker_id', $worker->id)
+                ->where('reference', $reference)
+                ->lockForUpdate()
+                ->first(['id']);
+
+            if ($alreadyRecorded instanceof CleaningDepositTransaction) {
+                return null;
+            }
+
+            // Nested calls share the outer account lock and transaction, so
+            // the balance update and ledger insert are committed together.
+            return $this->recordCharge($worker, $amount, 'commission', $reference, null, $createdByAdminId);
+        }, 3);
     }
 
     private function recordCharge(Worker $worker, float $amount, string $type, string $reference, ?string $notes, ?int $createdByAdminId): CleaningDepositTransaction

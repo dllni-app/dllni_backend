@@ -43,6 +43,12 @@ it('returns worker avatar and Arabic cleaning labels in booking payloads', funct
 
     Sanctum::actingAs($viewer);
 
+    // An unrelated authenticated account cannot inspect another customer's
+    // booking or the assigned worker's profile and room details.
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")->assertForbidden();
+
+    Sanctum::actingAs($workerUser);
+
     $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}");
 
     $response->assertOk()

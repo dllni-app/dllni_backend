@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningBillingPolicies;
 
+use App\Filament\Clusters\CleaningFinanceCluster;
 use App\Filament\Resources\CleaningBillingPolicies\Pages\CreateCleaningBillingPolicy;
 use App\Filament\Resources\CleaningBillingPolicies\Pages\EditCleaningBillingPolicy;
 use App\Filament\Resources\CleaningBillingPolicies\Pages\ListCleaningBillingPolicies;
@@ -22,6 +23,8 @@ use Modules\Cleaning\Models\CleaningBillingPolicy;
 final class CleaningBillingPolicyResource extends Resource
 {
     protected static ?string $model = CleaningBillingPolicy::class;
+
+    protected static ?string $cluster = CleaningFinanceCluster::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentList;
 

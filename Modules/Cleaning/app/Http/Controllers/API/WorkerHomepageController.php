@@ -150,19 +150,10 @@ final class WorkerHomepageController
             default => 0.0,
         };
 
-        $notifiedIds = DB::table('notifications')
-            ->where('type', NewOrderRequestNotification::class)
-            ->where('notifiable_id', $worker->user_id)
-            ->pluck('data')
-            ->map(static function ($payload): int {
-                $data = is_array($payload) ? $payload : json_decode((string) $payload, true);
-                return (int) ($data['bookingId'] ?? $data['orderId'] ?? 0);
-            })
-            ->filter(static fn (int $id): bool => $id > 0)
-            ->unique()
-            ->all();
+        $discoverableIds = app(\Modules\Cleaning\Services\CleaningGeographicDispatchService::class)
+            ->discoverableBookingIds($worker);
         $newOrderCandidates = $this->newOrdersCandidateQuery($worker, $today)
-            ->whereIn('id', $notifiedIds)
+            ->whereIn('id', $discoverableIds)
             ->get();
         $newOrdersCount = 0;
         $blockedByCommissionCapacityCount = 0;

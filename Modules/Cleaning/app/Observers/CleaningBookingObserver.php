@@ -98,6 +98,12 @@ final class CleaningBookingObserver
         }
     }
 
+    /** Refresh only the date-derived hot-order fields without repricing a multi-session aggregate. */
+    public function refreshHotOrderSnapshot(CleaningBooking $booking): void
+    {
+        $this->applySameDayHotOrderSnapshot($booking);
+    }
+
     public function created(CleaningBooking $booking): void
     {
         BookingStatusLog::create([

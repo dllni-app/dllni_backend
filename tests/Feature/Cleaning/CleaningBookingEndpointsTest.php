@@ -14,11 +14,22 @@ use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningNeighborhood;
+use Spatie\Permission\Models\Role;
 
 beforeEach(function () {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 });
+
+function authenticateGenericBookingAdmin(): User
+{
+    Role::findOrCreate('admin', 'web');
+    $admin = User::factory()->create(['is_active' => true]);
+    $admin->assignRole('admin');
+    Sanctum::actingAs($admin);
+
+    return $admin;
+}
 
 function createCleaningNeighborhoodCoverage(Worker $worker, ?string $name = null): CleaningNeighborhood
 {
@@ -36,6 +47,13 @@ function createCleaningNeighborhoodCoverage(Worker $worker, ?string $name = null
         'is_active' => true,
     ]);
 
+    // Geographic discovery now requires GPS even when a legacy neighborhood is set.
+    $worker->forceFill([
+        'home_address' => 'QA coverage location, Aleppo',
+        'home_latitude' => 36.2000,
+        'home_longitude' => 37.1500,
+    ])->save();
+
     return $neighborhood;
 }
 
@@ -52,6 +70,8 @@ it('lists cleaning bookings', function () {
         'billing_policy_id' => $billingPolicy->id,
     ]);
 
+    $this->getJson('/api/v1/cleaning-bookings')->assertForbidden();
+    authenticateGenericBookingAdmin();
     $response = $this->getJson('/api/v1/cleaning-bookings');
 
     $response->assertOk();
@@ -72,26 +92,24 @@ it('creates a cleaning booking', function () {
         'customerId' => $customer->id,
         'billingPolicyId' => $billingPolicy->id,
         'bookingNumber' => 'CLN-'.mb_strtoupper(Str::random(6)),
-        'status' => CleaningBookingStatus::Pending->value,
         'propertyType' => 'apartment',
         'scheduledDate' => now()->addDays(2)->format('Y-m-d'),
         'scheduledTime' => '10:00',
-        'numberOfWorkers' => 3,
+        'numberOfWorkers' => 1,
         'totalHours' => 3,
-        'basePrice' => 80,
-        'travelFee' => 10,
-        'totalPrice' => 90,
         'termsAccepted' => true,
     ];
 
+    $this->postJson('/api/v1/cleaning-bookings', $payload)->assertForbidden();
+    authenticateGenericBookingAdmin();
     $response = $this->postJson('/api/v1/cleaning-bookings', $payload);
 
     $response->assertCreated();
-    expect($response->json('data.numberOfWorkers'))->toBe(3);
+    expect($response->json('data.numberOfWorkers'))->toBe(1);
     $this->assertDatabaseHas('cleaning_bookings', [
         'booking_number' => $payload['bookingNumber'],
         'customer_id' => $customer->id,
-        'number_of_workers' => 3,
+        'number_of_workers' => 1,
     ]);
 });
 
@@ -109,6 +127,8 @@ it('shows a cleaning booking', function () {
         'number_of_workers' => 2,
     ]);
 
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")->assertForbidden();
+    authenticateGenericBookingAdmin();
     $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}");
 
     $response->assertOk();
@@ -131,29 +151,29 @@ it('updates a cleaning booking', function () {
         'status' => CleaningBookingStatus::Pending->value,
     ]);
 
-    $response = $this->putJson("/api/v1/cleaning-bookings/{$booking->id}", [
-        'customerId' => $booking->customer_id,
-        'billingPolicyId' => $billingPolicy->id,
-        'bookingNumber' => $booking->booking_number,
-        'status' => CleaningBookingStatus::WorkerAssigned->value,
-        'propertyType' => $booking->property_type,
-        'scheduledDate' => $booking->scheduled_date->format('Y-m-d'),
-        'scheduledTime' => $booking->scheduled_time,
-        'numberOfWorkers' => 4,
-        'totalHours' => (float) $booking->total_hours,
-        'basePrice' => (float) $booking->base_price,
-        'travelFee' => (float) $booking->travel_fee,
-        'totalPrice' => (float) $booking->total_price,
+    $payload = [
+        'propertyDetails' => ['kitchens' => 2, 'cleaning_mode' => 'deep'],
         'termsAccepted' => true,
-    ]);
+    ];
+    $this->putJson("/api/v1/cleaning-bookings/{$booking->id}", $payload)->assertForbidden();
+    authenticateGenericBookingAdmin();
+    $response = $this->putJson("/api/v1/cleaning-bookings/{$booking->id}", $payload);
 
     $response->assertOk();
     $this->assertDatabaseHas('cleaning_bookings', [
         'id' => $booking->id,
-        'status' => CleaningBookingStatus::WorkerAssigned->value,
-        'number_of_workers' => 4,
+        'status' => CleaningBookingStatus::Pending->value,
     ]);
-    expect($response->json('data.numberOfWorkers'))->toBe(4);
+    expect(data_get($booking->fresh()->property_details, 'kitchens'))->toBe(2)
+        ->and(data_get($booking->fresh()->property_details, 'cleaning_mode'))->toBe('deep');
+
+    $this->putJson("/api/v1/cleaning-bookings/{$booking->id}", [
+        'status' => CleaningBookingStatus::Completed->value,
+        'basePrice' => 1,
+        'totalPrice' => 1,
+        'workStartedAt' => now()->subHour()->toIso8601String(),
+        'workFinishedAt' => now()->toIso8601String(),
+    ])->assertUnprocessable();
 });
 
 it('deletes a cleaning booking', function () {
@@ -167,8 +187,13 @@ it('deletes a cleaning booking', function () {
 
     $booking = CleaningBooking::factory()->create([
         'billing_policy_id' => $billingPolicy->id,
+        // The factory randomizes status, while delete intentionally rejects
+        // completed, cancelled and already-executing bookings with HTTP 409.
+        'status' => CleaningBookingStatus::Pending->value,
     ]);
 
+    $this->deleteJson("/api/v1/cleaning-bookings/{$booking->id}")->assertForbidden();
+    authenticateGenericBookingAdmin();
     $response = $this->deleteJson("/api/v1/cleaning-bookings/{$booking->id}");
 
     $response->assertNoContent();
@@ -231,6 +256,8 @@ it('returns pending unassigned bookings for worker when forCurrentWorker and sta
         'gender_preference' => 'any',
         'neighborhood_id' => $neighborhood->id,
         'neighborhood_name' => $neighborhood->name_ar,
+        'address_latitude' => 36.2000,
+        'address_longitude' => 37.1500,
     ]);
     CleaningBooking::factory()->create([
         'worker_id' => null,
@@ -239,6 +266,8 @@ it('returns pending unassigned bookings for worker when forCurrentWorker and sta
         'gender_preference' => 'any',
         'neighborhood_id' => $neighborhood->id,
         'neighborhood_name' => $neighborhood->name_ar,
+        'address_latitude' => 36.2000,
+        'address_longitude' => 37.1500,
     ]);
 
     $response = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
@@ -273,6 +302,8 @@ it('returns only cleaning available bookings for cleaning preferred workers', fu
         'property_type' => 'apartment',
         'neighborhood_id' => $neighborhood->id,
         'neighborhood_name' => $neighborhood->name_ar,
+        'address_latitude' => 36.2000,
+        'address_longitude' => 37.1500,
     ]);
     CleaningBooking::factory()->create([
         'worker_id' => null,
@@ -282,6 +313,8 @@ it('returns only cleaning available bookings for cleaning preferred workers', fu
         'property_type' => 'event_assistance',
         'neighborhood_id' => $neighborhood->id,
         'neighborhood_name' => $neighborhood->name_ar,
+        'address_latitude' => 36.2000,
+        'address_longitude' => 37.1500,
     ]);
 
     $response = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
@@ -318,6 +351,8 @@ it('returns only event available bookings for events preferred workers', functio
         'property_type' => 'apartment',
         'neighborhood_id' => $neighborhood->id,
         'neighborhood_name' => $neighborhood->name_ar,
+        'address_latitude' => 36.2000,
+        'address_longitude' => 37.1500,
     ]);
     CleaningBooking::factory()->create([
         'worker_id' => null,
@@ -327,6 +362,8 @@ it('returns only event available bookings for events preferred workers', functio
         'property_type' => 'event_assistance',
         'neighborhood_id' => $neighborhood->id,
         'neighborhood_name' => $neighborhood->name_ar,
+        'address_latitude' => 36.2000,
+        'address_longitude' => 37.1500,
     ]);
 
     $response = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
@@ -363,6 +400,8 @@ it('returns cleaning and event available bookings for both preferred workers', f
         'property_type' => 'apartment',
         'neighborhood_id' => $neighborhood->id,
         'neighborhood_name' => $neighborhood->name_ar,
+        'address_latitude' => 36.2000,
+        'address_longitude' => 37.1500,
     ]);
     CleaningBooking::factory()->create([
         'worker_id' => null,
@@ -372,6 +411,8 @@ it('returns cleaning and event available bookings for both preferred workers', f
         'property_type' => 'event_assistance',
         'neighborhood_id' => $neighborhood->id,
         'neighborhood_name' => $neighborhood->name_ar,
+        'address_latitude' => 36.2000,
+        'address_longitude' => 37.1500,
     ]);
 
     $response = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
@@ -427,6 +468,7 @@ it('filters cleaning bookings by multiple statuses for current worker', function
 });
 
 it('filters cleaning bookings by property type', function () {
+    authenticateGenericBookingAdmin();
     $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
         'name' => 'Default',
         'billing_mode' => 'actual_working_time',
@@ -461,7 +503,8 @@ it('returns worker profile when user has worker', function () {
     $response->assertOk();
     expect($response->json('data.id'))->toBe($worker->id);
     expect($response->json('data.firstName'))->toBe('Ahmed');
-    expect($response->json('data.preferred_work_type'))->toBe('both');
+    expect($response->json('data.preferred_work_type'))->toBe('cleaning');
+    expect($response->json('data.preferredWorkTypes'))->toBe(['cleaning', 'events']);
     expect($response->json('data.user.id'))->toBe($workerUser->id);
     expect($response->json('data.user.phone'))->toBe('+963991234567');
 });
@@ -478,7 +521,8 @@ it('defaults existing style worker records to both preferred work type', functio
 
     $response->assertOk();
     expect($worker->fresh()->preferred_work_type)->toBe(WorkerPreferredWorkType::Both);
-    expect($response->json('data.preferred_work_type'))->toBe('both');
+    expect($response->json('data.preferred_work_type'))->toBe('cleaning');
+    expect($response->json('data.preferredWorkTypes'))->toBe(['cleaning', 'events']);
 });
 
 it('returns 403 for worker profile when user has no worker', function () {
@@ -617,7 +661,7 @@ it('finalizes provisional pricing when worker accepts booking', function () {
     $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'home_address' => 'Worker Home',
-        'home_latitude' => 33.6,
+        'home_latitude' => 33.55,
         'home_longitude' => 36.3,
         'is_active' => true,
     ]);
@@ -678,7 +722,7 @@ it('fails booking accept when worker home location is missing', function () {
 
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/accept");
 
-    $response->assertUnprocessable()->assertJsonValidationErrors(['status']);
+    $response->assertUnprocessable()->assertJsonValidationErrors(['worker']);
 });
 
 it('returns worker homepage stats for authenticated worker', function () {
@@ -753,7 +797,11 @@ it('returns zeros for worker homepage when user has no worker', function () {
 
 it('returns worker homepage with todayEarnings newOrdersCount and pendingExtensionRequestsCount', function () {
     $workerUser = User::factory()->create(['email' => 'worker-homepage-extended@example.com']);
-    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create([
+        'user_id' => $workerUser->id,
+        'trust_score' => 90,
+        'open_disputes_count' => 0,
+    ]);
     Sanctum::actingAs($workerUser);
 
     $neighborhood = createCleaningNeighborhoodCoverage($worker, 'Homepage Coverage');
@@ -786,6 +834,8 @@ it('returns worker homepage with todayEarnings newOrdersCount and pendingExtensi
         'gender_preference' => 'any',
         'neighborhood_id' => $neighborhood->id,
         'neighborhood_name' => $neighborhood->name_ar,
+        'address_latitude' => 36.2000,
+        'address_longitude' => 37.1500,
     ]);
 
     $bookingForWarning = CleaningBooking::factory()->create([
@@ -1075,6 +1125,7 @@ it('rejects activating worker account status without home location', function ()
 
 describe('cleaning booking work timer', function () {
     beforeEach(function () {
+        authenticateGenericBookingAdmin();
         Carbon::setTestNow(Carbon::parse('2026-06-21 12:00:00'));
 
         $this->billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([

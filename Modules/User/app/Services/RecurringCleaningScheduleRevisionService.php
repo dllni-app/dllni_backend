@@ -23,7 +23,7 @@ use Throwable;
 
 final class RecurringCleaningScheduleRevisionService
 {
-    private const MAX_WINDOW_DAYS = 30;
+    private const MAX_WINDOW_DAYS = 90;
 
     public function __construct(
         private readonly UserCleaningOrderEstimationService $estimationService,
@@ -113,6 +113,7 @@ final class RecurringCleaningScheduleRevisionService
                 $confirmedPreview['applied'] = false;
                 $confirmedPreview['requiresWorkerApproval'] = true;
                 $confirmedPreview['changeRequestId'] = (int) $pendingChangeRequest->id;
+
                 return;
             }
 
@@ -479,8 +480,8 @@ final class RecurringCleaningScheduleRevisionService
     }
 
     /**
-     * @param Collection<int,CleaningBookingSession> $preservedSessions
-     * @param array<int,array{date:string,time:string}> $proposedSessions
+     * @param  Collection<int,CleaningBookingSession>  $preservedSessions
+     * @param  array<int,array{date:string,time:string}>  $proposedSessions
      */
     private function assertCombinedScheduleInvariants(Collection $preservedSessions, array $proposedSessions): void
     {
@@ -521,7 +522,7 @@ final class RecurringCleaningScheduleRevisionService
 
         if ($dates[0]->diffInDays($dates[count($dates) - 1]) > self::MAX_WINDOW_DAYS) {
             throw ValidationException::withMessages([
-                'schedule.sessions' => ['يجب أن تقع جميع زيارات الحجز الدوري، بما فيها الزيارات المحفوظة، ضمن فترة لا تتجاوز 30 يوماً.'],
+                'schedule.sessions' => ['يجب أن تقع جميع زيارات الحجز الدوري، بما فيها الزيارات المحفوظة، ضمن فترة لا تتجاوز 90 يوماً.'],
             ]);
         }
     }

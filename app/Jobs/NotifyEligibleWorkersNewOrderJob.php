@@ -288,6 +288,12 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
         DepositService $depositService,
         WorkerBookingScheduleConflictService $scheduleConflictService,
     ): bool {
+        // An offer must be actionable: acceptance requires both parties' coordinates
+        // and the worker's registered home address, even for urgent orders.
+        if (! app(CleaningGeographicDispatchService::class)->hasRequiredLocations($worker, $booking)) {
+            return false;
+        }
+
         if (! $this->workerAcceptsBookingType($worker, $booking)) {
             return false;
         }

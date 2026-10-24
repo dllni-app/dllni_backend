@@ -31,6 +31,7 @@ final class CleaningBookingStartWorkController
 
     public function __invoke(CleaningBooking $cleaning_booking): CleaningBookingResource|JsonResponse
     {
+        abort_if($cleaning_booking->isSupervisedTeam(), 403, 'بدء العمل من صلاحيات المشرف.');
         $this->ensureCurrentWorkerCanStart($cleaning_booking);
 
         try {

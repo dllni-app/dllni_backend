@@ -37,6 +37,8 @@ final class CleaningRuntimeSettings
             'cleaning_room_pricing_units' => CleaningFinancialDefaults::roomPricingUnits(),
             'cleaning_room_deep_multipliers' => CleaningFinancialDefaults::roomDeepMultipliers(),
             'cleaning_room_time_minutes' => CleaningFinancialDefaults::roomTimeMinutes(),
+            'supervisor_hourly_rate' => 0.0,
+            'supervisor_compensation_hourly_rate' => 0.0,
         ];
     }
 

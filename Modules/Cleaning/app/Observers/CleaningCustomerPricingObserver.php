@@ -85,22 +85,26 @@ final class CleaningCustomerPricingObserver
         );
 
         $pricingCalculator = app(CleaningPricingCalculator::class);
+        $workerCount = max(1, (int) ($booking->number_of_workers ?? 1));
+        $provisionalTravelFee = (float) $pricingCalculator->provisional(0.0, 0.0, 0.0, $workerCount)['travelFee'];
+        $isPricingFinal = (bool) $booking->is_pricing_final;
+        $travelFee = $isPricingFinal
+            ? round(max(0.0, (float) ($booking->travel_fee ?? 0)), 2)
+            : $provisionalTravelFee;
         $includedAdminMarginBase = $pricingCalculator->minimumOrderAdminMarginBase(
             (float) ($booking->base_price ?? 0),
             (string) $booking->property_type,
+            (float) ($booking->addons_total ?? 0),
+            $travelFee,
+            (float) ($booking->total_price ?? 0),
         );
         $pricing = $pricingCalculator->provisional(
             $serviceSubtotal,
             0.0,
             $includedAdminMarginBase,
-            max(1, (int) ($booking->number_of_workers ?? 1)),
+            $workerCount,
         );
         $adminMargin = (float) $pricing['adminMargin'];
-        $provisionalTravelFee = round(max(0.0, (float) ($pricing['travelFee'] ?? 0)), 2);
-        $isPricingFinal = (bool) $booking->is_pricing_final;
-        $travelFee = $isPricingFinal
-            ? round(max(0.0, (float) ($booking->travel_fee ?? 0)), 2)
-            : $provisionalTravelFee;
 
         $booking->travel_fee = $travelFee;
         $booking->admin_margin_amount = $adminMargin;
@@ -116,7 +120,20 @@ final class CleaningCustomerPricingObserver
 
     private function canNormalize(CleaningBooking $booking): bool
     {
+        // Period V2 quotes are approved by the customer before store and must
+        // not be silently changed by legacy provisional repricing.
+        $details = (array) ($booking->property_details ?? []);
+        if (array_key_exists('_room_period_v2_approved_total', $details)) {
+            return false;
+        }
+
         if ((int) ($booking->platform_coupon_id ?? 0) > 0) {
+            return false;
+        }
+
+        // Recurring parents contain already-priced child visits. Reapplying a
+        // single-visit provisional margin would double-count their commission.
+        if ($booking->exists && $booking->sessions()->where('session_type', 'recurring_cleaning')->exists()) {
             return false;
         }
 
@@ -142,6 +159,9 @@ final class CleaningCustomerPricingObserver
         $includedAdminMarginBase = $pricingCalculator->minimumOrderAdminMarginBase(
             (float) ($booking->base_price ?? 0),
             (string) $booking->property_type,
+            (float) ($booking->addons_total ?? 0),
+            (float) ($booking->travel_fee ?? 0),
+            (float) ($booking->total_price ?? 0),
         );
         $serviceSubtotal = round(
             max(0.0, (float) ($booking->base_price ?? 0))

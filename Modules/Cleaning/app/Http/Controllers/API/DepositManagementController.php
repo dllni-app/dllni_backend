@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Modules\Cleaning\Http\Resources\CleaningDepositTransactionResource;
 use Modules\Cleaning\Services\AdminCleaningTransactionService;
+use Modules\Cleaning\Services\CleaningTransactionAdmissionService;
 use Modules\Cleaning\Services\DepositService;
 use Modules\Cleaning\Support\CleaningRuntimeSettings;
 
@@ -31,12 +32,27 @@ final class DepositManagementController
             'notes' => 'nullable|string|max:1000',
         ]);
 
-        return $this->runTransaction(fn () => $this->depositService->recordDeposit(
-            $worker,
-            (float) $validated['amount'],
-            $validated['reference'] ?? 'admin_api_deposit',
-            $validated['notes'] ?? null,
-            auth()->id(),
+        if (! config('cleaning_transaction_admission.admin_deposit_pilot_enabled', false)) {
+            return $this->runTransaction(fn () => $this->depositService->recordDeposit(
+                $worker,
+                (float) $validated['amount'],
+                $validated['reference'] ?? 'admin_api_deposit',
+                $validated['notes'] ?? null,
+                auth()->id(),
+            ), 'Deposit recorded successfully');
+        }
+
+        return $this->runTransaction(fn () => CleaningTransactionAdmissionService::run(
+            // HTTP route binding may have read the worker before admission.
+            // Do not trust that model snapshot for a financial mutation:
+            // fetch it again AFTER the admission sentinel has been locked.
+            fn () => $this->depositService->recordDeposit(
+                Worker::query()->findOrFail($worker->getKey()),
+                (float) $validated['amount'],
+                $validated['reference'] ?? 'admin_api_deposit',
+                $validated['notes'] ?? null,
+                auth()->id(),
+            ),
         ), 'Deposit recorded successfully');
     }
 

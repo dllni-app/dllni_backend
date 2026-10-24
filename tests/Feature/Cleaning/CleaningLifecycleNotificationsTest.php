@@ -69,7 +69,7 @@ it('sends worker-confirmed canonical notification to customer when a worker acce
     $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'home_address' => 'Worker Home',
-        'home_latitude' => 33.6,
+        'home_latitude' => 33.5,
         'home_longitude' => 36.3,
     ]);
     Sanctum::actingAs($workerUser);

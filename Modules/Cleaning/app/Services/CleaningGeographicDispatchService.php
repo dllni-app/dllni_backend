@@ -6,8 +6,8 @@ namespace Modules\Cleaning\Services;
 
 use App\Models\Worker;
 use Illuminate\Support\Facades\DB;
-use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
+use Modules\Cleaning\Models\CleaningBooking;
 
 final class CleaningGeographicDispatchService
 {
@@ -34,7 +34,8 @@ final class CleaningGeographicDispatchService
     public function radiusKm(CleaningBooking $booking): int
     {
         $minutes = max(0, (int) $booking->created_at->diffInMinutes(now()));
-        return min(self::MAX_RADIUS_KM, 10 * (1 + intdiv($minutes, 20)));
+
+        return min(self::MAX_RADIUS_KM, 10 * (1 + intdiv($minutes, 15)));
     }
 
     public function workerDistanceKm(Worker $worker, CleaningBooking $booking): ?float
@@ -79,8 +80,66 @@ final class CleaningGeographicDispatchService
         return 6371.0088 * 2 * asin(min(1.0, sqrt(max(0.0, $a))));
     }
 
+    /**
+     * Pending bookings discoverable by a worker even if the notification has
+     * not been persisted or the push channel failed. Matching is based on
+     * the same location and expansion policy as the dispatch job.
+     *
+     * @return array<int, int>
+     */
+    public function discoverableBookingIds(Worker $worker): array
+    {
+        return CleaningBooking::query()
+            ->where('status', 'pending')
+            ->whereDate('scheduled_date', '>=', today())
+            ->where(function ($query) use ($worker): void {
+                $query->whereNull('worker_id')->orWhere('worker_id', $worker->id);
+            })
+            ->get()
+            ->filter(function (CleaningBooking $booking) use ($worker): bool {
+                if (! $this->hasRequiredLocations($worker, $booking) || $booking->isTeamFulfilled()) {
+                    return false;
+                }
+
+                if ((int) ($booking->preferred_worker_id ?? 0) === (int) $worker->id) {
+                    return true;
+                }
+
+                if ($booking->preferred_worker_id !== null) {
+                    return false;
+                }
+
+                if ($booking->resolvedWorkerScope() === CleaningBooking::WORKER_SCOPE_SPECIFIC) {
+                    return in_array((int) $worker->id, $booking->specificWorkerIds(), true);
+                }
+
+                return $this->isWithinRadius($worker, $booking);
+            })
+            ->pluck('id')
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
+    }
+
+    public function hasRequiredLocations(Worker $worker, CleaningBooking $booking): bool
+    {
+        return filled($worker->home_address)
+            && $worker->home_latitude !== null
+            && $worker->home_longitude !== null
+            && $booking->address_latitude !== null
+            && $booking->address_longitude !== null;
+    }
+
     public function isWithinRadius(Worker $worker, CleaningBooking $booking): bool
     {
+        if (! $this->hasRequiredLocations($worker, $booking)) {
+            return false;
+        }
+
+        // Urgent same-day bookings bypass only the radius, not the required GPS inputs.
+        if ((bool) (($booking->property_details ?? [])['is_hot_order'] ?? false)) {
+            return true;
+        }
+
         $distance = $this->workerDistanceKm($worker, $booking);
 
         return $distance !== null && $distance <= $this->radiusKm($booking);

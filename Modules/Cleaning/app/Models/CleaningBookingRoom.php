@@ -33,6 +33,11 @@ final class CleaningBookingRoom extends Model
         return $this->belongsTo(CleaningBooking::class, 'cleaning_booking_id');
     }
 
+    public function roomPeriods(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(CleaningBookingRoomPeriod::class, 'cleaning_booking_room_id');
+    }
+
     public function assignedWorker(): BelongsTo
     {
         return $this->belongsTo(Worker::class, 'assigned_worker_id');

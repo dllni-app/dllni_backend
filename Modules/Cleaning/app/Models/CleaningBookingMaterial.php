@@ -19,6 +19,8 @@ final class CleaningBookingMaterial extends Model
         'unit_price',
         'total_price',
         'inventory_status',
+        'used_quantity', 'returned_quantity', 'damaged_quantity', 'lost_quantity',
+        'reconciled_at', 'reconciled_by_user_id',
     ];
 
     public function booking(): BelongsTo
@@ -48,6 +50,10 @@ final class CleaningBookingMaterial extends Model
 
     public function casts(): array
     {
-        return ['quantity' => 'float', 'unit_price' => 'float', 'total_price' => 'float'];
+        return [
+            'quantity' => 'float', 'unit_price' => 'float', 'total_price' => 'float',
+            'used_quantity' => 'float', 'returned_quantity' => 'float',
+            'damaged_quantity' => 'float', 'lost_quantity' => 'float', 'reconciled_at' => 'datetime',
+        ];
     }
 }

@@ -8,7 +8,11 @@ use Illuminate\Http\JsonResponse;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningDirtinessLevel;
 use Modules\Cleaning\Models\CleaningEventType;
+use Modules\Cleaning\Models\CleaningMaterialType;
+use Modules\Cleaning\Models\CleaningRoomType;
 use Modules\Cleaning\Models\CleaningSpecialServiceCategory;
+use Modules\Cleaning\Support\CleaningFinancialDefaults;
+use Modules\Cleaning\Support\CleaningRuntimeSettings;
 
 final class CleaningSuiteConfigController
 {
@@ -57,6 +61,10 @@ final class CleaningSuiteConfigController
             ])->values()->all(),
         ];
 
+        $configuredTimes = CleaningRuntimeSettings::financial()->cleaning_room_time_minutes;
+        $configuredTimes = is_array($configuredTimes) ? $configuredTimes : [];
+        $defaultTimes = CleaningFinancialDefaults::roomTimeMinutes();
+
         return response()->json(['success' => true, 'data' => [
             'schemaVersion' => 2,
             'serverNow' => now()->toIso8601String(),
@@ -68,7 +76,29 @@ final class CleaningSuiteConfigController
                 'dynamicEventTypes' => true,
                 'openTimeExtensions' => true,
                 'scheduleChangeApprovals' => true,
+                'roomHourlyPricing' => true,
+                'editableRoomHours' => true,
             ],
+            'roomTypes' => CleaningRoomType::query()->where('is_active', true)
+                ->orderBy('sort_order')->orderBy('id')->get()
+                ->map(static function (CleaningRoomType $room) use ($configuredTimes, $defaultTimes): array {
+                    $suggestions = [];
+                    foreach (CleaningFinancialDefaults::ROOM_SIZES as $size) {
+                        $suggestions[$size] = [
+                            'regularMinutes' => max(1, (int) ($room->suggested_minutes_by_size[$size]['regular'] ?? $configuredTimes[$room->code][$size]['regular'] ?? $defaultTimes[$room->code][$size]['regular'] ?? 30)),
+                            'deepMinutes' => max(1, (int) ($room->suggested_minutes_by_size[$size]['deep'] ?? $configuredTimes[$room->code][$size]['deep'] ?? $defaultTimes[$room->code][$size]['deep'] ?? 60)),
+                        ];
+                    }
+
+                    return [
+                        'code' => $room->code,
+                        'name' => $room->name,
+                        'iconKey' => $room->icon_key,
+                        'regularHourlyRate' => (float) $room->regular_hourly_rate,
+                        'deepHourlyRate' => (float) $room->deep_hourly_rate,
+                        'suggestedMinutesBySize' => $suggestions,
+                    ];
+                })->values()->all(),
             'openTime' => [
                 'durationOptions' => array_values((array) ($rules['duration_options'] ?? [60, 120, 180, 240, 480])),
                 'extensionOptions' => array_values((array) ($rules['extension_options'] ?? [15, 30, 60])),
@@ -85,6 +115,32 @@ final class CleaningSuiteConfigController
                     'name' => (string) $level->name,
                     'slug' => (string) $level->slug,
                     'priceMultiplier' => (float) $level->price_multiplier,
+                ])->values()->all(),
+            'materialTypes' => CleaningMaterialType::query()
+                ->where('is_active', true)
+                ->whereHas('unit', fn ($query) => $query->where('is_active', true))
+                ->with([
+                    'unit',
+                    'materials' => fn ($query) => $query->where('is_active', true),
+                    'quantityRules' => fn ($query) => $query
+                        ->where('is_active', true)
+                        ->where('requires_admin_resolution', false),
+                ])
+                ->orderBy('id')
+                ->get()
+                ->map(static fn ($type): array => [
+                    'id' => (int) $type->id,
+                    'name' => (string) $type->name,
+                    'unitCode' => (string) $type->unit->code,
+                    'unitLabel' => (string) $type->unit->name,
+                    'unitPrice' => (float) $type->price_per_unit,
+                    'availableQuantity' => round((float) $type->materials->sum('stock_quantity'), 3),
+                    'quantityRules' => $type->quantityRules->map(static fn ($rule): array => [
+                        'roomType' => $rule->room_type,
+                        'roomSize' => $rule->room_size,
+                        'cleaningMode' => $rule->cleaning_mode,
+                        'quantityPerRoom' => (float) $rule->quantity_per_room,
+                    ])->values()->all(),
                 ])->values()->all(),
             'specialServiceCategories' => $categories->map(static fn ($category) => [
                 'id' => (int) $category->id,

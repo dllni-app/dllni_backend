@@ -87,7 +87,7 @@ it('persists the per-worker transport allowance travel markup option', function 
 
     Livewire::test(FinancialSettings::class)
         ->set('travelMarkupType', 'worker_allowance')
-        ->assertSee('يُحتسب بدل المواصلات تلقائياً لكل عامل ضمن تسعير الطلب،')
+        ->assertSee(__('cleaning_admin.financial.hints.travel_worker_allowance'))
         ->assertDontSee('رسوم التنقل لكل كيلومتر')
         ->set('travelMarkupValue', 125)
         ->set('travelPerKm', 999)
