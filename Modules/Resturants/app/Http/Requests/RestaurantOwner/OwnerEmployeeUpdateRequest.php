@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Resturants\Http\Requests\RestaurantOwner;
 
+use App\Support\SyrianPhoneNumber;
 use Illuminate\Foundation\Http\FormRequest;
 
 final class OwnerEmployeeUpdateRequest extends FormRequest
@@ -67,6 +68,9 @@ final class OwnerEmployeeUpdateRequest extends FormRequest
             $payload['permissionIds'] = [];
         }
 
+        if (is_string($this->input('phone'))) {
+            $payload['phone'] = SyrianPhoneNumber::normalize($this->input('phone'));
+        }
         $this->merge($payload);
     }
 }

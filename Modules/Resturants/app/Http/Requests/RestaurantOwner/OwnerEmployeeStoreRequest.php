@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Resturants\Http\Requests\RestaurantOwner;
 
+use App\Support\SyrianPhoneNumber;
 use Illuminate\Foundation\Http\FormRequest;
 
 final class OwnerEmployeeStoreRequest extends FormRequest
@@ -48,6 +49,9 @@ final class OwnerEmployeeStoreRequest extends FormRequest
             $merge['isActive'] = $this->input('isActive', $this->input('is_active'));
         }
 
+        if (is_string($this->input('phone'))) {
+            $merge['phone'] = SyrianPhoneNumber::normalize($this->input('phone'));
+        }
         if ($merge !== []) {
             $this->merge($merge);
         }

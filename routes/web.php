@@ -184,30 +184,36 @@ $assetLinksPayload = static function (): array {
         return [];
     }
 
-    return [
-        [
-            'relation' => ['delegate_permission/common.handle_all_urls'],
-            'target' => [
-                'namespace' => 'android_app',
-                'package_name' => $packageName,
-                'sha256_cert_fingerprints' => $fingerprints,
-            ],
+    // Keep Android verification working even if a server has a legacy env override.
+    $packages = array_values(array_unique(['com.alnadha.app', $packageName]));
+
+    return array_map(static fn (string $package): array => [
+        'relation' => ['delegate_permission/common.handle_all_urls'],
+        'target' => [
+            'namespace' => 'android_app',
+            'package_name' => $package,
+            'sha256_cert_fingerprints' => $fingerprints,
         ],
-    ];
+    ], $packages);
 };
 
 /**
  * Build Apple App Site Association payload.
  */
 $appleAssociationPayload = static function (): array {
-    $appIds = array_values((array) config('deep_links.ios_app_ids', []));
-    $paths = array_values((array) config('deep_links.ios_paths', []));
+    $appIds = array_values(array_unique(array_merge(
+        (array) config('deep_links.ios_app_ids', []),
+        ['C4S72M3DX2.com.alnadha.app']
+    )));
+    $paths = array_values(array_unique(array_merge(
+        (array) config('deep_links.ios_paths', []),
+        ['/product/*', '/restaurant/*', '/store/*', '/vote/*', '/group-order/*', '/s/*', '/api/v1/user/*', '/api/v1/deep-links/*', '/open']
+    )));
 
     $details = [];
-    if ($appIds !== []) {
+    foreach ($appIds as $appId) {
         $details[] = [
-            'appID' => (string) $appIds[0],
-            'appIDs' => $appIds,
+            'appID' => (string) $appId,
             'paths' => $paths,
         ];
     }

@@ -19,7 +19,8 @@ final class RestaurantOwnerOrderItemService
         ?string $specialInstructions = null
     ): Order {
         return DB::transaction(function () use ($order, $product, $quantity, $substituteProductId, $specialInstructions) {
-            $unitPrice = (float) ($product->discounted_price ?? $product->price ?? 0);
+            // Match customer cart pricing: best of direct markdown and active offer.
+            $unitPrice = $product->effectivePrice();
 
             OrderItem::query()->create([
                 'order_id' => $order->id,

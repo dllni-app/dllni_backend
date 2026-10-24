@@ -14,7 +14,8 @@ it('serves android asset links on both well-known and root endpoints', function 
     $root = getJson('/assetlinks.json')->assertOk()->json();
 
     expect($root)->toBe($wellKnown)
-        ->and($root[0]['target']['package_name'])->toBe('com.alnadha.user')
+        ->and($root[0]['target']['package_name'])->toBe('com.alnadha.app')
+        ->and($root[1]['target']['package_name'])->toBe('com.alnadha.user')
         ->and($root[0]['target']['sha256_cert_fingerprints'])->toHaveCount(1);
 });
 
@@ -35,6 +36,8 @@ it('serves apple app site association on both well-known and root endpoints', fu
 
     expect($root)->toBe($wellKnown)
         ->and($root['applinks']['details'][0]['appID'])->toBe('C4S72M3DX2.com.alnadha.user')
+        ->and($root['applinks']['details'][1]['appID'])->toBe('C4S72M3DX2.com.alnadha.app')
         ->and($root['applinks']['details'][0]['paths'])->toContain('/store/*')
-        ->and($root['applinks']['details'][0]['paths'])->toContain('/s/*');
+        ->and($root['applinks']['details'][0]['paths'])->toContain('/s/*')
+        ->and($root['applinks']['details'][0]['paths'])->toContain('/open');
 });
