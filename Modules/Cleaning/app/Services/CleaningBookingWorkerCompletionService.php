@@ -33,6 +33,7 @@ final class CleaningBookingWorkerCompletionService
 
         $updated = DB::transaction(function () use ($booking, $workerId, $assignmentId, &$decisionWorkerId, &$decisionAssignmentId): CleaningBooking {
             $lockedBooking = $this->lockBooking($booking);
+            $this->assertLegacyCompletionAllowed($lockedBooking);
             $assignment = $this->resolvePendingCompletionAssignment($lockedBooking, $workerId, $assignmentId, true);
 
             if (! $assignment instanceof CleaningBookingWorkerAssignment) {
@@ -109,6 +110,7 @@ final class CleaningBookingWorkerCompletionService
 
         $updated = DB::transaction(function () use ($booking, $message, $workerId, $assignmentId, &$decisionWorkerId, &$decisionAssignmentId): CleaningBooking {
             $lockedBooking = $this->lockBooking($booking);
+            $this->assertLegacyCompletionAllowed($lockedBooking);
             $assignment = $this->resolvePendingCompletionAssignment($lockedBooking, $workerId, $assignmentId, true);
 
             if (! $assignment instanceof CleaningBookingWorkerAssignment) {
@@ -178,12 +180,13 @@ final class CleaningBookingWorkerCompletionService
     public function requestExtension(CleaningBooking $booking, int $additionalMinutes, ?string $customerMessage = null, ?int $workerId = null, ?int $assignmentId = null): array
     {
         $fromStatus = (string) $booking->status->value;
-        $extensionPricing = $this->extendedTimePricing->quoteForBooking($booking, $additionalMinutes);
         $decisionWorkerId = null;
         $decisionAssignmentId = null;
 
-        $result = DB::transaction(function () use ($booking, $additionalMinutes, $customerMessage, $extensionPricing, $workerId, $assignmentId, &$decisionWorkerId, &$decisionAssignmentId): array {
+        $result = DB::transaction(function () use ($booking, $additionalMinutes, $customerMessage, $workerId, $assignmentId, &$fromStatus, &$decisionWorkerId, &$decisionAssignmentId): array {
             $lockedBooking = $this->lockBooking($booking);
+            $this->assertLegacyCompletionAllowed($lockedBooking);
+            $fromStatus = (string) $lockedBooking->status->value;
             $assignment = $this->resolvePendingCompletionAssignment($lockedBooking, $workerId, $assignmentId, true);
 
             if (! $assignment instanceof CleaningBookingWorkerAssignment) {
@@ -193,6 +196,11 @@ final class CleaningBookingWorkerCompletionService
                     ]);
                 }
             }
+
+            // Derive the signed quote from the locked, current booking snapshot.
+            // Quoting before this transaction could use an outdated margin or
+            // subtotal and then persist that stale amount in a new warning.
+            $extensionPricing = $this->extendedTimePricing->quoteForBooking($lockedBooking, $additionalMinutes);
 
             $decisionWorkerId = $assignment instanceof CleaningBookingWorkerAssignment ? (int) $assignment->worker_id : $lockedBooking->worker_id;
             $decisionAssignmentId = $assignment instanceof CleaningBookingWorkerAssignment ? (int) $assignment->id : null;
@@ -229,6 +237,7 @@ final class CleaningBookingWorkerCompletionService
             return [
                 'booking' => $this->freshBooking($lockedBooking),
                 'warning' => $warning->fresh(['booking']),
+                'extensionPricing' => $extensionPricing,
             ];
         });
 
@@ -260,7 +269,7 @@ final class CleaningBookingWorkerCompletionService
 
         return [
             'booking' => $updated,
-            'extensionPricing' => $extensionPricing,
+            'extensionPricing' => $result['extensionPricing'],
             'warning' => $warning,
         ];
     }
@@ -417,6 +426,15 @@ final class CleaningBookingWorkerCompletionService
     private function lockBooking(CleaningBooking $booking): CleaningBooking
     {
         return CleaningBooking::query()->lockForUpdate()->findOrFail($booking->id);
+    }
+
+    private function assertLegacyCompletionAllowed(CleaningBooking $booking): void
+    {
+        if ($booking->status === CleaningBookingStatus::PartiallyCompleted) {
+            throw ValidationException::withMessages([
+                'status' => ['Partially completed bookings cannot use legacy completion decisions.'],
+            ]);
+        }
     }
 
     private function freshBooking(CleaningBooking $booking): CleaningBooking

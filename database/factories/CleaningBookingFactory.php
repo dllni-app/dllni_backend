@@ -34,7 +34,10 @@ final class CleaningBookingFactory extends Factory
             'cancellation_policy_id' => null,
             'billing_policy_id' => null,
             'booking_number' => 'CLN-'.mb_strtoupper(Str::random(6)).'-'.fake()->unique()->randomNumber(4),
-            'status' => fake()->randomElement(CleaningBookingStatus::class)->value,
+            'status' => fake()->randomElement(array_values(array_filter(
+                CleaningBookingStatus::cases(),
+                static fn (CleaningBookingStatus $status): bool => $status !== CleaningBookingStatus::PartiallyCompleted,
+            )))->value,
             'property_type' => fake()->randomElement(['apartment', 'house', 'villa']),
             'property_details' => [
                 'bedrooms' => fake()->numberBetween(1, 5),

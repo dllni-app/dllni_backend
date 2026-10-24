@@ -121,6 +121,7 @@ final class UserCleaningBookingResource extends JsonResource
             CleaningBookingStatus::InProgress->value,
             CleaningBookingStatus::Completed->value,
             CleaningBookingStatus::Cancelled->value,
+            CleaningBookingStatus::PartiallyCompleted->value,
         ], true);
     }
 }

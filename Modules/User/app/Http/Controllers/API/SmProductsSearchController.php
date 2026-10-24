@@ -293,7 +293,10 @@ final class SmProductsSearchController
 
         return $items
             ->filter(function (SmProduct $product) use ($tokens): bool {
-                $score = $product->getAttribute('semantic_score');
+                // Local fuzzy fallback rows have no SQL-computed semantic_score.
+                // Access the raw attributes to avoid strict missing-field errors,
+                // while retaining the score supplied by remote/vector searches.
+                $score = $product->getAttributes()['semantic_score'] ?? null;
                 $numericScore = is_numeric($score) ? (float) $score : 0.0;
 
                 if ($numericScore >= self::SEMANTIC_STRONG_SCORE_THRESHOLD) {

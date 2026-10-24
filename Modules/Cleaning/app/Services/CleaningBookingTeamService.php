@@ -24,6 +24,7 @@ final class CleaningBookingTeamService
 {
     public function __construct(
         private readonly CleaningPricingCalculator $pricingCalculator,
+        private readonly CleaningCouponPricingService $couponPricingService,
         private readonly DepositService $depositService,
         private readonly WorkerTrustService $workerTrustService,
         private readonly WorkerOrderSolvencyService $solvencyService,
@@ -58,6 +59,8 @@ final class CleaningBookingTeamService
                 ->whereKey($booking->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            $this->assertLegacyTeamMutationAllowed($booking);
 
             $hasAcceptedAssignments = CleaningBookingWorkerAssignment::query()
                 ->where('cleaning_booking_id', $booking->id)
@@ -109,6 +112,7 @@ final class CleaningBookingTeamService
     {
         return DB::transaction(function () use ($booking, $worker, $roomIds): CleaningBooking {
             $booking = $this->lockBooking($booking->id);
+            $this->assertLegacyTeamMutationAllowed($booking);
             $worker = Worker::query()
                 ->whereKey($worker->id)
                 ->lockForUpdate()
@@ -329,6 +333,7 @@ final class CleaningBookingTeamService
     {
         return DB::transaction(function () use ($booking, $assignments): CleaningBooking {
             $booking = $this->lockBooking($booking->id);
+            $this->assertLegacyTeamMutationAllowed($booking);
 
             if (in_array($booking->status, [CleaningBookingStatus::InProgress, CleaningBookingStatus::Completed, CleaningBookingStatus::Cancelled], true)) {
                 throw new InvalidArgumentException('Rooms cannot be reassigned in the current status.');
@@ -383,6 +388,7 @@ final class CleaningBookingTeamService
     public function recalculateBookingTeam(CleaningBooking $booking, bool $finalizeBooking = false): CleaningBooking
     {
         $booking = $this->lockBooking($booking->id);
+        $this->assertLegacyTeamMutationAllowed($booking);
         $this->repairMissingRoomPlan($booking);
 
         $roomQuery = CleaningBookingRoom::query()
@@ -502,28 +508,30 @@ final class CleaningBookingTeamService
                 'travel_fee' => round($totalTravelFee, 2),
                 'admin_margin_amount' => round($totalAdminMargin, 2),
                 'total_price' => round($acceptedAssignments->sum(
-                    fn (CleaningBookingWorkerAssignment $assignment): float =>
-                        (float) $assignment->worker_amount + (float) $assignment->admin_margin_amount
+                    fn (CleaningBookingWorkerAssignment $assignment): float => (float) $assignment->worker_amount + (float) $assignment->admin_margin_amount
                 ), 2),
                 'travel_distance_km' => null,
                 'is_pricing_final' => true,
-            ])->save();
+            ]);
+            $this->couponPricingService->saveAfterTeamRecalculation($booking);
         } else {
             $provisionalPricing = $this->pricingCalculator->provisional(
                 $subtotal,
                 0.0,
                 $includedAdminMarginBase,
+                $requiredWorkers,
             );
 
             $booking->forceFill([
                 'status' => CleaningBookingStatus::Pending,
                 'worker_id' => null,
-                'travel_fee' => 0,
+                'travel_fee' => round((float) $provisionalPricing['travelFee'], 2),
                 'admin_margin_amount' => round((float) $provisionalPricing['adminMargin'], 2),
                 'total_price' => round((float) $provisionalPricing['totalPrice'], 2),
                 'travel_distance_km' => null,
                 'is_pricing_final' => false,
-            ])->save();
+            ]);
+            $this->couponPricingService->saveAfterTeamRecalculation($booking);
         }
 
         $updated = $booking->fresh([
@@ -662,6 +670,15 @@ final class CleaningBookingTeamService
             ->whereKey($bookingId)
             ->lockForUpdate()
             ->firstOrFail();
+    }
+
+    private function assertLegacyTeamMutationAllowed(CleaningBooking $booking): void
+    {
+        if ($booking->status === CleaningBookingStatus::PartiallyCompleted) {
+            throw ValidationException::withMessages([
+                'status' => ['This partially completed booking cannot use legacy team or room mutations.'],
+            ]);
+        }
     }
 
     private function ensureAcceptableBooking(CleaningBooking $booking, Worker $worker): void

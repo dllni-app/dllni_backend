@@ -37,9 +37,8 @@ final class CleaningBookingWorkerSecurityCodeService
         return DB::transaction(function () use ($booking): array {
             $worker = $this->currentWorker();
             $lockedBooking = $this->lockBooking($booking);
-            $this->assertBookingIsNotTerminal($lockedBooking);
-
             $assignment = $this->activeAssignmentForWorker($lockedBooking->id, $worker->id, true);
+            $this->assertBookingReadyForStartVerification($lockedBooking, $assignment);
             if ($assignment instanceof CleaningBookingWorkerAssignment) {
                 if ($assignment->arrived_at === null) {
                     throw new InvalidArgumentException('Worker must arrive before requesting a security code.');
@@ -97,7 +96,7 @@ final class CleaningBookingWorkerSecurityCodeService
 
         return DB::transaction(function () use ($booking, $code): CleaningBooking {
             $lockedBooking = $this->lockBooking($booking);
-            $this->assertBookingIsNotTerminal($lockedBooking);
+            $this->assertBookingCanBeCustomerVerified($lockedBooking);
             $providedHash = $this->securityCodeHash($code);
             $record = $this->matchingSecurityCodeRecord($lockedBooking, $providedHash, $code);
 
@@ -133,10 +132,16 @@ final class CleaningBookingWorkerSecurityCodeService
                 }
 
                 $arrivedAt = $assignment->arrived_at;
-                $assignment->forceFill([
-                    'status' => CleaningBookingWorkerAssignmentStatus::StartApproved,
-                    'start_approved_at' => $assignment->start_approved_at ?? $verifiedAt,
-                ])->save();
+                if (in_array($this->assignmentStatus($assignment), [
+                    CleaningBookingWorkerAssignmentStatus::Accepted->value,
+                    CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
+                    CleaningBookingWorkerAssignmentStatus::AwaitingStartVerification->value,
+                ], true)) {
+                    $assignment->forceFill([
+                        'status' => CleaningBookingWorkerAssignmentStatus::StartApproved,
+                        'start_approved_at' => $assignment->start_approved_at ?? $verifiedAt,
+                    ])->save();
+                }
             } elseif ((int) $lockedBooking->worker_id !== (int) $workerId) {
                 throw ValidationException::withMessages(['code' => ['Security code is not available for this worker. Please request a new code.']]);
             }
@@ -355,11 +360,62 @@ final class CleaningBookingWorkerSecurityCodeService
         return CleaningBooking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
     }
 
-    private function assertBookingIsNotTerminal(CleaningBooking $booking): void
+    private function assertBookingReadyForStartVerification(
+        CleaningBooking $booking,
+        ?CleaningBookingWorkerAssignment $assignment = null,
+    ): void
     {
-        if (in_array($booking->status, [CleaningBookingStatus::Completed, CleaningBookingStatus::Cancelled, CleaningBookingStatus::UnderDispute], true)) {
-            throw new InvalidArgumentException('Security code is only available for bookings ready to start.');
+        if (in_array($booking->status, [
+            CleaningBookingStatus::WorkerAssigned,
+            CleaningBookingStatus::AwaitingStartVerification,
+            CleaningBookingStatus::AwaitingWorkerStartConfirmation,
+        ], true)) {
+            return;
         }
+
+        if (in_array($booking->status, [
+            CleaningBookingStatus::InProgress,
+            CleaningBookingStatus::AwaitingCustomerCompletion,
+            CleaningBookingStatus::TimeExtensionRequested,
+        ], true) && $assignment instanceof CleaningBookingWorkerAssignment && in_array(
+            $this->assignmentStatus($assignment),
+            [
+                CleaningBookingWorkerAssignmentStatus::Accepted->value,
+                CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
+                CleaningBookingWorkerAssignmentStatus::AwaitingStartVerification->value,
+            ],
+            true,
+        )) {
+            return;
+        }
+
+        throw new InvalidArgumentException('Security code is only available for bookings ready to start.');
+    }
+
+    private function assertBookingCanBeCustomerVerified(CleaningBooking $booking): void
+    {
+        if (in_array($booking->status, [
+            CleaningBookingStatus::WorkerAssigned,
+            CleaningBookingStatus::AwaitingStartVerification,
+            CleaningBookingStatus::AwaitingWorkerStartConfirmation,
+        ], true)) {
+            return;
+        }
+
+        // Team bookings can keep the aggregate status at an active work state
+        // while a specific accepted worker is still completing verification.
+        if (in_array($booking->status, [
+            CleaningBookingStatus::InProgress,
+            CleaningBookingStatus::AwaitingCustomerCompletion,
+            CleaningBookingStatus::TimeExtensionRequested,
+        ], true) && CleaningBookingWorkerAssignment::query()
+            ->where('cleaning_booking_id', $booking->id)
+            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::activeValues())
+            ->exists()) {
+            return;
+        }
+
+        throw new InvalidArgumentException('Security code is only available for bookings ready to start.');
     }
 
     private function securityCodeHash(string $code): string

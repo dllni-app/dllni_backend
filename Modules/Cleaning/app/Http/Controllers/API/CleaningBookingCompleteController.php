@@ -108,6 +108,10 @@ final class CleaningBookingCompleteController
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            if ($lockedBooking->status === CleaningBookingStatus::PartiallyCompleted) {
+                throw new InvalidArgumentException('Partially completed bookings cannot use legacy team completion.');
+            }
+
             if (in_array($lockedBooking->status, [
                 CleaningBookingStatus::Cancelled,
                 CleaningBookingStatus::Completed,

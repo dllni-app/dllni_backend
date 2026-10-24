@@ -6,6 +6,7 @@ use App\Enums\WorkerCustomerRatingType;
 use App\Enums\WorkerPreferredWorkType;
 use App\Models\CancellationPolicy;
 use App\Models\CleaningFinancialSetting;
+use App\Models\CleaningWorkerDeposit;
 use App\Models\PlatformCoupon;
 use App\Models\User;
 use App\Models\Worker;
@@ -25,6 +26,7 @@ use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Models\CleaningService;
 use Modules\Cleaning\Models\ServicePricing;
 use Modules\Cleaning\Services\CleaningPricingCalculator;
+use Modules\Cleaning\Services\DepositService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 use function Pest\Laravel\getJson;
@@ -52,6 +54,29 @@ beforeEach(function (): void {
         ]
     );
 });
+
+/** Previously hired workers are suggested again only if dispatch-eligible. */
+function fundPreviouslyWorkedCleaningWorker(Worker $worker): void
+{
+    $worker->forceFill([
+        'trust_score' => 100,
+        'is_active' => true,
+        'is_suspended' => false,
+    ])->save();
+
+    CleaningWorkerDeposit::query()->updateOrCreate(['worker_id' => $worker->id], [
+        'current_balance' => 100000,
+        'debt_balance' => 0,
+        'deposited_total' => 100000,
+        'withdrawn_total' => 0,
+        'minimum_required' => 0,
+        'max_negative_balance' => 100000,
+        'is_active' => true,
+    ]);
+
+    expect(app(DepositService::class)->isWorkerEligibleForDispatch($worker->fresh(['deposit'])))
+        ->toBeTrue();
+}
 
 it('creates a cleaning order for authenticated user', function (): void {
     $user = User::factory()->create();
@@ -537,6 +562,7 @@ it('returns previously worked cleaning workers for current user', function (): v
     Sanctum::actingAs($user);
 
     $worker = Worker::factory()->create();
+    fundPreviouslyWorkedCleaningWorker($worker);
 
     CleaningBooking::factory()->create([
         'customer_id' => $user->id,
@@ -561,6 +587,8 @@ it('filters previous workers by booking type so cleaning-only workers do not app
     $eventWorker = Worker::factory()->create([
         'preferred_work_type' => WorkerPreferredWorkType::Events,
     ]);
+    fundPreviouslyWorkedCleaningWorker($cleaningWorker);
+    fundPreviouslyWorkedCleaningWorker($eventWorker);
 
     CleaningBooking::factory()->create([
         'customer_id' => $user->id,
@@ -589,6 +617,8 @@ it('filters previous workers by regular cleaning type so event-only workers do n
     $eventWorker = Worker::factory()->create([
         'preferred_work_type' => WorkerPreferredWorkType::Events,
     ]);
+    fundPreviouslyWorkedCleaningWorker($cleaningWorker);
+    fundPreviouslyWorkedCleaningWorker($eventWorker);
 
     CleaningBooking::factory()->create([
         'customer_id' => $user->id,
@@ -605,6 +635,53 @@ it('filters previous workers by regular cleaning type so event-only workers do n
 
     $response->assertOk();
     expect(collect($response->json('workers'))->pluck('workerId')->all())->toBe([$cleaningWorker->id]);
+});
+
+it('keeps both-specialty workers selectable while excluding unfunded or other-customer history', function (): void {
+    $customer = User::factory()->create();
+    Sanctum::actingAs($customer);
+
+    $bothWorker = Worker::factory()->create([
+        'preferred_work_type' => WorkerPreferredWorkType::Both,
+        'trust_score' => 100,
+    ]);
+    fundPreviouslyWorkedCleaningWorker($bothWorker);
+    $unfundedWorker = Worker::factory()->create([
+        'preferred_work_type' => WorkerPreferredWorkType::Both,
+        'trust_score' => 100,
+    ]);
+    $otherCustomersWorker = Worker::factory()->create([
+        'preferred_work_type' => WorkerPreferredWorkType::Both,
+        'trust_score' => 100,
+    ]);
+    fundPreviouslyWorkedCleaningWorker($otherCustomersWorker);
+
+    foreach ([$bothWorker, $unfundedWorker] as $worker) {
+        CleaningBooking::factory()->create([
+            'customer_id' => $customer->id,
+            'worker_id' => $worker->id,
+            'status' => CleaningBookingStatus::Completed,
+        ]);
+    }
+    CleaningBooking::factory()->create([
+        'customer_id' => User::factory()->create()->id,
+        'worker_id' => $otherCustomersWorker->id,
+        'status' => CleaningBookingStatus::Completed,
+    ]);
+
+    foreach (['apartment', 'event_assistance'] as $propertyType) {
+        $response = getJson("/api/v1/user/cleaning/orders/previous-workers?propertyType={$propertyType}");
+        $response->assertOk();
+        expect(collect($response->json('workers'))->pluck('workerId')->all())
+            ->toBe([$bothWorker->id]);
+    }
+
+    // Older customers can send an unknown propertyType; that parameter must
+    // remain ignorable rather than changing a previously successful API call.
+    $unknownType = getJson('/api/v1/user/cleaning/orders/previous-workers?propertyType=invalid-service');
+    $unknownType->assertOk();
+    expect(collect($unknownType->json('workers'))->pluck('workerId')->all())
+        ->toBe([$bothWorker->id]);
 });
 
 it('returns estimated cleaning price from backend algorithm', function (): void {

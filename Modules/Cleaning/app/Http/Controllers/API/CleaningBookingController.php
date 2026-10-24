@@ -10,7 +10,9 @@ use App\Enums\SOSStatus;
 use App\Enums\SystemAlertStatus;
 use App\Models\SosAlert;
 use App\Models\SystemAlert;
+use App\Models\User;
 use App\Models\Worker;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
@@ -49,6 +51,10 @@ final class CleaningBookingController
 
     public function index(CleaningBookingFilterRequest $request): AnonymousResourceCollection
     {
+        $user = $request->user();
+        abort_unless($user instanceof User, 403);
+        $worker = $user->worker;
+
         $bookings = CleaningBooking::getQuery()
             ->with([
                 'customer',
@@ -60,10 +66,20 @@ final class CleaningBookingController
                 'billingPolicy',
                 'timeWarnings',
                 'disputes',
-            ])
-            ->paginate($request->get('perPage', 20));
+            ]);
 
-        $worker = $request->user()?->worker;
+        if (! $user->hasAnyRole(['admin', 'Super Admin', 'Cleaning Ops Manager'])) {
+            if ($worker instanceof Worker) {
+                $bookings->where(function (Builder $scope) use ($user): void {
+                    $scope->where('customer_id', $user->getKey())
+                        ->orWhere(fn (Builder $offers): Builder => $offers->forCurrentWorker(true));
+                });
+            } else {
+                $bookings->where('customer_id', $user->getKey());
+            }
+        }
+
+        $bookings = $bookings->paginate($request->get('perPage', 20));
 
         if ($worker instanceof Worker) {
             $worker->loadMissing('deposit');
@@ -105,7 +121,23 @@ final class CleaningBookingController
     {
         $this->ensureWorkerCanActOnBooking($cleaning_booking, requireOwnership: true);
 
-        if (! in_array($cleaning_booking->status, [
+        $worker = Auth::user()?->worker;
+        $assignmentReadyForVerification = $worker instanceof Worker
+            && in_array($cleaning_booking->status, [
+                CleaningBookingStatus::InProgress,
+                CleaningBookingStatus::AwaitingCustomerCompletion,
+                CleaningBookingStatus::TimeExtensionRequested,
+            ], true)
+            && $cleaning_booking->workerAssignments()
+                ->where('worker_id', $worker->id)
+                ->whereIn('status', [
+                    CleaningBookingWorkerAssignmentStatus::Accepted->value,
+                    CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
+                    CleaningBookingWorkerAssignmentStatus::AwaitingStartVerification->value,
+                ])
+                ->exists();
+
+        if (! $assignmentReadyForVerification && ! in_array($cleaning_booking->status, [
             CleaningBookingStatus::WorkerAssigned,
             CleaningBookingStatus::AwaitingStartVerification,
             CleaningBookingStatus::AwaitingWorkerStartConfirmation,
@@ -209,10 +241,14 @@ final class CleaningBookingController
     /** @throws Throwable */
     public function update(CleaningBookingRequest $request, CleaningBooking $cleaning_booking): CleaningBookingResource
     {
-        $updated = $this->cleaningBookingService->update(
-            CleaningBookingData::from($request->validated()),
-            $cleaning_booking
-        );
+        try {
+            $updated = $this->cleaningBookingService->update(
+                CleaningBookingData::from($request->validated()),
+                $cleaning_booking
+            );
+        } catch (InvalidArgumentException $exception) {
+            throw ValidationException::withMessages(['status' => [$exception->getMessage()]]);
+        }
 
         return CleaningBookingResource::make(
             $this->loadBookingDetails($updated)
@@ -221,7 +257,20 @@ final class CleaningBookingController
 
     public function destroy(CleaningBooking $cleaning_booking): Response
     {
-        $cleaning_booking->delete();
+        DB::transaction(function () use ($cleaning_booking): void {
+            $booking = CleaningBooking::query()
+                ->whereKey($cleaning_booking->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($booking->status === CleaningBookingStatus::PartiallyCompleted) {
+                throw ValidationException::withMessages([
+                    'status' => ['Partially completed bookings cannot be deleted through the legacy booking API.'],
+                ]);
+            }
+
+            $booking->delete();
+        });
 
         return response()->noContent();
     }

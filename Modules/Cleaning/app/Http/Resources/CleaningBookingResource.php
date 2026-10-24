@@ -48,6 +48,7 @@ final class CleaningBookingResource extends JsonResource
         'studio' => 'استوديو',
         'outdoor' => 'خارجي',
         'event_assistance' => 'مساعدة مناسبة',
+        'partially_completed' => 'اكتمل جزئياً',
         'family_dinner' => 'عشاء عائلي',
         'birthday' => 'عيد ميلاد',
         'large_gathering' => 'تجمع كبير',
@@ -77,7 +78,9 @@ final class CleaningBookingResource extends JsonResource
         $myAssignment = $myAssignmentModel instanceof CleaningBookingWorkerAssignment
             ? $this->serializeWorkerAssignment($myAssignmentModel)
             : $workerOffer;
-        $orderStatus = $this->responseStatusForRequest($myAssignmentModel, (string) $globalOrderStatus);
+        $orderStatus = $globalOrderStatus === CleaningBookingStatus::PartiallyCompleted->value
+            ? $globalOrderStatus
+            : $this->responseStatusForRequest($myAssignmentModel, (string) $globalOrderStatus);
         $workerOrderStatus = $this->workerOrderStatus($myAssignmentModel, (string) $globalOrderStatus);
         $team = $this->workerAcceptanceSummary();
         $workerLifecycleSummary = $this->workerLifecycleSummary();
@@ -519,7 +522,11 @@ final class CleaningBookingResource extends JsonResource
             'finished_cleaning_services' => $services,
             'finishedPropertyRooms' => $rooms,
             'finished_property_rooms' => $rooms,
-            'actions' => ['canConfirm' => $awaiting, 'canReject' => $awaiting, 'canRequestExtension' => $awaiting],
+            'actions' => [
+                'canConfirm' => $awaiting && $status !== CleaningBookingStatus::PartiallyCompleted,
+                'canReject' => $awaiting && $status !== CleaningBookingStatus::PartiallyCompleted,
+                'canRequestExtension' => $awaiting && $status !== CleaningBookingStatus::PartiallyCompleted,
+            ],
         ];
     }
 
@@ -679,11 +686,16 @@ final class CleaningBookingResource extends JsonResource
     private function workerDurationHours(?CleaningBookingWorkerAssignment $assignment = null): ?float
     {
         $details = is_array($this->property_details) ? $this->property_details : [];
-        $bookingHours = (float) (
-            $this->total_hours
-            ?: $this->estimated_hours
-            ?: Arr::get($details, 'hours', 0)
-        );
+        // Eloquent decimal casts return strings like "0.00", which are truthy
+        // in PHP. Compare numerically so an unset duration can use the agreed
+        // estimated/property hours rather than hiding the worker timer.
+        $bookingHours = (float) ($this->total_hours ?? 0);
+        if ($bookingHours <= 0) {
+            $bookingHours = (float) ($this->estimated_hours ?? 0);
+        }
+        if ($bookingHours <= 0) {
+            $bookingHours = (float) Arr::get($details, 'hours', 0);
+        }
 
         if ($bookingHours <= 0) {
             return null;
@@ -719,11 +731,14 @@ final class CleaningBookingResource extends JsonResource
         $start = $assignment?->work_started_at ?? $this->work_started_at ?? $this->arrived_at;
         $hours = $assignment instanceof CleaningBookingWorkerAssignment
             ? (float) ($this->workerDurationHours($assignment) ?? 0)
-            : (float) ($this->total_hours ?: $this->estimated_hours ?: 0);
+            : (float) ($this->total_hours ?? 0);
+        if (! $assignment instanceof CleaningBookingWorkerAssignment && $hours <= 0) {
+            $hours = (float) ($this->estimated_hours ?? 0);
+        }
         if ($start === null || $hours <= 0) return ['timerStartAt' => $start?->toIso8601String(), 'expectedFinishAt' => null, 'durationHours' => $hours > 0 ? $hours : null, 'remainingWorkSeconds' => 0, 'overdueWorkSeconds' => 0, 'isWorkOverdue' => false, 'shouldShowWorkTimer' => false, 'source' => ['startField' => null, 'durationField' => null]];
         $expected = $start->copy()->addSeconds((int) round($hours * 3600));
         $diff = now()->diffInSeconds($expected, false);
         $show = in_array($status, [CleaningBookingStatus::InProgress->value, CleaningBookingStatus::TimeExtensionRequested->value], true);
-        return ['timerStartAt' => $start->toIso8601String(), 'expectedFinishAt' => $expected->toIso8601String(), 'durationHours' => $hours, 'remainingWorkSeconds' => $show ? max(0, $diff) : 0, 'overdueWorkSeconds' => $show ? max(0, -$diff) : 0, 'isWorkOverdue' => $show && $diff < 0, 'shouldShowWorkTimer' => $show, 'source' => ['startField' => $assignment?->work_started_at !== null ? 'assignment.work_started_at' : ($this->work_started_at !== null ? 'work_started_at' : 'arrived_at'), 'durationField' => $assignment instanceof CleaningBookingWorkerAssignment ? 'worker_total_hours' : ($this->total_hours ? 'total_hours' : 'estimated_hours')]];
+        return ['timerStartAt' => $start->toIso8601String(), 'expectedFinishAt' => $expected->toIso8601String(), 'durationHours' => $hours, 'remainingWorkSeconds' => $show ? max(0, $diff) : 0, 'overdueWorkSeconds' => $show ? max(0, -$diff) : 0, 'isWorkOverdue' => $show && $diff < 0, 'shouldShowWorkTimer' => $show, 'source' => ['startField' => $assignment?->work_started_at !== null ? 'assignment.work_started_at' : ($this->work_started_at !== null ? 'work_started_at' : 'arrived_at'), 'durationField' => $assignment instanceof CleaningBookingWorkerAssignment ? 'worker_total_hours' : ((float) ($this->total_hours ?? 0) > 0 ? 'total_hours' : 'estimated_hours')]];
     }
 }

@@ -44,6 +44,7 @@ final class CleaningBookingForm
                     Select::make('status')
                         ->label('الحالة')
                         ->options(collect(CleaningBookingStatus::cases())
+                            ->reject(fn (CleaningBookingStatus $status): bool => $status === CleaningBookingStatus::PartiallyCompleted)
                             ->mapWithKeys(fn (CleaningBookingStatus $status): array => [$status->value => $status->label()])
                             ->all())
                         ->required(),

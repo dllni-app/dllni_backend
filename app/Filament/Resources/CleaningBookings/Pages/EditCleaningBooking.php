@@ -9,6 +9,8 @@ use Filament\Actions\ViewAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Validation\ValidationException;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningNeighborhood;
 use Modules\Cleaning\Support\WorkerRoomAssignmentPlanner;
@@ -57,6 +59,12 @@ final class EditCleaningBooking extends EditRecord
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
+        if (($data['status'] ?? null) === \Modules\Cleaning\Enums\CleaningBookingStatus::PartiallyCompleted->value) {
+            throw ValidationException::withMessages([
+                'status' => ['Partially completed status is read-only until session lifecycle integration.'],
+            ]);
+        }
+
         if (array_key_exists('selected_room_keys', $data)) {
             $this->selectedRoomKeys = array_values(array_unique(array_map(
                 static fn (mixed $key): string => (string) $key,
@@ -75,6 +83,32 @@ final class EditCleaningBooking extends EditRecord
         }
 
         return $data;
+    }
+
+    protected function handleRecordUpdate(Model $record, array $data): Model
+    {
+        return DB::transaction(function () use ($record, $data): Model {
+            if (($data['status'] ?? null) === \Modules\Cleaning\Enums\CleaningBookingStatus::PartiallyCompleted->value) {
+                throw ValidationException::withMessages([
+                    'status' => ['Partially completed status cannot be assigned through the legacy admin form.'],
+                ]);
+            }
+
+            $booking = CleaningBooking::query()
+                ->whereKey($record->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($booking->status === \Modules\Cleaning\Enums\CleaningBookingStatus::PartiallyCompleted) {
+                throw ValidationException::withMessages([
+                    'status' => ['Partially completed bookings cannot be edited through the legacy admin form.'],
+                ]);
+            }
+
+            $booking->fill($data)->save();
+
+            return $booking;
+        });
     }
 
     protected function afterSave(): void
@@ -113,6 +147,17 @@ final class EditCleaningBooking extends EditRecord
         }
 
         DB::transaction(function () use ($booking, $blueprints, $selected): void {
+            $lockedBooking = CleaningBooking::query()
+                ->whereKey($booking->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($lockedBooking->status === \Modules\Cleaning\Enums\CleaningBookingStatus::PartiallyCompleted) {
+                throw ValidationException::withMessages([
+                    'status' => ['Partially completed bookings cannot change rooms through the legacy admin form.'],
+                ]);
+            }
+
             $booking->rooms()
                 ->whereNotIn('room_key', $selected)
                 ->delete();

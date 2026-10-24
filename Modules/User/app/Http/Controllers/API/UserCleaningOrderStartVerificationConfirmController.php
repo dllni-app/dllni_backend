@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Modules\User\Http\Controllers\API;
 
 use Illuminate\Http\JsonResponse;
+use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Services\CleaningBookingWorkerSecurityCodeService;
 use Modules\User\Http\Requests\UserCleaningOrderStartVerificationConfirmRequest;
@@ -18,7 +20,11 @@ final class UserCleaningOrderStartVerificationConfirmController
             ->where('customer_id', $request->user()->id)
             ->findOrFail($order);
 
-        $updated = $service->confirmForCustomer($model, $request->validated('code'));
+        try {
+            $updated = $service->confirmForCustomer($model, $request->validated('code'));
+        } catch (InvalidArgumentException $exception) {
+            throw ValidationException::withMessages(['status' => [$exception->getMessage()]]);
+        }
         $updated->load(['worker.user', 'workerAssignments.worker.user', 'rooms.assignedWorker.user', 'timeWarnings', 'disputes', 'addons', 'billingPolicy']);
 
         return UserCleaningBookingResource::make($updated)->additional([

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Models\User;
 use App\Models\CleaningFinancialSetting;
+use App\Models\CleaningWorkerDeposit;
 use App\Models\Worker;
 use App\Enums\WorkerPreferredWorkType;
 use Illuminate\Support\Carbon;
@@ -14,6 +15,7 @@ use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningNeighborhood;
+use Modules\Cleaning\Services\DepositService;
 
 beforeEach(function () {
     $user = User::factory()->create();
@@ -39,6 +41,41 @@ function createCleaningNeighborhoodCoverage(Worker $worker, ?string $name = null
     return $neighborhood;
 }
 
+/**
+ * Available offers require an active, funded worker account and a passing
+ * trust score. Set those preconditions only in the offer-visibility fixtures,
+ * never by bypassing dispatch security checks in production.
+ */
+function enableEligibleCleaningOfferWorker(Worker $worker): void
+{
+    // These tests concern offer visibility by work preference, not route
+    // geometry. Use the supported per-worker allowance pricing mode so the
+    // pending quote does not fail due to unrelated missing test coordinates.
+    CleaningFinancialSetting::query()->updateOrCreate(['id' => 1], [
+        'travel_markup_type' => 'worker_allowance',
+        'travel_markup_value' => 0,
+    ]);
+
+    $worker->forceFill([
+        'trust_score' => 100,
+        'is_active' => true,
+        'is_suspended' => false,
+    ])->save();
+
+    CleaningWorkerDeposit::query()->updateOrCreate(['worker_id' => $worker->id], [
+        'current_balance' => 100000,
+        'debt_balance' => 0,
+        'deposited_total' => 100000,
+        'withdrawn_total' => 0,
+        'minimum_required' => 0,
+        'max_negative_balance' => 100000,
+        'is_active' => true,
+    ]);
+
+    expect(app(DepositService::class)->isWorkerEligibleForNewRequests($worker->fresh(['deposit'])))
+        ->toBeTrue();
+}
+
 it('lists cleaning bookings', function () {
     $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
         'name' => 'Default',
@@ -49,6 +86,7 @@ it('lists cleaning bookings', function () {
     ]);
 
     CleaningBooking::factory()->count(3)->create([
+        'customer_id' => auth()->id(),
         'billing_policy_id' => $billingPolicy->id,
     ]);
 
@@ -105,6 +143,7 @@ it('shows a cleaning booking', function () {
     ]);
 
     $booking = CleaningBooking::factory()->create([
+        'customer_id' => auth()->id(),
         'billing_policy_id' => $billingPolicy->id,
         'number_of_workers' => 2,
     ]);
@@ -212,6 +251,7 @@ it('filters cleaning bookings by forCurrentWorker and scheduledDate', function (
 it('returns pending unassigned bookings for worker when forCurrentWorker and status pending', function () {
     $workerUser = User::factory()->create(['email' => 'worker-new-requests@example.com']);
     $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    enableEligibleCleaningOfferWorker($worker);
     Sanctum::actingAs($workerUser);
 
     $neighborhood = createCleaningNeighborhoodCoverage($worker, 'Pending Coverage');
@@ -253,6 +293,7 @@ it('returns only cleaning available bookings for cleaning preferred workers', fu
         'user_id' => $workerUser->id,
         'preferred_work_type' => WorkerPreferredWorkType::Cleaning,
     ]);
+    enableEligibleCleaningOfferWorker($worker);
     Sanctum::actingAs($workerUser);
 
     $neighborhood = createCleaningNeighborhoodCoverage($worker, 'Cleaning Preference');
@@ -298,6 +339,7 @@ it('returns only event available bookings for events preferred workers', functio
         'user_id' => $workerUser->id,
         'preferred_work_type' => WorkerPreferredWorkType::Events,
     ]);
+    enableEligibleCleaningOfferWorker($worker);
     Sanctum::actingAs($workerUser);
 
     $neighborhood = createCleaningNeighborhoodCoverage($worker, 'Events Preference');
@@ -343,6 +385,7 @@ it('returns cleaning and event available bookings for both preferred workers', f
         'user_id' => $workerUser->id,
         'preferred_work_type' => WorkerPreferredWorkType::Both,
     ]);
+    enableEligibleCleaningOfferWorker($worker);
     Sanctum::actingAs($workerUser);
 
     $neighborhood = createCleaningNeighborhoodCoverage($worker, 'Both Preference');
@@ -380,6 +423,45 @@ it('returns cleaning and event available bookings for both preferred workers', f
     expect($response->json('data'))->toHaveCount(2);
     expect(collect($response->json('data'))->pluck('type')->sort()->values()->all())
         ->toBe(['cleaning', 'events']);
+});
+
+it('keeps a financially ineligible worker away from new offers without hiding already assigned work', function (): void {
+    $workerUser = User::factory()->create(['email' => 'unfunded-offer-privacy@example.com']);
+    $worker = Worker::factory()->create([
+        'user_id' => $workerUser->id,
+        'trust_score' => 100,
+        'is_active' => true,
+        'is_suspended' => false,
+    ]);
+    Sanctum::actingAs($workerUser);
+
+    // Deliberately leave the financial account absent: an unfunded worker may
+    // inspect existing assignments but must not receive new open offers.
+    $neighborhood = createCleaningNeighborhoodCoverage($worker, 'Unfunded Privacy');
+    $pending = CleaningBooking::factory()->create([
+        'worker_id' => null,
+        'status' => CleaningBookingStatus::Pending,
+        'gender_preference' => 'any',
+        'neighborhood_id' => $neighborhood->id,
+    ]);
+    $assigned = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'status' => CleaningBookingStatus::WorkerAssigned,
+    ]);
+
+    expect(app(DepositService::class)->isWorkerEligibleForNewRequests($worker->fresh(['deposit'])))
+        ->toBeFalse();
+
+    $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending')
+        ->assertOk()
+        ->assertJsonCount(0, 'data')
+        ->assertJsonPath('dispatchEligibility.canReceiveNewRequests', false);
+
+    $bookings = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1');
+    $bookings->assertOk()->assertJsonPath('dispatchEligibility.canReceiveNewRequests', false);
+    expect(collect($bookings->json('data'))->pluck('id')->map(fn ($id) => (int) $id)->all())
+        ->toContain($assigned->id)
+        ->not->toContain($pending->id);
 });
 
 it('filters cleaning bookings by multiple statuses for current worker', function () {
@@ -436,10 +518,12 @@ it('filters cleaning bookings by property type', function () {
     ]);
 
     CleaningBooking::factory()->create([
+        'customer_id' => auth()->id(),
         'billing_policy_id' => $billingPolicy->id,
         'property_type' => 'event_assistance',
     ]);
     CleaningBooking::factory()->create([
+        'customer_id' => auth()->id(),
         'billing_policy_id' => $billingPolicy->id,
         'property_type' => 'apartment',
     ]);
@@ -1038,6 +1122,90 @@ it('rejects activating worker account status without home location', function ()
     $response->assertUnprocessable()->assertJsonValidationErrors(['isActive']);
 });
 
+it('allows activating worker account after the worker provides a complete home location', function (): void {
+    $workerUser = User::factory()->create(['email' => 'worker-status-home-complete@example.com']);
+    $worker = Worker::factory()->create([
+        'user_id' => $workerUser->id,
+        'is_active' => false,
+        'home_address' => 'Worker home for dispatch pricing',
+        'home_latitude' => 36.1795,
+        'home_longitude' => 37.1082,
+    ]);
+    Sanctum::actingAs($workerUser);
+
+    $this->patchJson('/api/v1/cleaning/worker/account/status', ['isActive' => true])
+        ->assertOk()
+        ->assertJsonPath('isActive', true);
+    expect($worker->fresh()->is_active)->toBeTrue();
+});
+
+it('prevents activating an unfunded-home worker through the alternate profile endpoint without partial user writes', function (): void {
+    $workerUser = User::factory()->create([
+        'email' => 'profile-activation-bypass@example.com',
+        'name' => 'Original Worker User',
+    ]);
+    $worker = Worker::factory()->create([
+        'user_id' => $workerUser->id,
+        'is_active' => false,
+        'home_address' => null,
+        'home_latitude' => null,
+        'home_longitude' => null,
+    ]);
+    Sanctum::actingAs($workerUser);
+
+    $this->putJson('/api/v1/cleaning/worker/account/profile', [
+        'name' => 'Must Not Be Saved',
+        'isActive' => true,
+    ])->assertUnprocessable()->assertJsonValidationErrors(['isActive']);
+
+    expect($worker->fresh()->is_active)->toBeFalse()
+        ->and($workerUser->fresh()->name)->toBe('Original Worker User');
+});
+
+it('does not allow an active worker to remove their home location by editing the profile', function (): void {
+    $workerUser = User::factory()->create(['email' => 'profile-clear-location@example.com']);
+    $worker = Worker::factory()->create([
+        'user_id' => $workerUser->id,
+        'is_active' => true,
+        'home_address' => 'Existing Home',
+        'home_latitude' => 36.1795,
+        'home_longitude' => 37.1082,
+    ]);
+    Sanctum::actingAs($workerUser);
+
+    $this->putJson('/api/v1/cleaning/worker/account/profile', [
+        'homeAddress' => null,
+        'homeLatitude' => null,
+        'homeLongitude' => null,
+    ])->assertUnprocessable()->assertJsonValidationErrors(['isActive']);
+
+    expect($worker->fresh()->is_active)->toBeTrue()
+        ->and($worker->fresh()->home_address)->toBe('Existing Home')
+        ->and((float) $worker->fresh()->home_latitude)->toBe(36.1795);
+});
+
+it('allows a single profile update to set a complete home and activate the worker', function (): void {
+    $workerUser = User::factory()->create(['email' => 'profile-complete-activation@example.com']);
+    $worker = Worker::factory()->create([
+        'user_id' => $workerUser->id,
+        'is_active' => false,
+        'home_address' => null,
+        'home_latitude' => null,
+        'home_longitude' => null,
+    ]);
+    Sanctum::actingAs($workerUser);
+
+    $this->putJson('/api/v1/cleaning/worker/account/profile', [
+        'isActive' => true,
+        'homeAddress' => 'Valid Worker Home',
+        'homeLatitude' => 36.1795,
+        'homeLongitude' => 37.1082,
+    ])->assertOk();
+
+    expect($worker->fresh()->is_active)->toBeTrue()
+        ->and($worker->fresh()->home_address)->toBe('Valid Worker Home');
+});
+
 describe('cleaning booking work timer', function () {
     beforeEach(function () {
         Carbon::setTestNow(Carbon::parse('2026-06-21 12:00:00'));
@@ -1057,6 +1225,7 @@ describe('cleaning booking work timer', function () {
 
     it('returns remaining work seconds for active in progress booking', function () {
         $booking = CleaningBooking::factory()->create([
+            'customer_id' => auth()->id(),
             'billing_policy_id' => $this->billingPolicy->id,
             'status' => CleaningBookingStatus::InProgress,
             'work_started_at' => now()->subMinutes(30),
@@ -1078,6 +1247,7 @@ describe('cleaning booking work timer', function () {
 
     it('returns overdue work seconds when active work exceeds expected duration', function () {
         $booking = CleaningBooking::factory()->create([
+            'customer_id' => auth()->id(),
             'billing_policy_id' => $this->billingPolicy->id,
             'status' => CleaningBookingStatus::InProgress,
             'work_started_at' => now()->subHours(3),
@@ -1096,6 +1266,7 @@ describe('cleaning booking work timer', function () {
 
     it('falls back to estimated hours when total hours is zero', function () {
         $booking = CleaningBooking::factory()->create([
+            'customer_id' => auth()->id(),
             'billing_policy_id' => $this->billingPolicy->id,
             'status' => CleaningBookingStatus::InProgress,
             'work_started_at' => now()->subMinutes(30),
@@ -1103,15 +1274,19 @@ describe('cleaning booking work timer', function () {
             'estimated_hours' => 2,
         ]);
 
+        expect((float) $booking->fresh()->estimated_hours)->toBe(2.0);
+
         $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}");
 
         $response->assertOk();
+        expect($response->json('data.workTimer'))->not->toBeNull();
         expect($response->json('data.workTimer.source.durationField'))->toBe('estimated_hours');
         expect($response->json('data.expectedFinishAt'))->not->toBeNull();
     });
 
     it('falls back to arrived at when work started at is missing', function () {
         $booking = CleaningBooking::factory()->create([
+            'customer_id' => auth()->id(),
             'billing_policy_id' => $this->billingPolicy->id,
             'status' => CleaningBookingStatus::InProgress,
             'work_started_at' => null,
@@ -1129,6 +1304,7 @@ describe('cleaning booking work timer', function () {
 
     it('does not show active overdue state after awaiting customer completion', function () {
         $booking = CleaningBooking::factory()->create([
+            'customer_id' => auth()->id(),
             'billing_policy_id' => $this->billingPolicy->id,
             'status' => CleaningBookingStatus::AwaitingCustomerCompletion,
             'work_started_at' => now()->subHours(3),
@@ -1148,6 +1324,7 @@ describe('cleaning booking work timer', function () {
 
     it('returns null-safe work timer payload when start or duration is missing', function () {
         $booking = CleaningBooking::factory()->create([
+            'customer_id' => auth()->id(),
             'billing_policy_id' => $this->billingPolicy->id,
             'status' => CleaningBookingStatus::InProgress,
             'work_started_at' => null,

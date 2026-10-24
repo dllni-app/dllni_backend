@@ -9,13 +9,36 @@ use App\Models\PlatformCouponRedemption;
 use App\Services\Coupons\PlatformCouponEligibilityService;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\Cleaning\Models\CleaningTimeWarning;
 
 final class CleaningCouponPricingService
 {
+    /** @var array<int, int> */
+    private static array $skipNextBeforeSave = [];
+
     public function __construct(
         private readonly PlatformCouponEligibilityService $couponEligibility,
         private readonly CleaningPricingCalculator $pricingCalculator,
     ) {}
+
+    public function saveAfterTeamRecalculation(CleaningBooking $booking): void
+    {
+        $bookingId = (int) $booking->getKey();
+        $hasCoupon = (int) ($booking->platform_coupon_id ?? 0) > 0;
+        if ($hasCoupon) {
+            $this->applyBeforeSave($booking, assignmentValuesAreGross: true);
+        }
+
+        $this->saveWithCouponObserverSkipped($booking, $hasCoupon, $bookingId);
+    }
+
+    public function saveAfterApprovedExtension(CleaningBooking $booking): void
+    {
+        $bookingId = (int) $booking->getKey();
+        $hasCoupon = (int) ($booking->platform_coupon_id ?? 0) > 0;
+
+        $this->saveWithCouponObserverSkipped($booking, $hasCoupon, $bookingId);
+    }
 
     /**
      * Apply cleaning coupons to the service charge (including its platform margin),
@@ -119,8 +142,13 @@ final class CleaningCouponPricingService
      * Mutate a booking before it is saved so coupon discounts stay synchronized
      * when worker assignment recalculates travel and administration amounts.
      */
-    public function applyBeforeSave(CleaningBooking $booking): void
+    public function applyBeforeSave(CleaningBooking $booking, bool $assignmentValuesAreGross = false): void
     {
+        $bookingId = (int) $booking->getKey();
+        if (isset(self::$skipNextBeforeSave[$bookingId])) {
+            return;
+        }
+
         $couponId = (int) ($booking->platform_coupon_id ?? 0);
         if ($couponId <= 0) {
             return;
@@ -132,11 +160,15 @@ final class CleaningCouponPricingService
         }
 
         $previousFactors = $this->previousDiscountFactors($booking, $coupon);
+        $approvedExtensionAdminMargin = $this->approvedExtensionAdminMargin($booking);
+        $hasApprovedExtension = $approvedExtensionAdminMargin > 0.0
+            || max(0.0, (float) ($booking->extension_fee_total ?? 0)) > 0.0;
         $couponWasJustAttached = $booking->isDirty('platform_coupon_id')
             || empty($booking->getOriginal('platform_coupon_id'));
-        $assignmentPricingWasRecalculated = $booking->isDirty([
-            'base_price', 'addons_total', 'travel_fee', 'admin_margin_amount', 'is_pricing_final',
-        ]);
+        $assignmentPricingWasRecalculated = $assignmentValuesAreGross
+            || $booking->isDirty([
+                'base_price', 'addons_total', 'travel_fee', 'admin_margin_amount', 'is_pricing_final',
+            ]);
 
         $serviceAmount = round(
             max(0.0, (float) ($booking->base_price ?? 0))
@@ -190,22 +222,51 @@ final class CleaningCouponPricingService
             $includedAdminMargin,
         );
 
-        $this->applyToWorkerAssignments(
-            $booking,
-            (float) $allocation['assignmentWorkerNetFactor'],
-            (float) $allocation['adminNetFactor'],
-            $previousFactors['assignmentWorkerNetFactor'],
-            $previousFactors['adminNetFactor'],
-            $couponWasJustAttached || $assignmentPricingWasRecalculated,
-        );
+        if (! ($hasApprovedExtension && ! $assignmentPricingWasRecalculated)) {
+            $this->applyToWorkerAssignments(
+                $booking,
+                (float) $allocation['assignmentWorkerNetFactor'],
+                (float) $allocation['adminNetFactor'],
+                $previousFactors['assignmentWorkerNetFactor'],
+                $previousFactors['adminNetFactor'],
+                $couponWasJustAttached || $assignmentPricingWasRecalculated,
+            );
+        }
 
         $booking->travel_fee = $allocation['travelFee'];
-        $booking->admin_margin_amount = $allocation['adminMargin'];
+        $booking->admin_margin_amount = round(
+            (float) $allocation['adminMargin'] + $approvedExtensionAdminMargin,
+            2,
+        );
         $booking->subtotal_before_discount = $allocation['grossTotal'];
         $booking->discount_amount = $allocation['discountAmount'];
-        $booking->total_price = $allocation['totalPrice'];
+        // Accepted extension charges are quoted and approved separately from the
+        // original coupon-eligible cleaning price. Keep that signed delta intact
+        // without including it in the coupon's discount base.
+        $booking->total_price = round(
+            (float) $allocation['totalPrice'] + max(0.0, (float) ($booking->extension_fee_total ?? 0)),
+            2,
+        );
 
         $this->syncRedemptionSnapshot($booking, $allocation);
+    }
+
+    private function saveWithCouponObserverSkipped(CleaningBooking $booking, bool $hasCoupon, int $bookingId): void
+    {
+        if ($hasCoupon) {
+            self::$skipNextBeforeSave[$bookingId] = (self::$skipNextBeforeSave[$bookingId] ?? 0) + 1;
+        }
+
+        try {
+            $booking->save();
+        } finally {
+            if ($hasCoupon) {
+                self::$skipNextBeforeSave[$bookingId]--;
+                if (self::$skipNextBeforeSave[$bookingId] <= 0) {
+                    unset(self::$skipNextBeforeSave[$bookingId]);
+                }
+            }
+        }
     }
 
     /**
@@ -293,13 +354,21 @@ final class CleaningCouponPricingService
         );
         $grossServiceAmount = $parts['serviceAmount'];
         $grossAdminMargin = $parts['grossAdminMargin'];
-        $netAdminMargin = round(max(0.0, (float) ($booking->getOriginal('admin_margin_amount') ?? 0)), 2);
+        $netAdminMargin = round(max(
+            0.0,
+            (float) ($booking->getOriginal('admin_margin_amount') ?? 0)
+                - $this->approvedExtensionAdminMargin($booking),
+        ), 2);
 
         $assignmentFactor = (float) $currentAllocation['assignmentWorkerNetFactor'];
         $expectedDiscount = (float) $currentAllocation['discountAmount'];
         $expectedAdmin = (float) $currentAllocation['adminMargin'];
         $expectedTotal = (float) $currentAllocation['totalPrice'];
-        $storedTotal = max(0.0, (float) ($booking->getOriginal('total_price') ?? 0));
+        $storedTotal = max(
+            0.0,
+            (float) ($booking->getOriginal('total_price') ?? 0)
+                - (float) ($booking->getOriginal('extension_fee_total') ?? 0),
+        );
 
         $legacyFactor = $grossTotal > 0.0
             ? max(0.0, min(1.0, ($grossTotal - $storedDiscount) / $grossTotal))
@@ -369,14 +438,24 @@ final class CleaningCouponPricingService
         }
 
         $storedServiceTotal = round((float) $assignments->sum(
-            static fn (CleaningBookingWorkerAssignment $assignment): float =>
-                max(0.0, (float) ($assignment->service_share_amount ?? 0)),
+            static fn (CleaningBookingWorkerAssignment $assignment): float => max(0.0, (float) ($assignment->service_share_amount ?? 0)),
         ), 2);
         $legacyServiceTotal = round($grossServiceAmount * $legacyFactor, 2);
         $currentServiceTotal = round($grossServiceAmount * $currentRuleFactor, 2);
 
         return abs($storedServiceTotal - $legacyServiceTotal) <= 1.0
             && abs($storedServiceTotal - $currentServiceTotal) > 1.0;
+    }
+
+    private function approvedExtensionAdminMargin(CleaningBooking $booking): float
+    {
+        $query = CleaningTimeWarning::query()
+            ->where('booking_id', $booking->getKey())
+            ->where('booking_type', $booking->getMorphClass())
+            ->where('worker_response', 'extend_time')
+            ->whereNotNull('price_applied_at');
+
+        return round(max(0.0, (float) $query->sum('quoted_admin_margin_amount')), 2);
     }
 
     /** @return array{customerWorkerNetFactor: float, assignmentWorkerNetFactor: float, adminNetFactor: float} */

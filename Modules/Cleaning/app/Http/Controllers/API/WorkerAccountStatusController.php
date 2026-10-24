@@ -9,11 +9,13 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 use Modules\Cleaning\Http\Requests\WorkerAccountStatusRequest;
 use Modules\Cleaning\Services\DepositService;
+use Modules\Cleaning\Services\WorkerHomeActivationGuard;
 
 final class WorkerAccountStatusController
 {
     public function __construct(
         private readonly DepositService $depositService,
+        private readonly WorkerHomeActivationGuard $homeActivationGuard,
     ) {}
 
     public function show(): JsonResponse
@@ -28,11 +30,16 @@ final class WorkerAccountStatusController
         $depositSummary = $this->depositService->depositStatusPayload($worker);
         $canReceive = (bool) $depositSummary['isEligibleForNewRequests'];
         $reasonCode = $this->reasonCode($worker, $depositSummary, $canReceive);
+        $canStartAssignedWork = $this->depositService->isWorkerEligibleToStartWork($worker);
+        $startWorkReasonCode = $this->reasonCode($worker, $depositSummary, $canStartAssignedWork);
         $gate = [
             'canReceiveNewRequests' => $canReceive,
             'canAcceptNewBookings' => $canReceive,
             'reasonCode' => $reasonCode,
             'message' => $this->messageFor($reasonCode),
+            'canStartAssignedWork' => $canStartAssignedWork,
+            'startWorkReasonCode' => $startWorkReasonCode,
+            'startWorkMessage' => $this->messageFor($startWorkReasonCode),
             'depositSummary' => $depositSummary,
         ];
 
@@ -54,8 +61,13 @@ final class WorkerAccountStatusController
             return response()->json(['message' => 'User must have an associated worker.'], Response::HTTP_FORBIDDEN);
         }
 
+        $isActivating = (bool) $request->validated()['isActive'];
+        if ($isActivating) {
+            $this->homeActivationGuard->assertCanActivate($worker);
+        }
+
         $worker->update([
-            'is_active' => $request->validated()['isActive'],
+            'is_active' => $isActivating,
         ]);
 
         return $this->show();

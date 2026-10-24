@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Http\Controllers\API;
 
-use BackedEnum;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Validation\ValidationException;
@@ -18,14 +18,12 @@ use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningTimeWarning;
 use Modules\Cleaning\Models\EventBooking;
 use Modules\Cleaning\Services\CleaningTimeWarningService;
-use Modules\Cleaning\Services\CleaningTimeWarningWorkerNotificationService;
 use Throwable;
 
 final class CleaningTimeWarningController
 {
     public function __construct(
         private CleaningTimeWarningService $cleaningTimeWarningService,
-        private CleaningTimeWarningWorkerNotificationService $workerNotificationService,
     ) {}
 
     public function index(CleaningTimeWarningFilterRequest $request): AnonymousResourceCollection
@@ -34,9 +32,11 @@ final class CleaningTimeWarningController
             ->with(['booking']);
 
         $filters = (array) $request->input('filter', []);
-        $worker = $request->user()?->worker;
+        $user = $request->user();
+        abort_unless($user instanceof User, 403);
+        $worker = $user->worker;
 
-        if ($worker !== null) {
+        if ($worker !== null && ! $this->canReadAllWarnings($user)) {
             $warnings->where(function (Builder $query) use ($worker): void {
                 $query->where(function (Builder $cleaningQuery) use ($worker): void {
                     $cleaningQuery
@@ -62,8 +62,13 @@ final class CleaningTimeWarningController
             });
         }
 
-        if ($worker !== null && ! array_key_exists('pending', $filters)) {
+        if ($worker !== null && ! $this->canReadAllWarnings($user) && ! array_key_exists('pending', $filters)) {
             $warnings->whereNull('worker_responded_at');
+        }
+
+        if ($worker === null && ! $this->canReadAllWarnings($user)) {
+            $warnings->whereHasMorph('booking', [CleaningBooking::class, EventBooking::class],
+                static fn (Builder $bookingQuery) => $bookingQuery->where('customer_id', $user->getKey()));
         }
 
         return CleaningTimeWarningResource::collection(
@@ -73,6 +78,7 @@ final class CleaningTimeWarningController
 
     public function show(CleaningTimeWarning $cleaning_time_warning): CleaningTimeWarningResource
     {
+        $this->ensureCanViewWarning($cleaning_time_warning);
         $cleaning_time_warning->load(['booking']);
 
         return CleaningTimeWarningResource::make($cleaning_time_warning);
@@ -82,7 +88,6 @@ final class CleaningTimeWarningController
     public function accept(CleaningTimeWarningAcceptRequest $request, CleaningTimeWarning $cleaning_time_warning): CleaningTimeWarningResource
     {
         $this->ensureWorkerOwnsWarning($cleaning_time_warning);
-        $fromStatus = $this->warningStatus($cleaning_time_warning);
 
         try {
             $warning = $this->cleaningTimeWarningService->accept(
@@ -93,8 +98,6 @@ final class CleaningTimeWarningController
             throw ValidationException::withMessages(['warning' => [$e->getMessage()]]);
         }
 
-        $this->workerNotificationService->accepted($warning, $fromStatus);
-
         return CleaningTimeWarningResource::make($warning->load(['booking']));
     }
 
@@ -102,7 +105,6 @@ final class CleaningTimeWarningController
     public function reject(CleaningTimeWarningRejectRequest $request, CleaningTimeWarning $cleaning_time_warning): CleaningTimeWarningResource
     {
         $this->ensureWorkerOwnsWarning($cleaning_time_warning);
-        $fromStatus = $this->warningStatus($cleaning_time_warning);
 
         try {
             $warning = $this->cleaningTimeWarningService->reject(
@@ -113,9 +115,44 @@ final class CleaningTimeWarningController
             throw ValidationException::withMessages(['warning' => [$e->getMessage()]]);
         }
 
-        $this->workerNotificationService->declined($warning, $fromStatus, $request->validated('message'));
-
         return CleaningTimeWarningResource::make($warning->load(['booking']));
+    }
+
+    private function ensureCanViewWarning(CleaningTimeWarning $warning): void
+    {
+        $user = auth()->user();
+        abort_unless($user instanceof User, 403);
+
+        $booking = $warning->booking;
+        abort_unless($booking instanceof CleaningBooking || $booking instanceof EventBooking, 404);
+
+        if ($this->canReadAllWarnings($user) || (int) $booking->customer_id === (int) $user->getKey()) {
+            return;
+        }
+
+        $worker = $user->worker;
+        if ($worker !== null) {
+            $workerId = (int) $worker->getKey();
+            if ($warning->booking_type === 'event_booking'
+                && $booking instanceof EventBooking
+                && (int) ($warning->worker_id ?? 0) === $workerId) {
+                return;
+            }
+
+            if ($warning->booking_type === 'cleaning_booking'
+                && $booking instanceof CleaningBooking
+                && ($warning->worker_id === null || (int) $warning->worker_id === $workerId)
+                && $this->warningBelongsToWorker($booking, $workerId)) {
+                return;
+            }
+        }
+
+        abort(404, 'Extension request not found.');
+    }
+
+    private function canReadAllWarnings(User $user): bool
+    {
+        return $user->hasAnyRole(['admin', 'Super Admin', 'Cleaning Ops Manager']);
     }
 
     private function ensureWorkerOwnsWarning(CleaningTimeWarning $warning): void
@@ -165,17 +202,4 @@ final class CleaningTimeWarningController
             ->exists();
     }
 
-    private function warningStatus(CleaningTimeWarning $warning): ?string
-    {
-        $booking = $warning->booking;
-        $status = ($booking instanceof CleaningBooking || $booking instanceof EventBooking)
-            ? $booking->status
-            : null;
-
-        if ($status instanceof BackedEnum) {
-            return (string) $status->value;
-        }
-
-        return $status !== null ? (string) $status : null;
-    }
 }

@@ -174,12 +174,15 @@ final class CleaningBookingResource extends Resource
 
     public static function canEdit(Model $record): bool
     {
-        return self::hasPermission('bookings.update') && $record instanceof CleaningBooking;
+        return self::hasPermission('bookings.update')
+            && $record instanceof CleaningBooking
+            && $record->status !== CleaningBookingStatus::PartiallyCompleted;
     }
 
     public static function canDelete(Model $record): bool
     {
-        return self::hasPermission('bookings.delete');
+        return self::hasPermission('bookings.delete')
+            && (! $record instanceof CleaningBooking || $record->status !== CleaningBookingStatus::PartiallyCompleted);
     }
 
     public static function getRelations(): array

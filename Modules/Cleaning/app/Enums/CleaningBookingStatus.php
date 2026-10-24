@@ -13,12 +13,17 @@ enum CleaningBookingStatus: string
     case InProgress = 'in_progress';
     case AwaitingCustomerCompletion = 'awaiting_customer_completion';
     case TimeExtensionRequested = 'time_extension_requested';
+    case PartiallyCompleted = 'partially_completed';
     case UnderDispute = 'under_dispute';
     case Completed = 'completed';
     case Cancelled = 'cancelled';
 
     public function label(): string
     {
+        if ($this === self::PartiallyCompleted) {
+            return 'اكتمل جزئياً';
+        }
+
         if ($this === self::UnderDispute) {
             return 'قيد النزاع';
         }

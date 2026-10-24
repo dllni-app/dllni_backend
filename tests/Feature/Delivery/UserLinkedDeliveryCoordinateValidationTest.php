@@ -3,13 +3,14 @@
 declare(strict_types=1);
 
 use App\Models\User;
+use Database\Factories\SmCategoryFactory;
+use Database\Factories\SmProductFactory;
 use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
 use Modules\Delivery\Models\DeliveryCompany;
 use Modules\Supermarket\Models\SmCart;
 use Modules\Supermarket\Models\SmCartItem;
 use Modules\Supermarket\Models\SmOrder;
-use Modules\Supermarket\Models\SmProduct;
 use Modules\Supermarket\Models\SmStore;
 use Modules\User\Models\UserAddress;
 
@@ -30,7 +31,12 @@ function linkedDeliveryValidationSupermarketCart(User $user, array $storeOverrid
         'longitude' => 37.170000,
         ...$storeOverrides,
     ]);
-    $product = SmProduct::factory()->create(['store_id' => $store->id, 'price' => 9000]);
+    $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+    $product = SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'category_id' => $category->id,
+        'price' => 9000,
+    ]);
     $cart = SmCart::query()->create(['user_id' => $user->id, 'store_id' => $store->id]);
     SmCartItem::query()->create(['cart_id' => $cart->id, 'product_id' => $product->id, 'quantity' => 1, 'unit_price' => 9000]);
 

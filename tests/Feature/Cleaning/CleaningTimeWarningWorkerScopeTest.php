@@ -114,7 +114,8 @@ it('resolves an extension warning and removes it from the default worker pending
     expect($booking->fresh()->status)->toBe(CleaningBookingStatus::Completed);
 
     $secondResponse = $this->postJson("/api/v1/cleaning-time-warnings/{$warning->id}/reject", []);
-    $secondResponse->assertUnprocessable();
+    $secondResponse->assertOk()
+        ->assertJsonPath('data.workerResponse', 'commit_current_time');
 
     $listResponse = $this->getJson('/api/v1/cleaning-time-warnings');
     $ids = array_column($listResponse->json('data'), 'id');

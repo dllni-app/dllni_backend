@@ -70,6 +70,15 @@ final class CleaningBookingService
     public function update(CleaningBookingData $data, CleaningBooking $booking): CleaningBooking
     {
         return DB::transaction(function () use ($data, $booking): CleaningBooking {
+            $booking = CleaningBooking::query()
+                ->whereKey($booking->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($booking->status === CleaningBookingStatus::PartiallyCompleted) {
+                throw new InvalidArgumentException('Partially completed bookings cannot be edited through the legacy booking API.');
+            }
+
             $attributes = $data->onlyModelAttributes();
             if (array_key_exists('gender_preference', $attributes) && $attributes['gender_preference'] === null) {
                 $attributes['gender_preference'] = GenderPreference::Any->value;
@@ -541,6 +550,10 @@ final class CleaningBookingService
             $worker = $this->currentWorker();
             $lockedBooking = $this->lockBooking($booking);
 
+            if ($lockedBooking->status === CleaningBookingStatus::PartiallyCompleted) {
+                throw new InvalidArgumentException('Partially completed bookings cannot use legacy worker completion.');
+            }
+
             if ($lockedBooking->status !== CleaningBookingStatus::InProgress) {
                 throw new InvalidArgumentException('Booking must be in progress to mark completion.');
             }
@@ -766,6 +779,11 @@ final class CleaningBookingService
             $worker = Auth::user()?->worker;
             if (! $worker) {
                 throw new InvalidArgumentException('User must have an associated worker.');
+            }
+
+            $booking = $this->lockBooking($booking);
+            if ($booking->status === CleaningBookingStatus::PartiallyCompleted) {
+                throw new InvalidArgumentException('Partially completed bookings cannot be cancelled through the legacy worker action.');
             }
 
             $allowedStatuses = [

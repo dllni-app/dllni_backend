@@ -18,6 +18,12 @@ final class UserCleaningPreviousWorkersRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'propertyType' => [
+                'sometimes',
+                'nullable',
+                'string',
+                'max:100',
+            ],
             'genderPreference' => [
                 'sometimes',
                 'nullable',

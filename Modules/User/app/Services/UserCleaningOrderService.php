@@ -177,6 +177,8 @@ final class UserCleaningOrderService
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            $this->assertLegacyMutationAllowed($booking);
+
             $hasAcceptedAssignments = $booking->workerAssignments()
                 ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value)
                 ->exists();
@@ -395,21 +397,30 @@ final class UserCleaningOrderService
     public function cancel(CleaningBooking $booking, ?string $reason = null): CleaningBooking
     {
         $fromStatus = (string) $booking->status->value;
+        $updated = DB::transaction(function () use ($booking, $reason, &$fromStatus): CleaningBooking {
+            $booking = CleaningBooking::query()
+                ->whereKey($booking->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $this->assertLegacyMutationAllowed($booking);
+            $fromStatus = (string) $booking->status->value;
 
-        if (! in_array($booking->status, [CleaningBookingStatus::Pending, CleaningBookingStatus::WorkerAssigned, CleaningBookingStatus::AwaitingStartVerification], true)) {
-            throw ValidationException::withMessages([
-                'order' => ['Order cannot be cancelled in current status.'],
+            if (! in_array($booking->status, [CleaningBookingStatus::Pending, CleaningBookingStatus::WorkerAssigned, CleaningBookingStatus::AwaitingStartVerification], true)) {
+                throw ValidationException::withMessages([
+                    'order' => ['Order cannot be cancelled in current status.'],
+                ]);
+            }
+
+            $booking->update([
+                'status' => CleaningBookingStatus::Cancelled,
+                'cancelled_at' => now(),
+                'cancellation_reason' => $reason,
             ]);
-        }
 
-        $booking->update([
-            'status' => CleaningBookingStatus::Cancelled,
-            'cancelled_at' => now(),
-            'cancellation_reason' => $reason,
-        ]);
+            return $booking->fresh();
+        });
 
         // TODO: add tag to order that cancelation is from the user if the CleaningBookingStatus::AwaitingStartVerification
-        $updated = $booking->fresh();
         $this->dispatchTrackingUpdate($updated);
         $this->lifecycleNotifications->notifyWorker(
             booking: $updated,
@@ -435,6 +446,21 @@ final class UserCleaningOrderService
         }
 
         return DB::transaction(function () use ($booking, $code): CleaningBooking {
+            $booking = CleaningBooking::query()
+                ->whereKey($booking->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $this->assertLegacyMutationAllowed($booking);
+
+            if (! in_array($booking->status, [
+                CleaningBookingStatus::AwaitingStartVerification,
+                CleaningBookingStatus::AwaitingWorkerStartConfirmation,
+            ], true)) {
+                throw ValidationException::withMessages([
+                    'status' => ['Order is not waiting for start verification.'],
+                ]);
+            }
+
             $record = DB::table('booking_security_codes')
                 ->where('booking_id', $booking->id)
                 ->where('booking_type', $booking->getMorphClass())
@@ -543,6 +569,18 @@ final class UserCleaningOrderService
         }
 
         $updated = DB::transaction(function () use ($booking): CleaningBooking {
+            $booking = CleaningBooking::query()
+                ->whereKey($booking->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $this->assertLegacyMutationAllowed($booking);
+
+            if ($booking->status !== CleaningBookingStatus::AwaitingCustomerCompletion) {
+                throw ValidationException::withMessages([
+                    'status' => ['Order is not waiting for completion confirmation.'],
+                ]);
+            }
+
             $booking->update([
                 'status' => CleaningBookingStatus::Completed,
                 'customer_confirmed_at' => now(),
@@ -606,12 +644,24 @@ final class UserCleaningOrderService
             ]);
         }
 
-        $booking->update([
-            'status' => CleaningBookingStatus::InProgress,
-            'work_finished_at' => null,
-        ]);
+        $updated = DB::transaction(function () use ($booking): CleaningBooking {
+            $booking = CleaningBooking::query()
+                ->whereKey($booking->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $this->assertLegacyMutationAllowed($booking);
+            if ($booking->status !== CleaningBookingStatus::AwaitingCustomerCompletion) {
+                throw ValidationException::withMessages([
+                    'status' => ['Order is not waiting for completion confirmation.'],
+                ]);
+            }
+            $booking->update([
+                'status' => CleaningBookingStatus::InProgress,
+                'work_finished_at' => null,
+            ]);
+            return $booking->fresh();
+        });
 
-        $updated = $booking->fresh();
         $this->dispatchTrackingUpdate($updated);
         BroadcastAfterResponse::send(new CompletionDecisionMade(
             $updated->id,
@@ -709,6 +759,15 @@ final class UserCleaningOrderService
             'booking' => $updated,
             'extensionPricing' => $extensionPricing,
         ];
+    }
+
+    private function assertLegacyMutationAllowed(CleaningBooking $booking): void
+    {
+        if ($booking->status === CleaningBookingStatus::PartiallyCompleted) {
+            throw ValidationException::withMessages([
+                'status' => ['Partially completed bookings cannot use legacy customer actions.'],
+            ]);
+        }
     }
 
     /**

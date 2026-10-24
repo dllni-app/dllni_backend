@@ -230,12 +230,23 @@ final class CleaningBookingsTable
                         ])
                         ->action(function (CleaningBooking $record, array $data): void {
                             try {
-                                $updated = app(CleaningBookingAdminPricingService::class)->setRoomQuantity(
-                                    $record,
-                                    (string) $data['room_type'],
-                                    (string) $data['room_size'],
-                                    (int) $data['quantity'],
-                                );
+                                $updated = DB::transaction(function () use ($record, $data): CleaningBooking {
+                                    $booking = CleaningBooking::query()
+                                        ->whereKey($record->getKey())
+                                        ->lockForUpdate()
+                                        ->firstOrFail();
+
+                                    if ($booking->status === CleaningBookingStatus::PartiallyCompleted) {
+                                        throw new InvalidArgumentException('Partially completed bookings cannot change room quantities.');
+                                    }
+
+                                    return app(CleaningBookingAdminPricingService::class)->setRoomQuantity(
+                                        $booking,
+                                        (string) $data['room_type'],
+                                        (string) $data['room_size'],
+                                        (int) $data['quantity'],
+                                    );
+                                });
                             } catch (Throwable $exception) {
                                 Notification::make()
                                     ->title('تعذر تعديل الغرف')
@@ -272,10 +283,21 @@ final class CleaningBookingsTable
                         ])
                         ->action(function (CleaningBooking $record, array $data): void {
                             try {
-                                $updated = app(CleaningBookingAdminPricingService::class)->setBasePrice(
-                                    $record,
-                                    (float) $data['base_price'],
-                                );
+                                $updated = DB::transaction(function () use ($record, $data): CleaningBooking {
+                                    $booking = CleaningBooking::query()
+                                        ->whereKey($record->getKey())
+                                        ->lockForUpdate()
+                                        ->firstOrFail();
+
+                                    if ($booking->status === CleaningBookingStatus::PartiallyCompleted) {
+                                        throw new InvalidArgumentException('Partially completed bookings cannot be repriced.');
+                                    }
+
+                                    return app(CleaningBookingAdminPricingService::class)->setBasePrice(
+                                        $booking,
+                                        (float) $data['base_price'],
+                                    );
+                                });
                             } catch (Throwable $exception) {
                                 Notification::make()
                                     ->title('تعذر تعديل السعر')
@@ -465,6 +487,7 @@ final class CleaningBookingsTable
                             CleaningBookingStatus::Completed,
                             CleaningBookingStatus::Cancelled,
                             CleaningBookingStatus::UnderDispute,
+                            CleaningBookingStatus::PartiallyCompleted,
                         ], true))
                         ->requiresConfirmation()
                         ->modalHeading('إلغاء الحجز')
@@ -490,6 +513,7 @@ final class CleaningBookingsTable
                                     CleaningBookingStatus::Completed,
                                     CleaningBookingStatus::Cancelled,
                                     CleaningBookingStatus::UnderDispute,
+                                    CleaningBookingStatus::PartiallyCompleted,
                                 ], true)) {
                                     return $booking;
                                 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Http\Controllers\API;
 
+use App\Models\User;
 use App\Models\Worker;
 use Illuminate\Support\Facades\Auth;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
@@ -32,10 +33,18 @@ final class CleaningBookingShowController
 
     private function ensureWorkerCanViewBooking(CleaningBooking $booking): void
     {
-        $worker = Auth::user()?->worker;
+        $user = Auth::user();
+        abort_unless($user instanceof User, 403);
+
+        if ((int) $booking->customer_id === (int) $user->getKey()
+            || $user->hasAnyRole(['admin', 'Super Admin', 'Cleaning Ops Manager'])) {
+            return;
+        }
+
+        $worker = $user->worker;
 
         if (! $worker instanceof Worker) {
-            return;
+            abort(404, 'Cleaning booking not found.');
         }
 
         $hasAcceptedAssignment = $booking->workerAssignments()

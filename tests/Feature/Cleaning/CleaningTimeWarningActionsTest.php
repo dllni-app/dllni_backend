@@ -2,10 +2,11 @@
 
 declare(strict_types=1);
 
+use App\Jobs\NotifyWorkerExtensionRequestJob;
 use App\Models\User;
 use App\Models\Worker;
-use App\Jobs\NotifyWorkerExtensionRequestJob;
 use App\Notifications\Cleaning\BookingLifecycleNotification;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
@@ -46,6 +47,8 @@ it('accepts an extension request', function () {
         'sent_at' => now(),
         'additional_minutes' => 30,
         'quoted_amount' => 4500,
+        'customer_response' => 'extend_time',
+        'customer_responded_at' => now(),
         'quoted_currency' => 'SYP',
         'price_applied_at' => null,
     ]);
@@ -98,6 +101,7 @@ it('applies the extension breakdown to booking and worker accounting once', func
         'booking_type' => 'cleaning_booking',
         'worker_id' => $worker->id,
         'customer_response' => 'extend_time',
+        'customer_responded_at' => now(),
         'worker_response' => null,
         'sent_at' => now(),
         'additional_minutes' => 30,
@@ -150,6 +154,8 @@ it('rejects an extension request with message', function () {
         'sent_at' => now(),
         'additional_minutes' => 20,
         'quoted_amount' => 1000,
+        'customer_response' => 'extend_time',
+        'customer_responded_at' => now(),
         'quoted_currency' => 'SYP',
         'price_applied_at' => null,
     ]);
@@ -202,7 +208,7 @@ it('returns 403 when extension request is not for worker booking', function () {
     $response->assertForbidden();
 });
 
-it('returns 422 when extension request already responded', function () {
+it('returns the stored result when the extension request was already accepted', function () {
     $workerUser = User::factory()->create(['email' => 'worker-ext-done@example.com']);
     $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
@@ -223,7 +229,10 @@ it('returns 422 when extension request already responded', function () {
 
     $response = $this->postJson("/api/v1/cleaning-time-warnings/{$warning->id}/accept");
 
-    $response->assertUnprocessable();
+    $response->assertOk()
+        ->assertJsonPath('data.workerResponse', 'extend_time');
+    expect($warning->fresh()->worker_responded_at->toIso8601String())
+        ->toBe($warning->worker_responded_at->toIso8601String());
 });
 
 it('accepts an extension request without additionalMinutes', function () {
@@ -246,6 +255,8 @@ it('accepts an extension request without additionalMinutes', function () {
         'sent_at' => now(),
         'additional_minutes' => 25,
         'quoted_amount' => 1250,
+        'customer_response' => 'extend_time',
+        'customer_responded_at' => now(),
         'quoted_currency' => 'SYP',
         'price_applied_at' => null,
     ]);
@@ -288,6 +299,8 @@ it('does not double-apply extension quote when accept is retried', function () {
         'sent_at' => now(),
         'additional_minutes' => 15,
         'quoted_amount' => 1200,
+        'customer_response' => 'extend_time',
+        'customer_responded_at' => now(),
         'quoted_currency' => 'SYP',
         'price_applied_at' => null,
     ]);
@@ -300,11 +313,83 @@ it('does not double-apply extension quote when accept is retried', function () {
     expect((float) $booking->total_price)->toBe(1400.0);
 
     $secondResponse = $this->postJson("/api/v1/cleaning-time-warnings/{$warning->id}/accept", []);
-    $secondResponse->assertUnprocessable();
+    $secondResponse->assertOk();
 
     $booking->refresh();
     expect((float) $booking->extension_fee_total)->toBe(1200.0);
     expect((float) $booking->total_price)->toBe(1400.0);
+    expect($warning->fresh()->worker_responded_at->toIso8601String())
+        ->toBe(Carbon::parse($firstResponse->json('data.workerRespondedAt'))->toIso8601String());
+});
+
+it('rejects an opposite decision without changing the stored extension result', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-opposite-decision@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::TimeExtensionRequested,
+        'total_price' => 900.00,
+        'extension_fee_total' => 25.00,
+    ]);
+    $respondedAt = now()->subMinute();
+    $warning = CleaningTimeWarning::query()->create([
+        'booking_id' => $booking->id,
+        'booking_type' => 'cleaning_booking',
+        'worker_response' => 'extend_time',
+        'worker_responded_at' => $respondedAt,
+        'worker_reject_message' => null,
+        'sent_at' => now()->subHour(),
+        'quoted_amount' => 700,
+        'price_applied_at' => $respondedAt,
+    ]);
+
+    $rejectedAt = now()->subMinutes(2);
+    $rejectedBooking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::Completed,
+        'total_price' => 1100.00,
+        'extension_fee_total' => 100.00,
+    ]);
+    $rejectedWarning = CleaningTimeWarning::query()->create([
+        'booking_id' => $rejectedBooking->id,
+        'booking_type' => 'cleaning_booking',
+        'worker_response' => 'commit_current_time',
+        'worker_responded_at' => $rejectedAt,
+        'worker_reject_message' => 'Original rejection.',
+        'sent_at' => now()->subHour(),
+        'quoted_amount' => 500,
+        'price_applied_at' => null,
+    ]);
+
+    Notification::fake();
+
+    $this->postJson("/api/v1/cleaning-time-warnings/{$warning->id}/reject", [
+        'message' => 'Different decision',
+    ])->assertUnprocessable();
+
+    expect($warning->fresh()->worker_responded_at->toIso8601String())
+        ->toBe($respondedAt->toIso8601String())
+        ->and($warning->fresh()->worker_response->value)->toBe('extend_time')
+        ->and($warning->fresh()->worker_reject_message)->toBeNull()
+        ->and((float) $booking->fresh()->extension_fee_total)->toBe(25.0)
+        ->and((float) $booking->fresh()->total_price)->toBe(900.0);
+
+    $this->postJson("/api/v1/cleaning-time-warnings/{$rejectedWarning->id}/accept")
+        ->assertUnprocessable();
+
+    expect($rejectedWarning->fresh()->worker_responded_at->toIso8601String())
+        ->toBe($rejectedAt->toIso8601String())
+        ->and($rejectedWarning->fresh()->worker_response->value)->toBe('commit_current_time')
+        ->and($rejectedWarning->fresh()->worker_reject_message)->toBe('Original rejection.')
+        ->and($rejectedWarning->fresh()->price_applied_at)->toBeNull()
+        ->and((float) $rejectedBooking->fresh()->extension_fee_total)->toBe(100.0)
+        ->and((float) $rejectedBooking->fresh()->total_price)->toBe(1100.0);
+
+    Notification::assertNothingSent();
 });
 
 it('rejects an extension request without message', function () {
@@ -321,6 +406,8 @@ it('rejects an extension request without message', function () {
     $warning = CleaningTimeWarning::create([
         'booking_id' => $booking->id,
         'booking_type' => 'cleaning_booking',
+        'customer_response' => 'extend_time',
+        'customer_responded_at' => now(),
         'worker_response' => null,
         'worker_responded_at' => null,
         'sent_at' => now(),
@@ -441,6 +528,8 @@ it('notifies the customer when worker rejects an extension request', function ()
     $warning = CleaningTimeWarning::create([
         'booking_id' => $booking->id,
         'booking_type' => 'cleaning_booking',
+        'customer_response' => 'extend_time',
+        'customer_responded_at' => now(),
         'worker_response' => null,
         'worker_responded_at' => null,
         'sent_at' => now(),
