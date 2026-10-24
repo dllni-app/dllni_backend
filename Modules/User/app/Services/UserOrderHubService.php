@@ -204,6 +204,16 @@ final class UserOrderHubService
     {
         $deliveryOrder = $this->deliveryOrderFor($order);
         $deliverySummary = $deliveryOrder ? DeliveryPresentation::merchantSummary($order) : null;
+        if ($section === 'supermarket' && $deliveryOrder !== null && $deliverySummary !== null) {
+            // The merchant order can be ready while courier dispatch has stopped.
+            // These are distinct lifecycles; show the linked delivery status here.
+            $deliveryStatus = $deliveryOrder->status instanceof \BackedEnum
+                ? $deliveryOrder->status->value
+                : (string) $deliveryOrder->status;
+            $deliverySummary['status'] = $deliveryStatus;
+            $deliverySummary['statusLabelAr'] = DeliveryPresentation::statusLabelAr($deliveryStatus);
+            $deliverySummary['stopReason'] = $deliveryOrder->stop_reason;
+        }
 
         if ($section === 'restaurant') {
             $status = $order->status?->value ?? (string) $order->status;

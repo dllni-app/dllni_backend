@@ -95,7 +95,14 @@ final class DeliveryPresentation
         return [
             'enabled' => true,
             'status' => $status,
-            'statusLabelAr' => self::statusLabelAr($status),
+            'statusLabelAr' => match ($status) {
+                'pending' => 'بانتظار قبول المتجر',
+                'accepted' => 'قبل المتجر الطلب',
+                'preparing' => 'قيد التحضير',
+                'ready_for_pickup' => 'جاهز للاستلام',
+                'picked_up' => 'تم الاستلام',
+                default => self::statusLabelAr($status),
+            },
             'currentStage' => $currentStage,
             'isTerminal' => in_array($currentStage, ['handover_complete', 'completed', 'not_received', 'cancelled'], true),
             'pickupMode' => self::normalizeStatus(data_get($order, 'pickup_mode')),
