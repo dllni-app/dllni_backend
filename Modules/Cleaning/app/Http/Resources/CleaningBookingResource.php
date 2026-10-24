@@ -51,6 +51,7 @@ final class CleaningBookingResource extends JsonResource
         'studio' => 'استوديو',
         'outdoor' => 'خارجي',
         'event_assistance' => 'مساعدة مناسبة',
+        'partially_completed' => 'اكتمل جزئياً',
         'family_dinner' => 'عشاء عائلي',
         'birthday' => 'عيد ميلاد',
         'large_gathering' => 'تجمع كبير',
@@ -87,7 +88,11 @@ final class CleaningBookingResource extends JsonResource
         $myAssignment = $myAssignmentModel instanceof CleaningBookingWorkerAssignment
             ? $this->serializeWorkerAssignment($myAssignmentModel)
             : $workerOffer;
-        $orderStatus = $this->responseStatusForRequest($myAssignmentModel, (string) $globalOrderStatus);
+        // A persisted partial completion is a global booking state, not a
+        // worker-specific assignment state. Never downgrade it on read.
+        $orderStatus = (string) $globalOrderStatus === CleaningBookingStatus::PartiallyCompleted->value
+            ? (string) $globalOrderStatus
+            : $this->responseStatusForRequest($myAssignmentModel, (string) $globalOrderStatus);
         $workerOrderStatus = $this->workerOrderStatus(
             $myAssignmentModel,
             (string) $globalOrderStatus,
@@ -626,7 +631,11 @@ final class CleaningBookingResource extends JsonResource
             'finished_cleaning_services' => $services,
             'finishedPropertyRooms' => $rooms,
             'finished_property_rooms' => $rooms,
-            'actions' => ['canConfirm' => $awaiting, 'canReject' => $awaiting, 'canRequestExtension' => $awaiting],
+            'actions' => [
+                'canConfirm' => $awaiting && $status !== CleaningBookingStatus::PartiallyCompleted,
+                'canReject' => $awaiting && $status !== CleaningBookingStatus::PartiallyCompleted,
+                'canRequestExtension' => $awaiting && $status !== CleaningBookingStatus::PartiallyCompleted,
+            ],
         ];
     }
 

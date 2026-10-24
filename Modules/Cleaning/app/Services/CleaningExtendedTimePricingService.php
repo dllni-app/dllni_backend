@@ -155,7 +155,9 @@ final class CleaningExtendedTimePricingService
             'start' => $range['start'],
             'end' => $range['end'],
             'sort' => $range['sort'],
-            'price' => round(($ratePerThirtyMinutes / 30) * $range['end'], 2),
+            // Warning quote columns are stored as whole SYP. Normalize before
+            // display so the customer's signed quote matches its persisted value.
+            'price' => $this->pricingCalculator->roundMoney(($ratePerThirtyMinutes / 30) * $range['end']),
         ], self::FIXED_RANGES);
     }
 
@@ -182,7 +184,7 @@ final class CleaningExtendedTimePricingService
                 'start' => (int) $range['start'],
                 'end' => (int) $range['end'],
                 'sort' => $sort++,
-                'price' => round((float) $range['price'], 2),
+                'price' => $this->pricingCalculator->roundMoney((float) $range['price']),
             ];
         }
 
@@ -236,9 +238,9 @@ final class CleaningExtendedTimePricingService
 
         $effectiveRate = $bookingAdminMargin / $serviceSubtotal;
 
-        // Extension quotes preserve the booking's effective proportional
-        // margin snapshot to two decimals; rounding each component to a whole
-        // lira would distort small configured extension ranges.
-        return round($baseAmount * $effectiveRate, 2);
+        // Warning quote fields are cast to integer SYP. Round before the
+        // customer signs the quote so the approved component amounts match
+        // what will actually be persisted and charged.
+        return $this->pricingCalculator->roundMoney($baseAmount * $effectiveRate);
     }
 }

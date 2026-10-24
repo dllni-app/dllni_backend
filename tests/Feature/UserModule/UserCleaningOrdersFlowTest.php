@@ -6,6 +6,7 @@ use App\Enums\WorkerCustomerRatingType;
 use App\Enums\WorkerPreferredWorkType;
 use App\Models\CancellationPolicy;
 use App\Models\CleaningFinancialSetting;
+use App\Models\CleaningWorkerDeposit;
 use App\Models\PlatformCoupon;
 use App\Models\User;
 use App\Models\Worker;
@@ -27,6 +28,7 @@ use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Models\CleaningService;
 use Modules\Cleaning\Models\ServicePricing;
 use Modules\Cleaning\Services\CleaningPricingCalculator;
+use Modules\Cleaning\Services\DepositService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 use function Pest\Laravel\getJson;
@@ -54,6 +56,29 @@ beforeEach(function (): void {
         ]
     );
 });
+
+/** Previously hired workers are suggested again only if dispatch-eligible. */
+function fundPreviouslyWorkedCleaningWorker(Worker $worker): void
+{
+    $worker->forceFill([
+        'trust_score' => 100,
+        'is_active' => true,
+        'is_suspended' => false,
+    ])->save();
+
+    CleaningWorkerDeposit::query()->updateOrCreate(['worker_id' => $worker->id], [
+        'current_balance' => 100000,
+        'debt_balance' => 0,
+        'deposited_total' => 100000,
+        'withdrawn_total' => 0,
+        'minimum_required' => 0,
+        'max_negative_balance' => 100000,
+        'is_active' => true,
+    ]);
+
+    expect(app(DepositService::class)->isWorkerEligibleForDispatch($worker->fresh(['deposit'])))
+        ->toBeTrue();
+}
 
 it('creates a cleaning order for authenticated user', function (): void {
     $user = User::factory()->create();
@@ -562,6 +587,8 @@ it('filters previous workers by booking type so cleaning-only workers do not app
     $eventWorker = Worker::factory()->financiallyEligible()->create([
         'preferred_work_type' => WorkerPreferredWorkType::Events,
     ]);
+    fundPreviouslyWorkedCleaningWorker($cleaningWorker);
+    fundPreviouslyWorkedCleaningWorker($eventWorker);
 
     CleaningBooking::factory()->create([
         'customer_id' => $user->id,
@@ -590,6 +617,8 @@ it('filters previous workers by regular cleaning type so event-only workers do n
     $eventWorker = Worker::factory()->financiallyEligible()->create([
         'preferred_work_type' => WorkerPreferredWorkType::Events,
     ]);
+    fundPreviouslyWorkedCleaningWorker($cleaningWorker);
+    fundPreviouslyWorkedCleaningWorker($eventWorker);
 
     CleaningBooking::factory()->create([
         'customer_id' => $user->id,
@@ -606,6 +635,53 @@ it('filters previous workers by regular cleaning type so event-only workers do n
 
     $response->assertOk();
     expect(collect($response->json('workers'))->pluck('workerId')->all())->toBe([$cleaningWorker->id]);
+});
+
+it('keeps both-specialty workers selectable while excluding unfunded or other-customer history', function (): void {
+    $customer = User::factory()->create();
+    Sanctum::actingAs($customer);
+
+    $bothWorker = Worker::factory()->create([
+        'preferred_work_type' => WorkerPreferredWorkType::Both,
+        'trust_score' => 100,
+    ]);
+    fundPreviouslyWorkedCleaningWorker($bothWorker);
+    $unfundedWorker = Worker::factory()->create([
+        'preferred_work_type' => WorkerPreferredWorkType::Both,
+        'trust_score' => 100,
+    ]);
+    $otherCustomersWorker = Worker::factory()->create([
+        'preferred_work_type' => WorkerPreferredWorkType::Both,
+        'trust_score' => 100,
+    ]);
+    fundPreviouslyWorkedCleaningWorker($otherCustomersWorker);
+
+    foreach ([$bothWorker, $unfundedWorker] as $worker) {
+        CleaningBooking::factory()->create([
+            'customer_id' => $customer->id,
+            'worker_id' => $worker->id,
+            'status' => CleaningBookingStatus::Completed,
+        ]);
+    }
+    CleaningBooking::factory()->create([
+        'customer_id' => User::factory()->create()->id,
+        'worker_id' => $otherCustomersWorker->id,
+        'status' => CleaningBookingStatus::Completed,
+    ]);
+
+    foreach (['apartment', 'event_assistance'] as $propertyType) {
+        $response = getJson("/api/v1/user/cleaning/orders/previous-workers?propertyType={$propertyType}");
+        $response->assertOk();
+        expect(collect($response->json('workers'))->pluck('workerId')->all())
+            ->toBe([$bothWorker->id]);
+    }
+
+    // Older customers can send an unknown propertyType; that parameter must
+    // remain ignorable rather than changing a previously successful API call.
+    $unknownType = getJson('/api/v1/user/cleaning/orders/previous-workers?propertyType=invalid-service');
+    $unknownType->assertOk();
+    expect(collect($unknownType->json('workers'))->pluck('workerId')->all())
+        ->toBe([$bothWorker->id]);
 });
 
 it('returns estimated cleaning price from backend algorithm', function (): void {
@@ -636,13 +712,13 @@ it('returns estimated cleaning price from backend algorithm', function (): void 
     expect((float) $response->json('size.estimatedSqm'))->toBe(50.5);
     expect((float) $response->json('size.estimatedHours'))->toBe(2.5);
     expect((string) $response->json('size.sizeTier'))->toBe('small');
-    expect((float) $response->json('pricing.basePrice'))->toBe(275.0);
+    expect((float) $response->json('pricing.basePrice'))->toBe(282.0);
     expect($response->json('pricing.distanceKm'))->toBeNull();
     expect((float) $response->json('pricing.travelFee'))->toBe(0.0);
     expect((float) $response->json('pricing.addonsTotal'))->toBe(0.0);
     expect((float) $response->json('pricing.adminMargin'))->toBe(0.0);
     expect((bool) $response->json('pricing.isPricingFinal'))->toBeFalse();
-    expect((float) $response->json('pricing.totalPrice'))->toBe(275.0);
+    expect((float) $response->json('pricing.totalPrice'))->toBe(282.0);
     expect($response->json('extendedTimeRanges.1'))->toMatchArray([
         'startMinutes' => 16,
         'endMinutes' => 30,
@@ -794,7 +870,7 @@ it('prefers room_size_breakdown for estimate-price when provided', function (): 
     expect((float) $response->json('size.estimatedSqm'))->toBe(108.5);
     expect((float) $response->json('size.estimatedHours'))->toBe(5.0);
     expect((string) $response->json('size.sizeTier'))->toBe('medium');
-    expect((float) $response->json('pricing.basePrice'))->toBe(625.0);
+    expect((float) $response->json('pricing.basePrice'))->toBe(656.0);
 });
 
 it('creates order with room_size_breakdown and persists normalized breakdown-derived values', function (): void {
@@ -1185,9 +1261,9 @@ it('keeps legacy managed cleaning services informational and out of regular pric
     ]);
 
     $response->assertOk();
-    expect((float) $response->json('pricing.basePrice'))->toBe(275.0);
+    expect((float) $response->json('pricing.basePrice'))->toBe(282.0);
     expect((float) $response->json('pricing.addonsTotal'))->toBe(0.0);
-    expect((float) $response->json('pricing.totalPrice'))->toBe(275.0);
+    expect((float) $response->json('pricing.totalPrice'))->toBe(282.0);
     expect($response->json('pricing.serviceLines'))->toHaveCount(0);
 });
 
@@ -1240,9 +1316,9 @@ it('keeps legacy managed cleaning services informational and out of deep pricing
     ]);
 
     $response->assertOk();
-    expect((float) $response->json('pricing.basePrice'))->toBe(1100.0);
+    expect((float) $response->json('pricing.basePrice'))->toBe(1125.0);
     expect((float) $response->json('pricing.addonsTotal'))->toBe(0.0);
-    expect((float) $response->json('pricing.totalPrice'))->toBe(1100.0);
+    expect((float) $response->json('pricing.totalPrice'))->toBe(1125.0);
     expect($response->json('pricing.serviceLines'))->toHaveCount(0);
 });
 
@@ -1284,8 +1360,8 @@ it('returns finalized pricing when preferred worker is selected in estimate endp
     expect((bool) $response->json('pricing.isPricingFinal'))->toBeTrue();
     expect((float) $response->json('pricing.distanceKm'))->toBe(11.119);
     expect((float) $response->json('pricing.travelFee'))->toBe(112.0);
-    expect((float) $response->json('pricing.adminMargin'))->toBe(28.0);
-    expect((float) $response->json('pricing.totalPrice'))->toBe(415.0);
+    expect((float) $response->json('pricing.adminMargin'))->toBe(29.0);
+    expect((float) $response->json('pricing.totalPrice'))->toBe(423.0);
 });
 
 it('creates a cleaning order with totals matching a prior estimate for the same inputs', function (): void {
@@ -1367,7 +1443,7 @@ it('creates regular cleaning order with selected service names', function (): vo
 
     expect($response->json('order.cleaning_services'))->toBe(['Balcony cleaning', 'Window cleaning']);
     expect((float) $response->json('order.addonsTotal'))->toBe(0.0);
-    expect((float) $response->json('order.totalPrice'))->toBe(275.0);
+    expect((float) $response->json('order.totalPrice'))->toBe(282.0);
 
     $booking = CleaningBooking::query()->findOrFail($orderId);
     expect($booking->cleaning_services)->toBe(['Balcony cleaning', 'Window cleaning']);

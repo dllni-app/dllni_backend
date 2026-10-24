@@ -10,10 +10,13 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 use Modules\Cleaning\Http\Requests\WorkerAccountPasswordUpdateRequest;
 use Modules\Cleaning\Http\Requests\WorkerAccountProfileUpdateRequest;
+use Modules\Cleaning\Services\WorkerHomeActivationGuard;
 use Mrmarchone\LaravelAutoCrud\Helpers\MediaHelper;
 
 final class WorkerAccountProfileController
 {
+    public function __construct(private readonly WorkerHomeActivationGuard $homeActivationGuard) {}
+
     public function update(WorkerAccountProfileUpdateRequest $request): WorkerResource|JsonResponse
     {
         $worker = $this->worker();
@@ -23,6 +26,24 @@ final class WorkerAccountProfileController
         }
 
         $validated = $request->validated();
+        $homeEdits = [];
+        foreach ([
+            'homeAddress' => 'home_address',
+            'homeLatitude' => 'home_latitude',
+            'homeLongitude' => 'home_longitude',
+        ] as $inputKey => $modelKey) {
+            if (array_key_exists($inputKey, $validated)) {
+                $homeEdits[$modelKey] = $validated[$inputKey];
+            }
+        }
+        $willBeActive = array_key_exists('isActive', $validated)
+            ? (bool) $validated['isActive']
+            : (bool) $worker->is_active;
+        if ($willBeActive && (array_key_exists('isActive', $validated) || $homeEdits !== [])) {
+            // Validate the effective post-update home before changing even the
+            // linked user or avatar; a rejected request has no partial writes.
+            $this->homeActivationGuard->assertCanActivate($worker, $homeEdits);
+        }
         $user = $worker->user;
 
         if ($user) {

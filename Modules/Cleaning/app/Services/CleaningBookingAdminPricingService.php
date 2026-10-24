@@ -80,8 +80,6 @@ final class CleaningBookingAdminPricingService
                 $booking->address_longitude,
                 null,
                 null,
-                false,
-                [],
                 max(1, (int) ($booking->number_of_workers ?? 1)),
             );
 

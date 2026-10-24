@@ -493,7 +493,8 @@ final class UserRestaurantCartService
                     'name' => $modifier->name,
                     'price' => isset($modifier->pivot?->price) ? (float) $modifier->pivot->price : (float) ($modifier->price ?? 0),
                     'sortOrder' => (int) ($modifier->sort_order ?? 0),
-                    'isAvailable' => true,
+                    // Legacy modifier schema has no is_available field.
+                    'isAvailable' => (bool) ($modifier->getAttributes()['is_available'] ?? true),
                 ])
                 ->all();
 
@@ -582,7 +583,7 @@ final class UserRestaurantCartService
         }
 
         return $product->modifierGroups
-            ->sortBy('id')
+            ->sortBy(fn ($group): int => (int) ($group->getAttributes()['sort_order'] ?? $group->id))
             ->values()
             ->map(fn ($group): array => [
                 'id' => $group->id,
@@ -591,8 +592,8 @@ final class UserRestaurantCartService
                 'isRequired' => (bool) $group->is_required,
                 'minSelections' => (int) $group->min_selections,
                 'maxSelections' => (int) $group->max_selections,
-                'sortOrder' => 0,
-                'isActive' => true,
+                'sortOrder' => (int) ($group->getAttributes()['sort_order'] ?? 0),
+                'isActive' => (bool) ($group->getAttributes()['is_active'] ?? true),
                 'modifiers' => $group->modifiers
                     ->sortBy('sort_order')
                     ->values()
@@ -602,7 +603,7 @@ final class UserRestaurantCartService
                         'name' => $modifier->name,
                         'price' => (float) $modifier->price,
                         'sortOrder' => (int) $modifier->sort_order,
-                        'isAvailable' => true,
+                        'isAvailable' => (bool) ($modifier->getAttributes()['is_available'] ?? true),
                     ])
                     ->all(),
             ])

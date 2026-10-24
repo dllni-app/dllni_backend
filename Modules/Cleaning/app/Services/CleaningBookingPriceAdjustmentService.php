@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Models\Worker;
 use App\Support\Broadcast\BroadcastAfterResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningPriceAdjustmentRequestStatus;
@@ -22,9 +23,6 @@ use Modules\Cleaning\Models\CleaningBookingPriceAdjustmentRequest;
 
 final class CleaningBookingPriceAdjustmentService
 {
-    /**
-     * @param  float|int|string  $proposedTotalPrice
-     */
     public function requestFromWorker(
         CleaningBooking $booking,
         Worker $worker,
@@ -82,9 +80,6 @@ final class CleaningBookingPriceAdjustmentService
         return $request;
     }
 
-    /**
-     * @param  float|int|string  $adminFinalTotalPrice
-     */
     public function approve(
         CleaningBookingPriceAdjustmentRequest $request,
         float|int|string $adminFinalTotalPrice,
@@ -103,6 +98,12 @@ final class CleaningBookingPriceAdjustmentService
                 ->whereKey($request->cleaning_booking_id)
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            if ($booking->status === CleaningBookingStatus::PartiallyCompleted) {
+                throw ValidationException::withMessages([
+                    'status' => ['Pending price adjustments cannot be approved after partial completion.'],
+                ]);
+            }
 
             $currentTotal = (float) ($booking->total_price ?? 0);
             $newTotal = (float) $adminFinalTotalPrice;

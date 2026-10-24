@@ -20,6 +20,10 @@ enum CleaningBookingStatus: string
 
     public function label(): string
     {
+        if ($this === self::PartiallyCompleted) {
+            return 'اكتمل جزئياً';
+        }
+
         if ($this === self::UnderDispute) {
             return 'قيد النزاع';
         }

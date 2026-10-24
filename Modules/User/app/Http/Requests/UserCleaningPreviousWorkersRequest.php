@@ -25,7 +25,7 @@ final class UserCleaningPreviousWorkersRequest extends FormRequest
         $isEventAssistance = mb_strtolower((string) $this->input('propertyType')) === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE;
 
         return [
-            'propertyType' => ['sometimes', 'nullable', 'string', Rule::in(UserCleaningOrderEstimationService::PROPERTY_TYPES)],
+            'propertyType' => ['sometimes', 'nullable', 'string', 'max:100'],
             'genderPreference' => [
                 'sometimes',
                 'nullable',

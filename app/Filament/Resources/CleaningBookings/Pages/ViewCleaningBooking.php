@@ -336,6 +336,7 @@ final class ViewCleaningBooking extends ViewRecord
                     CleaningBookingStatus::Completed,
                     CleaningBookingStatus::Cancelled,
                     CleaningBookingStatus::UnderDispute,
+                    CleaningBookingStatus::PartiallyCompleted,
                 ], true))
                 ->requiresConfirmation()
                 ->modalHeading('إلغاء الحجز')
@@ -358,6 +359,7 @@ final class ViewCleaningBooking extends ViewRecord
                             CleaningBookingStatus::Completed,
                             CleaningBookingStatus::Cancelled,
                             CleaningBookingStatus::UnderDispute,
+                            CleaningBookingStatus::PartiallyCompleted,
                         ], true)) {
                             return $booking;
                         }

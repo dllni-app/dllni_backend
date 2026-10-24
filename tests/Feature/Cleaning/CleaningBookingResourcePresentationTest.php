@@ -22,6 +22,7 @@ it('returns worker avatar and Arabic cleaning labels in booking payloads', funct
         ->toMediaCollection('avatar');
 
     $booking = CleaningBooking::factory()->create([
+        'customer_id' => $viewer->id,
         'worker_id' => $worker->id,
         'status' => CleaningBookingStatus::WorkerAssigned,
         'property_details' => [

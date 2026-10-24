@@ -25,6 +25,7 @@ final class CleaningTimeWarningResource extends JsonResource
 
         return [
             'id' => $this->id,
+            'extensionFamily' => 'fixedTimeWarning',
             'bookingId' => $this->booking_id,
             'bookingType' => $this->booking_type,
             'sessionId' => $this->cleaning_booking_session_id,
@@ -50,7 +51,18 @@ final class CleaningTimeWarningResource extends JsonResource
             'currency' => $this->quoted_currency,
             'priceAppliedAt' => $this->price_applied_at?->toDateTimeString(),
             'workerRejectMessage' => $this->worker_reject_message,
-            'booking' => $this->whenLoaded('booking'),
+            'booking' => $this->whenLoaded('booking', function (): ?array {
+                $booking = $this->booking;
+                if ($booking === null) {
+                    return null;
+                }
+
+                return [
+                    'id' => (int) $booking->getKey(),
+                    'bookingNumber' => (string) $booking->booking_number,
+                    'status' => $booking->status?->value ?? $booking->status,
+                ];
+            }),
             'session' => $this->whenLoaded('session'),
             'createdAt' => $this->created_at->toDateTimeString(),
             'updatedAt' => $this->updated_at->toDateTimeString(),

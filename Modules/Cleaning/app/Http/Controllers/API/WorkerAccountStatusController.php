@@ -10,12 +10,14 @@ use Illuminate\Http\Response;
 use Modules\Cleaning\Http\Requests\WorkerAccountStatusRequest;
 use Modules\Cleaning\Services\DepositService;
 use Modules\Cleaning\Services\WorkerDispatchEligibilityService;
+use Modules\Cleaning\Services\WorkerHomeActivationGuard;
 
 final class WorkerAccountStatusController
 {
     public function __construct(
         private readonly DepositService $depositService,
         private readonly WorkerDispatchEligibilityService $dispatchEligibility,
+        private readonly WorkerHomeActivationGuard $homeActivationGuard,
     ) {}
 
     public function show(): JsonResponse
@@ -49,8 +51,13 @@ final class WorkerAccountStatusController
             return response()->json(['message' => 'User must have an associated worker.'], Response::HTTP_FORBIDDEN);
         }
 
+        $isActivating = (bool) $request->validated()['isActive'];
+        if ($isActivating) {
+            $this->homeActivationGuard->assertCanActivate($worker);
+        }
+
         $worker->update([
-            'is_active' => $request->validated()['isActive'],
+            'is_active' => $isActivating,
         ]);
 
         return $this->show();
@@ -60,5 +67,4 @@ final class WorkerAccountStatusController
     {
         return auth()->user()?->worker;
     }
-
 }

@@ -13,8 +13,8 @@ use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingMaterial;
 use Modules\Cleaning\Models\CleaningBookingSpecialService;
 use Modules\Cleaning\Services\CleaningOpenTimeBillingService;
-use Modules\Cleaning\Services\CleaningSpecialServiceDurationPlanningService;
 use Modules\Cleaning\Services\CleaningPricingCalculator;
+use Modules\Cleaning\Services\CleaningSpecialServiceDurationPlanningService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 /** @mixin CleaningBooking */
@@ -135,7 +135,7 @@ final class UserCleaningBookingResource extends JsonResource
                 'size' => (string) $period->room_size,
                 'cleaningMode' => (string) $period->cleaning_mode,
                 'scheduledDate' => $period->scheduled_date?->format('Y-m-d'),
-                'scheduledTime' => substr((string) $period->scheduled_time, 0, 5),
+                'scheduledTime' => mb_substr((string) $period->scheduled_time, 0, 5),
                 'numberOfWorkers' => (int) $period->required_workers,
                 'estimatedDurationMinutes' => (int) $period->estimated_duration_minutes,
                 'materials' => (array) $period->materials,
@@ -198,7 +198,29 @@ final class UserCleaningBookingResource extends JsonResource
                     $payload['services'], $payload['cleaning_services']);
             }
         }
+
         return $payload;
+    }
+
+    /** @param array<int, mixed> $paths */
+    private static function publicImageUrls(array $paths): array
+    {
+        return collect($paths)->filter(static fn ($value): bool => is_string($value) && mb_trim($value) !== '')
+            ->map(static function (string $path): ?string {
+                $path = mb_trim($path);
+                if (preg_match('/^https?:\/\//i', $path)) {
+                    return $path;
+                }
+                if (str_starts_with($path, '/') || preg_match('#(^|/)\.\.(/|$)#', $path)) {
+                    return null;
+                }
+                $uri = Storage::disk('public')->url($path);
+
+                return str_starts_with($uri, 'http') ? $uri : url($uri);
+            })
+            ->filter()
+            ->values()
+            ->all();
     }
 
     /** @return array<int, array<string, mixed>> */
@@ -263,26 +285,6 @@ final class UserCleaningBookingResource extends JsonResource
         ])->values()->all();
     }
 
-    /** @param array<int, mixed> $paths */
-    private static function publicImageUrls(array $paths): array
-    {
-        return collect($paths)->filter(static fn ($value): bool => is_string($value) && trim($value) !== '')
-            ->map(static function (string $path): ?string {
-                $path = trim($path);
-                if (preg_match('/^https?:\/\//i', $path)) {
-                    return $path;
-                }
-                if (str_starts_with($path, '/') || preg_match('#(^|/)\.\.(/|$)#', $path)) {
-                    return null;
-                }
-                $uri = Storage::disk('public')->url($path);
-                return str_starts_with($uri, 'http') ? $uri : url($uri);
-            })
-            ->filter()
-            ->values()
-            ->all();
-    }
-
     private function materialKitPayload(): ?array
     {
         $kit = $this->materialKit()->first();
@@ -341,6 +343,7 @@ final class UserCleaningBookingResource extends JsonResource
             CleaningBookingStatus::InProgress->value,
             CleaningBookingStatus::Completed->value,
             CleaningBookingStatus::Cancelled->value,
+            CleaningBookingStatus::PartiallyCompleted->value,
         ], true);
     }
 }

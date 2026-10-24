@@ -109,6 +109,10 @@ final class CleaningBookingCompleteController
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            if ($lockedBooking->status === CleaningBookingStatus::PartiallyCompleted) {
+                throw new InvalidArgumentException('Partially completed bookings cannot use legacy team completion.');
+            }
+
             if (in_array($lockedBooking->status, [
                 CleaningBookingStatus::Cancelled,
                 CleaningBookingStatus::Completed,
@@ -318,7 +322,7 @@ final class CleaningBookingCompleteController
 
         if (is_array($booking->cleaning_services)) {
             foreach ($booking->cleaning_services as $index => $service) {
-                $name = is_string($service) ? trim($service) : '';
+                $name = is_string($service) ? mb_trim($service) : '';
                 if ($name !== '') {
                     $services[] = ['id' => null, 'name' => $name, 'label' => $name, 'sort' => $index];
                 }
@@ -326,7 +330,7 @@ final class CleaningBookingCompleteController
         }
 
         foreach ($booking->addons as $addon) {
-            $name = trim((string) ($addon->name ?? $addon->title ?? ''));
+            $name = mb_trim((string) ($addon->name ?? $addon->title ?? ''));
             if ($name !== '') {
                 $services[] = ['id' => $addon->id, 'name' => $name, 'label' => $name];
             }

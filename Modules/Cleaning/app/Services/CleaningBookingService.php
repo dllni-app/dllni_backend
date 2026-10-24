@@ -317,13 +317,13 @@ final class CleaningBookingService
         if ($newlyStarted) {
             $this->dispatchTrackingUpdate($updated);
             $this->lifecycleNotifications->notifyCustomer(
-            booking: $updated,
-            canonicalType: 'cleaning.booking.worker_started_travel',
-            action: 'worker_started_travel',
-            actorRole: 'worker',
-            fromStatus: $fromStatus,
-            occurredAt: $startedAt ?? $updated->updated_at?->toIso8601String(),
-            extraData: ['workerId' => $workerId],
+                booking: $updated,
+                canonicalType: 'cleaning.booking.worker_started_travel',
+                action: 'worker_started_travel',
+                actorRole: 'worker',
+                fromStatus: $fromStatus,
+                occurredAt: $startedAt ?? $updated->updated_at?->toIso8601String(),
+                extraData: ['workerId' => $workerId],
             );
         }
 
@@ -602,6 +602,10 @@ final class CleaningBookingService
             $worker = $this->currentWorker();
             $lockedBooking = $this->lockBooking($booking);
 
+            if ($lockedBooking->status === CleaningBookingStatus::PartiallyCompleted) {
+                throw new InvalidArgumentException('Partially completed bookings cannot use legacy worker completion.');
+            }
+
             if ($lockedBooking->status !== CleaningBookingStatus::InProgress) {
                 throw new InvalidArgumentException('Booking must be in progress to mark completion.');
             }
@@ -827,6 +831,11 @@ final class CleaningBookingService
             $worker = Auth::user()?->worker;
             if (! $worker) {
                 throw new InvalidArgumentException('User must have an associated worker.');
+            }
+
+            $booking = $this->lockBooking($booking);
+            if ($booking->status === CleaningBookingStatus::PartiallyCompleted) {
+                throw new InvalidArgumentException('Partially completed bookings cannot be cancelled through the legacy worker action.');
             }
 
             $allowedStatuses = [

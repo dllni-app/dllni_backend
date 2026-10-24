@@ -17,6 +17,7 @@ use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\DepositService;
 use Modules\Cleaning\Services\WorkerBookingScheduleConflictService;
 use Modules\User\Http\Requests\UserCleaningPreviousWorkersRequest;
+use Modules\User\Services\UserCleaningOrderEstimationService;
 use Throwable;
 
 final class UserCleaningPreviousWorkersController
@@ -33,6 +34,11 @@ final class UserCleaningPreviousWorkersController
         $propertyType = $validated['propertyType'] ?? null;
         $genderPreference = $validated['genderPreference'] ?? null;
         $scheduleDefinitions = $this->scheduleDefinitions($validated['schedule']['sessions'] ?? null);
+        // Older clients may send an unsupported property type; ignore only the
+        // filter, not the request or its schedule/availability constraints.
+        if (! is_string($propertyType) || ! in_array($propertyType, UserCleaningOrderEstimationService::PROPERTY_TYPES, true)) {
+            $propertyType = null;
+        }
         $scheduledAt = $this->scheduledAt(
             $validated['scheduledDate'] ?? null,
             $validated['scheduledTime'] ?? null,
@@ -96,6 +102,13 @@ final class UserCleaningPreviousWorkersController
             ->whereHas('user', function ($query): void {
                 $query->where('is_active', true);
             })
+            ->when(is_string($propertyType), function ($query) use ($propertyType): void {
+                $supportedPreferences = $propertyType === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE
+                    ? [WorkerPreferredWorkType::Events->value, WorkerPreferredWorkType::Both->value]
+                    : [WorkerPreferredWorkType::Cleaning->value, WorkerPreferredWorkType::Both->value];
+
+                $query->whereIn('preferred_work_type', $supportedPreferences);
+            })
             ->when(
                 is_string($genderPreference) && $genderPreference !== 'any',
                 fn ($query) => $query->where('gender', $genderPreference),
@@ -112,6 +125,7 @@ final class UserCleaningPreviousWorkersController
                 $worker,
                 $scheduleDefinitions,
                 $scheduleCandidate,
+                $scheduledAt,
             ))
             ->keyBy('id');
 
@@ -153,6 +167,7 @@ final class UserCleaningPreviousWorkersController
         Worker $worker,
         array $scheduleDefinitions,
         ?CleaningBooking $scheduleCandidate,
+        ?Carbon $scheduledAt,
     ): bool {
         if (! $this->depositService->isWorkerEligibleForDispatch($worker)) {
             return false;
@@ -164,6 +179,18 @@ final class UserCleaningPreviousWorkersController
                 ! $this->isAvailableForDefinitions($worker, $scheduleDefinitions)
                 || $this->scheduleConflictService->hasConflictForDefinitions($worker, $scheduleDefinitions)
             )
+        ) {
+            return false;
+        }
+
+        // A configured availability schedule is authoritative for the
+        // requested start time. Workers without a saved weekly schedule keep
+        // the legacy previous-worker lookup behavior.
+        if (
+            $scheduledAt !== null
+            && is_array($worker->default_working_hours)
+            && $worker->default_working_hours !== []
+            && ! $worker->isAvailableAt($scheduledAt)
         ) {
             return false;
         }

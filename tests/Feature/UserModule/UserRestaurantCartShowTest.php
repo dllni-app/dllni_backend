@@ -108,12 +108,12 @@ it('returns separate carts for items from different restaurants', function (): v
         'price' => 20,
     ]);
 
-    $this->postJson('/api/v1/user/restaurants/cart/items', [
+    $firstAdd = $this->postJson('/api/v1/user/restaurants/cart/items', [
         'productId' => $productA->id,
         'quantity' => 1,
     ])->assertCreated();
 
-    $this->postJson('/api/v1/user/restaurants/cart/items', [
+    $secondAdd = $this->postJson('/api/v1/user/restaurants/cart/items', [
         'productId' => $productB->id,
         'quantity' => 2,
     ])->assertCreated();

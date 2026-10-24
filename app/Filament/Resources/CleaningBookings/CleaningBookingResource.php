@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningBookings;
 
-use App\Filament\Clusters\CleaningOperationsCluster;
 use App\Enums\DisputeStatus;
 use App\Enums\SupportCaseKind;
 use App\Enums\SupportCaseStatus;
+use App\Filament\Clusters\CleaningOperationsCluster;
 use App\Filament\Resources\CleaningBookings\Pages\EditCleaningBooking;
 use App\Filament\Resources\CleaningBookings\Pages\ListCleaningBookings;
 use App\Filament\Resources\CleaningBookings\Pages\ViewCleaningBooking;
@@ -176,12 +176,15 @@ final class CleaningBookingResource extends Resource
 
     public static function canEdit(Model $record): bool
     {
-        return self::hasPermission('bookings.update') && $record instanceof CleaningBooking;
+        return self::hasPermission('bookings.update')
+            && $record instanceof CleaningBooking
+            && $record->status !== CleaningBookingStatus::PartiallyCompleted;
     }
 
     public static function canDelete(Model $record): bool
     {
-        return self::hasPermission('bookings.delete');
+        return self::hasPermission('bookings.delete')
+            && (! $record instanceof CleaningBooking || $record->status !== CleaningBookingStatus::PartiallyCompleted);
     }
 
     public static function getRelations(): array

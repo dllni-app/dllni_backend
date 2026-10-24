@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Modules\User\Http\Controllers\API;
 
 use Illuminate\Http\JsonResponse;
+use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Services\CleaningBookingSessionLifecycleService;
@@ -31,9 +33,13 @@ final class UserCleaningOrderStartVerificationConfirmController
             $code,
         );
 
-        $updated = $matchedSession instanceof CleaningBookingSession
-            ? ($model->fresh() ?? $model)
-            : $service->confirmForCustomer($model, $code);
+        try {
+            $updated = $matchedSession instanceof CleaningBookingSession
+                ? ($model->fresh() ?? $model)
+                : $service->confirmForCustomer($model, $code);
+        } catch (InvalidArgumentException $exception) {
+            throw ValidationException::withMessages(['status' => [$exception->getMessage()]]);
+        }
         $updated->load(['worker.user', 'workerAssignments.worker.user', 'rooms.assignedWorker.user', 'timeWarnings', 'disputes', 'addons', 'billingPolicy']);
 
         return UserCleaningBookingResource::make($updated)->additional([

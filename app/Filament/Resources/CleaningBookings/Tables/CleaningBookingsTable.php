@@ -31,8 +31,8 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
-use Modules\Cleaning\Services\CleaningBookingTeamService;
 use Modules\Cleaning\Services\CleaningBookingAdminPricingService;
+use Modules\Cleaning\Services\CleaningBookingTeamService;
 use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
 use Modules\Cleaning\Services\CleaningMaterialInventoryService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
@@ -125,7 +125,7 @@ final class CleaningBookingsTable
                 TextColumn::make('estimated_duration_display')
                     ->label(self::headerLabel('مدة العمل المتوقعة', 'المدة التقديرية للعمل في هذا الحجز بالساعات.'))
                     ->getStateUsing(fn (CleaningBooking $record): string => (
-                        rtrim(rtrim(number_format(max(0.0, (float) ($record->estimated_hours ?: $record->total_hours ?: 0)), 2, '.', ''), '0'), '.')
+                        mb_rtrim(mb_rtrim(number_format(max(0.0, (float) ($record->estimated_hours ?: $record->total_hours ?: 0)), 2, '.', ''), '0'), '.')
                     ).' ساعة')
                     ->badge()
                     ->color('info'),
@@ -275,107 +275,129 @@ final class CleaningBookingsTable
             ])
             ->recordActions([
                 Action::make('change_room_quantity')
-                        ->label('تعديل عدد الغرف')
-                        ->icon('heroicon-o-home-modern')
-                        ->color('primary')
-                        ->visible(fn (CleaningBooking $record): bool => in_array($record->status, [
-                            CleaningBookingStatus::Pending,
-                            CleaningBookingStatus::WorkerAssigned,
-                        ], true) && ! self::isEventAssistance($record)
-                            && (string) ($record->booking_kind ?? '') !== 'open_time'
-                            && $record->started_travel_at === null
-                            && ! $record->sessions()->exists()
-                            && empty((array) data_get($record->property_details, '_time_period_v2', []))
-                            && CleaningBookingResource::canEdit($record))
-                        ->modalHeading('تعديل عدد الغرف وإعادة احتساب السعر')
-                        ->modalDescription('أدخل العدد النهائي لغرف نوع وحجم محددين. سيحسب النظام مدة التنفيذ والسعر وحصص العمال من جديد. لا يُسمح بالتعديل بعد بدء الرحلة.')
-                        ->form([
-                            Select::make('room_type')
-                                ->label('نوع الغرفة')
-                                ->options([
-                                    'bedroom' => 'غرفة نوم',
-                                    'bathroom' => 'حمام',
-                                    'kitchen' => 'مطبخ',
-                                    'living_room' => 'صالة',
-                                    'balcony' => 'بلكون',
-                                    'corridor' => 'موزع',
-                                    'shed' => 'سقيفة',
-                                ])->required(),
-                            Select::make('room_size')
-                                ->label('حجم الغرفة')
-                                ->options([
-                                    'small' => 'صغيرة',
-                                    'medium' => 'متوسطة',
-                                    'large' => 'كبيرة',
-                                ])->required(),
-                            TextInput::make('quantity')
-                                ->label('العدد النهائي لهذا النوع والحجم')
-                                ->numeric()->minValue(0)->maxValue(30)->required(),
-                        ])
-                        ->action(function (CleaningBooking $record, array $data): void {
-                            try {
-                                $updated = app(CleaningBookingAdminPricingService::class)->setRoomQuantity(
-                                    $record,
+                    ->label('تعديل عدد الغرف')
+                    ->icon('heroicon-o-home-modern')
+                    ->color('primary')
+                    ->visible(fn (CleaningBooking $record): bool => in_array($record->status, [
+                        CleaningBookingStatus::Pending,
+                        CleaningBookingStatus::WorkerAssigned,
+                    ], true) && ! self::isEventAssistance($record)
+                        && (string) ($record->booking_kind ?? '') !== 'open_time'
+                        && $record->started_travel_at === null
+                        && ! $record->sessions()->exists()
+                        && empty((array) data_get($record->property_details, '_time_period_v2', []))
+                        && CleaningBookingResource::canEdit($record))
+                    ->modalHeading('تعديل عدد الغرف وإعادة احتساب السعر')
+                    ->modalDescription('أدخل العدد النهائي لغرف نوع وحجم محددين. سيحسب النظام مدة التنفيذ والسعر وحصص العمال من جديد. لا يُسمح بالتعديل بعد بدء الرحلة.')
+                    ->form([
+                        Select::make('room_type')
+                            ->label('نوع الغرفة')
+                            ->options([
+                                'bedroom' => 'غرفة نوم',
+                                'bathroom' => 'حمام',
+                                'kitchen' => 'مطبخ',
+                                'living_room' => 'صالة',
+                                'balcony' => 'بلكون',
+                                'corridor' => 'موزع',
+                                'shed' => 'سقيفة',
+                            ])->required(),
+                        Select::make('room_size')
+                            ->label('حجم الغرفة')
+                            ->options([
+                                'small' => 'صغيرة',
+                                'medium' => 'متوسطة',
+                                'large' => 'كبيرة',
+                            ])->required(),
+                        TextInput::make('quantity')
+                            ->label('العدد النهائي لهذا النوع والحجم')
+                            ->numeric()->minValue(0)->maxValue(30)->required(),
+                    ])
+                    ->action(function (CleaningBooking $record, array $data): void {
+                        try {
+                            $updated = DB::transaction(function () use ($record, $data): CleaningBooking {
+                                $booking = CleaningBooking::query()
+                                    ->whereKey($record->getKey())
+                                    ->lockForUpdate()
+                                    ->firstOrFail();
+
+                                if ($booking->status === CleaningBookingStatus::PartiallyCompleted) {
+                                    throw new InvalidArgumentException('Partially completed bookings cannot change room quantities.');
+                                }
+
+                                return app(CleaningBookingAdminPricingService::class)->setRoomQuantity(
+                                    $booking,
                                     (string) $data['room_type'],
                                     (string) $data['room_size'],
                                     (int) $data['quantity'],
                                 );
-                            } catch (Throwable $exception) {
-                                Notification::make()
-                                    ->title('تعذر تعديل الغرف')
-                                    ->body($exception->getMessage())
-                                    ->danger()->persistent()->send();
-                    
-                                return;
-                            }
-                    
-                            $record->setRawAttributes($updated->getAttributes(), true);
+                            });
+                        } catch (Throwable $exception) {
                             Notification::make()
-                                ->title('تم تحديث الغرف والسعر والمدة وحصص العمال')
-                                ->success()->send();
-                        }),
-                    Action::make('change_base_price')
-                        ->label('تعديل السعر الأساسي')
-                        ->icon('heroicon-o-currency-dollar')
-                        ->color('warning')
-                        ->visible(fn (CleaningBooking $record): bool => in_array($record->status, [
-                            CleaningBookingStatus::Pending,
-                            CleaningBookingStatus::WorkerAssigned,
-                        ], true) && ! self::isEventAssistance($record)
-                            && (string) ($record->booking_kind ?? '') !== 'open_time'
-                            && $record->started_travel_at === null
-                            && ! $record->sessions()->exists()
-                            && empty((array) data_get($record->property_details, '_time_period_v2', []))
-                            && CleaningBookingResource::canEdit($record))
-                        ->modalHeading('تعديل السعر الأساسي للطلب')
-                        ->modalDescription('تعديل إداري للسعر الأساسي؛ يتم إعادة حساب الإجمالي وحصص العمال والعمولة ورسوم التنقل قبل إتمام الطلب.')
-                        ->form([
-                            TextInput::make('base_price')
-                                ->label('السعر الأساسي الجديد')
-                                ->default(fn (CleaningBooking $record): float => (float) ($record->base_price ?? 0))
-                                ->numeric()->minValue(1)->required(),
-                        ])
-                        ->action(function (CleaningBooking $record, array $data): void {
-                            try {
-                                $updated = app(CleaningBookingAdminPricingService::class)->setBasePrice(
-                                    $record,
+                                ->title('تعذر تعديل الغرف')
+                                ->body($exception->getMessage())
+                                ->danger()->persistent()->send();
+
+                            return;
+                        }
+
+                        $record->setRawAttributes($updated->getAttributes(), true);
+                        Notification::make()
+                            ->title('تم تحديث الغرف والسعر والمدة وحصص العمال')
+                            ->success()->send();
+                    }),
+                Action::make('change_base_price')
+                    ->label('تعديل السعر الأساسي')
+                    ->icon('heroicon-o-currency-dollar')
+                    ->color('warning')
+                    ->visible(fn (CleaningBooking $record): bool => in_array($record->status, [
+                        CleaningBookingStatus::Pending,
+                        CleaningBookingStatus::WorkerAssigned,
+                    ], true) && ! self::isEventAssistance($record)
+                        && (string) ($record->booking_kind ?? '') !== 'open_time'
+                        && $record->started_travel_at === null
+                        && ! $record->sessions()->exists()
+                        && empty((array) data_get($record->property_details, '_time_period_v2', []))
+                        && CleaningBookingResource::canEdit($record))
+                    ->modalHeading('تعديل السعر الأساسي للطلب')
+                    ->modalDescription('تعديل إداري للسعر الأساسي؛ يتم إعادة حساب الإجمالي وحصص العمال والعمولة ورسوم التنقل قبل إتمام الطلب.')
+                    ->form([
+                        TextInput::make('base_price')
+                            ->label('السعر الأساسي الجديد')
+                            ->default(fn (CleaningBooking $record): float => (float) ($record->base_price ?? 0))
+                            ->numeric()->minValue(1)->required(),
+                    ])
+                    ->action(function (CleaningBooking $record, array $data): void {
+                        try {
+                            $updated = DB::transaction(function () use ($record, $data): CleaningBooking {
+                                $booking = CleaningBooking::query()
+                                    ->whereKey($record->getKey())
+                                    ->lockForUpdate()
+                                    ->firstOrFail();
+
+                                if ($booking->status === CleaningBookingStatus::PartiallyCompleted) {
+                                    throw new InvalidArgumentException('Partially completed bookings cannot be repriced.');
+                                }
+
+                                return app(CleaningBookingAdminPricingService::class)->setBasePrice(
+                                    $booking,
                                     (float) $data['base_price'],
                                 );
-                            } catch (Throwable $exception) {
-                                Notification::make()
-                                    ->title('تعذر تعديل السعر')
-                                    ->body($exception->getMessage())
-                                    ->danger()->persistent()->send();
-                    
-                                return;
-                            }
-                    
-                            $record->setRawAttributes($updated->getAttributes(), true);
+                            });
+                        } catch (Throwable $exception) {
                             Notification::make()
-                                ->title('تم تحديث السعر وحصص العمال')
-                                ->success()->send();
-                        }),
-                                    Action::make('add_worker')
+                                ->title('تعذر تعديل السعر')
+                                ->body($exception->getMessage())
+                                ->danger()->persistent()->send();
+
+                            return;
+                        }
+
+                        $record->setRawAttributes($updated->getAttributes(), true);
+                        Notification::make()
+                            ->title('تم تحديث السعر وحصص العمال')
+                            ->success()->send();
+                    }),
+                Action::make('add_worker')
                     ->label('إضافة عامل')
                     ->icon('heroicon-o-user-plus')
                     ->color('success')
@@ -386,7 +408,7 @@ final class CleaningBookingsTable
                         Select::make('worker_id')
                             ->label('العامل')
                             ->options(fn (?CleaningBooking $record): array => self::activeWorkerOptions($record))
-                                ->disableOptionWhen(fn (mixed $value): bool => str_starts_with((string) $value, 'disabled:'))
+                            ->disableOptionWhen(fn (mixed $value): bool => str_starts_with((string) $value, 'disabled:'))
                             ->searchable()
                             ->required(),
                         CheckboxList::make('room_ids')
@@ -456,61 +478,61 @@ final class CleaningBookingsTable
                         Notification::make()->title('تم إلغاء تعيين العامل')->success()->send();
                     }),
                 Action::make('replace_worker')
-                        ->label('استبدال عامل')
-                        ->icon('heroicon-o-arrow-path')
-                        ->color('info')
-                        ->visible(fn (CleaningBooking $record): bool => in_array(
-                            $record->status,
-                            [CleaningBookingStatus::Pending, CleaningBookingStatus::WorkerAssigned],
-                            true,
-                        ) && $record->acceptedWorkerCount() > 0
-                            && CleaningBookingResource::canEdit($record))
-                        ->modalHeading('استبدال عامل ضمن الفريق')
-                        ->modalDescription('يتم استبدال العامل في عملية واحدة؛ إذا تعذرت إضافة البديل فلن يُحذف العامل الحالي.')
-                        ->form([
-                            Select::make('outgoing_worker_id')
-                                ->label('العامل الحالي')
-                                ->options(fn (?CleaningBooking $record): array => self::acceptedWorkerOptions($record))
-                                ->searchable()
-                                ->required(),
-                            Select::make('incoming_worker_id')
-                                ->label('العامل البديل')
-                                ->options(fn (?CleaningBooking $record): array => self::activeWorkerOptions($record))
-                                ->searchable()
-                                ->required(),
-                            TextInput::make('reason')->label('سبب الاستبدال')->maxLength(255),
-                        ])
-                        ->action(function (CleaningBooking $record, array $data): void {
-                            $oldStatus = $record->status instanceof BackedEnum
-                                ? (string) $record->status->value
-                                : (string) $record->status;
-                    
-                            try {
-                                $outgoing = Worker::query()->with('user')->findOrFail((int) $data['outgoing_worker_id']);
-                                $incoming = Worker::query()->with('user')->findOrFail((int) $data['incoming_worker_id']);
-                                self::assertDashboardWorkerEligibility($record, $incoming);
-                                $updated = app(CleaningBookingTeamService::class)->replaceWorkerByAdmin(
-                                    $record,
-                                    $outgoing,
-                                    $incoming,
-                                    filled($data['reason'] ?? null) ? (string) $data['reason'] : null,
-                                );
-                            } catch (Throwable $exception) {
-                                Notification::make()
-                                    ->title('تعذر استبدال العامل')
-                                    ->body(self::workerAssignmentErrorMessage($exception->getMessage()))
-                                    ->danger()
-                                    ->persistent()
-                                    ->send();
-                    
-                                return;
-                            }
-                    
-                            $record->setRawAttributes($updated->getAttributes(), true);
-                            self::notifyAdminWorkerAssignment($updated, $incoming, $oldStatus);
-                            Notification::make()->title('تم استبدال العامل بنجاح')->success()->send();
-                        }),
-                                    Action::make('assign_rooms')
+                    ->label('استبدال عامل')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('info')
+                    ->visible(fn (CleaningBooking $record): bool => in_array(
+                        $record->status,
+                        [CleaningBookingStatus::Pending, CleaningBookingStatus::WorkerAssigned],
+                        true,
+                    ) && $record->acceptedWorkerCount() > 0
+                        && CleaningBookingResource::canEdit($record))
+                    ->modalHeading('استبدال عامل ضمن الفريق')
+                    ->modalDescription('يتم استبدال العامل في عملية واحدة؛ إذا تعذرت إضافة البديل فلن يُحذف العامل الحالي.')
+                    ->form([
+                        Select::make('outgoing_worker_id')
+                            ->label('العامل الحالي')
+                            ->options(fn (?CleaningBooking $record): array => self::acceptedWorkerOptions($record))
+                            ->searchable()
+                            ->required(),
+                        Select::make('incoming_worker_id')
+                            ->label('العامل البديل')
+                            ->options(fn (?CleaningBooking $record): array => self::activeWorkerOptions($record))
+                            ->searchable()
+                            ->required(),
+                        TextInput::make('reason')->label('سبب الاستبدال')->maxLength(255),
+                    ])
+                    ->action(function (CleaningBooking $record, array $data): void {
+                        $oldStatus = $record->status instanceof BackedEnum
+                            ? (string) $record->status->value
+                            : (string) $record->status;
+
+                        try {
+                            $outgoing = Worker::query()->with('user')->findOrFail((int) $data['outgoing_worker_id']);
+                            $incoming = Worker::query()->with('user')->findOrFail((int) $data['incoming_worker_id']);
+                            self::assertDashboardWorkerEligibility($record, $incoming);
+                            $updated = app(CleaningBookingTeamService::class)->replaceWorkerByAdmin(
+                                $record,
+                                $outgoing,
+                                $incoming,
+                                filled($data['reason'] ?? null) ? (string) $data['reason'] : null,
+                            );
+                        } catch (Throwable $exception) {
+                            Notification::make()
+                                ->title('تعذر استبدال العامل')
+                                ->body(self::workerAssignmentErrorMessage($exception->getMessage()))
+                                ->danger()
+                                ->persistent()
+                                ->send();
+
+                            return;
+                        }
+
+                        $record->setRawAttributes($updated->getAttributes(), true);
+                        self::notifyAdminWorkerAssignment($updated, $incoming, $oldStatus);
+                        Notification::make()->title('تم استبدال العامل بنجاح')->success()->send();
+                    }),
+                Action::make('assign_rooms')
                     ->label('تعيين الغرف')
                     ->icon('heroicon-o-squares-plus')
                     ->color('primary')
@@ -551,6 +573,7 @@ final class CleaningBookingsTable
                         CleaningBookingStatus::Completed,
                         CleaningBookingStatus::Cancelled,
                         CleaningBookingStatus::UnderDispute,
+                        CleaningBookingStatus::PartiallyCompleted,
                     ], true))
                     ->requiresConfirmation()
                     ->modalHeading('إلغاء الحجز')
@@ -576,6 +599,7 @@ final class CleaningBookingsTable
                                 CleaningBookingStatus::Completed,
                                 CleaningBookingStatus::Cancelled,
                                 CleaningBookingStatus::UnderDispute,
+                                CleaningBookingStatus::PartiallyCompleted,
                             ], true)) {
                                 return $booking;
                             }
@@ -1025,6 +1049,7 @@ final class CleaningBookingsTable
 
             if ($issues === []) {
                 $options[(string) $worker->id] = $label.' — متاح';
+
                 continue;
             }
 

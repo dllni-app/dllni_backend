@@ -27,12 +27,12 @@ use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Http\Requests\CleaningBookingAcceptRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingCancelRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingCompleteRequest;
-use Modules\Cleaning\Http\Requests\CleaningBookingSosRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingLocationRequest;
-use Modules\Cleaning\Http\Requests\CleaningBookingRoomClaimRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingRejectRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingRequests\CleaningBookingFilterRequest;
+use Modules\Cleaning\Http\Requests\CleaningBookingRoomClaimRequest;
+use Modules\Cleaning\Http\Requests\CleaningBookingSosRequest;
 use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Services\CleaningBookingService;
@@ -73,14 +73,14 @@ final class CleaningBookingController
         }
 
         $relations = [
-                'worker.user',
-                'preferredWorker.user',
-                'rooms.assignedWorker.user',
-                'workerAssignments.worker.user',
-                'addons',
-                'billingPolicy',
-                'timeWarnings',
-                'disputes',
+            'worker.user',
+            'preferredWorker.user',
+            'rooms.assignedWorker.user',
+            'workerAssignments.worker.user',
+            'addons',
+            'billingPolicy',
+            'timeWarnings',
+            'disputes',
         ];
         if (! $authenticatedWorker instanceof Worker) {
             $relations[] = 'customer';
@@ -90,7 +90,7 @@ final class CleaningBookingController
             ->with($relations)
             ->paginate($request->get('perPage', 20));
 
-        $worker = $request->user()?->worker;
+        $worker = $authenticatedWorker;
 
         if ($worker instanceof Worker) {
             $worker->loadMissing('deposit');
@@ -150,7 +150,23 @@ final class CleaningBookingController
     {
         $this->ensureWorkerCanActOnBooking($cleaning_booking, requireOwnership: true);
 
-        if (! in_array($cleaning_booking->status, [
+        $worker = Auth::user()?->worker;
+        $assignmentReadyForVerification = $worker instanceof Worker
+            && in_array($cleaning_booking->status, [
+                CleaningBookingStatus::InProgress,
+                CleaningBookingStatus::AwaitingCustomerCompletion,
+                CleaningBookingStatus::TimeExtensionRequested,
+            ], true)
+            && $cleaning_booking->workerAssignments()
+                ->where('worker_id', $worker->id)
+                ->whereIn('status', [
+                    CleaningBookingWorkerAssignmentStatus::Accepted->value,
+                    CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
+                    CleaningBookingWorkerAssignmentStatus::AwaitingStartVerification->value,
+                ])
+                ->exists();
+
+        if (! $assignmentReadyForVerification && ! in_array($cleaning_booking->status, [
             CleaningBookingStatus::WorkerAssigned,
             CleaningBookingStatus::AwaitingStartVerification,
             CleaningBookingStatus::AwaitingWorkerStartConfirmation,
@@ -634,8 +650,7 @@ final class CleaningBookingController
         CleaningBooking $booking,
         CleaningBookingFilterRequest $request,
         Worker $worker,
-    ): array
-    {
+    ): array {
         $payload = CleaningBookingResource::make($booking)->resolve($request);
         $safe = Arr::only($payload, [
             'id', 'bookingNumber', 'displayTitle', 'status', 'statusLabel', 'globalStatus',

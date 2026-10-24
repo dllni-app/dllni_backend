@@ -59,10 +59,36 @@ final class RedactCleaningCustomerContactForUnacceptedWorker
             return $booking;
         }
 
-        // Do not leak direct contact details for jobs the worker has not accepted.
-        // Keep the customer object shape stable for Flutter clients.
+        // Keep public discovery useful without exposing a customer's exact
+        // address, coordinates, private instructions or direct contact.
+        $booking['customer']['name'] = null;
         $booking['customer']['phone'] = null;
         $booking['customer']['email'] = null;
+
+        foreach (['propertyDetails', 'property_details'] as $key) {
+            if (isset($booking[$key]) && is_array($booking[$key])) {
+                $booking[$key] = array_intersect_key($booking[$key], array_flip([
+                    'bedrooms', 'bathrooms', 'kitchens', 'rooms', 'balconies', 'sheds',
+                    'living_room_size', 'living_room_size_label', 'room_size', 'room_size_label',
+                    'room_type', 'room_type_label', 'cleaning_mode', 'cleaning_mode_label',
+                    'event_type', 'event_type_label', 'venue_type', 'venue_type_label',
+                    'eventType', 'eventTypeLabel', 'venueType', 'venueTypeLabel',
+                    'cleaningMode', 'cleaningModeLabel',
+                ]));
+            }
+        }
+
+        if (isset($booking['address']) && is_array($booking['address'])) {
+            foreach ($booking['address'] as $key => $_) {
+                if (! in_array($key, ['neighborhoodId', 'neighborhoodName'], true)) {
+                    $booking['address'][$key] = null;
+                }
+            }
+        }
+
+        $booking['addressLatitude'] = null;
+        $booking['addressLongitude'] = null;
+        $booking['locationName'] = $booking['neighborhoodName'] ?? null;
 
         return $booking;
     }

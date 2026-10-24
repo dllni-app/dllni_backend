@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-use Modules\User\Services\UserCleaningOrderEstimationService;
 use App\Models\CleaningFinancialSetting;
 use App\Models\Worker;
 use Modules\Cleaning\Enums\ServiceCategory;
 use Modules\Cleaning\Models\CleaningService;
 use Modules\Cleaning\Models\ServicePricing;
+use Modules\User\Services\UserCleaningOrderEstimationService;
 
 it('computes deterministic cleaning size, duration, and tier from configured room-size defaults', function (): void {
     $service = app(UserCleaningOrderEstimationService::class);
@@ -109,6 +109,12 @@ it('computes distance-based pricing with fixed admin margin', function (): void 
 });
 
 it('returns provisional pricing when preferred worker is not selected', function (): void {
+    CleaningFinancialSetting::query()->updateOrCreate(['id' => 1], [
+        'default_commission_rate' => 10,
+        'commission_type' => 'percent',
+        'commission_fixed_amount' => null,
+        'travel_markup_type' => 'fixed',
+    ]);
     $service = app(UserCleaningOrderEstimationService::class);
 
     $pricing = $service->price(
@@ -127,15 +133,20 @@ it('returns provisional pricing when preferred worker is not selected', function
     expect($pricing['basePrice'])->toBe(282.0);
     expect($pricing['distanceKm'])->toBeNull();
     expect($pricing['travelFee'])->toBe(0.0);
-    expect($pricing['adminMargin'])->toBe(0.0);
+    expect($pricing['adminMargin'])->toBe(29.0);
     expect($pricing['isPricingFinal'])->toBeFalse();
-    expect($pricing['totalPrice'])->toBe(282.0);
+    expect($pricing['totalPrice'])->toBe(311.0);
 });
 
 it('computes event assistance pricing per worker per hour', function (): void {
     CleaningFinancialSetting::query()->updateOrCreate(
         ['id' => 1],
-        ['extension_rate_per_30_minutes' => 150]
+        [
+            'extension_rate_per_30_minutes' => 150,
+            'default_commission_rate' => 10,
+            'commission_type' => 'percent',
+            'commission_fixed_amount' => null,
+        ]
     );
 
     $service = app(UserCleaningOrderEstimationService::class);
@@ -164,7 +175,7 @@ it('computes event assistance pricing per worker per hour', function (): void {
     expect($estimation['recommendation']['suggestedTeamSize'])->toBe(5);
     expect($estimation['estimatedHours'])->toBe(4.0);
     expect($pricing['basePrice'])->toBe(6000.0);
-    expect($pricing['totalPrice'])->toBe(6000.0);
+    expect($pricing['totalPrice'])->toBe(6600.0);
     expect($pricing['eventHourlyRate'])->toBe(300.0);
     expect($pricing['eventHours'])->toBe(4.0);
     expect($pricing['eventWorkerCount'])->toBe(5);
@@ -247,16 +258,6 @@ it('uses configured deep room pricing and time estimates while keeping add-ons u
         'description' => 'A',
         'is_active' => true,
     ]);
-
-    ServicePricing::query()->create([
-        'cleaning_service_id' => $serviceA->id,
-        'property_type' => 'apartment',
-        'living_room_size' => 'small',
-        'base_price' => 100,
-        'price_per_sqm' => null,
-        'min_hours' => 1,
-    ]);
-
     $service = app(UserCleaningOrderEstimationService::class);
 
     $regularEstimation = $service->estimate('apartment', [
@@ -279,7 +280,7 @@ it('uses configured deep room pricing and time estimates while keeping add-ons u
         'bedrooms' => 1,
         'bathrooms' => 1,
         'living_room_size' => 'small',
-    ], null, null, null, [$serviceA->id]);
+    ], null, null);
 
     $deepPricing = $service->price('apartment', [
         'rooms' => 2,
@@ -287,7 +288,7 @@ it('uses configured deep room pricing and time estimates while keeping add-ons u
         'bathrooms' => 1,
         'living_room_size' => 'small',
         'cleaning_mode' => 'deep',
-    ], null, null, null, [$serviceA->id]);
+    ], null, null);
 
     expect($deepEstimation['estimatedSqm'])->toBe($regularEstimation['estimatedSqm']);
     expect($deepEstimation['sizeTier'])->toBe($regularEstimation['sizeTier']);
