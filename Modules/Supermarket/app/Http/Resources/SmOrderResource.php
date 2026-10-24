@@ -27,6 +27,7 @@ final class SmOrderResource extends JsonResource
         return [
             'id' => $this->id,
             'deliveryOrderId' => $deliveryOrder?->id,
+            'deliveryDriverId' => $deliveryOrder?->driver_id,
             'fulfillmentType' => $fulfillmentType,
             'fulfillmentTypeLabel' => $fulfillmentType === 'delivery' ? 'توصيل' : 'استلام من المتجر',
             'customerId' => $this->customer_id,
