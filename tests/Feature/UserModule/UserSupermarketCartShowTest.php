@@ -8,12 +8,12 @@ use Database\Factories\SmProductFactory;
 use Database\Factories\SmStoreFactory;
 use Laravel\Sanctum\Sanctum;
 
-it('requires authentication to fetch supermarket carts', function (): void {
+it('requires authentication to list supermarket carts', function (): void {
     $this->getJson('/api/v1/user/supermarket/carts')
         ->assertUnauthorized();
 });
 
-it('returns each supermarket cart with its own store and items', function (): void {
+it('returns store-scoped supermarket cart detail and a list of carts', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
@@ -26,18 +26,28 @@ it('returns each supermarket cart with its own store and items', function (): vo
         'price' => 14,
     ]);
 
-    $add = $this->postJson('/api/v1/user/supermarket/cart/items', [
+    $created = $this->postJson('/api/v1/user/supermarket/cart/items', [
         'productId' => $product->id,
         'quantity' => 2,
     ])->assertCreated();
 
-    $response = $this->getJson('/api/v1/user/supermarket/carts');
+    $cartId = (int) $created->json('data.id');
+    expect($cartId)->toBeGreaterThan(0);
 
-    $response->assertOk()
+    $this->getJson('/api/v1/user/supermarket/carts')
+        ->assertOk()
         ->assertJsonCount(1, 'data')
-        ->assertJsonPath('data.0.id', $add->json('data.id'))
-        ->assertJsonPath('data.0.merchant.id', $store->id)
-        ->assertJsonPath('data.0.items.0.productId', $product->id)
-        ->assertJsonPath('data.0.items.0.quantity', 2)
-        ->assertJsonMissingPath('data.0.merchantGroups');
+        ->assertJsonPath('data.0.id', $cartId)
+        ->assertJsonPath('data.0.merchant.id', $store->id);
+
+    $detail = $this->getJson("/api/v1/user/supermarket/carts/{$cartId}");
+
+    $detail->assertOk()
+        ->assertJsonPath('data.id', $cartId)
+        ->assertJsonPath('data.storeId', $store->id)
+        ->assertJsonPath('data.merchant.id', $store->id)
+        ->assertJsonPath('data.items.0.productId', $product->id)
+        ->assertJsonPath('data.items.0.quantity', 2);
+
+    expect($detail->json('data'))->not->toHaveKey('merchantGroups');
 });
