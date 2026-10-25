@@ -32,6 +32,7 @@ trait CleaningBookingFilterQuery
                 AllowedFilter::exact('propertyType', 'property_type'),
                 AllowedFilter::scope('forCurrentWorker'),
                 AllowedFilter::scope('assignedToCurrentWorker'),
+                AllowedFilter::scope('workerView'),
                 AllowedFilter::scope('hasDispute'),
             ])
             ->allowedSorts([
@@ -175,6 +176,21 @@ trait CleaningBookingFilterQuery
                                 ->orWhere('gender_preference', $worker->gender);
                         })
                         ->whereDoesntHave('rejections', fn (Builder $rejections) => $rejections->where('worker_id', $worker->id));
+                })
+                ->orWhere(function (Builder $history) use ($worker): void {
+                    // Once a team booking ends, a cancelled assignment may no
+                    // longer have an accepted status. Keep true participants in
+                    // their history, but never expose offers they never took.
+                    $history->whereIn('status', [
+                        CleaningBookingStatus::Completed->value,
+                        CleaningBookingStatus::PartiallyCompleted->value,
+                        CleaningBookingStatus::Cancelled->value,
+                    ])->where(function (Builder $participated) use ($worker): void {
+                        $participated->whereHas('workerAssignments', fn (Builder $a) => $a
+                            ->where('worker_id', $worker->id)->whereNotNull('accepted_at'))
+                            ->orWhereHas('sessions.workerAssignments', fn (Builder $a) => $a
+                                ->where('worker_id', $worker->id)->whereNotNull('accepted_at'));
+                    });
                 });
         });
     }
@@ -202,8 +218,51 @@ trait CleaningBookingFilterQuery
                     $assignments
                         ->where('worker_id', $worker->id)
                         ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
+                })->orWhere(function (Builder $history) use ($worker): void {
+                    $history->whereIn('status', [
+                        CleaningBookingStatus::Completed->value,
+                        CleaningBookingStatus::PartiallyCompleted->value,
+                        CleaningBookingStatus::Cancelled->value,
+                    ])->where(function (Builder $participated) use ($worker): void {
+                        $participated->whereHas('workerAssignments', fn (Builder $a) => $a
+                            ->where('worker_id', $worker->id)->whereNotNull('accepted_at'))
+                            ->orWhereHas('sessions.workerAssignments', fn (Builder $a) => $a
+                                ->where('worker_id', $worker->id)->whereNotNull('accepted_at'));
+                    });
                 });
         });
+    }
+
+    /** Worker-centric group selection; the stored booking status is unchanged. */
+    public function scopeWorkerView(Builder $query, string $view): Builder
+    {
+        $worker = auth()->user()?->worker;
+        if (! $worker) {
+            return $query->where('id', -1);
+        }
+
+        if ($view === 'mine') {
+            return $this->scopeAssignedToCurrentWorker($query, true);
+        }
+
+        if ($view !== 'available') {
+            return $query->where('id', -1);
+        }
+
+        $workerId = (int) $worker->id;
+
+        return $query->where('status', CleaningBookingStatus::Pending->value)
+            ->where(function (Builder $bookings) use ($workerId): void {
+                $bookings->whereNull('worker_id')->orWhere('worker_id', '!=', $workerId);
+            })
+            ->whereDoesntHave('workerAssignments', function (Builder $assignments) use ($workerId): void {
+                $assignments->where('worker_id', $workerId)
+                    ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
+            })
+            ->whereDoesntHave('sessions.workerAssignments', function (Builder $assignments) use ($workerId): void {
+                $assignments->where('worker_id', $workerId)
+                    ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
+            });
     }
 
     public function scopeHasDispute(Builder $query, mixed $value): Builder

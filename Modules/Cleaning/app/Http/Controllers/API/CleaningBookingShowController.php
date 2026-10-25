@@ -124,7 +124,7 @@ final class CleaningBookingShowController
             'genderPreference', 'propertyType', 'propertyTypeLabel', 'numberOfRooms', 'numberOfKitchens',
             'numberOfBalconies', 'numberOfSheds', 'estimatedHours', 'scheduledDate', 'scheduledTime',
             'totalHours', 'workerTotalHours', 'serviceShareAmount', 'travelFee', 'workerAmount',
-            'workerOffer', 'worker_offer', 'myAssignment', 'worker_assignment', 'isHotOrder',
+            'workerOffer', 'worker_offer', 'myAssignment', 'worker_assignment', 'workerFinancials', 'workerPresentationState', 'isHotOrder',
             'urgencyLabel', 'createdAt', 'updatedAt',
         ]);
 

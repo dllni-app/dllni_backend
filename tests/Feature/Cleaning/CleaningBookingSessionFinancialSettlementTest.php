@@ -3,6 +3,9 @@
 declare(strict_types=1);
 
 use App\Models\Worker;
+use App\Models\User;
+use Laravel\Sanctum\Sanctum;
+use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 use Modules\Cleaning\Enums\CleaningBookingSessionCoverageStatus;
 use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
@@ -223,6 +226,47 @@ it('keeps released worker payout as audit history but exposes only payable repla
         ->and((float) $assignments->first()['workerAmount'])->toBe(700.0)
         ->and($assignments->pluck('workerId')->map(fn ($id): int => (int) $id)->all())
         ->not->toContain((int) $releasedWorker->id);
+});
+
+it('shows only the viewing workers session payout and conceals customer session billing', function (): void {
+    $booking = makeFinancialSettlementBooking();
+    $session = makeFinancialSettlementSession($booking, 1, CleaningBookingSessionStatus::WorkerAssigned, 1500, 250, 1750, requiredWorkers: 2);
+    $firstWorker = Worker::factory()->create();
+    $otherWorker = Worker::factory()->create();
+    makeFinancialSettlementAssignment($session, $firstWorker, CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart, 500);
+    makeFinancialSettlementAssignment($session, $otherWorker, CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart, 750);
+
+    $workerSchedule = app(CleaningBookingSchedulePresenter::class)->present($booking, $firstWorker);
+    $row = $workerSchedule['sessions'][0];
+    expect($row['workerAssignments'])->toHaveCount(1)
+        ->and($row['workerAssignments'][0]['workerId'])->toBe($firstWorker->id)
+        ->and($row['workerAssignments'][0]['workerAmount'])->toEqual(500)
+        ->and($row['myAssignment']['workerAmount'])->toEqual(500)
+        ->and($row['pricing'])->toBeNull()
+        ->and($row['payment'])->toBeNull()
+        ->and($row['openTime'])->toBeNull();
+
+    $customerSchedule = app(CleaningBookingSchedulePresenter::class)->present($booking);
+    expect($customerSchedule['sessions'][0]['workerAssignments'])->toHaveCount(2)
+        ->and($customerSchedule['sessions'][0]['pricing']['totalPrice'])->toEqual(1750);
+});
+
+it('uses accepted session payouts instead of a zero parent offer in worker financial summaries', function (): void {
+    $booking = makeFinancialSettlementBooking();
+    $session = makeFinancialSettlementSession($booking, 1, CleaningBookingSessionStatus::Completed, 1000, 200, 1200);
+    $workerUser = User::factory()->create();
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    makeFinancialSettlementAssignment($session, $worker, CleaningBookingWorkerAssignmentStatus::Completed, 800);
+    $otherWorker = Worker::factory()->create();
+    makeFinancialSettlementAssignment($session, $otherWorker, CleaningBookingWorkerAssignmentStatus::Completed, 300);
+
+    Sanctum::actingAs($workerUser);
+    $workerRequest = request();
+    $workerRequest->setUserResolver(static fn () => $workerUser);
+    $payload = CleaningBookingResource::make($booking)->resolve($workerRequest);
+    expect($payload['workerFinancials']['workerAmount'])->toBe(800.0)
+        ->and($payload['workerFinancials']['serviceShareAmount'])->toBe(800.0)
+        ->and($payload['workerFinancials']['isPreview'])->toBeFalse();
 });
 
 it('applies a booking-level discount exactly once when session aggregates are resynchronized', function (): void {

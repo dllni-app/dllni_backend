@@ -24,7 +24,7 @@ use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class WorkerHomepageController
 {
-    private const ACCEPTED_ASSIGNMENT_STATUSES = ['accepted', 'accepted_waiting_team', 'accepted_waiting_for_order_start'];
+    private const ACCEPTED_ASSIGNMENT_STATUSES = ['accepted', 'accepted_waiting_for_order_start', 'awaiting_start_verification', 'start_approved', 'in_progress', 'awaiting_customer_completion', 'time_extension_requested', 'completed'];
 
     public function __construct(
         private readonly DepositService $depositService,
@@ -84,7 +84,7 @@ final class WorkerHomepageController
         }
 
         $baseQuery = CleaningBooking::query()->where(function (Builder $query) use ($worker): void {
-            $query->where('worker_id', $worker->id)
+                $query->where('worker_id', $worker->id)
                 ->orWhereHas('workerAssignments', function (Builder $assignments) use ($worker): void {
                     $assignments
                         ->where('worker_id', $worker->id)
@@ -377,7 +377,9 @@ final class WorkerHomepageController
             return $this->assignmentNetAmount($assignment);
         }
 
-        return max(0.0, $this->bookingGrossAmount($booking, $workerId));
+        return (int) ($booking->worker_id ?? 0) === $workerId
+            ? max(0.0, $this->bookingGrossAmount($booking, $workerId))
+            : 0.0;
     }
 
     private function bookingAdminAmount(CleaningBooking $booking, int $workerId): float
@@ -390,7 +392,9 @@ final class WorkerHomepageController
             return (float) $assignment->admin_margin_amount;
         }
 
-        return (float) ($booking->admin_margin_amount ?? 0);
+        return (int) ($booking->worker_id ?? 0) === $workerId
+            ? (float) ($booking->admin_margin_amount ?? 0)
+            : 0.0;
     }
 
     private function bookingGrossAmount(CleaningBooking $booking, int $workerId): float
@@ -401,6 +405,10 @@ final class WorkerHomepageController
 
         if ($assignment instanceof CleaningBookingWorkerAssignment) {
             return $this->assignmentGrossAmount($assignment);
+        }
+
+        if ((int) ($booking->worker_id ?? 0) !== $workerId) {
+            return 0.0;
         }
 
         $gross = round(

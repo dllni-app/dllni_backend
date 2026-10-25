@@ -32,6 +32,11 @@ final class OtpService
     public function issue(string $phone, OtpPurpose $purpose): OtpIssueData
     {
         $code = (string) random_int(100000, 999999);
+
+        if (!app()->environment('production')) {
+            $code = '000000';
+        }
+
         $expiresAt = CarbonImmutable::now()->addMinutes(5);
 
         UserOtp::create([

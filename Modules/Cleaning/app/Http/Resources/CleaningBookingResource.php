@@ -82,6 +82,7 @@ final class CleaningBookingResource extends JsonResource
         );
 
         $workerOffer = $this->currentWorkerOffer($request, $myAssignmentModel);
+        $workerFinancials = $this->workerFinancialsPayload($request, $workerOffer);
         $pendingCompletionAssignments = $this->pendingCustomerCompletionAssignments();
         $pendingCompletionAssignment = $pendingCompletionAssignments[0] ?? null;
         $completionRequests = $this->completionRequestsPayload($pendingCompletionAssignments);
@@ -288,6 +289,8 @@ final class CleaningBookingResource extends JsonResource
             'roomAssignments' => $this->whenLoaded('rooms', fn () => $this->rooms->map(fn (CleaningBookingRoom $room): array => $this->serializeRoomAssignment($room))->values()),
             'workerOffer' => $workerOffer,
             'worker_offer' => $workerOffer,
+            'workerFinancials' => $workerFinancials,
+            'workerPresentationState' => $this->workerPresentationStatePayload($request, $myAssignmentModel, $workerOffer, $workerOrderStatus, (string) $globalOrderStatus),
             'myAssignment' => $myAssignment,
             'worker_assignment' => $myAssignment,
             'addons' => $this->whenLoaded('addons'),
@@ -577,6 +580,77 @@ final class CleaningBookingResource extends JsonResource
 
             return null;
         }
+    }
+
+    private function workerFinancialsPayload(Request $request, ?array $offer): ?array
+    {
+        $workerId = $request->user()?->worker?->id;
+        if ($workerId === null) {
+            return null;
+        }
+
+        $sessionAssignments = CleaningBookingSessionWorkerAssignment::query()
+            ->where('worker_id', (int) $workerId)
+            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
+            ->whereHas('session', fn ($query) => $query
+                ->where('cleaning_booking_id', $this->id)
+                ->where('status', '!=', CleaningBookingSessionStatus::Superseded->value))
+            ->get();
+        if ($sessionAssignments->isNotEmpty()) {
+            return [
+                'serviceShareAmount' => round((float) $sessionAssignments->sum('service_share_amount'), 2),
+                'travelFee' => round((float) $sessionAssignments->sum('travel_fee'), 2),
+                'workerAmount' => round((float) $sessionAssignments->sum('worker_amount'), 2),
+                'currency' => (string) ($sessionAssignments->first()?->currency ?: config('app.currency', 'SYP')),
+                'isPricingFinal' => true,
+                'isPreview' => false,
+            ];
+        }
+
+        if (! is_array($offer) || (int) ($offer['workerId'] ?? 0) !== (int) $workerId) {
+            return null;
+        }
+
+        return [
+            'serviceShareAmount' => (float) ($offer['serviceShareAmount'] ?? 0),
+            'travelFee' => (float) ($offer['travelFee'] ?? 0),
+            'workerAmount' => (float) ($offer['workerAmount'] ?? 0),
+            'currency' => (string) ($offer['currency'] ?? config('app.currency', 'SYP')),
+            'isPricingFinal' => (bool) ($offer['isPricingFinal'] ?? false),
+            'isPreview' => (bool) ($offer['isPreview'] ?? true),
+        ];
+    }
+
+    private function workerPresentationStatePayload(
+        Request $request,
+        ?CleaningBookingWorkerAssignment $assignment,
+        ?array $offer,
+        string $workerStatus,
+        string $globalStatus,
+    ): ?array {
+        $workerId = $request->user()?->worker?->id;
+        if ($workerId === null || ! is_array($offer) || (int) ($offer['workerId'] ?? 0) !== (int) $workerId) {
+            return null;
+        }
+
+        $assignmentStatus = $assignment instanceof CleaningBookingWorkerAssignment
+            ? $this->assignmentStatus($assignment)
+            : null;
+        $activeAssignment = $assignmentStatus !== null
+            && in_array($assignmentStatus, CleaningBookingWorkerAssignmentStatus::activeValues(), true);
+        $hasSession = $this->hasCurrentWorkerActiveSessionAssignment($request);
+        $terminal = in_array($globalStatus, [CleaningBookingStatus::Cancelled->value, CleaningBookingStatus::Completed->value, CleaningBookingStatus::UnderDispute->value], true);
+
+        return [
+            'status' => $workerStatus,
+            'globalStatus' => $globalStatus,
+            'assignmentId' => $assignment?->id,
+            'assignmentStatus' => $assignmentStatus,
+            'isAssigned' => $activeAssignment || $hasSession,
+            'hasActiveSession' => $hasSession,
+            'isOffer' => ! $terminal && ! $activeAssignment && ! $hasSession && $globalStatus === CleaningBookingStatus::Pending->value,
+            'canStart' => ! $terminal && ($activeAssignment || $hasSession) && in_array($workerStatus, [CleaningBookingStatus::AwaitingWorkerStartConfirmation->value, CleaningBookingWorkerAssignmentStatus::StartApproved->value], true),
+        ];
     }
 
     private function netWorkerAmount(float $serviceShare, float $travelFee, float $adminMargin): float

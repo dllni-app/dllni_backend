@@ -353,7 +353,7 @@ final class CleaningBookingSchedulePresenter
             'canRequestOpenTimeExtension' => $canRequestOpenTimeExtension,
             'canRequestOpenTimeEnd' => $canRequestOpenTimeEnd,
             'canDecideOpenTimeEnd' => $canDecideOpenTimeEnd,
-            'openTime' => $openTime,
+            'openTime' => $isCustomerView ? $openTime : null,
             'canCancel' => $canCancel,
             'canSkip' => $canSkip,
             'canReschedule' => $isCustomerView && $canReschedule,
@@ -379,15 +379,15 @@ final class CleaningBookingSchedulePresenter
                 'actionWorkerIds' => $attendanceActionWorkerIds,
                 'incidents' => $attendanceIncidents->all(),
             ],
-            'paymentStatus' => $paymentStatus,
-            'paymentSettledAt' => $session->payment_settled_at?->toIso8601String(),
-            'payment' => [
+            'paymentStatus' => $isCustomerView ? $paymentStatus : null,
+            'paymentSettledAt' => $isCustomerView ? $session->payment_settled_at?->toIso8601String() : null,
+            'payment' => $isCustomerView ? [
                 'status' => $paymentStatus,
                 'amount' => (float) $session->total_price,
                 'currency' => (string) config('app.currency', 'SYP'),
                 'settledAt' => $session->payment_settled_at?->toIso8601String(),
                 'isInternalSettlement' => true,
-            ],
+            ] : null,
             'canReview' => $isCustomerView && $status === CleaningBookingSessionStatus::Completed->value && $reviewableWorkerIds->isNotEmpty(),
             'hasReview' => $reviewedWorkerIds->isNotEmpty(),
             'reviewedWorkerIds' => $reviewedWorkerIds->all(),
@@ -398,7 +398,7 @@ final class CleaningBookingSchedulePresenter
             'disputeStatus' => $activeDispute instanceof Dispute
                 ? ($activeDispute->status?->value ?? (string) $activeDispute->status)
                 : null,
-            'pricing' => [
+            'pricing' => $isCustomerView ? [
                 'basePrice' => (float) $session->base_price,
                 'addonsTotal' => (float) $session->addons_total,
                 'materialsTotal' => (float) $session->materials_total,
@@ -412,7 +412,7 @@ final class CleaningBookingSchedulePresenter
                 'isPricingFinal' => (bool) $session->is_pricing_final,
                 'currency' => (string) config('app.currency', 'SYP'),
                 'snapshot' => $session->pricing_snapshot,
-            ],
+            ] : null,
             'startedTravelAt' => $session->started_travel_at?->toIso8601String(),
             'arrivedAt' => $session->arrived_at?->toIso8601String(),
             'customerConfirmedAt' => $session->customer_confirmed_at?->toIso8601String(),
@@ -423,7 +423,9 @@ final class CleaningBookingSchedulePresenter
             'cancelledByRole' => $session->cancelled_by_role,
             'skippedAt' => $session->skipped_at?->toIso8601String(),
             'skipReason' => $session->skip_reason,
-            'workerAssignments' => $acceptedAssignments
+            'workerAssignments' => ($viewerWorker instanceof Worker
+                ? $acceptedAssignments->where('worker_id', (int) $viewerWorker->id)
+                : $acceptedAssignments)
                 ->map(fn (CleaningBookingSessionWorkerAssignment $assignment): array => $this->assignmentPayload($assignment))
                 ->values()
                 ->all(),

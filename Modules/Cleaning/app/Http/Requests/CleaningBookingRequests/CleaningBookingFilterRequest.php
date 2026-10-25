@@ -56,6 +56,7 @@ final class CleaningBookingFilterRequest extends FormRequest
             'filter.workerId' => 'sometimes|exists:workers,id',
             'filter.propertyType' => ['sometimes', 'string', Rule::in(UserCleaningOrderEstimationService::PROPERTY_TYPES)],
             'filter.forCurrentWorker' => 'sometimes|boolean',
+            'filter.workerView' => 'sometimes|string|in:available,mine',
             'filter.hasDispute' => 'sometimes|boolean',
             'sort' => 'sometimes|string|in:scheduledDate,-scheduledDate,createdAt,-createdAt,status,-status,totalPrice,-totalPrice',
         ];

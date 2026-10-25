@@ -61,6 +61,7 @@ final class DatabaseSeeder extends Seeder
     {
         return [
             RequestedTestUsersSeeder::class,
+            CleaningSupervisorSeeder::class,
             DeliveryModuleDataSeeder::class,
             MandoubDeliveryTestUserSeeder::class,            MandoubPrimaryOfferScenarioSeeder::class,
             CleaningWorkersSeeder::class,

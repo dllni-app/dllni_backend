@@ -30,3 +30,7 @@ yarn-error.log
 /test-results/
 /playwright-report/
 /.cursor/plans/
+
+# Local QA artifacts and generated reports
+/qa/
+/reports/
