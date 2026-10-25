@@ -173,9 +173,11 @@ final class CleaningCatalogScenarioSeeder extends Seeder
             ['تنظيف الفرن من الداخل', 'oven-interior', 'kitchen-appliances', 'piece', 85, 75],
             ['تنظيف الثلاجة من الداخل', 'fridge-interior', 'kitchen-appliances', 'piece', 70, 60],
             ['غسيل الكنبايات بالبخار', 'sofa-steam', 'upholstery-carpets', 'seat', 35, 30],
-            ['غسيل السجاد', 'carpet-wash', 'upholstery-carpets', 'sqm', 22, 20],
+            // Duration is minutes per pricing unit. For square metres, 20 minutes
+            // per m² made a 31 m² carpet appear to take over ten hours by itself.
+            ['غسيل السجاد', 'carpet-wash', 'upholstery-carpets', 'sqm', 22, 2],
             ['تنظيف النوافذ', 'window-cleaning', 'glass-facades', 'piece', 18, 15],
-            ['تنظيف ما بعد الدهان والصيانة', 'post-renovation', 'post-maintenance', 'sqm', 30, 180],
+            ['تنظيف ما بعد الدهان والصيانة', 'post-renovation', 'post-maintenance', 'sqm', 30, 5],
         ];
 
         foreach ($services as [$name, $slug, $category, $unit, $price, $duration]) {

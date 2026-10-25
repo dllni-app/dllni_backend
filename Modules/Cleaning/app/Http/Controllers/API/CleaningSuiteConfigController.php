@@ -94,6 +94,8 @@ final class CleaningSuiteConfigController
                         'code' => $room->code,
                         'name' => $room->name,
                         'iconKey' => $room->icon_key,
+                        'regularDescription' => $room->regular_description,
+                        'deepDescription' => $room->deep_description,
                         'regularHourlyRate' => (float) $room->regular_hourly_rate,
                         'deepHourlyRate' => (float) $room->deep_hourly_rate,
                         'suggestedMinutesBySize' => $suggestions,

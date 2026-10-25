@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Http\Controllers\API;
 
 use App\Models\User;
+use App\Support\SyrianPhoneNumber;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,8 +20,9 @@ final class SupervisorAppController
 
     public function login(Request $request): JsonResponse
     {
-        $data = $request->validate(['phone' => ['required', 'string'], 'password' => ['required', 'string']]);
-        $user = User::query()->where('phone', $data['phone'])->first();
+        $data = $request->validate(['phone' => ['required', 'string', 'max:32'], 'password' => ['required', 'string']]);
+        // Match the canonical number and legacy formats already supported by customer login.
+        $user = User::query()->whereIn('phone', SyrianPhoneNumber::aliases($data['phone']))->first();
         if (! $user || ! Hash::check($data['password'], $user->password) || ! $user->is_active
             || ! $user->hasRole(SupervisedTeamService::ROLE)) {
             return $this->error('INVALID_CREDENTIALS', 'بيانات الدخول غير صحيحة أو الحساب غير مخول.', 422);

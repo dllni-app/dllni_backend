@@ -148,6 +148,31 @@ it('returns authoritative service duration and requires explicit split reconcili
     expect($response['visits'][0]['reconciliationSources'][0]['specialServices'][0]['targetRoomKeys'])->toBe(['bedroom.1']);
 });
 
+it('quotes a 31 square metre carpet cleaning without a false eight-hour room error', function (): void {
+    $input = timePeriodPayload();
+    $initial = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)
+        ->assertOk()->json();
+    $input = timePeriodAcceptGroups($input, $initial);
+    $service = CleaningSpecialService::query()->create([
+        'name' => 'غسيل السجاد', 'slug' => 'carpet-wash',
+        'pricing_unit' => 'sqm', 'unit_code' => 'sqm',
+        'input_type' => 'quantity', 'base_unit_price' => 22,
+        'estimated_duration_minutes' => 2, 'supports_dirtiness' => false,
+        'is_active' => true,
+    ]);
+    $input['visits'][0]['timePeriods'][0]['specialServices'] = [[
+        'serviceKey' => 'carpet.31', 'specialServiceId' => $service->id,
+        'targetRoomKeys' => ['bedroom.1'], 'quantity' => 31,
+        'dirtinessLevel' => null,
+    ]];
+
+    $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)
+        ->assertOk()
+        ->assertJsonPath('visits.0.roomSchedules.0.estimatedWorkMinutes', 302)
+        ->assertJsonPath('visits.0.roomSchedules.0.estimatedDurationMinutes', 151)
+        ->assertJsonPath('pricing.isPricingFinal', true);
+});
+
 it('keeps the same service on two room targets as two operational items', function (): void {
     $input = timePeriodPayload();
     $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)->assertOk()->json();

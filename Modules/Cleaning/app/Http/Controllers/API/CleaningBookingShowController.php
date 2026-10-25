@@ -15,6 +15,7 @@ use Modules\Cleaning\Http\Resources\CleaningBookingOperationalResource;
 use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Support\WorkerPendingSpecialServicesPreview;
+use Modules\Cleaning\Support\WorkerBookingRequirementsPresenter;
 
 final class CleaningBookingShowController
 {
@@ -65,6 +66,10 @@ final class CleaningBookingShowController
 
             return;
         }
+
+        // An offer the worker explicitly declined is no longer available to
+        // that worker, even if a legacy worker_id still points to them.
+        abort_if($booking->rejections()->where('worker_id', $worker->id)->exists(), 404, 'Booking not found.');
 
         $hasAcceptedAssignment = $booking->workerAssignments()
             ->where('worker_id', $worker->id)
@@ -128,6 +133,13 @@ final class CleaningBookingShowController
             'workerOffer', 'worker_offer', 'myAssignment', 'worker_assignment', 'workerFinancials', 'workerPresentationState', 'isHotOrder',
             'urgencyLabel', 'cleaning_services', 'services', 'createdAt', 'updatedAt',
         ]);
+
+        $safe['roomRequirements'] = WorkerBookingRequirementsPresenter::summarize(
+            is_array($payload['roomAssignments'] ?? null) ? $payload['roomAssignments'] : [],
+            is_array($booking->property_details) ? $booking->property_details : null,
+        );
+        $safe['locationSummary'] = $booking->neighborhood_name;
+        $safe['neighborhoodName'] = $booking->neighborhood_name;
 
         if ($this->isWorkerDispatchCandidate($booking)) {
             $safe['specialServicesPreview'] = WorkerPendingSpecialServicesPreview::forBooking($booking);

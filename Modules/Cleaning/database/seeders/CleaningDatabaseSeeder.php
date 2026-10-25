@@ -21,6 +21,7 @@ final class CleaningDatabaseSeeder extends Seeder
             CleaningServiceSeeder::class,
             CleaningBannerSeeder::class,
             CleaningCatalogScenarioSeeder::class,
+            CleaningRoomDescriptionsSeeder::class,
             CleaningBookingSeeder::class,
             EventBookingSeeder::class,
             CleaningOperationalScenarioSeeder::class,

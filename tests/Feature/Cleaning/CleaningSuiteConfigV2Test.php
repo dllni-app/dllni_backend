@@ -11,8 +11,49 @@ use Modules\Cleaning\Models\CleaningMaterialTypeQuantityRule;
 use Modules\Cleaning\Models\CleaningMaterialUnit;
 use Modules\Cleaning\Models\CleaningSpecialService;
 use Modules\Cleaning\Models\CleaningSpecialServiceCategory;
+use Modules\Cleaning\Models\CleaningRoomType;
+use Modules\Cleaning\Database\Seeders\CleaningRoomDescriptionsSeeder;
 
 use function Pest\Laravel\getJson;
+
+it('publishes room-specific cleaning scopes managed by the Filament room catalog', function (): void {
+    $room = CleaningRoomType::query()->where('code', 'bedroom')->firstOrFail();
+    $room->update([
+        'regular_description' => 'الحوسة: ترتيب السرير ومسح الأسطح والأرضية.',
+        'deep_description' => 'التعزيل: تنظيف حواف وزوايا الغرفة.',
+        'icon_key' => 'bedroom',
+    ]);
+
+    getJson('/api/v1/cleaning/suite-config')
+        ->assertOk()
+        ->assertJsonFragment([
+            'code' => 'bedroom',
+            'name' => $room->name,
+            'iconKey' => 'bedroom',
+            'regularDescription' => 'الحوسة: ترتيب السرير ومسح الأسطح والأرضية.',
+            'deepDescription' => 'التعزيل: تنظيف حواف وزوايا الغرفة.',
+            'regularHourlyRate' => (float) $room->regular_hourly_rate,
+            'deepHourlyRate' => (float) $room->deep_hourly_rate,
+            'suggestedMinutesBySize' => [
+                'small' => [
+                    'regularMinutes' => (int) $room->suggested_minutes_by_size['small']['regular'],
+                    'deepMinutes' => (int) $room->suggested_minutes_by_size['small']['deep'],
+                ],
+                'medium' => [
+                    'regularMinutes' => (int) $room->suggested_minutes_by_size['medium']['regular'],
+                    'deepMinutes' => (int) $room->suggested_minutes_by_size['medium']['deep'],
+                ],
+                'large' => [
+                    'regularMinutes' => (int) $room->suggested_minutes_by_size['large']['regular'],
+                    'deepMinutes' => (int) $room->suggested_minutes_by_size['large']['deep'],
+                ],
+            ],
+        ]);
+
+    (new CleaningRoomDescriptionsSeeder)->run();
+    expect($room->fresh()->regular_description)->toBe('الحوسة: ترتيب السرير ومسح الأسطح والأرضية.')
+        ->and($room->fresh()->deep_description)->toBe('التعزيل: تنظيف حواف وزوايا الغرفة.');
+});
 
 it('publishes dynamic event and special-service configuration with v2 capabilities', function (): void {
     $category = CleaningSpecialServiceCategory::query()->create([

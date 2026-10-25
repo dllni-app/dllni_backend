@@ -383,6 +383,39 @@ it('allows worker to reject a pending unassigned booking', function () {
         'id' => $booking->id,
         'status' => CleaningBookingStatus::Pending->value,
     ]);
+
+    // This is a worker-specific refusal of an offer, not a global
+    // cancellation. The same worker must never receive it again.
+    $list = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1');
+    $list->assertOk();
+    expect(collect($list->json('data'))->pluck('id'))->not->toContain($booking->id);
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")->assertNotFound();
+});
+
+it('removes a rejected previously assigned offer from every worker booking view', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-declined-legacy@example.com']);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::WorkerAssigned,
+        'scheduled_date' => now()->toDateString(),
+        'scheduled_time' => now()->addHour()->format('H:i'),
+    ]);
+
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/reject")
+        ->assertOk();
+
+    $this->assertDatabaseHas('cleaning_booking_worker_rejections', [
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $worker->id,
+    ]);
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")->assertNotFound();
+    $list = $this->getJson('/api/v1/cleaning-bookings');
+    $list->assertOk();
+    expect(collect($list->json('data'))->pluck('id'))->not->toContain($booking->id);
 });
 
 it('cancels a cleaning booking without reason', function () {

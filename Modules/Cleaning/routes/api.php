@@ -74,6 +74,10 @@ Route::prefix('v1')->group(function () {
                 ->whereIn('action', ['start', 'finish', 'complete', 'verification-requests', 'handover-requests', 'attendance-incidents', 'replacement-requests']);
             Route::get('me', [SupervisorAppController::class, 'me']);
             Route::post('logout', [SupervisorAppController::class, 'logout']);
+            Route::get('notifications', [UserNotificationController::class, 'index']);
+            Route::patch('notifications/read-all', [UserNotificationController::class, 'markAllAsRead']);
+            Route::patch('notifications/{id}/read', [UserNotificationController::class, 'markAsRead']);
+            Route::put('notifications/token', RegisterFcmTokenController::class);
             Route::get('home', [SupervisorAppController::class, 'home']);
             Route::get('bookings', [SupervisorAppController::class, 'index']);
             Route::get('schedule', [SupervisorAppController::class, 'schedule']);

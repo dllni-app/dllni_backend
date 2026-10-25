@@ -35,6 +35,7 @@ use Modules\Cleaning\Http\Requests\CleaningBookingRoomClaimRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingSosRequest;
 use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 use Modules\Cleaning\Support\WorkerPendingSpecialServicesPreview;
+use Modules\Cleaning\Support\WorkerBookingRequirementsPresenter;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Services\CleaningBookingService;
 use Modules\Cleaning\Services\DepositService;
@@ -665,6 +666,13 @@ final class CleaningBookingController
             'urgencyLabel', 'cleaning_services', 'services', 'createdAt', 'updatedAt',
         ]);
 
+        $safe['roomRequirements'] = WorkerBookingRequirementsPresenter::summarize(
+            is_array($payload['roomAssignments'] ?? null) ? $payload['roomAssignments'] : [],
+            is_array($booking->property_details) ? $booking->property_details : null,
+        );
+        $safe['locationSummary'] = $booking->neighborhood_name;
+        $safe['neighborhoodName'] = $booking->neighborhood_name;
+
         if ($this->isPendingCandidateForWorker($booking, $worker)) {
             $safe['specialServicesPreview'] = WorkerPendingSpecialServicesPreview::forBooking($booking);
         }
@@ -696,6 +704,10 @@ final class CleaningBookingController
                     'assignedWorkerId', 'assignmentSource',
                 ]))
                 ->values()->all();
+
+            $safe['address'] = $payload['address'] ?? null;
+            $safe['addressLatitude'] = $payload['addressLatitude'] ?? null;
+            $safe['addressLongitude'] = $payload['addressLongitude'] ?? null;
         }
         if ($this->shouldScopeV2WorkerRooms($booking)) {
             $safe = $this->scopeNestedWorkerRoomData($safe, $ownedRooms);

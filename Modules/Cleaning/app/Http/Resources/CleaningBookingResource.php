@@ -295,7 +295,15 @@ final class CleaningBookingResource extends JsonResource
             'worker_assignment' => $myAssignment,
             'addons' => $this->whenLoaded('addons'),
             'billingPolicy' => $this->whenLoaded('billingPolicy'),
-            'timeWarnings' => $this->whenLoaded('timeWarnings'),
+            // Keep the historical snake_case fields for older clients, while
+            // exposing the same priced warning contract as the standalone
+            // extension endpoint. Raw Eloquent warnings caused the worker
+            // extension sheet to receive an amount but no validated breakdown.
+            'timeWarnings' => $this->whenLoaded('timeWarnings', fn () => $this->timeWarnings
+                ->map(fn ($warning): array => array_merge(
+                    $warning->toArray(),
+                    CleaningTimeWarningResource::make($warning)->resolve($request),
+                ))->values()->all()),
             'disputes' => $this->whenLoaded('disputes'),
             'createdAt' => $this->created_at->toDateTimeString(),
             'updatedAt' => $this->updated_at->toDateTimeString(),
@@ -597,9 +605,15 @@ final class CleaningBookingResource extends JsonResource
                 ->where('status', '!=', CleaningBookingSessionStatus::Superseded->value))
             ->get();
         if ($sessionAssignments->isNotEmpty()) {
+            $service = round((float) $sessionAssignments->sum('service_share_amount'), 2);
+            $transport = round((float) $sessionAssignments->sum('travel_fee'), 2);
+            $margin = round((float) $sessionAssignments->sum('admin_margin_amount'), 2);
             return [
-                'serviceShareAmount' => round((float) $sessionAssignments->sum('service_share_amount'), 2),
-                'travelFee' => round((float) $sessionAssignments->sum('travel_fee'), 2),
+                'serviceShareAmount' => $service,
+                'travelFee' => $transport,
+                'grossAmount' => round($service + $transport, 2),
+                'adminMarginAmount' => $margin,
+                'adminMarginPercentage' => $service > 0 ? round(100 * $margin / $service, 2) : null,
                 'workerAmount' => round((float) $sessionAssignments->sum('worker_amount'), 2),
                 'currency' => (string) ($sessionAssignments->first()?->currency ?: config('app.currency', 'SYP')),
                 'isPricingFinal' => true,
@@ -611,9 +625,16 @@ final class CleaningBookingResource extends JsonResource
             return null;
         }
 
+        $service = (float) ($offer['serviceShareAmount'] ?? 0);
+        $transport = (float) ($offer['travelFee'] ?? 0);
+        $margin = (float) ($offer['adminMarginAmount'] ?? 0);
+
         return [
-            'serviceShareAmount' => (float) ($offer['serviceShareAmount'] ?? 0),
-            'travelFee' => (float) ($offer['travelFee'] ?? 0),
+            'serviceShareAmount' => $service,
+            'travelFee' => $transport,
+            'grossAmount' => round($service + $transport, 2),
+            'adminMarginAmount' => $margin,
+            'adminMarginPercentage' => $service > 0 ? round(100 * $margin / $service, 2) : null,
             'workerAmount' => (float) ($offer['workerAmount'] ?? 0),
             'currency' => (string) ($offer['currency'] ?? config('app.currency', 'SYP')),
             'isPricingFinal' => (bool) ($offer['isPricingFinal'] ?? false),

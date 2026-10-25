@@ -57,7 +57,10 @@ final class CleaningTimeWarningService
             $quotedBaseAmount = $warning->quoted_base_amount !== null
                 ? round((float) $warning->quoted_base_amount, 2)
                 : max(0.0, round($quotedAmount - $quotedAdminMargin, 2));
-            $quotedServiceAmount = $quotedAmount > 0 ? $quotedAmount : $quotedBaseAmount;
+            // Administration margin is paid by the customer *in addition* to
+            // service price. The worker receives only the quoted service base
+            // plus their travel allowance, never the customer-side margin.
+            $quotedServiceAmount = $quotedBaseAmount;
             $shouldApplyPrice = $warning->price_applied_at === null && $quotedAmount > 0;
 
             if ($shouldApplyPrice) {

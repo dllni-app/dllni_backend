@@ -105,7 +105,12 @@ trait CleaningBookingFilterQuery
         $discoverableBookingIds = app(\Modules\Cleaning\Services\CleaningGeographicDispatchService::class)
             ->discoverableBookingIds($worker);
 
-        return $query->where(function (Builder $q) use ($worker, $preferredWorkTypes, $canReceiveNewRequests, $discoverableBookingIds): void {
+        // A declined offer is worker-scoped, not a cancellation of the booking.
+        // Exclude it from *all* branches, including legacy worker_id and old
+        // assignment/history branches, so it cannot reappear after refresh.
+        return $query
+            ->whereDoesntHave('rejections', fn (Builder $rejections) => $rejections->where('worker_id', $worker->id))
+            ->where(function (Builder $q) use ($worker, $preferredWorkTypes, $canReceiveNewRequests, $discoverableBookingIds): void {
             $q->where('worker_id', $worker->id)
                 ->orWhereHas('workerAssignments', function (Builder $assignments) use ($worker): void {
                     $assignments
@@ -192,7 +197,7 @@ trait CleaningBookingFilterQuery
                                 ->where('worker_id', $worker->id)->whereNotNull('accepted_at'));
                     });
                 });
-        });
+            });
     }
 
     public function scopeAssignedToCurrentWorker(Builder $query, mixed $value): Builder

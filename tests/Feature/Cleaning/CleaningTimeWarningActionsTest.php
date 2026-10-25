@@ -154,15 +154,23 @@ it('applies the extension breakdown to booking and worker accounting once', func
     $this->postJson("/api/v1/cleaning-time-warnings/{$warning->id}/accept")
         ->assertOk();
 
+    // Embedded warnings must carry the same verified quote components as
+    // their standalone API resource, otherwise Flutter disables acceptance.
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")
+        ->assertOk()
+        ->assertJsonPath('data.timeWarnings.0.baseAmount', 4500)
+        ->assertJsonPath('data.timeWarnings.0.adminMargin', 500)
+        ->assertJsonPath('data.timeWarnings.0.totalAmount', 5000);
+
     $booking->refresh();
     $assignment->refresh();
 
     expect((float) $booking->extension_fee_total)->toBe(5000.0)
         ->and((float) $booking->admin_margin_amount)->toBe(1500.0)
         ->and((float) $booking->total_price)->toBe(16000.0)
-        ->and((float) $assignment->service_share_amount)->toBe(15000.0)
+        ->and((float) $assignment->service_share_amount)->toBe(14500.0)
         ->and((float) $assignment->admin_margin_amount)->toBe(1500.0)
-        ->and((float) $assignment->worker_amount)->toBe(15000.0);
+        ->and((float) $assignment->worker_amount)->toBe(14500.0);
 });
 
 it('rejects an extension request with message', function () {

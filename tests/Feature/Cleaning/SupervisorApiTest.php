@@ -58,6 +58,19 @@ it('requires supervisor credentials and rejects inactive supervisors', function 
     expect($login->json('data.token'))->toBeString();
 });
 
+it('accepts equivalent Syrian phone formats at supervisor login', function (): void {
+    Role::findOrCreate('Cleaning Supervisor', 'web');
+    $supervisor = User::factory()->create(['phone' => '+963944100006', 'is_active' => true]);
+    $supervisor->assignRole('Cleaning Supervisor');
+
+    foreach (['944100006', '0944100006', '+963944100006', '963944100006', '00963944100006'] as $phone) {
+        $this->postJson('/api/v1/supervisor/login', ['phone' => $phone, 'password' => 'password'])
+            ->assertOk()->assertJsonPath('data.user.id', $supervisor->id);
+    }
+    $this->postJson('/api/v1/supervisor/login', ['phone' => '944100007', 'password' => 'password'])
+        ->assertUnprocessable()->assertJsonPath('code', 'INVALID_CREDENTIALS');
+});
+
 it('uses the issued Sanctum token for profile and revokes it on logout', function () {
     $supervisor = supervisorUser();
     $token = $this->postJson('/api/v1/supervisor/login', [

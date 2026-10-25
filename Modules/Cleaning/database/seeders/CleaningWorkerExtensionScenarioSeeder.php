@@ -9,17 +9,22 @@ use App\Models\User;
 use App\Models\Worker;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningTimeWarningResponse;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningTimeWarning;
+use Modules\Cleaning\Services\CleaningExtendedTimePricingService;
 
 final class CleaningWorkerExtensionScenarioSeeder extends Seeder
 {
     public function run(): void
     {
+        if (app()->environment('production')) {
+            return;
+        }
         $billingPolicy = CleaningBillingPolicy::where('is_default', true)->first();
 
         if (! $billingPolicy) {
@@ -54,9 +59,9 @@ final class CleaningWorkerExtensionScenarioSeeder extends Seeder
     private function workerRows(): array
     {
         return [
-            ['email' => 'cleaning.worker@dllni.sy', 'prefix' => 'CLN-AR-W1', 'minutes' => 30, 'quote' => 25, 'property_type' => 'apartment'],
-            ['email' => 'cleaning.worker2@dllni.sy', 'prefix' => 'CLN-AR-W2', 'minutes' => 45, 'quote' => 50, 'property_type' => 'apartment'],
-            ['email' => 'cleaning.worker3@dllni.sy', 'prefix' => 'CLN-AR-W3', 'minutes' => 60, 'quote' => 100, 'property_type' => 'office'],
+            ['email' => 'cleaning.worker@dllni.sy', 'prefix' => 'CLN-AR-W1', 'minutes' => 30, 'property_type' => 'apartment'],
+            ['email' => 'cleaning.worker2@dllni.sy', 'prefix' => 'CLN-AR-W2', 'minutes' => 45, 'property_type' => 'apartment'],
+            ['email' => 'cleaning.worker3@dllni.sy', 'prefix' => 'CLN-AR-W3', 'minutes' => 60, 'property_type' => 'office'],
         ];
     }
 
@@ -74,7 +79,7 @@ final class CleaningWorkerExtensionScenarioSeeder extends Seeder
             $booking = $this->booking($worker, $customer, $billingPolicy, $policy, $row, $case, $date->copy()->addDays((int) $case['day']));
 
             if (($case['pending_warning'] ?? false) === true) {
-                $this->warning($booking, (int) $row['minutes'], (float) $row['quote']);
+                $this->warning($booking, (int) $row['minutes']);
             }
         }
     }
@@ -87,7 +92,7 @@ final class CleaningWorkerExtensionScenarioSeeder extends Seeder
         $travelFee = 10.00;
         $isOffice = $row['property_type'] === 'office';
 
-        return CleaningBooking::updateOrCreate(
+        $booking = CleaningBooking::updateOrCreate(
             ['booking_number' => $row['prefix'].'-'.$case['suffix'].'-0001'],
             [
                 'customer_id' => $customer->id,
@@ -99,6 +104,7 @@ final class CleaningWorkerExtensionScenarioSeeder extends Seeder
                 'billing_policy_id' => $billingPolicy->id,
                 'status' => $status,
                 'property_type' => $row['property_type'],
+                'neighborhood_name' => 'الجميلية',
                 'property_details' => [
                     'location_name' => $isOffice ? 'مكتب تجريبي في الجميلية' : 'شقة تجريبية في العزيزية',
                     'address' => 'حلب، الجميلية، قرب ساحة سعد الله الجابري',
@@ -107,6 +113,13 @@ final class CleaningWorkerExtensionScenarioSeeder extends Seeder
                     'bathrooms' => $isOffice ? 2 : 1,
                     'kitchens' => 1,
                     'living_room_size' => 'medium',
+                    'cleaning_mode' => 'deep',
+                    'room_size_breakdown' => [
+                        'bedroom' => ['medium' => $isOffice ? 0 : 2],
+                        'bathroom' => ['small' => $isOffice ? 2 : 1],
+                        'kitchen' => ['medium' => 1],
+                        'living_room' => ['medium' => 1],
+                    ],
                 ],
                 'cleaning_services' => ['تنظيف عميق'],
                 'estimated_sqm' => $isOffice ? 120 : 90,
@@ -118,7 +131,8 @@ final class CleaningWorkerExtensionScenarioSeeder extends Seeder
                 'addons_total' => 0,
                 'travel_fee' => $travelFee,
                 'cancellation_fee' => 0,
-                'total_price' => $basePrice + $travelFee,
+                'admin_margin_amount' => round($basePrice * 0.10, 2),
+                'total_price' => round($basePrice * 1.10 + $travelFee, 2),
                 'terms_accepted' => true,
                 'address_latitude' => $isOffice ? 36.2168 : 36.1795,
                 'address_longitude' => $isOffice ? 37.1317 : 37.1082,
@@ -129,10 +143,23 @@ final class CleaningWorkerExtensionScenarioSeeder extends Seeder
                 'customer_confirmed_at' => $this->customerConfirmedAt($status, $date),
             ]
         );
+
+        // Legacy booking-updated listeners can reprice seed fixtures during
+        // Eloquent saves. Pin the synthetic financial snapshot explicitly so
+        // the customer total and worker commission contract stay consistent.
+        DB::table('cleaning_bookings')->where('id', $booking->id)->update([
+            'travel_fee' => $travelFee,
+            'admin_margin_amount' => round($basePrice * 0.10, 2),
+            'total_price' => round($basePrice * 1.10 + $travelFee, 2),
+        ]);
+
+        return $booking->refresh();
     }
 
-    private function warning(CleaningBooking $booking, int $minutes, float $quote): void
+    private function warning(CleaningBooking $booking, int $minutes): void
     {
+        $quote = app(CleaningExtendedTimePricingService::class)
+            ->quoteForBooking($booking, $minutes);
         CleaningTimeWarning::updateOrCreate(
             ['booking_id' => $booking->id, 'booking_type' => 'cleaning_booking'],
             [
@@ -143,8 +170,10 @@ final class CleaningWorkerExtensionScenarioSeeder extends Seeder
                 'customer_responded_at' => now()->subMinutes(25),
                 'worker_responded_at' => null,
                 'additional_minutes' => $minutes,
-                'quoted_amount' => $quote,
-                'quoted_currency' => 'SYP',
+                'quoted_base_amount' => $quote['baseAmount'],
+                'quoted_admin_margin_amount' => $quote['adminMargin'],
+                'quoted_amount' => $quote['totalAmount'],
+                'quoted_currency' => $quote['currency'],
                 'price_applied_at' => null,
                 'worker_reject_message' => null,
             ]

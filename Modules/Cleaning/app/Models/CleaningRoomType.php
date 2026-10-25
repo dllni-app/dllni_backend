@@ -10,7 +10,7 @@ use Modules\Cleaning\Support\CleaningFinancialDefaults;
 
 final class CleaningRoomType extends Model
 {
-    protected $fillable = ['code', 'name', 'icon_key', 'regular_hourly_rate', 'deep_hourly_rate', 'suggested_minutes_by_size', 'sort_order', 'is_active'];
+    protected $fillable = ['code', 'name', 'icon_key', 'regular_description', 'deep_description', 'regular_hourly_rate', 'deep_hourly_rate', 'suggested_minutes_by_size', 'sort_order', 'is_active'];
 
     public function casts(): array
     {

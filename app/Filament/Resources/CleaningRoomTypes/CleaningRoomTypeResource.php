@@ -13,6 +13,7 @@ use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
@@ -108,6 +109,13 @@ final class CleaningRoomTypeResource extends Resource
                     TextInput::make('regular_hourly_rate')->label('سعر ساعة الحوسة (ل.س)')->required()->numeric()->minValue(0)->step(0.01),
                     TextInput::make('deep_hourly_rate')->label('سعر ساعة التعزيل (ل.س)')->required()->numeric()->minValue(0)->step(0.01),
                     Toggle::make('is_active')->label('ظاهر في تطبيق المستخدم')->default(true),
+                ]),
+            Section::make('تفاصيل العمل التي يراها العميل')
+                ->description('اشرح بدقة الأعمال المشمولة في الحوسة والتعزيل لهذا النوع من الغرف. تظهر النصوص في نافذة المساعدة داخل تطبيق المستخدم؛ وتُستثنى خدمات الغسيل المتخصصة ما لم تُطلب منفصلة.')
+                ->columns(1)
+                ->schema([
+                    Textarea::make('regular_description')->label('ماذا تشمل الحوسة في هذه الغرفة؟')->rows(4)->maxLength(3000)->required(),
+                    Textarea::make('deep_description')->label('ماذا يشمل التعزيل الإضافي في هذه الغرفة؟')->rows(4)->maxLength(3000)->required(),
                 ]),
             Section::make('الدقائق المقترحة لكل حجم')
                 ->description('هذه المدد تظهر تلقائياً في التطبيق عند إضافة الغرفة، ويمكن للعميل تعديلها قبل تأكيد السعر.')
