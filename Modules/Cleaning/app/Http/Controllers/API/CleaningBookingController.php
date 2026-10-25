@@ -34,6 +34,7 @@ use Modules\Cleaning\Http\Requests\CleaningBookingRequests\CleaningBookingFilter
 use Modules\Cleaning\Http\Requests\CleaningBookingRoomClaimRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingSosRequest;
 use Modules\Cleaning\Http\Resources\CleaningBookingResource;
+use Modules\Cleaning\Support\WorkerPendingSpecialServicesPreview;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Services\CleaningBookingService;
 use Modules\Cleaning\Services\DepositService;
@@ -661,8 +662,12 @@ final class CleaningBookingController
             'totalHours', 'workerTotalHours', 'serviceShareAmount', 'travelFee', 'workerAmount',
             'currency', 'isPricingFinal',
             'workerOffer', 'worker_offer', 'myAssignment', 'worker_assignment', 'workerFinancials', 'workerPresentationState', 'isHotOrder',
-            'urgencyLabel', 'createdAt', 'updatedAt',
+            'urgencyLabel', 'cleaning_services', 'services', 'createdAt', 'updatedAt',
         ]);
+
+        if ($this->isPendingCandidateForWorker($booking, $worker)) {
+            $safe['specialServicesPreview'] = WorkerPendingSpecialServicesPreview::forBooking($booking);
+        }
 
         $safe['visits'] = $this->workerVisitProjection($booking, $worker);
         $ownedRooms = [];

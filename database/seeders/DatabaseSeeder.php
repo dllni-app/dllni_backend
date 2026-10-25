@@ -79,6 +79,7 @@ final class DatabaseSeeder extends Seeder
             CleaningWorkerExtensionScenarioSeeder::class,
             EventBookingSeeder::class,
             CleaningOperationalScenarioSeeder::class,
+            WorkerOrderJourneySeeder::class,
             SupermarketDatabaseSeeder::class,
             MarketingOfferSeeder::class,
             UserAppScenarioSeeder::class,

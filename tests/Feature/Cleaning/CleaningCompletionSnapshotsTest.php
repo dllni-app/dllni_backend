@@ -149,7 +149,39 @@ it('does not reuse booking snapshots for an empty assignment in a multi-worker o
         ->and($firstWorker->id)->not->toBe($secondWorker->id);
 });
 
-it('uses event assistance details instead of inferred room snapshots when completing without snapshots', function (): void {
+it('keeps an explicit empty room selection empty despite existing cleaning rooms', function (): void {
+    Event::fake([CleaningBookingTrackingUpdated::class, CleaningOrderAwaitingCustomerCompletion::class]);
+    $user = User::factory()->create();
+    $worker = Worker::factory()->create(['user_id' => $user->id]);
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'number_of_workers' => 1,
+        'status' => CleaningBookingStatus::InProgress,
+        'work_started_at' => now()->subHour(),
+        'cleaning_services' => ['تنظيف الغرفة'],
+    ]);
+    CleaningBookingRoom::query()->create([
+        'cleaning_booking_id' => $booking->id,
+        'room_key' => 'bedroom.medium.1',
+        'room_type' => 'bedroom', 'room_size' => 'medium',
+        'display_label' => 'Bedroom 1', 'weight' => 1,
+        'planned_worker_slot' => 1, 'assigned_worker_id' => $worker->id,
+    ]);
+
+    Sanctum::actingAs($user);
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/complete", [
+        'propertiesRooms' => [], 'cleaningServices' => [],
+    ])->assertOk()
+        ->assertJsonPath('data.status', CleaningBookingStatus::AwaitingCustomerCompletion->value)
+        ->assertJsonCount(0, 'data.completionRequests.0.finishedPropertyRooms')
+        ->assertJsonCount(0, 'data.completionRequests.0.finishedCleaningServices');
+
+    expect($booking->fresh()->worker_finished_property_rooms)->toBe([])
+        ->and($booking->fresh()->worker_finished_cleaning_services)->toBe([]);
+});
+
+it('does not fabricate event services or rooms when completion sends no selections', function (): void {
     Event::fake([
         CleaningBookingTrackingUpdated::class,
         CleaningOrderAwaitingCustomerCompletion::class,
@@ -199,18 +231,18 @@ it('uses event assistance details instead of inferred room snapshots when comple
     $completionResponse
         ->assertOk()
         ->assertJsonPath('data.status', CleaningBookingStatus::AwaitingCustomerCompletion->value)
-        ->assertJsonPath('data.completionRequests.0.finishedCleaningServices.0.name', 'تجهيز ركن القهوة والضيافة')
+        ->assertJsonCount(0, 'data.completionRequests.0.finishedCleaningServices')
         ->assertJsonCount(0, 'data.completionRequests.0.finishedPropertyRooms');
 
     $booking->refresh();
 
-    expect($booking->worker_finished_cleaning_services)->toHaveCount(1)
+    expect($booking->worker_finished_cleaning_services)->toBe([])
         ->and($booking->worker_finished_property_rooms)->toBe([]);
 
     Sanctum::actingAs($customer);
 
     $this->getJson("/api/v1/user/cleaning/orders/{$booking->id}")
         ->assertOk()
-        ->assertJsonPath('data.completionRequests.0.finishedCleaningServices.0.name', 'تجهيز ركن القهوة والضيافة')
+        ->assertJsonCount(0, 'data.completionRequests.0.finishedCleaningServices')
         ->assertJsonCount(0, 'data.completionRequests.0.finishedPropertyRooms');
 });

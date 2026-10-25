@@ -7,7 +7,6 @@ namespace Modules\Cleaning\Http\Controllers\API;
 use App\Models\Worker;
 use App\Support\Broadcast\BroadcastAfterResponse;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -18,10 +17,8 @@ use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Http\Requests\CleaningBookingCompleteRequest;
 use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 use Modules\Cleaning\Models\CleaningBooking;
-use Modules\Cleaning\Models\CleaningBookingRoom;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\CleaningBookingService;
-use Modules\User\Services\UserCleaningOrderEstimationService;
 use Throwable;
 
 final class CleaningBookingCompleteController
@@ -52,8 +49,8 @@ final class CleaningBookingCompleteController
 
         if (! $this->shouldUseTeamCompletionFlow($booking) && $booking->status === CleaningBookingStatus::AwaitingCustomerCompletion) {
             $booking->forceFill([
-                'worker_finished_cleaning_services' => $finishedServices !== [] ? $finishedServices : $this->inferFinishedServices($booking),
-                'worker_finished_property_rooms' => $finishedRooms !== [] ? $finishedRooms : $this->inferFinishedRooms($booking),
+                'worker_finished_cleaning_services' => $finishedServices,
+                'worker_finished_property_rooms' => $finishedRooms,
             ])->save();
         }
 
@@ -151,8 +148,8 @@ final class CleaningBookingCompleteController
                 'status' => CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion,
                 'work_finished_at' => $finishedAt,
                 'worker_completion_message' => $completionMessage,
-                'worker_finished_cleaning_services' => $finishedServices !== [] ? $finishedServices : $this->inferFinishedServices($lockedBooking),
-                'worker_finished_property_rooms' => $finishedRooms !== [] ? $finishedRooms : $this->inferFinishedRoomsForWorker($lockedBooking, $worker->id),
+                'worker_finished_cleaning_services' => $finishedServices,
+                'worker_finished_property_rooms' => $finishedRooms,
             ])->save();
 
             $statusAfterCompletion = $this->resolveBookingStatusAfterWorkerCompletion($lockedBooking);
@@ -305,84 +302,4 @@ final class CleaningBookingCompleteController
         ]));
     }
 
-    /** @return array<int, array<string, mixed>> */
-    private function inferFinishedServices(CleaningBooking $booking): array
-    {
-        $services = [];
-
-        if ($this->isEventAssistanceBooking($booking)) {
-            $details = is_array($booking->property_details) ? $booking->property_details : [];
-            $name = Arr::get($details, 'custom_service') ?? Arr::get($details, 'customService');
-            $label = is_string($name) && mb_trim($name) !== ''
-                ? mb_trim($name)
-                : 'مساعدة مناسبة';
-
-            return [['id' => null, 'name' => $label, 'label' => $label, 'sort' => 0]];
-        }
-
-        if (is_array($booking->cleaning_services)) {
-            foreach ($booking->cleaning_services as $index => $service) {
-                $name = is_string($service) ? mb_trim($service) : '';
-                if ($name !== '') {
-                    $services[] = ['id' => null, 'name' => $name, 'label' => $name, 'sort' => $index];
-                }
-            }
-        }
-
-        foreach ($booking->addons as $addon) {
-            $name = mb_trim((string) ($addon->name ?? $addon->title ?? ''));
-            if ($name !== '') {
-                $services[] = ['id' => $addon->id, 'name' => $name, 'label' => $name];
-            }
-        }
-
-        return array_values($services);
-    }
-
-    /** @return array<int, array<string, mixed>> */
-    private function inferFinishedRooms(CleaningBooking $booking): array
-    {
-        if ($this->isEventAssistanceBooking($booking)) {
-            return [];
-        }
-
-        return $booking->rooms
-            ->map(static fn (CleaningBookingRoom $room): array => [
-                'id' => $room->id,
-                'roomKey' => $room->room_key,
-                'roomType' => $room->room_type,
-                'displayLabel' => $room->display_label,
-            ])
-            ->values()
-            ->all();
-    }
-
-    /** @return array<int, array<string, mixed>> */
-    private function inferFinishedRoomsForWorker(CleaningBooking $booking, int $workerId): array
-    {
-        if ($this->isEventAssistanceBooking($booking)) {
-            return [];
-        }
-
-        $rooms = $booking->rooms->where('assigned_worker_id', $workerId);
-
-        if ($rooms->isEmpty()) {
-            return $this->inferFinishedRooms($booking);
-        }
-
-        return $rooms
-            ->map(static fn (CleaningBookingRoom $room): array => [
-                'id' => $room->id,
-                'roomKey' => $room->room_key,
-                'roomType' => $room->room_type,
-                'displayLabel' => $room->display_label,
-            ])
-            ->values()
-            ->all();
-    }
-
-    private function isEventAssistanceBooking(CleaningBooking $booking): bool
-    {
-        return (string) $booking->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE;
-    }
 }

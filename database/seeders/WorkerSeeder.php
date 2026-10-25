@@ -41,7 +41,9 @@ final class WorkerSeeder extends Seeder
 
         foreach ($workers as $index => $data) {
             $phone = $data['phone'] ?? sprintf('+9639441201%02d', $index + 1);
-            $user = User::query()->where('email', $data['email'])->orWhere('phone', $phone)->first();
+            // Worker personas must be resolved by stable identity. Matching
+            // another seeded user by phone silently transfers their account.
+            $user = User::query()->where('email', $data['email'])->first();
 
             if (! $user instanceof User) {
                 $user = User::query()->create([
@@ -182,7 +184,8 @@ final class WorkerSeeder extends Seeder
     {
         return [
             [
-                'email' => 'worker1@dllni.sy', 'phone' => '+963944100001',
+                // The legacy cleaning.worker@ demo persona owns +963944100001.
+                'email' => 'worker1@dllni.sy', 'phone' => '+963944120101',
                 'gender' => GenderPreference::Female->value, 'first_name' => 'رنا',
                 'bio' => 'عاملة تنظيف محترفة بخبرة أكثر من 5 سنوات، متخصصة في التنظيف العميق واستخدام المنتجات الصديقة للبيئة.',
                 'address' => 'حلب - الجميلية - شارع فيصل', 'lat' => 36.2127, 'lng' => 37.1456,

@@ -11,6 +11,8 @@ use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingSpecialService;
+use Modules\Cleaning\Models\CleaningSpecialService;
 use Spatie\Permission\Models\Role;
 
 beforeEach(function (): void {
@@ -121,6 +123,20 @@ it('limits a worker list to own assigned work and eligible pending offers', func
         'address_latitude' => 36.1795,
         'address_longitude' => 37.1082,
         'property_details' => ['bedrooms' => 2, 'address' => 'private street 5', 'private_note' => 'private info'],
+        'cleaning_services' => ['تنظيف الغرف', 'تنظيف المطبخ'],
+    ]);
+    $catalog = CleaningSpecialService::query()->create([
+        'name' => 'تنظيف مخصص', 'pricing_unit' => 'piece',
+        'base_unit_price' => 100, 'estimated_duration_minutes' => 30, 'is_active' => true,
+    ]);
+    CleaningBookingSpecialService::query()->create([
+        'cleaning_booking_id' => $pendingBooking->id,
+        'cleaning_special_service_id' => $catalog->id,
+        'service_name' => 'تنظيف مخصص', 'quantity' => 2,
+        'pricing_unit' => 'piece', 'dirtiness_level' => 'heavy',
+        'base_unit_price' => 100, 'price_multiplier' => 1, 'total_price' => 200,
+        'notes' => 'Private customer note',
+        'equipment_snapshot' => [['id' => 19, 'name' => 'جهاز بخار', 'internal' => 'secret']],
     ]);
 
     Sanctum::actingAs($workerUser);
@@ -135,6 +151,13 @@ it('limits a worker list to own assigned work and eligible pending offers', func
         ->not->toHaveKey('addressLongitude')
         ->not->toHaveKey('customer')
         ->not->toHaveKey('propertyDetails');
+    expect($pending['cleaning_services'])->toBe(['تنظيف الغرف', 'تنظيف المطبخ']);
+    expect(array_column($pending['services'], 'name'))->toBe(['تنظيف الغرف', 'تنظيف المطبخ']);
+    expect($pending['specialServicesPreview'])->toBe([[
+        'name' => 'تنظيف مخصص', 'quantity' => 2, 'pricingUnit' => 'piece',
+        'dirtinessLevel' => 'heavy', 'equipmentNames' => ['جهاز بخار'],
+    ]]);
+    expect(json_encode($pending))->not->toContain('Private customer note')->not->toContain('secret');
 });
 
 it('preserves authorized administrative list and show access', function (): void {

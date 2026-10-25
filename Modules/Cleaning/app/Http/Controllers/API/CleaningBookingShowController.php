@@ -14,6 +14,7 @@ use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Http\Resources\CleaningBookingOperationalResource;
 use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Support\WorkerPendingSpecialServicesPreview;
 
 final class CleaningBookingShowController
 {
@@ -125,8 +126,12 @@ final class CleaningBookingShowController
             'numberOfBalconies', 'numberOfSheds', 'estimatedHours', 'scheduledDate', 'scheduledTime',
             'totalHours', 'workerTotalHours', 'serviceShareAmount', 'travelFee', 'workerAmount',
             'workerOffer', 'worker_offer', 'myAssignment', 'worker_assignment', 'workerFinancials', 'workerPresentationState', 'isHotOrder',
-            'urgencyLabel', 'createdAt', 'updatedAt',
+            'urgencyLabel', 'cleaning_services', 'services', 'createdAt', 'updatedAt',
         ]);
+
+        if ($this->isWorkerDispatchCandidate($booking)) {
+            $safe['specialServicesPreview'] = WorkerPendingSpecialServicesPreview::forBooking($booking);
+        }
 
         $safe['visits'] = $booking->sessions()
             ->whereHas('workerAssignments', function ($assignments) use ($worker): void {
@@ -169,12 +174,42 @@ final class CleaningBookingShowController
             $safe['addressLatitude'] = $payload['addressLatitude'] ?? null;
             $safe['addressLongitude'] = $payload['addressLongitude'] ?? null;
             $safe['roomAssignments'] = $ownedRooms;
+            $safe = array_merge($safe, $this->acceptedWorkerOperationalDetails($booking, $worker, array_column($safe['visits'], 'id')));
         }
         if ($this->shouldScopeV2WorkerRooms($booking)) {
             $safe = $this->scopeNestedWorkerRoomData($safe, $ownedRooms);
         }
 
         return $safe;
+    }
+
+    /**
+     * Materials and kits belong to the booking. Special services may belong to
+     * individual visits or workers, so exclude every service outside this
+     * worker's accepted visits, even if it belongs to the same booking.
+     *
+     * @param list<int> $acceptedSessionIds
+     * @return array<string, mixed>
+     */
+    private function acceptedWorkerOperationalDetails(CleaningBooking $booking, Worker $worker, array $acceptedSessionIds): array
+    {
+        if ($acceptedSessionIds === []) {
+            return [];
+        }
+
+        $operational = (new CleaningBookingOperationalResource($booking))->toArray(request());
+        $specialServices = array_values(array_filter(
+            $operational['specialServices'],
+            static fn (array $service): bool =>
+                ($service['assignedWorkerId'] === null || $service['assignedWorkerId'] === (int) $worker->id)
+                && array_intersect($service['sessionIds'], $acceptedSessionIds) !== [],
+        ));
+
+        return [
+            'materials' => $operational['materials'],
+            'materialKit' => $operational['materialKit'],
+            'specialServices' => $specialServices,
+        ];
     }
 
     private function workerOwnsAcceptedVisit(CleaningBooking $booking, Worker $worker): bool
