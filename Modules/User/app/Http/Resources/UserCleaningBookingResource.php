@@ -27,6 +27,7 @@ final class UserCleaningBookingResource extends JsonResource
             && app(CleaningPricingCalculator::class)->minimumOrderAdminMarginBase(
                 $bookingBasePrice,
                 (string) $this->property_type,
+                $this->minimum_order_applied,
             ) > 0.0;
 
         // Keep the legacy propertyDetails address synchronized with the structured
