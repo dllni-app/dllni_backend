@@ -326,7 +326,14 @@ final class UserCleaningOrderEstimationService
 
         $calculatedBasePrice = $this->pricingCalculator->roundMoney($basePrice);
         $minimumOrderPrice = $this->pricingCalculator->roundMoney($minimumOrderPrice);
-        $minimumOrderApplied = $minimumOrderPrice > 0.0 && $calculatedBasePrice < $minimumOrderPrice;
+        // The configured minimum is the customer-facing service amount, inclusive
+        // of platform commission but excluding travel. Compare like for like:
+        // a room base below the minimum can still exceed it after commission.
+        $unclampedPricing = $this->pricingCalculator->provisional($calculatedBasePrice);
+        $unclampedServicePrice = $this->pricingCalculator->roundMoney(
+            (float) $unclampedPricing['totalPrice'] - (float) $unclampedPricing['travelFee'],
+        );
+        $minimumOrderApplied = $minimumOrderPrice > 0.0 && $unclampedServicePrice < $minimumOrderPrice;
         $basePrice = $minimumOrderApplied ? $minimumOrderPrice : $calculatedBasePrice;
         $estimatedSqm = round(max(25.0, $rawSqm), 2);
 
