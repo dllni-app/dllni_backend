@@ -423,6 +423,7 @@ final class CleaningBookingTeamService
         $includedAdminMarginBase = $this->pricingCalculator->minimumOrderAdminMarginBase(
             (float) ($booking->base_price ?? 0),
             (string) $booking->property_type,
+            $booking->minimum_order_applied,
         );
         $requiredWorkers = max(1, (int) ($booking->number_of_workers ?? 1));
         $totalTravelFee = 0.0;
