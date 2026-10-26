@@ -147,6 +147,7 @@ final class UserCleaningOrderService
                 'scheduled_time' => $validated['scheduledTime'],
                 'total_hours' => $estimation['estimatedHours'],
                 'base_price' => $storedPricing['basePrice'],
+                'minimum_order_applied' => (bool) ($pricing['pricingAlgorithm']['minimumOrderApplied'] ?? false),
                 'addons_total' => $storedPricing['addonsTotal'],
                 'travel_fee' => $storedPricing['travelFee'],
                 'travel_distance_km' => $storedPricing['distanceKm'],
@@ -330,6 +331,7 @@ final class UserCleaningOrderService
                 $updates['total_hours'] = $estimation['estimatedHours'];
                 $storedPricing = $this->resolveStoredPricingForUpdate($pricing, $validated, $booking);
                 $updates['base_price'] = $storedPricing['basePrice'];
+                $updates['minimum_order_applied'] = (bool) ($pricing['pricingAlgorithm']['minimumOrderApplied'] ?? false);
                 $updates['travel_fee'] = $storedPricing['travelFee'];
                 $updates['travel_distance_km'] = $storedPricing['distanceKm'];
                 $updates['addons_total'] = $storedPricing['addonsTotal'];
