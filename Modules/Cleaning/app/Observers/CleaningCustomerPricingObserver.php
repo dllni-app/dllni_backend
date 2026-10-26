@@ -88,6 +88,7 @@ final class CleaningCustomerPricingObserver
         $includedAdminMarginBase = $pricingCalculator->minimumOrderAdminMarginBase(
             (float) ($booking->base_price ?? 0),
             (string) $booking->property_type,
+            $booking->minimum_order_applied,
         );
         $pricing = $pricingCalculator->provisional(
             $serviceSubtotal,
@@ -142,6 +143,7 @@ final class CleaningCustomerPricingObserver
         $includedAdminMarginBase = $pricingCalculator->minimumOrderAdminMarginBase(
             (float) ($booking->base_price ?? 0),
             (string) $booking->property_type,
+            $booking->minimum_order_applied,
         );
         $serviceSubtotal = round(
             max(0.0, (float) ($booking->base_price ?? 0))
