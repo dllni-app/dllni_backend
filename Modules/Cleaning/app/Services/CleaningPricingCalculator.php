@@ -168,13 +168,24 @@ final class CleaningPricingCalculator
         ];
     }
 
-    public function minimumOrderAdminMarginBase(float $basePrice, string $propertyType): float
-    {
+    public function minimumOrderAdminMarginBase(
+        float $basePrice,
+        string $propertyType,
+        ?bool $minimumOrderApplied = null,
+    ): float {
         if ($propertyType === 'event_assistance') {
             return 0.0;
         }
 
         $basePrice = $this->roundMoney(max(0.0, $basePrice));
+        // New bookings persist this decision from the actual price estimate.
+        // The base price alone cannot distinguish an applied minimum from an
+        // unfloored price below (or exactly equal to) the minimum.
+        if ($minimumOrderApplied !== null) {
+            return $minimumOrderApplied ? $basePrice : 0.0;
+        }
+
+        // Legacy bookings have no stored flag, so preserve their prior behaviour.
         $minimumOrderPrice = $this->roundMoney(max(
             0.0,
             (float) (CleaningRuntimeSettings::financial()->cleaning_minimum_order_price ?? 0.0),
