@@ -452,7 +452,22 @@ final class CleaningTimeWarningService
                 ->exists();
 
             if (! $isLegacyWorker && ! $hasCommittedAssignment) {
-                throw new InvalidArgumentException('The extension request worker assignment is no longer active.');
+                // V2 bookings assign workers per visit, not necessarily to the
+                // parent booking. Resolve legacy warnings to the one active
+                // visit, then revalidate the worker on that exact session.
+                // Never accept a withdrawn worker or another visit's worker.
+                $session = $this->resolveWarningSession($warning, $booking);
+                $hasActiveSessionAssignment = $session instanceof CleaningBookingSession
+                    && CleaningBookingSessionWorkerAssignment::query()
+                        ->where('cleaning_booking_session_id', $session->id)
+                        ->where('worker_id', $workerId)
+                        ->whereIn('status', CleaningBookingWorkerAssignmentStatus::activeValues())
+                        ->lockForUpdate()
+                        ->exists();
+
+                if (! $hasActiveSessionAssignment) {
+                    throw new InvalidArgumentException('The extension request worker assignment is no longer active.');
+                }
             }
         }
     }

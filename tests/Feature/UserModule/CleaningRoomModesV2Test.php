@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\CleaningFinancialSetting;
+use Modules\Cleaning\Models\CleaningRoomType;
 use Modules\Cleaning\Support\CleaningFinancialDefaults;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
@@ -32,6 +33,20 @@ it('prices a mix of حوسة and تعزيل room by room and divides elapsed tim
         'cleaning_room_time_minutes' => $minutes,
     ]);
 
+    // Room hourly prices are now controlled by the catalog. Keep this test's
+    // simple financial examples independent of whichever seeded catalog rates
+    // happen to be installed in the local QA database.
+    foreach ([
+        'bedroom' => ['regular' => 100, 'deep' => 300],
+        'bathroom' => ['regular' => 100, 'deep' => 200],
+    ] as $code => $hourly) {
+        CleaningRoomType::query()->where('code', $code)->update([
+            'regular_hourly_rate' => $hourly['regular'],
+            'deep_hourly_rate' => $hourly['deep'],
+            'suggested_minutes_by_size' => json_encode($minutes[$code], JSON_THROW_ON_ERROR),
+        ]);
+    }
+
     $details = [
         'cleaning_mode' => 'regular',
         'room_size_breakdown' => [
@@ -58,8 +73,8 @@ it('prices a mix of حوسة and تعزيل room by room and divides elapsed tim
     ], null, null);
 
     expect($regular['basePrice'])->toBe(100.0)
-        ->and($mixedOne['basePrice'])->toBe(150.0)
-        ->and($allDeep['basePrice'])->toBe(250.0)
+        ->and($mixedOne['basePrice'])->toBe(350.0)
+        ->and($allDeep['basePrice'])->toBe(750.0)
         ->and($mixedOne['estimatedWorkMinutes'])->toBe(120)
         ->and($mixedOne['estimatedDurationMinutes'])->toBe(120)
         ->and($mixedTwo['estimatedDurationMinutes'])->toBe(60)

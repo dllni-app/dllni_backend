@@ -8,6 +8,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingRoomPeriod;
 use Modules\Cleaning\Models\CleaningBookingSession;
@@ -104,17 +105,29 @@ final class SupervisorScheduledV2Controller
     {
         if ($booking->sessions()->exists()) {
             $sessions = $this->scheduled->assignedSessions($user, $booking)
-                ->with('workerAssignments')
+                ->with(['workerAssignments.worker.user', 'activeSupervisorAssignment'])
                 ->get();
             $schedules = $booking->roomSchedules()->with('room')->get()->groupBy('cleaning_booking_session_id');
             $roomPeriods = $booking->roomPeriods()->with('room')->get()->groupBy('cleaning_booking_session_id');
+            $materialsBySession = DB::table('cleaning_time_periods')
+                ->where('cleaning_booking_id', $booking->id)
+                ->get(['cleaning_booking_session_id', 'period_key', 'materials_choice'])
+                ->groupBy('cleaning_booking_session_id');
+            $materialsBySchedule = DB::table('cleaning_time_period_room_schedules as link')
+                ->join('cleaning_time_periods as period', 'period.id', '=', 'link.cleaning_time_period_id')
+                ->where('period.cleaning_booking_id', $booking->id)
+                ->get(['link.cleaning_room_schedule_id', 'period.period_key', 'period.materials_choice'])
+                ->groupBy('cleaning_room_schedule_id');
 
-            return $sessions->map(function (CleaningBookingSession $session) use ($schedules, $roomPeriods): array {
+            return $sessions->map(function (CleaningBookingSession $session) use ($schedules, $roomPeriods, $materialsBySession, $materialsBySchedule): array {
                 $accepted = $session->workerAssignments->filter(
                     fn (CleaningBookingSessionWorkerAssignment $worker): bool => $worker->isAccepted()
                 );
                 $arrived = $accepted->filter(
                     fn (CleaningBookingSessionWorkerAssignment $worker): bool => $worker->arrived_at !== null
+                );
+                $attending = $accepted->filter(
+                    fn (CleaningBookingSessionWorkerAssignment $worker): bool => $worker->work_started_at !== null
                 );
                 $required = $session->requiredWorkerCount();
                 $visitSchedules = $schedules->get($session->id, collect());
@@ -134,8 +147,16 @@ final class SupervisorScheduledV2Controller
                     'attendance' => [
                         'source' => 'session', 'requiredWorkers' => $required,
                         'acceptedWorkers' => $accepted->count(), 'arrivedWorkers' => $arrived->count(),
+                        'plannedWorkers' => $required, 'workStartedWorkers' => $attending->count(),
+                        'actualWorkers' => null, 'actualAttendanceCertified' => false,
                         'teamReady' => $arrived->count() >= $required,
                     ],
+                    'financials' => $this->visitFinancials($session, $accepted, $interval),
+                    'materials' => $this->materialsSources($materialsBySession->get($session->id, collect())),
+                    // Exposed only through the assigned-supervisor V2 routes,
+                    // never through an individual worker's booking resource.
+                    'materialsTotal' => $session->materials_total === null
+                        ? null : round((float) $session->materials_total, 2),
                     'rooms' => $visitSchedules->map(fn (CleaningRoomSchedule $schedule): array => [
                         'roomId' => $schedule->cleaning_booking_room_id,
                         'roomKey' => $schedule->room?->client_key ?? $schedule->room?->room_key,
@@ -144,8 +165,9 @@ final class SupervisorScheduledV2Controller
                         'startsAt' => $this->isoUtc($this->roomScheduleInstant($schedule->getRawOriginal('starts_at'))),
                         'endsAt' => $this->isoUtc($this->roomScheduleInstant($schedule->getRawOriginal('ends_at'))),
                         'requiredWorkers' => $schedule->required_workers,
+                        'materials' => $this->materialsSources($materialsBySchedule->get($schedule->id, collect())),
                         'executionStatus' => 'not_tracked_per_room',
-                    ])->concat($visitRoomPeriods->map(static fn (CleaningBookingRoomPeriod $period): array => [
+                    ])->concat($visitRoomPeriods->map(fn (CleaningBookingRoomPeriod $period): array => [
                         'roomId' => $period->cleaning_booking_room_id,
                         'roomKey' => $period->client_key,
                         'roomType' => $period->room_type,
@@ -154,6 +176,7 @@ final class SupervisorScheduledV2Controller
                         'scheduledDate' => $period->scheduled_date?->toDateString(),
                         'scheduledTime' => mb_substr((string) $period->scheduled_time, 0, 5),
                         'requiredWorkers' => $period->required_workers,
+                        'materials' => $this->roomPeriodMaterials($period),
                         'executionStatus' => 'not_tracked_per_room',
                     ]))->values()->all(),
                     'allowedActions' => [],
@@ -163,7 +186,7 @@ final class SupervisorScheduledV2Controller
 
         // Room-period contract has no session rows or per-visit attendance ledger.
         // Its booking-level worker arrivals must never be presented as visit attendance.
-        return $booking->roomPeriods()->get()->groupBy('visit_sequence')
+        return $booking->roomPeriods()->with('room.assignedWorker.user')->get()->groupBy('visit_sequence')
             ->map(function (Collection $periods, $sequence): array {
                 $interval = $this->roomPeriodInterval($periods);
 
@@ -174,8 +197,12 @@ final class SupervisorScheduledV2Controller
                     'attendance' => [
                         'source' => 'unavailable', 'requiredWorkers' => null,
                         'acceptedWorkers' => null, 'arrivedWorkers' => null, 'teamReady' => null,
+                        'plannedWorkers' => null, 'workStartedWorkers' => null,
+                        'actualWorkers' => null, 'actualAttendanceCertified' => false,
                     ],
-                    'rooms' => $periods->map(static fn ($period): array => [
+                    'financials' => null,
+                    'materials' => ['source' => null, 'periods' => []],
+                    'rooms' => $periods->map(fn ($period): array => [
                         'roomId' => $period->cleaning_booking_room_id,
                         'roomKey' => $period->client_key,
                         'roomType' => $period->room_type,
@@ -184,11 +211,84 @@ final class SupervisorScheduledV2Controller
                         'scheduledDate' => $period->scheduled_date?->toDateString(),
                         'scheduledTime' => mb_substr((string) $period->scheduled_time, 0, 5),
                         'requiredWorkers' => $period->required_workers,
+                        'materials' => $this->roomPeriodMaterials($period),
                         'executionStatus' => 'not_tracked_per_room',
                     ])->values()->all(),
                     'allowedActions' => [],
                 ];
             })->values()->all();
+    }
+
+    private function materialsSources(Collection $periods): array
+    {
+        $sources = $periods->pluck('materials_choice')->unique()->values();
+
+        return [
+            'source' => $sources->count() === 1 && in_array($sources->first(), ['customer_all', 'customer_partial', 'platform_all'], true)
+                ? $sources->first() : null,
+            'periods' => $periods->map(static fn ($period): array => [
+                'periodKey' => $period->period_key,
+                'source' => in_array($period->materials_choice, ['customer_all', 'customer_partial', 'platform_all'], true)
+                    ? $period->materials_choice : null,
+            ])->values()->all(),
+        ];
+    }
+
+    private function roomPeriodMaterials(CleaningBookingRoomPeriod $period): array
+    {
+        $materials = $period->materials;
+        $provided = is_array($materials) ? ($materials['providedByPlatform'] ?? null) : null;
+
+        return [
+            'source' => is_bool($provided) ? ($provided ? 'platform_all' : 'customer_all') : null,
+            'providedByPlatform' => is_bool($provided) ? $provided : null,
+            'materialTypeIds' => is_array($materials) && is_array($materials['materialTypeIds'] ?? null)
+                ? array_values(array_map('intval', $materials['materialTypeIds'])) : [],
+        ];
+    }
+
+    private function visitFinancials(CleaningBookingSession $session, Collection $accepted, ?array $interval): array
+    {
+        $money = static fn (mixed $value): ?float => $value === null ? null : round((float) $value, 2);
+        $supervisorRate = $session->activeSupervisorAssignment?->compensation_hourly_rate;
+        $scheduledMinutes = $interval === null ? null : max(0, (int) ceil($interval[0]->diffInSeconds($interval[1]) / 60));
+        $supervisorShare = $supervisorRate === null || $scheduledMinutes === null
+            ? null : round(max(0.0, (float) $supervisorRate) * $scheduledMinutes / 60, 2);
+
+        return [
+            'status' => 'projected',
+            'isFinal' => false,
+            'isPricingFinal' => (bool) $session->is_pricing_final,
+            'currency' => (string) ($session->pricing_snapshot['currency'] ?? config('app.currency', 'SYP')),
+            'baseServiceTotal' => $money($session->getRawOriginal('base_price')),
+            'specialServicesTotal' => $money($session->getRawOriginal('special_services_total')),
+            'materialsTotal' => $money($session->getRawOriginal('materials_total')),
+            'addonsTotal' => $money($session->getRawOriginal('addons_total')),
+            'travelTotal' => $money($session->getRawOriginal('travel_fee')),
+            'adminMarginTotal' => $money($session->getRawOriginal('admin_margin_amount')),
+            'totalPrice' => $money($session->getRawOriginal('total_price')),
+            'supervisorHourlyRate' => $money($supervisorRate),
+            'supervisorShareAmount' => $supervisorShare,
+            'supervisorScheduledMinutes' => $scheduledMinutes,
+            'supervisorCompensationStatus' => $supervisorRate === null ? 'unassigned' : ($scheduledMinutes === null ? 'schedule_unavailable' : 'projected'),
+            'supervisorTravelAmount' => null,
+            'plannedWorkerCount' => $session->requiredWorkerCount(),
+            'actualWorkerCount' => null,
+            'actualAttendanceCertified' => false,
+            'workers' => $accepted->map(static fn (CleaningBookingSessionWorkerAssignment $assignment): array => [
+                'workerId' => $assignment->worker_id,
+                'workerName' => $assignment->worker?->user?->name,
+                'arrivedAt' => $assignment->arrived_at?->toIso8601String(),
+                'workStartedAt' => $assignment->work_started_at?->toIso8601String(),
+                'workFinishedAt' => $assignment->work_finished_at?->toIso8601String(),
+                'serviceShareAmount' => $money($assignment->getRawOriginal('service_share_amount')),
+                'travelAmount' => $money($assignment->getRawOriginal('travel_fee')),
+                'adminMarginAmount' => $money($assignment->getRawOriginal('admin_margin_amount')),
+                'workerAmount' => $money($assignment->getRawOriginal('worker_amount')),
+                'currency' => $assignment->currency,
+                'isFinal' => false,
+            ])->values()->all(),
+        ];
     }
 
     /** @return array{0: CarbonImmutable, 1: CarbonImmutable}|null */

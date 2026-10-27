@@ -94,6 +94,12 @@
                 <span class="text-xs text-gray-500 dark:text-gray-400">تُضاف مرة واحدة لساعات المشرف الفعلية في حجز الفريق تحت الإشراف: مدة عمل الفريق = إجمالي دقائق العمل ÷ عدد العمال (مقرّبة لأعلى إلى دقيقة). لا تُضاعف التكلفة بعدد العمال.</span>
                 @error('supervisorHourlyRate') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
             </label>
+            <label class="flex flex-col gap-1">
+                <span class="text-sm font-medium">أجر ساعة المشرف المستحق (ل.س)</span>
+                <input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="supervisorCompensationHourlyRate">
+                <span class="text-xs text-gray-500 dark:text-gray-400">هذا أجر المشرف، وهو مستقل عن تكلفة الإشراف المفوترة للعميل. يُثبّت سعر الساعة وقت إسناد المشرف للزيارة، ولا تضرب الأجرة بعدد العمال.</span>
+                @error('supervisorCompensationHourlyRate') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
+            </label>
         </div>
     </x-filament::section>
 

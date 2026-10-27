@@ -260,7 +260,6 @@ Route::prefix('v1/user')->group(function (): void {
         Route::patch('cleaning/orders/{order}', UserCleaningOrderUpdateController::class);
         Route::post('cleaning/orders/{order}/recurring-schedule/preview', [UserRecurringCleaningScheduleRevisionController::class, 'preview']);
         Route::post('cleaning/orders/{order}/recurring-schedule/confirm', [UserRecurringCleaningScheduleRevisionController::class, 'confirm']);
-        Route::patch('cleaning/orders/{order}/room-assignments', UserCleaningOrderRoomAssignmentsController::class);
         Route::post('cleaning/orders/{order}/last-hour-team-decision', UserCleaningLastHourTeamDecisionController::class);
         Route::post('cleaning/orders/{order}/cancel', UserCleaningOrderCancelController::class);
         Route::post('cleaning/orders/{order}/preferred-worker-rejection/decision', [UserCleaningPreferredWorkerRejectionDecisionController::class, 'decide']);

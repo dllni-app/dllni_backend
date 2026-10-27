@@ -239,40 +239,6 @@ final class UserCleaningOrderEstimatePriceController
             ]);
         }
 
-        $workerRoomAssignments = null;
-
-        if (
-            array_key_exists('workerRoomAssignments', $validated)
-            && ! $isEventAssistance
-        ) {
-            $plan = WorkerRoomAssignmentPlanner::plan(
-                (array) $validated['propertyDetails'],
-                is_array($validated['workerRoomAssignments']) ? $validated['workerRoomAssignments'] : null,
-                $assignmentMode,
-                $requestedWorkers,
-                isset($validated['preferredWorkerId']) ? (int) $validated['preferredWorkerId'] : null,
-            );
-
-            if ($plan['errors'] !== []) {
-                throw ValidationException::withMessages($plan['errors']);
-            }
-
-            $roomPricingBase = round((float) $pricing['basePrice'] + (float) $pricing['addonsTotal'], 2);
-            if ($recurringPlan !== null && is_array($pricing['schedule']['sessions'][0] ?? null)) {
-                $firstSessionPricing = $pricing['schedule']['sessions'][0];
-                $roomPricingBase = round(
-                    (float) ($firstSessionPricing['basePrice'] ?? 0)
-                    + (float) ($firstSessionPricing['addonsTotal'] ?? 0),
-                    2,
-                );
-            }
-
-            $workerRoomAssignments = WorkerRoomAssignmentPlanner::withPricingPreview(
-                $plan['assignments'],
-                $roomPricingBase,
-            );
-        }
-
         $clientPricing = $this->legacyMinimumPriceCompatibility($pricing);
         $clientPricing['priceSummary'] = $this->priceSummary($pricing, $openTimePlan !== null);
 
@@ -314,7 +280,6 @@ final class UserCleaningOrderEstimatePriceController
                 'isFulfilled' => false,
             ],
             'recommendation' => $estimation['recommendation'] ?? null,
-            'workerRoomAssignments' => $workerRoomAssignments,
             'workEnvironmentConfirmation' => $this->workEnvironmentConfirmationPayload($validated),
             'extendedTimeRanges' => $extendedTimePricing->ranges(),
             'algorithmVersion' => $service->algorithmVersion(),

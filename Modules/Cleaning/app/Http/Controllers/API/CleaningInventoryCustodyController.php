@@ -40,7 +40,7 @@ final class CleaningInventoryCustodyController
     {
         $row = $this->assignedSupervisorBooking($request, $booking);
 
-        return response()->json(['data' => $this->inventory($row)]);
+        return response()->json(['data' => $this->inventory($row, showMaterialPrices: true)]);
     }
 
     public function receiveSupervisorKit(Request $request, int $booking, CleaningMaterialInventoryService $materials): JsonResponse
@@ -77,7 +77,7 @@ final class CleaningInventoryCustodyController
         return response()->json(['data' => ['reservation' => $this->equipmentRow($result)]]);
     }
 
-    private function inventory(CleaningBooking $booking, ?Worker $worker = null, bool $hideGroupMaterials = false): array
+    private function inventory(CleaningBooking $booking, ?Worker $worker = null, bool $hideGroupMaterials = false, bool $showMaterialPrices = false): array
     {
         $booking->loadMissing(['materialKit', 'materials.material.materialType.unit']);
         $kit = $hideGroupMaterials ? null : $booking->materialKit;
@@ -93,6 +93,10 @@ final class CleaningInventoryCustodyController
             'damagedQuantity' => $line->damaged_quantity === null ? null : (float) $line->damaged_quantity,
             'lostQuantity' => $line->lost_quantity === null ? null : (float) $line->lost_quantity,
             'status' => $line->inventory_status,
+            ...($showMaterialPrices ? [
+                'unitPrice' => round((float) $line->unit_price, 2),
+                'totalPrice' => round((float) $line->total_price, 2),
+            ] : []),
         ])->all();
 
         $equipment = CleaningEquipmentReservation::query()->with('equipment')
@@ -113,6 +117,9 @@ final class CleaningInventoryCustodyController
                 'receivedAt' => $kit->received_at?->toIso8601String(),
             ] : null,
             'materials' => $materials,
+            ...($showMaterialPrices ? [
+                'materialsTotal' => round((float) $booking->materials->sum('total_price'), 2),
+            ] : []),
             'equipment' => $equipment,
         ];
     }

@@ -16,6 +16,8 @@ use Filament\Schemas\Schema;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingRoom;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\Cleaning\Services\CleaningBookingFinancialExposureService;
+use Modules\Cleaning\Services\CleaningBookingTeamPresentation;
 use Modules\Cleaning\Services\CleaningCouponPricingService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 use Throwable;
@@ -118,10 +120,13 @@ final class CleaningBookingInfolist
                                     ->schema([
                                         TextEntry::make('worker_acceptance')
                                             ->label('قبول العاملين')
-                                            ->state(fn ($record): string => sprintf('%d / %d', $record->acceptedWorkerCount(), max(1, (int) ($record->number_of_workers ?? 1)))),
+                                            ->state(static function (CleaningBooking $record): string {
+                                                $team = app(CleaningBookingTeamPresentation::class)->counts($record);
+                                                return sprintf('%d / %d', $team['accepted'], $team['required']);
+                                            }),
                                         TextEntry::make('remaining_workers')
                                             ->label('العاملون المتبقون')
-                                            ->state(fn ($record): string => self::integer($record->remainingWorkerCount())),
+                                            ->state(fn (CleaningBooking $record): string => self::integer(app(CleaningBookingTeamPresentation::class)->counts($record)['remaining'])),
                                         TextEntry::make('active_supervisor')
                                             ->label('المشرف المسؤول')
                                             ->state(static function (CleaningBooking $record): string {
@@ -168,6 +173,26 @@ final class CleaningBookingInfolist
                                 Section::make('الملخص المالي')
                                     ->description('الأرقام النهائية التي يحتاجها مدير المنصة لمراجعة الطلب وحصص الأطراف.')
                                     ->schema([
+                                        TextEntry::make('financial_reconciliation_alert')
+                                            ->label('تحذير التسوية المالية')
+                                            ->state(static function (CleaningBooking $record): string {
+                                                $exposure = app(CleaningBookingFinancialExposureService::class)->forBooking($record);
+
+                                                return $exposure === null ? '' : sprintf(
+                                                    'فرق غير مموّل: %s ل.س — مستحق العامل: %s، هامش الإدارة: %s، إجمالي العميل: %s. يحتاج مراجعة قبل التسوية.',
+                                                    number_format($exposure['gap'], 2),
+                                                    number_format($exposure['workerPayable'], 2),
+                                                    number_format($exposure['adminMargin'], 2),
+                                                    number_format($exposure['customerTotal'], 2),
+                                                ).($exposure['supervisorFee'] > 0
+                                                    ? sprintf(' رسوم الإشراف المحجوزة ضمن الطلب: %s ل.س.', number_format($exposure['supervisorFee'], 2))
+                                                    : '');
+                                            })
+                                            ->visible(static fn (CleaningBooking $record): bool =>
+                                                (app(CleaningBookingFinancialExposureService::class)->forBooking($record)['gap'] ?? 0) > 0)
+                                            ->color('danger')
+                                            ->badge()
+                                            ->columnSpanFull(),
                                         TextEntry::make('financial_service')
                                             ->label('قيمة الخدمة')
                                             ->state(fn (CleaningBooking $record): string => self::financialServiceSummary($record)),

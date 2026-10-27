@@ -181,7 +181,7 @@ it('scopes initialized visits to active visit ownership instead of booking-level
     expect($scheduled->assignedQuery($firstSupervisor)->whereKey($booking->id)->exists())->toBeFalse();
 });
 
-it('rejects visit supervisor reassignment after worker acceptance or arrival evidence', function (): void {
+it('allows first supervisor assignment after two worker acceptances while blocking reassignment and travel', function (): void {
     Role::findOrCreate('Cleaning Ops Manager', 'web');
     Role::findOrCreate('Cleaning Supervisor', 'web');
     $ops = User::factory()->create(['is_active' => true]);
@@ -206,6 +206,7 @@ it('rejects visit supervisor reassignment after worker acceptance or arrival evi
         'required_workers' => 2,
         'supervision_mode' => CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR,
         'supervision_initialized_at' => now(),
+        'pricing_snapshot' => ['supervisorCompensationHourlyRate' => 75],
         'coverage_status' => 'searching',
         'status' => 'worker_assigned',
     ]);
@@ -235,27 +236,33 @@ it('rejects visit supervisor reassignment after worker acceptance or arrival evi
         'work_minutes' => 240,
         'duration_minutes' => 120,
     ]);
-    $session->supervisorAssignments()->create([
-        'supervisor_user_id' => $firstSupervisor->id,
-        'assigned_by_user_id' => $ops->id,
-        'assigned_at' => now(),
-        'compensation_hourly_rate' => 0,
-        'active_slot' => 1,
-    ]);
-    $session->workerAssignments()->create([
-        'worker_id' => App\Models\Worker::factory()->create()->id,
-        'status' => 'accepted',
-        'accepted_at' => now(),
-        'arrived_at' => now(),
-    ]);
+    foreach (range(1, 2) as $seat) {
+        $session->workerAssignments()->create([
+            'worker_id' => App\Models\Worker::factory()->create()->id,
+            'status' => 'accepted_waiting_for_order_start',
+            'accepted_at' => now(),
+        ]);
+    }
     Sanctum::actingAs($ops);
 
-    $this->postJson("/api/v1/admin/cleaning/supervisor-v2-bookings/{$booking->id}/visits/1/supervisor", [
+    $url = "/api/v1/admin/cleaning/supervisor-v2-bookings/{$booking->id}/visits/1/supervisor";
+    $this->postJson($url, ['supervisorUserId' => $firstSupervisor->id])->assertCreated();
+    expect($session->supervisorAssignments()->count())->toBe(1)
+        ->and((int) $session->activeSupervisorAssignment()->value('supervisor_user_id'))->toBe($firstSupervisor->id)
+        ->and((float) $session->activeSupervisorAssignment()->value('compensation_hourly_rate'))->toBe(75.0);
+
+    $this->postJson($url, [
         'supervisorUserId' => $secondSupervisor->id,
         'reason' => 'Supervisor schedule changed after assignment.',
     ])->assertStatus(409);
     expect($session->supervisorAssignments()->count())->toBe(1)
         ->and((int) $session->activeSupervisorAssignment()->value('supervisor_user_id'))->toBe($firstSupervisor->id);
+
+    $session->activeSupervisorAssignment()->firstOrFail()->update(['active_slot' => null, 'released_at' => now()]);
+    $session->workerAssignments()->firstOrFail()->update(['started_travel_at' => now()]);
+    $this->postJson($url, ['supervisorUserId' => $secondSupervisor->id])->assertStatus(409);
+    expect($session->supervisorAssignments()->count())->toBe(1)
+        ->and($session->activeSupervisorAssignment()->exists())->toBeFalse();
 });
 
 it('enforces initialized visit privacy through real supervisor list detail and visit APIs', function (): void {

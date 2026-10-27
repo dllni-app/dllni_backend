@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Models\Worker;
 use App\Models\User;
+use App\Models\CleaningFinancialSetting;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 use Modules\Cleaning\Enums\CleaningBookingSessionCoverageStatus;
@@ -190,6 +191,54 @@ it('allocates multi-worker session entitlement by seat without deducting admin m
         ->and(round($first['serviceShareAmount'] + $second['serviceShareAmount'], 2))->toBe(1000.0);
 });
 
+it('reserves an explicitly funded supervisor fee outside both worker seats without rewriting historical sessions', function (): void {
+    $booking = makeFinancialSettlementBooking(['number_of_workers' => 2]);
+    $session = makeFinancialSettlementSession(
+        $booking, 1, CleaningBookingSessionStatus::WorkerAssigned, 2900, 725, 3645,
+        travelFee: 20, requiredWorkers: 2,
+    );
+    $workers = [Worker::factory()->create(), Worker::factory()->create()];
+    $service = app(CleaningBookingSessionWorkerPricingService::class);
+
+    // Existing bookings lacking a verifiable included-fee breakdown are left intact.
+    expect($service->quoteForNextSeat($session, $workers[0], 0)['serviceShareAmount'])->toBe(1450.0);
+
+    $session->forceFill(['pricing_snapshot' => ['contractVersion' => 2, 'supervisorFeeIncluded' => 1400]])->saveQuietly();
+    $first = $service->quoteForNextSeat($session->fresh(), $workers[0], 0);
+    $second = $service->quoteForNextSeat($session->fresh(), $workers[1], 1);
+    expect($first['serviceShareAmount'])->toBe(750.0)
+        ->and($second['serviceShareAmount'])->toBe(750.0)
+        ->and($first['serviceShareAmount'] + $second['serviceShareAmount'] + 1400)->toBe(2900.0);
+});
+
+it('keeps a fixed transport allowance even when worker coordinates are absent', function (): void {
+    CleaningFinancialSetting::query()->updateOrCreate(['id' => 1], [
+        'default_commission_rate' => 0,
+        'travel_markup_type' => 'worker_allowance',
+        'travel_markup_value' => 10,
+    ]);
+    $booking = makeFinancialSettlementBooking([
+        'number_of_workers' => 2,
+        'address_latitude' => null,
+        'address_longitude' => null,
+    ]);
+    $session = makeFinancialSettlementSession(
+        $booking, 1, CleaningBookingSessionStatus::WorkerAssigned, 1000, 200, 1220,
+        requiredWorkers: 2,
+    );
+    $worker = Worker::factory()->create([
+        'home_address' => null,
+        'home_latitude' => null,
+        'home_longitude' => null,
+    ]);
+
+    $quote = app(CleaningBookingSessionWorkerPricingService::class)->quoteForNextSeat($session, $worker, 0);
+
+    expect($quote['serviceShareAmount'])->toBe(500.0)
+        ->and($quote['travelFee'])->toBe(10.0)
+        ->and($quote['workerAmount'])->toBe(510.0);
+});
+
 it('keeps released worker payout as audit history but exposes only payable replacement assignments operationally', function (): void {
     $booking = makeFinancialSettlementBooking();
     $session = makeFinancialSettlementSession(
@@ -267,6 +316,187 @@ it('uses accepted session payouts instead of a zero parent offer in worker finan
     expect($payload['workerFinancials']['workerAmount'])->toBe(800.0)
         ->and($payload['workerFinancials']['serviceShareAmount'])->toBe(800.0)
         ->and($payload['workerFinancials']['isPreview'])->toBeFalse();
+});
+
+it('shows the customer service price with its booking-wide margin alongside a worker share', function (): void {
+    $booking = makeFinancialSettlementBooking([
+        'number_of_workers' => 2,
+        'base_price' => 2900,
+        'addons_total' => 0,
+        'travel_fee' => 20,
+        'admin_margin_amount' => 725,
+        'total_price' => 3645,
+    ]);
+    $session = makeFinancialSettlementSession(
+        $booking, 1, CleaningBookingSessionStatus::WorkerAssigned,
+        2900, 725, 3645, travelFee: 20, requiredWorkers: 2,
+    );
+    $workerUser = User::factory()->create();
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $assignment = makeFinancialSettlementAssignment(
+        $session, $worker, CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart, 1460,
+    );
+    $assignment->forceFill([
+        'service_share_amount' => 1450,
+        'admin_margin_amount' => 362.5,
+        'travel_fee' => 10,
+        'worker_amount' => 1460,
+    ])->saveQuietly();
+
+    Sanctum::actingAs($workerUser);
+    $request = request();
+    $request->setUserResolver(static fn () => $workerUser);
+    $financials = CleaningBookingResource::make($booking->fresh())->resolve($request)['workerFinancials'];
+
+    expect($financials['bookingBaseServiceAmount'])->toBe(2900.0)
+        ->and($financials['bookingServicePriceIncludingAdmin'])->toBe(3625.0)
+        ->and($financials['bookingAdminMarginAmount'])->toBe(725.0)
+        ->and($financials['serviceShareAmount'])->toBe(1450.0)
+        ->and($financials['adminMarginAmount'])->toBe(362.5)
+        ->and($financials['workerAmount'])->toBe(1460.0);
+
+    // Minimum-price-inclusive commission is not added again, and coupon
+    // reductions must follow the persisted customer total, not a fresh quote.
+    $booking->forceFill(['base_price' => 1500, 'admin_margin_amount' => 375, 'travel_fee' => 0, 'total_price' => 1500])->saveQuietly();
+    $included = CleaningBookingResource::make($booking->fresh())->resolve($request)['workerFinancials'];
+    expect($included['bookingServicePriceIncludingAdmin'])->toBe(1500.0)
+        ->and($included['bookingAdminMarginAmount'])->toBe(375.0);
+
+    $booking->forceFill(['base_price' => 2900, 'admin_margin_amount' => 725, 'travel_fee' => 20, 'total_price' => 3445, 'discount_amount' => 200])->saveQuietly();
+    $discounted = CleaningBookingResource::make($booking->fresh())->resolve($request)['workerFinancials'];
+    expect($discounted['bookingServicePriceIncludingAdmin'])->toBe(3425.0);
+});
+
+it('marks worker distribution final only after all payable sessions are settled, even with fixed travel', function (): void {
+    $booking = makeFinancialSettlementBooking([
+        'number_of_workers' => 2,
+        'property_details' => ['_time_period_v2' => ['contractVersion' => 2, 'rooms' => [], 'visits' => []]],
+    ]);
+    $first = makeFinancialSettlementSession($booking, 1, CleaningBookingSessionStatus::Completed, 1000, 200, 1220, travelFee: 20, requiredWorkers: 2);
+    $second = makeFinancialSettlementSession($booking, 2, CleaningBookingSessionStatus::WorkerAssigned, 1000, 200, 1220, travelFee: 20, requiredWorkers: 2);
+    $workerUser = User::factory()->create();
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $firstAssignment = makeFinancialSettlementAssignment($first, $worker, CleaningBookingWorkerAssignmentStatus::Completed, 510);
+    $secondAssignment = makeFinancialSettlementAssignment($second, $worker, CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart, 510);
+    foreach ([$firstAssignment, $secondAssignment] as $assignment) {
+        $assignment->forceFill(['service_share_amount' => 500, 'travel_fee' => 10, 'worker_amount' => 510])->saveQuietly();
+    }
+    $first->forceFill(['payment_status' => 'settled', 'payment_settled_at' => now()])->saveQuietly();
+
+    Sanctum::actingAs($workerUser);
+    $request = request();
+    $request->setUserResolver(static fn () => $workerUser);
+    $financials = CleaningBookingResource::make($booking->fresh())->resolve($request)['workerFinancials'];
+    expect($financials['isFinal'])->toBeFalse()
+        ->and($financials['travelFee'])->toBe(20.0)
+        ->and($financials['workerAmount'])->toBe(1020.0);
+
+    $second->forceFill([
+        'status' => CleaningBookingSessionStatus::Completed,
+        'payment_status' => 'settled',
+        'payment_settled_at' => now(),
+    ])->saveQuietly();
+    $secondAssignment->forceFill(['status' => CleaningBookingWorkerAssignmentStatus::Completed])->saveQuietly();
+    $financials = CleaningBookingResource::make($booking->fresh())->resolve($request)['workerFinancials'];
+    expect($financials['isFinal'])->toBeTrue()
+        ->and($financials['isPricingFinal'])->toBeTrue()
+        ->and($financials['isPreview'])->toBeFalse()
+        ->and($financials['travelFee'])->toBe(20.0)
+        ->and($financials['workerAmount'])->toBe(1020.0);
+});
+
+it('splits V2 projected worker earnings into base special and materials from session snapshots', function (): void {
+    $booking = makeFinancialSettlementBooking(['number_of_workers' => 2, 'property_details' => ['_time_period_v2' => ['contractVersion' => 2, 'rooms' => [], 'visits' => []]]]);
+    $session = makeFinancialSettlementSession($booking, 1, CleaningBookingSessionStatus::WorkerAssigned, 800, 100, 1100);
+    $session->forceFill(['required_workers' => 2, 'addons_total' => 200, 'special_services_total' => 150, 'materials_total' => 50])->saveQuietly();
+    $workerUser = User::factory()->create();
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    makeFinancialSettlementAssignment($session, $worker, CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart, 500);
+
+    Sanctum::actingAs($workerUser);
+    $request = request();
+    $request->setUserResolver(static fn () => $workerUser);
+    $financials = CleaningBookingResource::make($booking->fresh())->resolve($request)['workerFinancials'];
+
+    expect($financials['baseServiceShareAmount'])->toBe(400.0)
+        ->and($financials['serviceAndOperationalShareAmount'])->toBe(425.0)
+        ->and($financials['specialServicesShareAmount'])->toBe(75.0)
+        ->and(array_key_exists('materialsShareAmount', $financials))->toBeFalse()
+        ->and($financials['serviceShareAmount'])->toBe(500.0)
+        ->and($financials['plannedWorkerCount'])->toBe(2)
+        ->and($financials['isFinal'])->toBeFalse()
+        ->and($financials['isPricingFinal'])->toBeFalse()
+        ->and($financials['isPreview'])->toBeTrue();
+});
+
+it('splits worker-only V2 earnings without allocating unpaid operational materials', function (): void {
+    $booking = makeFinancialSettlementBooking(['number_of_workers' => 2, 'property_details' => ['_time_period_v2' => ['contractVersion' => 2, 'rooms' => [], 'visits' => []]]]);
+    $session = makeFinancialSettlementSession($booking, 1, CleaningBookingSessionStatus::WorkerAssigned, 1450, 300, 2025);
+    $session->forceFill([
+        'required_workers' => 2,
+        'addons_total' => 275,
+        'special_services_total' => 200,
+        'materials_total' => 75,
+    ])->saveQuietly();
+    $workerUser = User::factory()->create();
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $assignment = makeFinancialSettlementAssignment($session, $worker, CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart, 835);
+    $assignment->forceFill([
+        'service_share_amount' => 825,
+        'travel_fee' => 10,
+        'worker_amount' => 835,
+    ])->saveQuietly();
+
+    Sanctum::actingAs($workerUser);
+    $request = request();
+    $request->setUserResolver(static fn () => $workerUser);
+    $financials = CleaningBookingResource::make($booking->fresh())->resolve($request)['workerFinancials'];
+
+    expect($financials['baseServiceShareAmount'])->toBe(725.0)
+        ->and($financials['specialServicesShareAmount'])->toBe(100.0)
+        ->and($financials['serviceShareAmount'])->toBe(825.0)
+        ->and($financials['workerAmount'])->toBe(835.0)
+        ->and($financials['serviceAndOperationalShareAmount'])->toBe(725.0)
+        ->and(array_key_exists('materialsShareAmount', $financials))->toBeFalse();
+});
+
+it('does not invent a V2 special service share when extras lack a reconciled source', function (): void {
+    $booking = makeFinancialSettlementBooking(['number_of_workers' => 2, 'property_details' => ['_time_period_v2' => ['contractVersion' => 2, 'rooms' => [], 'visits' => []]]]);
+    $session = makeFinancialSettlementSession($booking, 1, CleaningBookingSessionStatus::WorkerAssigned, 800, 100, 1100);
+    $session->forceFill(['addons_total' => 200, 'special_services_total' => 150, 'materials_total' => 0])->saveQuietly();
+    $workerUser = User::factory()->create();
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    makeFinancialSettlementAssignment($session, $worker, CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart, 500);
+
+    Sanctum::actingAs($workerUser);
+    $request = request();
+    $request->setUserResolver(static fn () => $workerUser);
+    $financials = CleaningBookingResource::make($booking->fresh())->resolve($request)['workerFinancials'];
+
+    expect($financials['baseServiceShareAmount'])->toBeNull()
+        ->and($financials['serviceAndOperationalShareAmount'])->toBeNull()
+        ->and($financials['specialServicesShareAmount'])->toBeNull()
+        ->and(array_key_exists('materialsShareAmount', $financials))->toBeFalse()
+        ->and($financials['serviceShareAmount'])->toBe(500.0)
+        ->and($financials['isFinal'])->toBeFalse();
+});
+
+it('keeps the price of materials visible in a solo worker financial projection', function (): void {
+    $booking = makeFinancialSettlementBooking(['number_of_workers' => 1]);
+    $session = makeFinancialSettlementSession($booking, 1, CleaningBookingSessionStatus::WorkerAssigned, 800, 100, 1100);
+    $session->forceFill(['required_workers' => 1, 'addons_total' => 200, 'special_services_total' => 150, 'materials_total' => 50])->saveQuietly();
+    $workerUser = User::factory()->create();
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    makeFinancialSettlementAssignment($session, $worker, CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart, 1000);
+
+    Sanctum::actingAs($workerUser);
+    $request = request();
+    $request->setUserResolver(static fn () => $workerUser);
+    $financials = CleaningBookingResource::make($booking->fresh())->resolve($request)['workerFinancials'];
+    expect($financials['baseServiceShareAmount'])->toBe(800.0)
+        ->and($financials['specialServicesShareAmount'])->toBe(150.0)
+        ->and($financials['materialsShareAmount'])->toBe(50.0)
+        ->and($financials['workerAmount'])->toBe(1000.0);
 });
 
 it('applies a booking-level discount exactly once when session aggregates are resynchronized', function (): void {

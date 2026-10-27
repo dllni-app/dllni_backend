@@ -123,16 +123,6 @@ final class UserCleaningOrderService
                 ]);
             }
 
-            $plannedWorkerRoomAssignments = $this->plannedWorkerRoomAssignments(
-                $normalizedPropertyType,
-                $normalizedPropertyDetails,
-                $validated['workerRoomAssignments'] ?? null,
-                $resolvedAssignmentMode,
-                $requestedWorkers,
-                $resolvedAssignmentMode === 'preferred_worker'
-                    ? ($normalizedInput['preferredWorkerId'] !== null ? (int) $normalizedInput['preferredWorkerId'] : null)
-                    : null,
-            );
             $storedPricing = $preferredWorkerPricing ? $pricing : [
                 'basePrice' => $pricing['basePrice'],
                 'addonsTotal' => $pricing['addonsTotal'],
@@ -210,7 +200,7 @@ final class UserCleaningOrderService
             ]);
 
             if (! $booking->isSupervisedTeam()) {
-                $this->teamService->syncRooms($booking, $plannedWorkerRoomAssignments);
+                $this->teamService->syncRooms($booking);
             } else {
                 $base = max(1, (int) ceil((float) ($estimation['estimatedRawMinutes'] ?? ($estimation['estimatedHours'] * 60))));
                 $teamInterval = app(\Modules\Cleaning\Services\SupervisedTeamScheduleService::class)->estimate(
@@ -525,31 +515,12 @@ final class UserCleaningOrderService
                 $booking = $booking->fresh();
 
                 if (! $hasAcceptedAssignments) {
-                    $plannedWorkerRoomAssignments = array_key_exists('workerRoomAssignments', $validated)
-                        ? $this->plannedWorkerRoomAssignments(
-                            (string) $booking->property_type,
-                            is_array($booking->property_details) ? $booking->property_details : [],
-                            $validated['workerRoomAssignments'] ?? null,
-                            $booking->resolvedAssignmentMode(),
-                            max(1, (int) ($booking->number_of_workers ?? 1)),
-                            $booking->preferred_worker_id !== null ? (int) $booking->preferred_worker_id : null,
-                        )
-                        : $this->teamService->exportPlannedWorkerRoomAssignments($booking);
-
-                    $this->teamService->syncRooms($booking, $plannedWorkerRoomAssignments);
+                    $this->teamService->syncRooms($booking);
                 }
             }
 
             return $booking->fresh();
         });
-    }
-
-    /**
-     * @param  array<int, array{roomId:int, workerId:?int}>  $assignments
-     */
-    public function assignRoomAssignments(CleaningBooking $booking, array $assignments): CleaningBooking
-    {
-        return $this->teamService->assignRoomsFromCustomer($booking, $assignments);
     }
 
     public function cancel(CleaningBooking $booking, ?string $reason = null): CleaningBooking
@@ -1417,40 +1388,6 @@ final class UserCleaningOrderService
      * @param  array<int, array<string, mixed>>|null  $workerRoomAssignments
      * @return array<int, array<string, mixed>>|null
      */
-    private function plannedWorkerRoomAssignments(
-        string $propertyType,
-        array $propertyDetails,
-        ?array $workerRoomAssignments,
-        string $assignmentMode,
-        int $numberOfWorkers,
-        ?int $preferredWorkerId,
-    ): ?array {
-        if ($this->estimationService->isEventAssistanceType($propertyType) || $workerRoomAssignments === null) {
-            return null;
-        }
-
-        $plan = WorkerRoomAssignmentPlanner::plan(
-            $propertyDetails,
-            $workerRoomAssignments,
-            $assignmentMode,
-            $numberOfWorkers,
-            $preferredWorkerId,
-        );
-
-        if ($plan['errors'] !== []) {
-            throw ValidationException::withMessages($plan['errors']);
-        }
-
-        return array_map(static fn (array $assignment): array => [
-            'workerSlot' => $assignment['workerSlot'],
-            'preferredWorkerId' => $assignment['preferredWorkerId'],
-            'rooms' => array_map(static fn (array $room): array => [
-                'roomKey' => $room['roomKey'],
-                'roomType' => $room['roomType'],
-                'roomSize' => $room['roomSize'],
-            ], $assignment['rooms']),
-        ], $plan['assignments']);
-    }
 
     private function defaultCancellationPolicyId(): ?int
     {

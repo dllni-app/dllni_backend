@@ -6,6 +6,7 @@ namespace Modules\User\Services;
 
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 
 final class CleaningTimePeriodCustomerDetailService
@@ -118,6 +119,20 @@ final class CleaningTimePeriodCustomerDetailService
             ];
         }
         $dates = array_map(static fn (array $visit): string => mb_substr($visit['startAt'], 0, 10), $visits);
+        $acceptedTravel = (float) $booking->workerAssignments()
+            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
+            ->sum('travel_fee');
+        // Historical signed V2 quotes predate travelFeePending. Keep them
+        // transparent too when accepted workers' transport exceeds the amount
+        // actually included in the customer booking price.
+        $quotedTravel = (float) data_get($booking->property_details, '_time_period_v2.pricing.travelFee', 0);
+        $quotedTotal = (float) data_get($booking->property_details, '_time_period_v2.pricing.totalPrice', $booking->total_price);
+        $customerIncreaseSinceQuote = max(0.0, (float) $booking->total_price - $quotedTotal);
+        $unfundedTransport = max(0.0,
+            max((float) $booking->travel_fee, $acceptedTravel) - $quotedTravel - $customerIncreaseSinceQuote,
+        );
+        $travelFeePending = (bool) data_get($booking->property_details, '_time_period_v2.pricing.travelFeePending', false)
+            || round($unfundedTransport, 2) > 0;
 
         return [
             'rooms' => $rooms,
@@ -131,7 +146,11 @@ final class CleaningTimePeriodCustomerDetailService
             'pricing' => [
                 'totalPrice' => (float) $booking->total_price,
                 'currency' => (string) config('app.currency', 'SYP'),
-                'isPricingFinal' => true,
+                // A distance-dependent transport allowance is not known when
+                // the customer signs the service quote. Preserve that status
+                // after creation instead of presenting the subtotal as final.
+                'isPricingFinal' => ! $travelFeePending,
+                'travelFeePending' => $travelFeePending,
                 'coverage' => 'all_visits',
             ],
         ];

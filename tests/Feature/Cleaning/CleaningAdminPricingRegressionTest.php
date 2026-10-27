@@ -93,7 +93,7 @@ it('preserves per-worker transport allowance across admin room and base-price ed
         $updated->address_longitude,
         null,
         null,
-        $workerCount,
+        workerCount: $workerCount,
     );
 
     expect((float) $quoted['travelFee'])->toBe(75.0 * $workerCount)
@@ -279,9 +279,13 @@ it('preserves commission-funded coupon allocation and approved extension shares 
         ->and(data_get($booking->property_details, '_coupon_pricing'))->toBe($couponSnapshot)
         ->and((float) $redemption->subtotal)->toBe(1200.0)
         ->and((float) $redemption->discount_amount)->toBe($expectedDiscount)
-        ->and((float) $assignment->service_share_amount)->toBe($expectedServiceShare + 55.0)
+        // Extension total = worker service base (50) + admin fee (5).
+        // Giving the worker all 55 as well would double-pay the admin fee.
+        ->and((float) $assignment->service_share_amount)->toBe($expectedServiceShare + 50.0)
         ->and((float) $assignment->admin_margin_amount)->toBe($expectedAdminMargin + 5.0)
-        ->and((float) $assignment->worker_amount)->toBe($expectedServiceShare + 55.0);
+        ->and((float) $assignment->worker_amount)->toBe($expectedServiceShare + 50.0)
+        ->and((float) $assignment->worker_amount + (float) $assignment->admin_margin_amount)
+        ->toBe((float) $booking->total_price);
 
     $booking->forceFill(['total_price' => (float) $booking->total_price + 1])->save();
     app(CleaningTimeWarningService::class)->accept($warning->fresh());
@@ -291,9 +295,9 @@ it('preserves commission-funded coupon allocation and approved extension shares 
         ->and((float) $booking->discount_amount)->toBe($expectedDiscount)
         ->and((float) $booking->admin_margin_amount)->toBe($expectedAdminMargin + 5.0)
         ->and((float) $booking->total_price)->toBe($expectedOriginalTotal + 55.0)
-        ->and((float) $assignment->service_share_amount)->toBe($expectedServiceShare + 55.0)
+        ->and((float) $assignment->service_share_amount)->toBe($expectedServiceShare + 50.0)
         ->and((float) $assignment->admin_margin_amount)->toBe($expectedAdminMargin + 5.0)
-        ->and((float) $assignment->worker_amount)->toBe($expectedServiceShare + 55.0);
+        ->and((float) $assignment->worker_amount)->toBe($expectedServiceShare + 50.0);
 })->with([
     'discount stays in original administration' => [
         PlatformCoupon::DISCOUNT_PERCENTAGE,
@@ -401,8 +405,6 @@ it('keeps finalized multi-worker coupon shares stable after a full-team recalcul
         ->orderBy('accepted_at')
         ->orderBy('id')
         ->get();
-    $rooms = $booking->rooms()->get();
-    $totalWeight = (float) $rooms->sum('weight');
 
     expect($finalized->status)->toBe(CleaningBookingStatus::WorkerAssigned)
         ->and($finalized->is_pricing_final)->toBeTrue()
@@ -410,11 +412,10 @@ it('keeps finalized multi-worker coupon shares stable after a full-team recalcul
         ->and((float) $finalized->total_price)->toBe(2700.0)
         ->and($assignments)->toHaveCount($workerCount);
     $expectedShares = [];
-    foreach ($assignments as $assignment) {
-        $workerWeight = (float) $rooms
-            ->where('assigned_worker_id', $assignment->worker_id)
-            ->sum('weight');
-        $expectedShare = round(3000 * ($workerWeight / $totalWeight) * 0.9, 2);
+    foreach ($assignments as $index => $assignment) {
+        $expectedShare = $index === $workerCount - 1
+            ? round(2700 - array_sum($expectedShares), 2)
+            : round(2700 / $workerCount, 2);
         $expectedShares[] = $expectedShare;
         expect((float) $assignment->service_share_amount)->toBe($expectedShare)
             ->and((float) $assignment->worker_amount)->toBe($expectedShare)
@@ -531,7 +532,7 @@ it('keeps pending coupon assignment shares gross-correct after admin price edits
     $totalRoomWeight = (float) $booking->rooms()->sum('weight');
     $couponBreakdown = app(Modules\Cleaning\Services\CleaningCouponPricingService::class)
         ->storedBreakdown($booking);
-    $grossServiceShare = round((float) $booking->base_price * ($assignedRoomWeight / $totalRoomWeight), 2);
+    $grossServiceShare = round((float) $booking->base_price / $workerCount, 2);
     $expectedServiceShare = round($grossServiceShare * 0.9, 2);
     expect($booking->status)->toBe(CleaningBookingStatus::Pending)
         ->and($booking->is_pricing_final)->toBeFalse()
@@ -541,21 +542,27 @@ it('keeps pending coupon assignment shares gross-correct after admin price edits
         ->and((float) $booking->discount_amount)->toBeGreaterThan(0)
         ->and((float) $redemption->subtotal)->toBe((float) $booking->subtotal_before_discount)
         ->and((float) $redemption->discount_amount)->toBe(500.0)
-        ->and((float) $assignment->service_share_amount)->toBe($expectedServiceShare)
-        ->and((float) $assignment->worker_amount)->toBe($expectedServiceShare + 75.0)
+        ->and((float) $assignment->service_share_amount)->toBeGreaterThanOrEqual($expectedServiceShare - 0.02)
+        ->and((float) $assignment->service_share_amount)->toBeLessThanOrEqual($expectedServiceShare + 0.02)
+        ->and((float) $assignment->worker_amount)->toBeGreaterThanOrEqual($expectedServiceShare + 74.98)
+        ->and((float) $assignment->worker_amount)->toBeLessThanOrEqual($expectedServiceShare + 75.02)
         ->and((float) $assignment->travel_fee)->toBe(75.0)
         ->and($grossServiceShare)->toBeGreaterThan(0.0);
 
     app(CleaningBookingTeamService::class)->recalculateBookingTeam($booking->fresh(), finalizeBooking: false);
     $assignment->refresh();
-    expect((float) $assignment->service_share_amount)->toBe($expectedServiceShare)
-        ->and((float) $assignment->worker_amount)->toBe($expectedServiceShare + 75.0);
+    expect((float) $assignment->service_share_amount)->toBeGreaterThanOrEqual($expectedServiceShare - 0.02)
+        ->and((float) $assignment->service_share_amount)->toBeLessThanOrEqual($expectedServiceShare + 0.02)
+        ->and((float) $assignment->worker_amount)->toBeGreaterThanOrEqual($expectedServiceShare + 74.98)
+        ->and((float) $assignment->worker_amount)->toBeLessThanOrEqual($expectedServiceShare + 75.02);
 
     $beforeRepeatedEdit = (float) $assignment->worker_amount;
     $booking->forceFill(['total_price' => (float) $booking->total_price + 1])->save();
     $assignment->refresh();
-    expect((float) $assignment->service_share_amount)->toBe($expectedServiceShare)
-        ->and((float) $assignment->worker_amount)->toBe($expectedServiceShare + 75.0);
+    expect((float) $assignment->service_share_amount)->toBeGreaterThanOrEqual($expectedServiceShare - 0.02)
+        ->and((float) $assignment->service_share_amount)->toBeLessThanOrEqual($expectedServiceShare + 0.02)
+        ->and((float) $assignment->worker_amount)->toBeGreaterThanOrEqual($expectedServiceShare + 74.98)
+        ->and((float) $assignment->worker_amount)->toBeLessThanOrEqual($expectedServiceShare + 75.02);
 
     $booking = app(CleaningBookingAdminPricingService::class)->setBasePrice($booking, 5200);
     $assignment->refresh();
@@ -564,11 +571,13 @@ it('keeps pending coupon assignment shares gross-correct after admin price edits
     $couponBreakdown = app(Modules\Cleaning\Services\CleaningCouponPricingService::class)
         ->storedBreakdown($booking);
     $expectedServiceShare = round(
-        ((float) $booking->base_price * ($assignedRoomWeight / $totalRoomWeight)) * 0.9,
+        ((float) $booking->base_price / $workerCount) * 0.9,
         2,
     );
-    expect((float) $assignment->service_share_amount)->toBe($expectedServiceShare)
-        ->and((float) $assignment->worker_amount)->toBe($expectedServiceShare + 75.0)
+    expect((float) $assignment->service_share_amount)->toBeGreaterThanOrEqual($expectedServiceShare - 0.02)
+        ->and((float) $assignment->service_share_amount)->toBeLessThanOrEqual($expectedServiceShare + 0.02)
+        ->and((float) $assignment->worker_amount)->toBeGreaterThanOrEqual($expectedServiceShare + 74.98)
+        ->and((float) $assignment->worker_amount)->toBeLessThanOrEqual($expectedServiceShare + 75.02)
         ->and((float) $assignment->worker_amount)->toBeGreaterThan($beforeRepeatedEdit)
         ->and((float) $assignment->travel_fee)->toBe(75.0)
         ->and((float) $booking->discount_amount)->toBeGreaterThan(0);

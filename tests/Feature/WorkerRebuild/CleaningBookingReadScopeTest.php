@@ -160,6 +160,37 @@ it('limits a worker list to own assigned work and eligible pending offers', func
     expect(json_encode($pending))->not->toContain('Private customer note')->not->toContain('secret');
 });
 
+it('shows the complete saved address and shared room tasks only after worker acceptance', function (): void {
+    $workerUser = User::factory()->create();
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $address = 'حلب - الحمدانية - شارع القدس - بناء 12 - طابق 3';
+    $booking = CleaningBooking::factory()->create([
+        'billing_policy_id' => $this->billingPolicy->id,
+        'worker_id' => $worker->id,
+        'number_of_workers' => 2,
+        'status' => CleaningBookingStatus::WorkerAssigned,
+        'property_details' => ['address' => $address, 'bedrooms' => 2],
+    ]);
+    $booking->rooms()->create([
+        'room_key' => 'bedroom.medium.1', 'room_type' => 'bedroom',
+        'room_size' => 'medium', 'display_label' => 'غرفة نوم', 'weight' => 1,
+    ]);
+    $booking->workerAssignments()->create([
+        'worker_id' => $worker->id,
+        'status' => 'accepted_waiting_for_order_start',
+        'accepted_at' => now(),
+    ]);
+
+    Sanctum::actingAs($workerUser);
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")
+        ->assertOk()
+        ->assertJsonPath('data.address.fullAddress', $address)
+        ->assertJsonPath('data.roomTasks.0.displayLabel', 'غرفة نوم')
+        ->assertJsonMissingPath('data.roomAssignments')
+        ->assertJsonMissingPath('data.workerRoomAssignments')
+        ->assertJsonMissingPath('data.roomTasks.0.assignedWorkerId');
+});
+
 it('preserves authorized administrative list and show access', function (): void {
     $admin = User::factory()->create();
     Role::findOrCreate('admin', 'web');

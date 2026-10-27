@@ -96,38 +96,20 @@ final class CleaningBookingWorkerSessionVisibilityService
             return collect();
         }
 
-        $assignedOrHistorical = $sessions
-            ->filter(fn (CleaningBookingSession $session): bool => $this->hasAcceptedAssignment($session, $worker))
-            ->values();
-        $hasAssignmentHistory = $this->hasSessionAssignmentHistory($sessions, $worker);
         $isEventAssistance = (string) $booking->property_type === 'event_assistance';
 
-        // For Event Assistance, once the worker has participated in this
-        // booking, assignment rows are the authoritative operational scope.
-        // A released/replaced event day must not become visible again simply
-        // because that seat reopened. Other session products retain their
-        // established discovery behavior and are handled by the per-session
-        // acceptance decision below.
-        if ($isEventAssistance && $hasAssignmentHistory) {
-            return $assignedOrHistorical;
-        }
-
-        $isMultiDayEvent = $isEventAssistance && $sessions->count() > 1;
-
-        if ($isMultiDayEvent) {
-            if (! $this->acceptanceService->canAcceptAllAvailableSessions($booking, $worker)) {
-                return collect();
-            }
-
-            return $sessions
-                ->filter(fn (CleaningBookingSession $session): bool => $this->isOpenForAcceptance($session))
-                ->values();
-        }
-
         return $sessions
-            ->filter(function (CleaningBookingSession $session) use ($booking, $worker): bool {
+            ->filter(function (CleaningBookingSession $session) use ($booking, $worker, $isEventAssistance): bool {
                 if ($this->hasAcceptedAssignment($session, $worker)) {
                     return true;
+                }
+
+                // A released event day stays hidden for the replaced worker,
+                // while other unassigned event days remain independently available.
+                if ($isEventAssistance && $session->workerAssignments->contains(
+                    static fn (CleaningBookingSessionWorkerAssignment $assignment): bool => (int) $assignment->worker_id === (int) $worker->id,
+                )) {
+                    return false;
                 }
 
                 return $this->acceptanceService->canAcceptSession($booking, $session, $worker);

@@ -100,7 +100,12 @@ final class CleaningBookingSessionPricingService
                     continue;
                 }
 
-                $base = max(0.0, (float) $session->base_price);
+                $supervisorFee = min(max(0.0, (float) ($session->pricing_snapshot['supervisorFeeIncluded'] ?? 0)), max(0.0, (float) $session->base_price));
+                $base = max(0.0, (float) $session->base_price + (float) $session->addons_total - $supervisorFee);
+                if ($session->special_services_total !== null && $session->materials_total !== null
+                    && abs(round((float) $session->special_services_total + (float) $session->materials_total - (float) $session->addons_total, 2)) <= 0.01) {
+                    $base = round(max(0.0, (float) $session->base_price + (float) $session->special_services_total - $supervisorFee), 2);
+                }
                 $remainingShare = $base;
 
                 foreach ($accepted as $index => $parentAssignment) {
@@ -139,10 +144,7 @@ final class CleaningBookingSessionPricingService
                     $sessionAssignment->service_share_amount = $share;
                     $sessionAssignment->travel_fee = (float) $workerPricing['travelFee'];
                     $sessionAssignment->admin_margin_amount = (float) $workerPricing['adminMargin'];
-                    $sessionAssignment->worker_amount = max(0.0, round(
-                        $share + (float) $workerPricing['travelFee'] - (float) $workerPricing['adminMargin'],
-                        2,
-                    ));
+                    $sessionAssignment->worker_amount = max(0.0, round($share + (float) $workerPricing['travelFee'], 2));
                     $sessionAssignment->currency = (string) config('app.currency', 'SYP');
                     $sessionAssignment->saveQuietly();
                 }
@@ -167,6 +169,17 @@ final class CleaningBookingSessionPricingService
                 }
 
                 $session->load('workerAssignments');
+                // Time-period V2 already has a frozen customer quote. Seat changes
+                // update worker entitlements, never rebuild the customer's bill.
+                // In particular, the included supervisor fee and materials must
+                // remain funded once outside the worker service pool.
+                if (array_key_exists('supervisorFeeIncluded', (array) $session->pricing_snapshot)
+                    && ($session->is_pricing_final
+                        || ((string) data_get($session->pricing_snapshot, 'contractVersion') === 'room_period_v2_backfill'
+                            && data_get($session->pricing_snapshot, 'approvedTotal') !== null)
+                        || (string) data_get($session->pricing_snapshot, 'contractVersion') === 'room_period_v2')) {
+                    continue;
+                }
                 if ($teamFulfilled) {
                     $activeAssignments = $session->workerAssignments->filter(fn (CleaningBookingSessionWorkerAssignment $assignment): bool => in_array(
                         (string) ($assignment->status?->value ?? $assignment->status),

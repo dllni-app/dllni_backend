@@ -16,21 +16,13 @@ trait ValidatesWorkerRoomAssignments
     protected function workerRoomAssignmentRules(): array
     {
         return [
-            'workerRoomAssignments' => ['nullable', 'array'],
-            'workerRoomAssignments.*.workerSlot' => ['required_with:workerRoomAssignments', 'integer', 'min:1'],
-            'workerRoomAssignments.*.preferredWorkerId' => ['nullable', 'integer', 'exists:workers,id'],
-            'workerRoomAssignments.*.rooms' => ['required_with:workerRoomAssignments', 'array'],
-            'workerRoomAssignments.*.rooms.*.roomKey' => ['required', 'string'],
-            'workerRoomAssignments.*.rooms.*.roomType' => ['required', 'string'],
-            'workerRoomAssignments.*.rooms.*.roomSize' => ['required', 'string'],
+            'workerRoomAssignments' => ['prohibited'],
         ];
     }
 
     protected function validateWorkerRoomAssignments(Validator $validator): void
     {
-        if (! $this->has('workerRoomAssignments')) {
-            return;
-        }
+        return;
 
         if ($this->isEventAssistanceForWorkerRoomAssignments()) {
             return;

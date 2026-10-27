@@ -195,7 +195,10 @@ final class CleaningSupervisorAssignmentService
                 || $session->supervision_mode !== CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR), 409,
                 'يجب تهيئة ملكية جميع الزيارات قبل الإسناد الجماعي.');
 
-            $eligible = $sessions->filter(fn (CleaningBookingSession $session): bool => $this->isFutureUnstartedVisit($session));
+            $eligible = $sessions->filter(fn (CleaningBookingSession $session): bool => $this->isFutureUnstartedVisit(
+                $session,
+                ! $session->activeSupervisorAssignment()->exists(),
+            ));
             abort_if($eligible->isEmpty(), 409, 'لا توجد زيارات مستقبلية غير مبدوءة قابلة للإسناد.');
 
             $legacy = DB::table('cleaning_supervisor_assignments')
@@ -247,15 +250,14 @@ final class CleaningSupervisorAssignmentService
         abort_if(! $session->isSupervisionInitialized()
             || $session->supervision_mode !== CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR, 409,
             'الزيارة غير مهيأة لملكية المشرف.');
-        abort_if(! $this->isFutureUnstartedVisit($session), 409,
-            'يمكن إسناد الزيارات المستقبلية غير المبدوءة فقط.');
-        $this->assertAssignableSupervisor($supervisor);
-
         $existing = $session->supervisorAssignments()
             ->where('active_slot', 1)
             ->whereNull('released_at')
             ->lockForUpdate()
             ->first();
+        abort_if(! $this->isFutureUnstartedVisit($session, $existing === null), 409,
+            'يمكن إسناد الزيارات المستقبلية غير المبدوءة فقط.');
+        $this->assertAssignableSupervisor($supervisor);
         if ($existing && (int) $existing->supervisor_user_id === (int) $supervisor->id) {
             return [
                 'id' => (int) $existing->id,
@@ -281,7 +283,17 @@ final class CleaningSupervisorAssignmentService
             ])->save();
         }
 
-        $rate = max(0.0, (float) CleaningRuntimeSettings::financial()->supervisor_compensation_hourly_rate);
+        // The compensation agreed when the customer booked the visit is the
+        // durable rate. Changing Financial Settings after booking must not
+        // silently alter an already quoted visit's eventual supervisor share.
+        // Legacy visits without this new private snapshot retain the former
+        // current-setting behavior, without rewriting historical assignments.
+        $bookedRate = data_get($session->pricing_snapshot, 'supervisorCompensationHourlyRate');
+        $rate = max(0.0, (float) (
+            is_numeric($bookedRate)
+                ? $bookedRate
+                : CleaningRuntimeSettings::financial()->supervisor_compensation_hourly_rate
+        ));
         $assignment = CleaningBookingSessionSupervisorAssignment::query()->create([
             'cleaning_booking_session_id' => $session->id,
             'supervisor_user_id' => $supervisor->id,
@@ -312,7 +324,7 @@ final class CleaningSupervisorAssignmentService
         abort_unless($supervisor->is_active && $supervisor->hasRole(SupervisedTeamService::ROLE), 422);
     }
 
-    private function isFutureUnstartedVisit(CleaningBookingSession $session): bool
+    private function isFutureUnstartedVisit(CleaningBookingSession $session, bool $allowAcceptedWorkers = false): bool
     {
         $status = (string) ($session->status?->value ?? $session->status);
         if (! in_array($status, [
@@ -323,13 +335,15 @@ final class CleaningSupervisorAssignmentService
             || $session->arrived_at !== null
             || $session->work_started_at !== null
             || $session->work_finished_at !== null
-            || $session->workerAssignments()->where(function ($assignments): void {
-                $assignments->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
-                    ->orWhereNotNull('accepted_at')
-                    ->orWhereNotNull('started_travel_at')
+            || $session->workerAssignments()->where(function ($assignments) use ($allowAcceptedWorkers): void {
+                $assignments->whereNotNull('started_travel_at')
                     ->orWhereNotNull('arrived_at')
                     ->orWhereNotNull('work_started_at')
                     ->orWhereNotNull('work_finished_at');
+                if (! $allowAcceptedWorkers) {
+                    $assignments->orWhereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
+                        ->orWhereNotNull('accepted_at');
+                }
             })->exists()) {
             return false;
         }

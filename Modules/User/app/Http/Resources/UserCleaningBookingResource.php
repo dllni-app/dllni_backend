@@ -180,7 +180,7 @@ final class UserCleaningBookingResource extends JsonResource
                     ->flatMap(static fn (array $visit): array => $visit['timePeriods'])
                     ->flatMap(static fn (array $period): array => $period['specialServices'])
                     ->values()->all();
-                $payload['travelFeePending'] = false;
+                $payload['travelFeePending'] = (bool) ($details['pricing']['travelFeePending'] ?? false);
                 $payload['capabilities']['timePeriods'] = true;
                 $payload['canEdit'] = false;
                 $payload['can_edit'] = false;
@@ -267,7 +267,6 @@ final class UserCleaningBookingResource extends JsonResource
             'sessionIds' => $line->sessions()->pluck('cleaning_booking_sessions.id')->map(fn ($id) => (int) $id)->values()->all(),
             'executionStatus' => (string) $line->execution_status,
             'unableReason' => $line->unable_reason,
-            'assignedWorkerId' => $line->assigned_worker_id !== null ? (int) $line->assigned_worker_id : null,
             'items' => $line->items()->get()->map(static fn ($item): array => [
                 'id' => (int) $item->id,
                 'dirtinessLevelId' => $item->cleaning_dirtiness_level_id !== null ? (int) $item->cleaning_dirtiness_level_id : null,

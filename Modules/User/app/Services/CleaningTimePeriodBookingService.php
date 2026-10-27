@@ -16,6 +16,7 @@ use Modules\Cleaning\Models\CleaningBookingSpecialServiceItem;
 use Modules\Cleaning\Models\CleaningRoomSchedule;
 use Modules\Cleaning\Models\CleaningTimePeriod;
 use Modules\Cleaning\Services\CleaningMaterialInventoryService;
+use Modules\Cleaning\Support\CleaningRuntimeSettings;
 
 final class CleaningTimePeriodBookingService
 {
@@ -101,7 +102,7 @@ final class CleaningTimePeriodBookingService
         $first = $schedules->sortBy('startAt')->first();
         $legacy['scheduledDate'] = mb_substr($first['startAt'], 0, 10);
         $legacy['scheduledTime'] = mb_substr($first['startAt'], 11, 5);
-        $legacy['numberOfWorkers'] = $quote['requiredSimultaneousWorkers'];
+        $legacy['numberOfWorkers'] = $quote['requestedWorkerCount'] ?? $quote['requiredSimultaneousWorkers'];
         $details = $input['propertyDetails'];
         $counts = [];
         $modes = [];
@@ -121,7 +122,7 @@ final class CleaningTimePeriodBookingService
         if ($quote['supervisor'] !== null) {
             $details['_supervisor_pricing'] = $quote['supervisor'];
         }
-        $booking->forceFill(['property_details' => $details, 'number_of_workers' => $quote['requiredSimultaneousWorkers'], 'estimated_hours' => round($quote['estimatedWorkMinutes'] / 60, 2), 'total_hours' => round($quote['estimatedWorkMinutes'] / 60, 2), 'base_price' => $quote['basePrice'], 'addons_total' => $quote['addonsTotal'], 'travel_fee' => $quote['travelFee'], 'admin_margin_amount' => $quote['adminMargin'], 'total_price' => $quote['totalPrice'], 'subtotal_before_discount' => $quote['totalPrice'], 'is_pricing_final' => true])->save();
+        $booking->forceFill(['property_details' => $details, 'number_of_workers' => $quote['requestedWorkerCount'] ?? $quote['requiredSimultaneousWorkers'], 'estimated_hours' => round($quote['estimatedWorkMinutes'] / 60, 2), 'total_hours' => round($quote['estimatedWorkMinutes'] / 60, 2), 'base_price' => $quote['basePrice'], 'addons_total' => $quote['addonsTotal'], 'travel_fee' => $quote['travelFee'], 'admin_margin_amount' => $quote['adminMargin'], 'total_price' => $quote['totalPrice'], 'subtotal_before_discount' => $quote['totalPrice'], 'is_pricing_final' => true])->save();
 
         return $booking;
     }
@@ -149,8 +150,8 @@ final class CleaningTimePeriodBookingService
         $first = collect($visit['roomSchedules'])->sortBy('startAt')->first();
         $work = array_sum(array_column($visit['roomSchedules'], 'estimatedWorkMinutes'));
         $fraction = $quote['estimatedWorkMinutes'] > 0 ? $work / $quote['estimatedWorkMinutes'] : 1 / count($quote['visits']);
-        $requiredWorkers = max(1, (int) $visit['requiredSimultaneousWorkers']);
-        $session = $booking->sessions()->create(['sequence' => $visit['sequence'], 'session_type' => count($quote['visits']) > 1 ? 'recurring_cleaning' : null, 'calculation_mode' => 'task', 'scheduled_date' => mb_substr($first['startAt'], 0, 10), 'scheduled_time' => mb_substr($first['startAt'], 11, 5), 'duration_hours' => round($visit['estimatedDurationMinutes'] / 60, 2), 'required_workers' => $requiredWorkers, 'supervision_mode' => $requiredWorkers > 1 ? CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR : CleaningBookingSession::SUPERVISION_MODE_WORKER, 'supervision_initialized_at' => now(), 'materials_total' => $visit['financial']['materialsTotal'], 'special_services_total' => $visit['financial']['specialServicesTotal'], 'coverage_status' => 'searching', 'status' => 'scheduled', 'base_price' => $visit['financial']['basePrice'], 'addons_total' => $visit['financial']['addonsTotal'], 'travel_fee' => $visit['financial']['travelFee'], 'admin_margin_amount' => $visit['financial']['adminMargin'], 'total_price' => $visit['financial']['totalPrice'], 'is_pricing_final' => true, 'pricing_snapshot' => ['contractVersion' => 2, 'visitKey' => $visit['visitKey'], 'includedAdminMargin' => $visit['financial']['includedAdminMargin'], 'cashRoundingAdjustment' => $visit['financial']['cashRoundingAdjustment']]]);
+        $requiredWorkers = max(1, (int) ($quote['requestedWorkerCount'] ?? $visit['requiredSimultaneousWorkers']));
+        $session = $booking->sessions()->create(['sequence' => $visit['sequence'], 'session_type' => count($quote['visits']) > 1 ? 'recurring_cleaning' : null, 'calculation_mode' => 'task', 'scheduled_date' => mb_substr($first['startAt'], 0, 10), 'scheduled_time' => mb_substr($first['startAt'], 11, 5), 'duration_hours' => round($visit['estimatedDurationMinutes'] / 60, 2), 'required_workers' => $requiredWorkers, 'supervision_mode' => $requiredWorkers > 1 ? CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR : CleaningBookingSession::SUPERVISION_MODE_WORKER, 'supervision_initialized_at' => now(), 'materials_total' => $visit['financial']['materialsTotal'], 'special_services_total' => $visit['financial']['specialServicesTotal'], 'coverage_status' => 'searching', 'status' => 'scheduled', 'base_price' => $visit['financial']['basePrice'], 'addons_total' => $visit['financial']['addonsTotal'], 'travel_fee' => $visit['financial']['travelFee'], 'admin_margin_amount' => $visit['financial']['adminMargin'], 'total_price' => $visit['financial']['totalPrice'], 'is_pricing_final' => true, 'pricing_snapshot' => ['contractVersion' => 2, 'visitKey' => $visit['visitKey'], 'includedAdminMargin' => $visit['financial']['includedAdminMargin'], 'cashRoundingAdjustment' => $visit['financial']['cashRoundingAdjustment'], 'supervisorFeeIncluded' => (int) $visit['sequence'] === 1 ? (float) ($quote['supervisor']['fee'] ?? 0) : 0.0, 'supervisorCompensationHourlyRate' => $requiredWorkers > 1 ? max(0.0, (float) CleaningRuntimeSettings::financial()->supervisor_compensation_hourly_rate) : null]]);
         $scheduleMap = [];
         $byRoom = [];
         foreach ($visit['roomSchedules'] as $schedule) {

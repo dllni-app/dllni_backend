@@ -151,15 +151,18 @@ final class CleaningBookingService
 
     public function accept(CleaningBooking $booking, ?array $roomIds = null): CleaningBooking
     {
+        if ($roomIds !== null && $roomIds !== []) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['roomIds' => ['Worker-to-room allocation is no longer supported.']]);
+        }
         $fromStatus = (string) $booking->status->value;
 
-        $updated = DB::transaction(function () use ($booking, $roomIds): CleaningBooking {
+        $updated = DB::transaction(function () use ($booking): CleaningBooking {
             $worker = Auth::user()?->worker;
             if (! $worker) {
                 throw new InvalidArgumentException('User must have an associated worker.');
             }
 
-            return $this->teamService->acceptWorker($booking, $worker, $roomIds);
+            return $this->teamService->acceptWorker($booking, $worker);
         });
 
         $this->dispatchTrackingUpdate($updated);
@@ -182,20 +185,6 @@ final class CleaningBookingService
                 occurredAt: $updated->updated_at?->toIso8601String(),
             );
         }
-
-        return $updated;
-    }
-
-    public function claimRooms(CleaningBooking $booking, ?array $roomIds = null): CleaningBooking
-    {
-        $worker = Auth::user()?->worker;
-        if (! $worker) {
-            throw new InvalidArgumentException('User must have an associated worker.');
-        }
-
-        $updated = $this->teamService->claimRooms($booking, $worker, $roomIds);
-
-        $this->dispatchTrackingUpdate($updated);
 
         return $updated;
     }

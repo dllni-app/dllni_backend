@@ -15,6 +15,7 @@ final class CleaningBookingWorkerScheduleService
     public function __construct(
         private readonly CleaningBookingSchedulePresenter $presenter,
         private readonly CleaningBookingWorkerSessionVisibilityService $visibility,
+        private readonly CleaningBookingSessionWorkerPricingService $pricing,
     ) {}
 
     /** @return array<string, mixed> */
@@ -32,10 +33,40 @@ final class CleaningBookingWorkerScheduleService
             $includeHistoricalSession,
         );
 
-        return $this->sanitize(
-            $this->scopeToWorker($schedule, $visibleSessions),
-            $worker,
-        );
+        $scoped = $this->scopeToWorker($schedule, $visibleSessions);
+        $previews = [];
+        foreach ($visibleSessions as $session) {
+            if ($session->workerAssignments()->where('worker_id', $worker->id)
+                ->whereIn('status', \Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus::acceptedValues())->exists()) {
+                continue;
+            }
+
+            try {
+                $quote = $this->pricing->quoteForNextSeat(
+                    $session, $worker, $session->acceptedWorkerCount(),
+                );
+                $previews[(int) $session->id] = [
+                    'workerAmount' => $quote['workerAmount'],
+                    'serviceShareAmount' => $quote['serviceShareAmount'],
+                    'travelFee' => $quote['travelFee'],
+                    'currency' => $quote['currency'],
+                ];
+            } catch (\Throwable) {
+                // No estimate is safer than displaying a stale or invented amount.
+            }
+        }
+
+        foreach ($scoped['sessions'] as &$item) {
+            if (is_array($item)) {
+                $item['pricingPreview'] = $previews[(int) ($item['sessionId'] ?? $item['id'] ?? 0)] ?? null;
+            }
+        }
+        unset($item);
+        if (is_array($scoped['nextSession'] ?? null)) {
+            $scoped['nextSession']['pricingPreview'] = $previews[(int) ($scoped['nextSession']['sessionId'] ?? $scoped['nextSession']['id'] ?? 0)] ?? null;
+        }
+
+        return $this->sanitize($scoped, $worker);
     }
 
     /**

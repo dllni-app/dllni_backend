@@ -111,11 +111,11 @@ it('accepts only the explicitly selected sessions and keeps the others available
         ->and($second->workerAssignments()->count())->toBe(0);
 });
 
-it('rejects partial acceptance for a multi-day event through the public API', function (): void {
+it('accepts an independently selected event day through the public API', function (): void {
     $worker = makeSessionWorker();
     $booking = makeSessionBooking('event_assistance');
     $first = makeExecutionSession($booking, 1, now()->addDay()->toDateString(), '10:00', 1.0);
-    makeExecutionSession($booking, 2, now()->addDays(2)->toDateString(), '10:00', 1.0);
+    $second = makeExecutionSession($booking, 2, now()->addDays(2)->toDateString(), '10:00', 1.0);
 
     Sanctum::actingAs($worker->user);
 
@@ -123,12 +123,12 @@ it('rejects partial acceptance for a multi-day event through the public API', fu
         "/api/v1/cleaning-bookings/{$booking->id}/sessions/accept-selected",
         ['sessionIds' => [$first->id]],
     )
-        ->assertUnprocessable()
-        ->assertJsonPath('data.acceptance.allAccepted', false)
-        ->assertJsonPath('data.acceptance.acceptedSessionIds', [])
-        ->assertJsonPath('data.acceptance.rejected.0.reasonCode', 'event_all_days_required');
+        ->assertOk()
+        ->assertJsonPath('data.acceptance.allAccepted', true)
+        ->assertJsonPath('data.acceptance.acceptedSessionIds', [(int) $first->id]);
 
-    expect($first->workerAssignments()->count())->toBe(0);
+    expect($first->workerAssignments()->count())->toBe(1)
+        ->and($second->workerAssignments()->count())->toBe(0);
 });
 
 
@@ -148,12 +148,32 @@ it('reports session acceptance as the current worker order status while the pare
 
     $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")
         ->assertOk()
+        ->assertJsonPath('data.bookingBasePrice', 3000)
         ->assertJsonPath('data.status', CleaningBookingStatus::Pending->value)
         ->assertJsonPath('data.globalStatus', CleaningBookingStatus::Pending->value)
         ->assertJsonPath(
             'data.worker_order_status',
             'accepted_waiting_for_order_start',
         );
+});
+
+it('refuses legacy parent acceptance for a signed single-visit V2 booking', function (): void {
+    $worker = makeSessionWorker();
+    $booking = makeSessionBooking();
+    $booking->forceFill([
+        'property_details' => [
+            '_time_period_v2' => ['contractVersion' => 2],
+        ],
+    ])->save();
+    $session = makeExecutionSession($booking, 1, now()->addDay()->toDateString(), '10:00', 1.0);
+
+    Sanctum::actingAs($worker->user);
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/accept", [])
+        ->assertUnprocessable()
+        ->assertJsonStructure(['errors' => ['booking']]);
+
+    expect($booking->fresh()->status)->toBe(CleaningBookingStatus::Pending)
+        ->and($session->workerAssignments()->count())->toBe(0);
 });
 
 it('reserves specialist equipment during the session acceptance transaction', function (): void {

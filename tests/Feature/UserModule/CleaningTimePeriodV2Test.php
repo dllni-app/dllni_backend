@@ -58,7 +58,8 @@ beforeEach(function (): void {
 });
 
 it('groups exact matching intervals into one period with two independent room schedules', function (): void {
-    $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', timePeriodPayload())
+    $input = timePeriodPayload();
+    $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)
         ->assertOk()->assertJsonCount(2, 'visits.0.timePeriods')
         ->assertJsonPath('visits.0.timePeriods.0.roomScheduleKeys', ['schedule.1', 'schedule.2'])
         ->assertJsonPath('visits.0.roomSchedules.0.endAt', now('Asia/Damascus')->addDays(3)->format('Y-m-d').'T11:00:00+03:00')
@@ -68,8 +69,72 @@ it('groups exact matching intervals into one period with two independent room sc
     expect($quote['quoteSignature'])->toHaveLength(64);
 });
 
+it('makes route-dependent transportation explicitly pending while preserving a signed, itemized quote', function (): void {
+    CleaningFinancialSetting::query()->where('id', 1)->update([
+        'travel_markup_type' => 'fixed',
+        'travel_per_km' => 10,
+        'travel_markup_value' => 0,
+    ]);
+
+    $input = timePeriodPayload();
+    $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)
+        ->assertOk()
+        ->assertJsonPath('pricing.travelFeePending', true)
+        ->assertJsonPath('pricing.isPricingFinal', false)
+        ->assertJsonPath('pricing.travelFee', 0)
+        ->json();
+
+    expect($quote['quoteSignature'])->toHaveLength(64)
+        ->and($quote['pricing']['totalPrice'])->toBe(
+            $quote['pricing']['basePrice'] + $quote['pricing']['addonsTotal']
+            + $quote['pricing']['travelFee'] + $quote['pricing']['adminMargin']
+        );
+
+    $created = $this->postJson('/api/v1/user/cleaning/orders', timePeriodStorePayload($input, $quote))
+        ->assertCreated()->json();
+    $this->getJson('/api/v1/user/cleaning/orders/'.$created['order']['id'])
+        ->assertOk()
+        ->assertJsonPath('data.travelFeePending', true)
+        ->assertJsonPath('data.pricing.travelFeePending', true)
+        ->assertJsonPath('data.pricing.isPricingFinal', false);
+
+    // Legacy signed snapshots lacked the new pending flag. If the accepted
+    // worker's route allowance is not reflected in what the customer pays,
+    // the customer detail must still acknowledge an unresolved transport fee.
+    $booking = CleaningBooking::query()->findOrFail($created['order']['id']);
+    $details = $booking->property_details;
+    unset($details['_time_period_v2']['pricing']['travelFeePending']);
+    $booking->forceFill(['property_details' => $details, 'travel_fee' => 10])->saveQuietly();
+    $booking->workerAssignments()->create([
+        'worker_id' => Worker::factory()->create()->id,
+        'status' => 'accepted_waiting_for_order_start',
+        'travel_fee' => 10,
+        'service_share_amount' => 150,
+        'admin_margin_amount' => 0,
+        'worker_amount' => 160,
+        'currency' => 'SYP',
+    ]);
+    $this->getJson('/api/v1/user/cleaning/orders/'.$booking->id)
+        ->assertOk()
+        ->assertJsonPath('data.travelFeePending', true)
+        ->assertJsonPath('data.pricing.isPricingFinal', false);
+
+    CleaningFinancialSetting::query()->where('id', 1)->update([
+        'travel_markup_type' => 'worker_allowance',
+        'travel_markup_value' => 10,
+    ]);
+    $fixed = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', timePeriodPayload())
+        ->assertOk()->assertJsonPath('pricing.travelFeePending', false)
+        ->assertJsonPath('pricing.isPricingFinal', true)->json();
+
+    expect($fixed['pricing']['travelFee'])->toBeGreaterThan(0);
+});
+
 it('bills one supervisor across overlapping room schedules and snapshots approved group hours', function (): void {
-    CleaningFinancialSetting::query()->where('id', 1)->update(['supervisor_hourly_rate' => 180]);
+    CleaningFinancialSetting::query()->where('id', 1)->update([
+        'supervisor_hourly_rate' => 180,
+        'supervisor_compensation_hourly_rate' => 75,
+    ]);
     $input = timePeriodPayload();
     $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)
         ->assertOk()
@@ -83,6 +148,7 @@ it('bills one supervisor across overlapping room schedules and snapshots approve
     expect($booking->property_details['_supervisor_pricing'])->toMatchArray([
         'hourlyRate' => 180, 'billableMinutes' => 240, 'fee' => 720,
     ]);
+    expect((float) $booking->sessions()->firstOrFail()->pricing_snapshot['supervisorCompensationHourlyRate'])->toBe(75.0);
 });
 
 it('keeps partial overlaps separate and treats touching endpoints as non-overlapping', function (): void {
@@ -170,7 +236,8 @@ it('quotes a 31 square metre carpet cleaning without a false eight-hour room err
         ->assertOk()
         ->assertJsonPath('visits.0.roomSchedules.0.estimatedWorkMinutes', 302)
         ->assertJsonPath('visits.0.roomSchedules.0.estimatedDurationMinutes', 151)
-        ->assertJsonPath('pricing.isPricingFinal', true);
+        ->assertJsonPath('pricing.travelFeePending', true)
+        ->assertJsonPath('pricing.isPricingFinal', false);
 });
 
 it('keeps the same service on two room targets as two operational items', function (): void {
@@ -561,6 +628,43 @@ it('accepts more workers than rooms within server capacity and persists the requ
         ->json();
     $this->getJson('/api/v1/user/cleaning/orders/'.$stored['order']['id'])
         ->assertOk()->assertJsonPath('data.workforce.requestedWorkers', 4);
+});
+
+it('bills fixed travel for every selected team member even when peak room concurrency is one', function (): void {
+    CleaningFinancialSetting::query()->where('id', 1)->update([
+        'default_commission_rate' => 25,
+        'commission_type' => 'percent',
+        'travel_markup_type' => 'worker_allowance',
+        'travel_markup_value' => 10,
+        'travel_per_km' => 0,
+        'supervisor_hourly_rate' => 400,
+        'supervisor_compensation_hourly_rate' => 200,
+    ]);
+
+    $input = timePeriodPayload();
+    $input['rooms'] = [$input['rooms'][0]];
+    $input['propertyDetails']['room_size_breakdown'] = ['bedroom' => ['medium' => 1]];
+    $input['visits'][0]['roomSchedules'] = [$input['visits'][0]['roomSchedules'][0]];
+    $input['visits'][0]['roomSchedules'][0]['numberOfWorkers'] = 1;
+    $input['numberOfWorkers'] = 2;
+
+    $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)
+        ->assertOk()
+        ->assertJsonPath('requiredSimultaneousWorkers', 1)
+        ->assertJsonPath('pricing.travelFee', 20)
+        ->assertJsonPath('pricing.travelFeePending', false)
+        ->assertJsonPath('pricing.isPricingFinal', true)
+        ->json();
+
+    $id = $this->postJson('/api/v1/user/cleaning/orders', timePeriodStorePayload($input, $quote))
+        ->assertCreated()
+        ->assertJsonPath('workforce.requestedWorkers', 2)
+        ->json('order.id');
+    $booking = CleaningBooking::query()->findOrFail($id);
+    expect($booking->number_of_workers)->toBe(2)
+        ->and((float) $booking->travel_fee)->toBe(20.0)
+        ->and((int) $booking->sessions()->firstOrFail()->required_workers)->toBe(2)
+        ->and((float) $booking->total_price)->toBe((float) $quote['pricing']['totalPrice']);
 });
 
 it('requires customer authentication for the read-only V2 materials preview', function (): void {

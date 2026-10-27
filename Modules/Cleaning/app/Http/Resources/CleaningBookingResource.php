@@ -7,6 +7,7 @@ namespace Modules\Cleaning\Http\Resources;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Arr;
+use App\Models\CleaningFinancialSetting;
 use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
@@ -17,6 +18,7 @@ use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\CleaningExtendedTimePricingService;
 use Modules\Cleaning\Services\CleaningOrderUrgencyService;
+use Modules\Cleaning\Services\CleaningBookingTeamPresentation;
 use Modules\Cleaning\Services\WorkerOrderSolvencyService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 use Throwable;
@@ -80,6 +82,45 @@ final class CleaningBookingResource extends JsonResource
                     && $globalOrderStatus !== CleaningBookingStatus::Pending->value)
             ))
         );
+
+        // A group booking may be supervised at the *visit* level (V2), not
+        // on the parent booking. Return the assigned supervisor only to an
+        // authenticated, accepted worker of the relevant visit.
+        $supervisorContact = null;
+        $hasAcceptedBookingAssignment = $myAssignmentModel instanceof CleaningBookingWorkerAssignment
+            && in_array($myAssignmentModel->status, CleaningBookingWorkerAssignmentStatus::acceptedStatuses(), true);
+        if ($currentWorkerId !== null && (int) $this->number_of_workers > 1) {
+            $assignedVisit = $this->sessions()
+                ->where('status', '!=', CleaningBookingSessionStatus::Superseded->value)
+                ->whereHas('workerAssignments', fn ($query) => $query
+                    ->where('worker_id', $currentWorkerId)
+                    ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues()))
+                ->whereHas('activeSupervisorAssignment')
+                ->with('activeSupervisorAssignment.supervisor')
+                ->orderBy('scheduled_date')
+                ->first();
+            $supervisorUser = $assignedVisit?->activeSupervisorAssignment?->supervisor;
+            if ($supervisorUser === null && ($hasAcceptedBookingAssignment || $assignedVisit !== null
+                || $this->sessions()
+                    ->where('status', '!=', CleaningBookingSessionStatus::Superseded->value)
+                    ->whereHas('workerAssignments', fn ($query) => $query
+                        ->where('worker_id', $currentWorkerId)
+                        ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues()))
+                    ->exists())) {
+                $supervisorUser = $this->supervisorAssignments()
+                    ->whereNull('released_at')
+                    ->with('supervisor')
+                    ->latest('id')
+                    ->first()?->supervisor;
+            }
+            if ($supervisorUser !== null) {
+                $supervisorContact = [
+                    'id' => $supervisorUser->id,
+                    'name' => $supervisorUser->name,
+                    'phone' => $supervisorUser->phone,
+                ];
+            }
+        }
 
         $workerOffer = $this->currentWorkerOffer($request, $myAssignmentModel);
         $workerFinancials = $this->workerFinancialsPayload($request, $workerOffer);
@@ -203,6 +244,7 @@ final class CleaningBookingResource extends JsonResource
                 ? 'hourly_worker'
                 : ($this->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE ? 'events' : 'cleaning'),
             'bookingKind' => (string) ($this->booking_kind ?? 'standard'),
+            'supervisorContact' => $supervisorContact,
             'required_workers_count' => $team['required'],
             'accepted_workers_count' => $team['accepted'],
             'pending_workers_count' => $team['remaining'],
@@ -245,6 +287,11 @@ final class CleaningBookingResource extends JsonResource
             'workerAmount' => is_array($workerOffer) ? (float) ($workerOffer['workerAmount'] ?? 0) : null,
             'isPricingFinal' => $isPricingFinal,
             'cancellationFee' => (float) $this->cancellation_fee,
+            // Forward-looking worker cancellation cost, not the fee already
+            // charged to this booking. Never infer it from the client.
+            'workerCancellationPenaltyAmount' => $currentWorkerId !== null
+                ? CleaningFinancialSetting::currentCancellationFee()
+                : null,
             'totalPrice' => $totalPrice,
             'bookingBasePrice' => (float) ($this->base_price ?? 0),
             'bookingAddonsTotal' => (float) $this->addons_total,
@@ -285,8 +332,7 @@ final class CleaningBookingResource extends JsonResource
             'preferredWorker' => $this->whenLoaded('preferredWorker', fn () => $this->preferredWorker ? $this->serializeWorker($this->preferredWorker) : null),
             'worker' => $this->whenLoaded('worker', fn () => $this->worker ? $this->serializeWorker($this->worker) : null),
             'workerAssignments' => $this->whenLoaded('workerAssignments', fn () => $this->workerAssignments->map(fn (CleaningBookingWorkerAssignment $assignment): array => $this->serializeWorkerAssignment($assignment))->values()),
-            'workerRoomAssignments' => $this->whenLoaded('rooms', fn () => $this->serializeWorkerRoomAssignments()),
-            'roomAssignments' => $this->whenLoaded('rooms', fn () => $this->rooms->map(fn (CleaningBookingRoom $room): array => $this->serializeRoomAssignment($room))->values()),
+            'roomTasks' => $this->whenLoaded('rooms', fn () => $this->rooms->map(fn (CleaningBookingRoom $room): array => $this->serializeRoomAssignment($room))->values()),
             'workerOffer' => $workerOffer,
             'worker_offer' => $workerOffer,
             'workerFinancials' => $workerFinancials,
@@ -318,17 +364,22 @@ final class CleaningBookingResource extends JsonResource
 
     private function workerAcceptanceSummary(): array
     {
-        $required = max(1, (int) ($this->number_of_workers ?? 1));
-        $accepted = $this->acceptedWorkerCount();
-        $startApproved = $this->startApprovedWorkerCount();
+        $counts = app(CleaningBookingTeamPresentation::class)->counts($this->resource);
+        $required = $counts['required'];
+        $accepted = $counts['accepted'];
+        $startApproved = $counts['startApproved'];
 
         return ['required' => $required, 'accepted' => $accepted, 'remaining' => max(0, $required - $accepted), 'isFulfilled' => $accepted >= $required, 'startApproved' => $startApproved, 'notStartApproved' => max(0, $accepted - $startApproved)];
     }
 
     private function workerLifecycleSummary(): array
     {
-        $assignments = $this->workerAssignmentsForResource();
-        $required = max(1, (int) ($this->number_of_workers ?? 1));
+        $presentation = app(CleaningBookingTeamPresentation::class);
+        $session = $presentation->currentSession($this->resource);
+        $assignments = $session !== null
+            ? $session->workerAssignments()->whereNull('released_at')->get()
+            : $this->workerAssignmentsForResource();
+        $required = $presentation->counts($this->resource)['required'];
         $counts = array_fill_keys([
             'pending',
             'accepted',
@@ -345,13 +396,18 @@ final class CleaningBookingResource extends JsonResource
         ], 0);
 
         foreach ($assignments as $assignment) {
-            $status = $this->assignmentStatus($assignment);
+            $status = $assignment instanceof CleaningBookingSessionWorkerAssignment
+                ? (string) ($assignment->status?->value ?? $assignment->status)
+                : $this->assignmentStatus($assignment);
             $counts[$status] = ($counts[$status] ?? 0) + 1;
         }
 
         $accepted = 0;
         foreach ($assignments as $assignment) {
-            if (in_array($this->assignmentStatus($assignment), CleaningBookingWorkerAssignmentStatus::acceptedValues(), true)) {
+            $status = $assignment instanceof CleaningBookingSessionWorkerAssignment
+                ? (string) ($assignment->status?->value ?? $assignment->status)
+                : $this->assignmentStatus($assignment);
+            if (in_array($status, CleaningBookingWorkerAssignmentStatus::acceptedValues(), true)) {
                 $accepted++;
             }
         }
@@ -494,7 +550,6 @@ final class CleaningBookingResource extends JsonResource
     private function serializeWorkerAssignment(CleaningBookingWorkerAssignment $assignment): array
     {
         $worker = $assignment->relationLoaded('worker') ? $assignment->worker : null;
-        $roomIds = $this->relationLoaded('rooms') ? $this->rooms->where('assigned_worker_id', $assignment->worker_id)->pluck('id')->values()->all() : [];
         $assignmentStatus = $this->assignmentStatusForResponse($assignment);
         $services = $this->finishedSnapshot($assignment->worker_finished_cleaning_services, 'service');
         $rooms = $this->finishedSnapshot($assignment->worker_finished_property_rooms, 'room');
@@ -526,14 +581,13 @@ final class CleaningBookingResource extends JsonResource
             'adminMarginAmount' => $adminMargin,
             'workerAmount' => $this->netWorkerAmount($serviceShare, $travelFee, $adminMargin),
             'currency' => $assignment->currency,
-            'roomIds' => $roomIds,
             'worker' => $worker ? $this->serializeWorker($worker) : null,
         ];
     }
 
     private function serializeRoomAssignment(CleaningBookingRoom $room): array
     {
-        return ['id' => $room->id, 'roomKey' => $room->room_key, 'roomType' => $room->room_type, 'roomTypeLabel' => $this->label($room->room_type), 'roomSize' => $room->room_size, 'roomSizeLabel' => $this->label($room->room_size), 'cleaningMode' => $this->roomCleaningModeForKey((string) $room->room_key), 'cleaningModeLabel' => $this->roomCleaningModeForKey((string) $room->room_key) === 'deep' ? 'تعزيل' : 'حوسة', 'displayLabel' => $room->display_label, 'weight' => (float) $room->weight, 'plannedWorkerSlot' => $room->planned_worker_slot !== null ? (int) $room->planned_worker_slot : null, 'plannedPreferredWorkerId' => $room->planned_preferred_worker_id, 'assignedWorkerId' => $room->assigned_worker_id, 'assignmentSource' => $room->assignment_source?->value ?? $room->assignment_source, 'assignmentSourceLabel' => $this->label($room->assignment_source?->value ?? $room->assignment_source), 'assignedWorker' => $room->relationLoaded('assignedWorker') && $room->assignedWorker ? $this->serializeWorker($room->assignedWorker) : null];
+        return ['id' => $room->id, 'roomKey' => $room->room_key, 'roomType' => $room->room_type, 'roomTypeLabel' => $this->label($room->room_type), 'roomSize' => $room->room_size, 'roomSizeLabel' => $this->label($room->room_size), 'cleaningMode' => $this->roomCleaningModeForKey((string) $room->room_key), 'cleaningModeLabel' => $this->roomCleaningModeForKey((string) $room->room_key) === 'deep' ? 'تعزيل' : 'حوسة', 'displayLabel' => $room->display_label, 'weight' => (float) $room->weight];
     }
 
     /**
@@ -550,14 +604,6 @@ final class CleaningBookingResource extends JsonResource
         return $mode === 'deep' ? 'deep' : 'regular';
     }
 
-    private function serializeWorkerRoomAssignments(): array
-    {
-        if (! $this->relationLoaded('rooms')) {
-            return [];
-        }
-
-        return $this->rooms->groupBy('planned_worker_slot')->filter(fn ($_, $slot): bool => $slot !== '')->map(fn ($rooms, $slot): array => ['workerSlot' => (int) $slot, 'preferredWorkerId' => $rooms->first()?->planned_preferred_worker_id, 'roomsWeight' => round((float) $rooms->sum('weight'), 2), 'rooms' => $rooms->map(fn ($room): array => ['roomKey' => $room->room_key, 'roomType' => $room->room_type, 'roomTypeLabel' => $this->label($room->room_type), 'roomSize' => $room->room_size, 'roomSizeLabel' => $this->label($room->room_size)])->values()->all()])->values()->all();
-    }
 
     private function currentWorkerAssignment(Request $request): ?CleaningBookingWorkerAssignment
     {
@@ -597,27 +643,140 @@ final class CleaningBookingResource extends JsonResource
             return null;
         }
 
+        // Group materials are priced and managed by the supervisor. The
+        // individual worker still receives their worker-scoped payable amount
+        // but must not receive a separately priced materials share.
+        $hideGroupMaterialPrices = $this->isSupervisedTeam()
+            || $this->isV2OperationalGroup()
+            || (int) ($this->number_of_workers ?? 1) > 1;
+
+        // Use the persisted CUSTOMER total, not the per-worker service offer,
+        // to explain where the platform margin was charged. Subtract charges
+        // outside the original service (travel, addons, cancellation and time
+        // extensions) so the price cannot accidentally double-charge margin.
+        // This also honors coupon discounts and commission-inclusive minima.
+        $otherCharges = (float) ($this->travel_fee ?? 0)
+            + (float) ($this->addons_total ?? 0)
+            + (float) ($this->extension_fee_total ?? 0)
+            + (float) ($this->cancellation_fee ?? 0);
+        $customerServiceWithMargin = $this->total_price !== null
+            && (float) $this->total_price + 0.01 >= $otherCharges
+                ? round(max(0, (float) $this->total_price - $otherCharges), 2)
+                : null;
+        $bookingMargin = round((float) ($this->admin_margin_amount ?? 0), 2);
+
         $sessionAssignments = CleaningBookingSessionWorkerAssignment::query()
             ->where('worker_id', (int) $workerId)
             ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
             ->whereHas('session', fn ($query) => $query
                 ->where('cleaning_booking_id', $this->id)
                 ->where('status', '!=', CleaningBookingSessionStatus::Superseded->value))
+            ->with('session')
             ->get();
         if ($sessionAssignments->isNotEmpty()) {
+            // A fixed/quoted transport allowance is known at acceptance, but
+            // the worker's total is not settled until all of their payable
+            // sessions have completed and their payment has been settled.
+            // In particular, team attendance and extensions can still change
+            // the service share without changing the transport allowance.
+            $isDistributionFinal = $sessionAssignments->every(static function (CleaningBookingSessionWorkerAssignment $assignment): bool {
+                $session = $assignment->session;
+
+                return $session !== null
+                    && $session->status === CleaningBookingSessionStatus::Completed
+                    && $session->payment_status === 'settled'
+                    && $session->payment_settled_at !== null
+                    && $assignment->status === CleaningBookingWorkerAssignmentStatus::Completed;
+            });
             $service = round((float) $sessionAssignments->sum('service_share_amount'), 2);
             $transport = round((float) $sessionAssignments->sum('travel_fee'), 2);
             $margin = round((float) $sessionAssignments->sum('admin_margin_amount'), 2);
+            $baseShare = 0.0;
+            $specialShare = 0.0;
+            $materialsShare = 0.0;
+            $splitAvailable = true;
+            foreach ($sessionAssignments as $assignment) {
+                $session = $assignment->session;
+                $base = round(max(0.0, (float) ($session?->base_price ?? 0)), 2);
+                $addons = round(max(0.0, (float) ($session?->addons_total ?? 0)), 2);
+                $special = $session?->special_services_total;
+                $materials = $session?->materials_total;
+                $share = round((float) $assignment->service_share_amount, 2);
+                $total = round($base + $addons, 2);
+
+                // Never silently classify materials or unknown extras as special services.
+                if ($session === null || $special === null || $materials === null
+                    || abs(round((float) $special + (float) $materials - $addons, 2)) > 0.01
+                    || ($total <= 0 && $share > 0)) {
+                    $splitAvailable = false;
+                    break;
+                }
+
+                // Recent V2 payouts divide base service + special services and
+                // exclude operating materials. Older persisted allocations can
+                // include materials. Classify the snapshot by its known
+                // per-seat entitlement instead of silently allocating part
+                // of the worker's wage to materials that were never paid.
+                $requiredWorkers = max(1, (int) $session->required_workers);
+                $distributable = round($base + (float) $special, 2);
+                $expectedWithoutMaterials = round($distributable / $requiredWorkers, 2);
+                $expectedWithMaterials = round($total / $requiredWorkers, 2);
+                $excludesMaterials = abs($share - $expectedWithoutMaterials) <= 0.02;
+                $includesMaterials = ! $excludesMaterials
+                    && abs($share - $expectedWithMaterials) <= 0.02;
+                if (! $excludesMaterials && ! $includesMaterials) {
+                    $splitAvailable = false;
+                    break;
+                }
+                $allocationTotal = $includesMaterials ? $total : $distributable;
+
+                if ($allocationTotal > 0) {
+                    $allocatedBase = round($share * $base / $allocationTotal, 2);
+                    $allocatedSpecial = round($share * (float) $special / $allocationTotal, 2);
+                    $baseShare += $allocatedBase;
+                    $specialShare += $allocatedSpecial;
+                    if ($includesMaterials) {
+                        $materialsShare += round($share - $allocatedBase - $allocatedSpecial, 2);
+                    } else {
+                        // Keep rounding pennies with the service component.
+                        $baseShare += round($share - $allocatedBase - $allocatedSpecial, 2);
+                    }
+                }
+            }
             return [
                 'serviceShareAmount' => $service,
+                // Booking-wide service base for an explicit worker-share comparison.
+                // Excludes special services, operational materials, travel and margin.
+                'bookingBaseServiceAmount' => round((float) ($this->base_price ?? 0), 2),
+                'bookingServicePriceIncludingAdmin' => $customerServiceWithMargin,
+                'bookingAdminMarginAmount' => $bookingMargin,
+                ...($hideGroupMaterialPrices ? [
+                    // Merge the operational-material component into the
+                    // service subtotal: the worker can reconcile their own
+                    // payout without learning the individual material price.
+                    'serviceAndOperationalShareAmount' => $splitAvailable
+                        ? round($baseShare + $materialsShare, 2) : null,
+                    // The worker-facing service line must exclude operational costs.
+                    'baseServiceShareAmount' => $splitAvailable ? round($baseShare, 2) : null,
+                ] : [
+                    'baseServiceShareAmount' => $splitAvailable ? round($baseShare, 2) : null,
+                ]),
+                'specialServicesShareAmount' => $splitAvailable ? round($specialShare, 2) : null,
+                ...($hideGroupMaterialPrices ? [] : [
+                    'materialsShareAmount' => $splitAvailable ? round($materialsShare, 2) : null,
+                ]),
+                // For V2 the visit seat requirement is authoritative, even
+                // when the parent booking still carries a legacy worker count.
+                'plannedWorkerCount' => max(1, (int) ($sessionAssignments->first()?->session?->required_workers ?? $this->number_of_workers ?? 1)),
+                'isFinal' => $isDistributionFinal,
                 'travelFee' => $transport,
                 'grossAmount' => round($service + $transport, 2),
                 'adminMarginAmount' => $margin,
                 'adminMarginPercentage' => $service > 0 ? round(100 * $margin / $service, 2) : null,
                 'workerAmount' => round((float) $sessionAssignments->sum('worker_amount'), 2),
                 'currency' => (string) ($sessionAssignments->first()?->currency ?: config('app.currency', 'SYP')),
-                'isPricingFinal' => true,
-                'isPreview' => false,
+                'isPricingFinal' => $isDistributionFinal || empty($this->property_details['_time_period_v2']),
+                'isPreview' => ! $isDistributionFinal && ! empty($this->property_details['_time_period_v2']),
             ];
         }
 
@@ -628,9 +787,19 @@ final class CleaningBookingResource extends JsonResource
         $service = (float) ($offer['serviceShareAmount'] ?? 0);
         $transport = (float) ($offer['travelFee'] ?? 0);
         $margin = (float) ($offer['adminMarginAmount'] ?? 0);
+        $isDistributionFinal = $this->status === CleaningBookingStatus::Completed
+            && (bool) ($offer['isPricingFinal'] ?? false);
 
         return [
             'serviceShareAmount' => $service,
+            'bookingBaseServiceAmount' => round((float) ($this->base_price ?? 0), 2),
+            'bookingServicePriceIncludingAdmin' => $customerServiceWithMargin,
+            'bookingAdminMarginAmount' => $bookingMargin,
+            'baseServiceShareAmount' => null,
+            'specialServicesShareAmount' => null,
+            ...($hideGroupMaterialPrices ? [] : ['materialsShareAmount' => null]),
+            'plannedWorkerCount' => max(1, (int) ($this->number_of_workers ?? 1)),
+            'isFinal' => $isDistributionFinal,
             'travelFee' => $transport,
             'grossAmount' => round($service + $transport, 2),
             'adminMarginAmount' => $margin,
@@ -638,7 +807,7 @@ final class CleaningBookingResource extends JsonResource
             'workerAmount' => (float) ($offer['workerAmount'] ?? 0),
             'currency' => (string) ($offer['currency'] ?? config('app.currency', 'SYP')),
             'isPricingFinal' => (bool) ($offer['isPricingFinal'] ?? false),
-            'isPreview' => (bool) ($offer['isPreview'] ?? true),
+            'isPreview' => ! $isDistributionFinal && (bool) ($offer['isPreview'] ?? true),
         ];
     }
 

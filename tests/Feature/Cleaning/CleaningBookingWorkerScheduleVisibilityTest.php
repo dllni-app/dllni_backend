@@ -281,11 +281,28 @@ it('preserves eligible multi-day event pre-acceptance visibility and blocks an i
 
     Sanctum::actingAs($eligible->user);
 
-    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/schedule")
+    $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/schedule")
         ->assertOk()
         ->assertJsonPath('data.schedule.daysCount', 2)
         ->assertJsonPath('data.schedule.sessions.0.sessionId', $first->id)
         ->assertJsonPath('data.schedule.sessions.1.sessionId', $second->id);
+
+    foreach ($response->json('data.schedule.sessions') as $visit) {
+        expect($visit)->toHaveKey('pricingPreview');
+        if ($visit['pricingPreview'] !== null) {
+            expect(array_keys($visit['pricingPreview']))->toEqualCanonicalizing([
+                'workerAmount', 'serviceShareAmount', 'travelFee', 'currency',
+            ]);
+            expect($visit['pricingPreview'])->not->toHaveKey('adminMarginAmount');
+        }
+    }
+    $nextPreview = $response->json('data.schedule.nextSession.pricingPreview');
+    if ($nextPreview !== null) {
+        expect(array_keys($nextPreview))->toEqualCanonicalizing([
+            'workerAmount', 'serviceShareAmount', 'travelFee', 'currency',
+        ]);
+        expect($nextPreview)->not->toHaveKey('adminMarginAmount');
+    }
 
     Sanctum::actingAs($ineligible->user);
 

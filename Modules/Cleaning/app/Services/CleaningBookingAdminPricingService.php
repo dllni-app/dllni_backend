@@ -78,9 +78,10 @@ final class CleaningBookingAdminPricingService
                 $details,
                 $booking->address_latitude,
                 $booking->address_longitude,
-                null,
-                null,
-                max(1, (int) ($booking->number_of_workers ?? 1)),
+                preferredWorkerId: null,
+                serviceIds: null,
+                requestMaterials: false,
+                workerCount: max(1, (int) ($booking->number_of_workers ?? 1)),
             );
 
             // The final team recalculation emits one canonical update. Suppress

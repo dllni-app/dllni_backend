@@ -96,6 +96,45 @@ it('previews then idempotently initializes a safe room-period booking', function
         ->and($booking->sessions()->sole()->id)->toBe($session->id);
 });
 
+it('freezes a funded room-period supervisor fee only when creating a new visit session', function (): void {
+    $booking = createB1RoomPeriodBackfillBooking([
+        'base_price' => 2900,
+        'addons_total' => 0,
+        'travel_fee' => 20,
+        'admin_margin_amount' => 725,
+        'total_price' => 3645,
+        'property_details' => [
+            '_room_period_v2_approved_total' => 3645,
+            '_room_period_v2_quote_algorithm' => 'room-period-v2-2026-10-14',
+            '_supervisor_pricing' => ['fee' => 1400, 'hourlyRate' => 400, 'billableMinutes' => 210],
+        ],
+    ]);
+    // Match the signed zero-addon quote rather than the fixture's default
+    // twenty units of material/special-service add-ons.
+    $booking->roomPeriods()->firstOrFail()->update([
+        'addons_total' => 0,
+        'total_price' => 100,
+        'pricing_snapshot' => ['materials' => [], 'specialServices' => [], 'specialServicesTotal' => 0],
+    ]);
+    $service = app(CleaningBookingVisitInitializationService::class);
+    expect($service->initializeBooking($booking->id, true)['status'])->toBe('initialized');
+    $session = $booking->sessions()->sole();
+    expect((float) data_get($session->pricing_snapshot, 'supervisorFeeIncluded'))->toBe(1400.0)
+        ->and((float) $session->base_price)->toBe(2900.0)
+        ->and((float) $session->total_price)->toBe(3645.0)
+        ->and((float) $booking->fresh()->total_price)->toBe(3645.0);
+
+    $worker = \App\Models\Worker::factory()->create();
+    $first = app(\Modules\Cleaning\Services\CleaningBookingSessionWorkerPricingService::class)->quoteForNextSeat($session, $worker, 0);
+    $second = app(\Modules\Cleaning\Services\CleaningBookingSessionWorkerPricingService::class)->quoteForNextSeat($session, $worker, 1);
+    expect($first['serviceShareAmount'])->toBe(750.0)
+        ->and($second['serviceShareAmount'])->toBe(750.0)
+        ->and($first['serviceShareAmount'] + $second['serviceShareAmount'] + 1400 + 725 + 20)->toBe(3645.0);
+
+    expect($service->initializeBooking($booking->id, true)['status'])->toBe('unchanged')
+        ->and($booking->sessions()->count())->toBe(1);
+});
+
 it('links and initializes only an exactly reconciled preexisting room-period session', function (): void {
     $booking = createB1RoomPeriodBackfillBooking();
     $period = $booking->roomPeriods()->sole();

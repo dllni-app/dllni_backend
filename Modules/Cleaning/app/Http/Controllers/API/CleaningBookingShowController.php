@@ -135,7 +135,7 @@ final class CleaningBookingShowController
         ]);
 
         $safe['roomRequirements'] = WorkerBookingRequirementsPresenter::summarize(
-            is_array($payload['roomAssignments'] ?? null) ? $payload['roomAssignments'] : [],
+            $booking->rooms()->get()->map(fn ($room): array => ['id' => $room->id, 'roomKey' => $room->room_key, 'roomType' => $room->room_type, 'roomSize' => $room->room_size, 'displayLabel' => $room->display_label])->all(),
             is_array($booking->property_details) ? $booking->property_details : null,
         );
         $safe['locationSummary'] = $booking->neighborhood_name;
@@ -179,17 +179,31 @@ final class CleaningBookingShowController
             ->values()
             ->all();
 
-        $ownedRooms = [];
-        if ($safe['visits'] !== []) {
-            $ownedRooms = $this->workerOwnedRoomProjection($booking, $worker);
-            $safe['address'] = $payload['address'] ?? null;
+        $acceptedBookingWorker = $booking->workerAssignments()
+            ->where('worker_id', $worker->id)
+            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
+            ->exists();
+        if ($safe['visits'] !== [] || $acceptedBookingWorker) {
+            $safe['roomTasks'] = $safe['visits'] !== []
+                ? $this->workerOwnedRoomProjection($booking, $worker)
+                : $booking->rooms()->get()->map(static fn ($room): array => [
+                    'id' => $room->id, 'roomKey' => $room->room_key,
+                    'roomType' => $room->room_type, 'roomSize' => $room->room_size,
+                    'displayLabel' => $room->display_label,
+                ])->all();
+            // Booking-wide service price is safe for a worker who owns an
+            // accepted visit. Never expose it to an unaccepted dispatch
+            // candidate, and do not include customer grand totals.
+            $safe['bookingBasePrice'] = (float) ($payload['bookingBasePrice'] ?? $booking->base_price ?? 0);
+            $safe['address'] = $payload['address'] ?? ['fullAddress' => data_get($booking->property_details, 'address')];
             $safe['addressLatitude'] = $payload['addressLatitude'] ?? null;
             $safe['addressLongitude'] = $payload['addressLongitude'] ?? null;
-            $safe['roomAssignments'] = $ownedRooms;
             $safe = array_merge($safe, $this->acceptedWorkerOperationalDetails($booking, $worker, array_column($safe['visits'], 'id')));
         }
-        if ($this->shouldScopeV2WorkerRooms($booking)) {
-            $safe = $this->scopeNestedWorkerRoomData($safe, $ownedRooms);
+        foreach (['workerOffer', 'worker_offer', 'myAssignment', 'worker_assignment'] as $key) {
+            if (is_array($safe[$key] ?? null)) {
+                unset($safe[$key]['roomIds']);
+            }
         }
 
         return $safe;
@@ -256,7 +270,6 @@ final class CleaningBookingShowController
                 'roomType' => $schedule->room?->room_type,
                 'roomSize' => $schedule->room?->room_size,
                 'displayLabel' => $schedule->room?->display_label,
-                'assignedWorkerId' => $schedule->room?->assigned_worker_id,
             ]);
         $periodRooms = $booking->roomPeriods()
             ->with('room')
@@ -268,7 +281,6 @@ final class CleaningBookingShowController
                 'roomType' => $period->room_type,
                 'roomSize' => $period->room_size,
                 'displayLabel' => $period->room?->display_label,
-                'assignedWorkerId' => $period->room?->assigned_worker_id,
             ]);
 
         return $scheduledRooms->concat($periodRooms)
@@ -280,58 +292,6 @@ final class CleaningBookingShowController
     /**
      * @param  list<array{id:int,roomKey:mixed,roomType:mixed,roomSize:mixed,displayLabel:mixed,assignedWorkerId:mixed}>  $ownedRooms
      */
-    private function scopeNestedWorkerRoomData(array $safe, array $ownedRooms): array
-    {
-        $ownedIds = array_fill_keys(array_map(static fn (array $room): int => (int) $room['id'], $ownedRooms), true);
-        $ownedKeys = array_fill_keys(array_values(array_filter(array_map(
-            static fn (array $room): ?string => is_string($room['roomKey'] ?? null) ? mb_trim($room['roomKey']) : null,
-            $ownedRooms,
-        ))), true);
-        $ownedLabels = array_fill_keys(array_values(array_filter(array_map(
-            static fn (array $room): ?string => is_string($room['displayLabel'] ?? null) ? mb_trim($room['displayLabel']) : null,
-            $ownedRooms,
-        ))), true);
-
-        foreach (['workerOffer', 'worker_offer', 'myAssignment', 'worker_assignment'] as $key) {
-            if (! is_array($safe[$key] ?? null)) {
-                continue;
-            }
-
-            $nested = $safe[$key];
-            if (is_array($nested['roomIds'] ?? null)) {
-                $nested['roomIds'] = array_values(array_filter(
-                    $nested['roomIds'],
-                    static fn (mixed $roomId): bool => isset($ownedIds[(int) $roomId]),
-                ));
-            }
-            foreach (['workerFinishedPropertyRooms', 'worker_finished_property_rooms'] as $roomsKey) {
-                if (! is_array($nested[$roomsKey] ?? null)) {
-                    continue;
-                }
-                $nested[$roomsKey] = array_values(array_filter(
-                    $nested[$roomsKey],
-                    static function (mixed $snapshot) use ($ownedIds, $ownedKeys, $ownedLabels): bool {
-                        if (! is_array($snapshot)) {
-                            return false;
-                        }
-                        if (is_numeric($snapshot['id'] ?? null)) {
-                            return isset($ownedIds[(int) $snapshot['id']]);
-                        }
-                        $roomKey = $snapshot['roomKey'] ?? $snapshot['room_key'] ?? null;
-                        if (is_string($roomKey) && mb_trim($roomKey) !== '') {
-                            return isset($ownedKeys[mb_trim($roomKey)]);
-                        }
-                        $label = $snapshot['displayLabel'] ?? $snapshot['display_label'] ?? $snapshot['name'] ?? $snapshot['label'] ?? null;
-
-                        return is_string($label) && mb_trim($label) !== '' && isset($ownedLabels[mb_trim($label)]);
-                    },
-                ));
-            }
-            $safe[$key] = $nested;
-        }
-
-        return $safe;
-    }
 
     private function shouldScopeV2WorkerRooms(CleaningBooking $booking): bool
     {

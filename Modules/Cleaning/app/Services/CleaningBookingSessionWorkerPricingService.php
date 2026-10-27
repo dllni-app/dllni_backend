@@ -7,6 +7,7 @@ namespace Modules\Cleaning\Services;
 use App\Models\Worker;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
+use Modules\Cleaning\Support\CleaningRuntimeSettings;
 
 final class CleaningBookingSessionWorkerPricingService
 {
@@ -28,7 +29,14 @@ final class CleaningBookingSessionWorkerPricingService
 
         $requiredWorkers = max(1, (int) ($session->required_workers ?? 1));
         $slot = min($requiredWorkers, max(1, $acceptedBefore + 1));
-        $generalServiceTotal = max(0.0, (float) $session->base_price + (float) $session->addons_total);
+        $supervisorFee = min(max(0.0, (float) ($session->pricing_snapshot['supervisorFeeIncluded'] ?? 0)), max(0.0, (float) $session->base_price));
+        $generalServiceTotal = max(0.0, (float) $session->base_price + (float) $session->addons_total - $supervisorFee);
+        // Materials are an operational charge, not earnings for the attending workers.
+        // Only subtract them when the persisted addon breakdown reconciles.
+        if ($session->special_services_total !== null && $session->materials_total !== null
+            && abs(round((float) $session->special_services_total + (float) $session->materials_total - (float) $session->addons_total, 2)) <= 0.01) {
+            $generalServiceTotal = round(max(0.0, (float) $session->base_price + (float) $session->special_services_total - $supervisorFee), 2);
+        }
         $targetAdminMargin = max(0.0, (float) $session->admin_margin_amount);
 
         if ($targetAdminMargin <= 0.0 && $generalServiceTotal > 0.0) {
@@ -53,13 +61,16 @@ final class CleaningBookingSessionWorkerPricingService
 
     private function travelForWorker(CleaningBooking $booking, float $serviceShare, Worker $worker): float
     {
-        if (
+        // The per-worker allowance is independent of both workers' addresses.
+        // Only distance-based travel needs geocoding to be available.
+        $usesFixedWorkerAllowance = (string) CleaningRuntimeSettings::financial()->travel_markup_type === 'worker_allowance';
+        if (! $usesFixedWorkerAllowance && (
             $booking->address_latitude === null
             || $booking->address_longitude === null
             || blank($worker->home_address)
             || $worker->home_latitude === null
             || $worker->home_longitude === null
-        ) {
+        )) {
             // Legacy bookings and workers can predate mandatory geocoding. Their
             // session can still be settled safely; only transport pricing is
             // unavailable, so preserve the zero-travel snapshot instead of

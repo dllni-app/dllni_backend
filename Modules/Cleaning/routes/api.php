@@ -169,7 +169,6 @@ Route::prefix('v1')->group(function () {
 
         Route::post('cleaning-bookings/{cleaning_booking}/delivery-fee', CleaningBookingDeliveryFeeController::class)->name('cleaning-bookings.delivery-fee')->middleware(RejectSupervisedWorkerLifecycle::class);
         Route::post('cleaning-bookings/{cleaning_booking}/accept', [CleaningBookingController::class, 'accept'])->name('cleaning-bookings.accept')->middleware(RejectSupervisedWorkerLifecycle::class);
-        Route::post('cleaning-bookings/{cleaning_booking}/rooms/claim', [CleaningBookingController::class, 'claimRooms'])->name('cleaning-bookings.rooms.claim')->middleware(RejectSupervisedWorkerLifecycle::class);
         Route::post('cleaning-bookings/{cleaning_booking}/reject', [CleaningBookingController::class, 'reject'])->name('cleaning-bookings.reject')->middleware(RejectSupervisedWorkerLifecycle::class);
         Route::get('cleaning-bookings/{cleaning_booking}/security-code', CleaningBookingSecurityCodeController::class)->name('cleaning-bookings.security-code')->middleware(RejectSupervisedWorkerLifecycle::class);
         Route::post('cleaning-bookings/{cleaning_booking}/sos', [CleaningBookingController::class, 'sos'])->name('cleaning-bookings.sos');

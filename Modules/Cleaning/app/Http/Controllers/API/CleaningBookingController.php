@@ -294,14 +294,24 @@ final class CleaningBookingController
     public function accept(CleaningBookingAcceptRequest $request, CleaningBooking $cleaning_booking): CleaningBookingResource|JsonResponse
     {
         $this->ensureWorkerCanActOnBooking($cleaning_booking, requireOwnership: false);
-        $eligibilityResponse = $this->blockedAcceptResponse($cleaning_booking, $request->validated('roomIds'));
+        // Signed room-period V2 bookings must be accepted per execution
+        // session. The legacy parent accept path creates no V2 session proof
+        // and can change the pricing components after the customer signs.
+        $details = (array) ($cleaning_booking->property_details ?? []);
+        if (array_key_exists('_time_period_v2', $details) && $cleaning_booking->sessions()->exists()) {
+            return response()->json([
+                'message' => 'اقبل جلسة الطلب من خلال مسار الجلسات. حدّث تطبيق العامل إذا لزم الأمر.',
+                'errors' => ['booking' => ['هذا الطلب يتطلب قبول جلسة التنفيذ، وليس القبول القديم للطلب.']],
+            ], 422);
+        }
+        $eligibilityResponse = $this->blockedAcceptResponse($cleaning_booking);
 
         if ($eligibilityResponse instanceof JsonResponse) {
             return $eligibilityResponse;
         }
 
         try {
-            $booking = $this->cleaningBookingService->accept($cleaning_booking, $request->validated('roomIds'));
+            $booking = $this->cleaningBookingService->accept($cleaning_booking);
         } catch (InvalidArgumentException $e) {
             throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
         }
@@ -314,16 +324,7 @@ final class CleaningBookingController
     /** @throws Throwable */
     public function claimRooms(CleaningBookingRoomClaimRequest $request, CleaningBooking $cleaning_booking): CleaningBookingResource|JsonResponse
     {
-        abort_if($cleaning_booking->isSupervisedTeam(), 403, 'لا يوجد توزيع رقمي للغرف ضمن فريق المشرف.');
-        try {
-            $booking = $this->cleaningBookingService->claimRooms($cleaning_booking, $request->validated('roomIds'));
-        } catch (InvalidArgumentException $e) {
-            throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
-        }
-
-        return CleaningBookingResource::make(
-            $this->loadBookingDetails($booking)
-        );
+        return response()->json(['message' => 'Worker-to-room allocation is no longer supported.'], 410);
     }
 
     /** @throws Throwable */
@@ -479,8 +480,7 @@ final class CleaningBookingController
         ]);
     }
 
-    /** @param array<int, mixed>|null $roomIds */
-    private function blockedAcceptResponse(CleaningBooking $booking, ?array $roomIds = null): ?JsonResponse
+    private function blockedAcceptResponse(CleaningBooking $booking): ?JsonResponse
     {
         $worker = Auth::user()?->worker;
 
@@ -491,7 +491,7 @@ final class CleaningBookingController
         $worker->loadMissing('deposit');
         $depositSummary = $this->depositService->depositStatusPayload($worker);
         $eligibility = $this->newRequestEligibility($worker, $depositSummary);
-        $solvency = $this->solvencyService->solvencyPayloadForBooking($worker, $booking, $roomIds);
+        $solvency = $this->solvencyService->solvencyPayloadForBooking($worker, $booking);
         $eligibility['bookingSolvency'] = $solvency;
 
         if ((bool) $eligibility['canAcceptNewBookings'] && (bool) $solvency['canAcceptBooking']) {
@@ -667,7 +667,7 @@ final class CleaningBookingController
         ]);
 
         $safe['roomRequirements'] = WorkerBookingRequirementsPresenter::summarize(
-            is_array($payload['roomAssignments'] ?? null) ? $payload['roomAssignments'] : [],
+            $booking->rooms()->get()->map(fn ($room): array => ['id' => $room->id, 'roomKey' => $room->room_key, 'roomType' => $room->room_type, 'roomSize' => $room->room_size, 'displayLabel' => $room->display_label])->all(),
             is_array($booking->property_details) ? $booking->property_details : null,
         );
         $safe['locationSummary'] = $booking->neighborhood_name;
@@ -678,13 +678,11 @@ final class CleaningBookingController
         }
 
         $safe['visits'] = $this->workerVisitProjection($booking, $worker);
-        $ownedRooms = [];
         if ($safe['visits'] !== []) {
-            $ownedRooms = $this->workerOwnedRoomProjection($booking, $worker);
-            $safe['address'] = $payload['address'] ?? null;
+            $safe['roomTasks'] = $this->workerOwnedRoomProjection($booking, $worker);
+            $safe['address'] = $payload['address'] ?? ['fullAddress' => data_get($booking->property_details, 'address')];
             $safe['addressLatitude'] = $payload['addressLatitude'] ?? null;
             $safe['addressLongitude'] = $payload['addressLongitude'] ?? null;
-            $safe['roomAssignments'] = $ownedRooms;
         } elseif ((int) $booking->worker_id === (int) $worker->id
             && (int) $booking->number_of_workers === 1
             && (string) $booking->booking_kind !== 'supervised_team'
@@ -696,21 +694,14 @@ final class CleaningBookingController
             // Pre-session legacy single-worker bookings have no visit proof.
             // Restore only the worker's own room identities here; never turn
             // this compatibility path into V2 group room or address discovery.
-            $safe['roomAssignments'] = collect($payload['roomAssignments'] ?? [])
-                ->filter(static fn (mixed $room): bool => is_array($room)
-                    && (int) ($room['assignedWorkerId'] ?? 0) === (int) $worker->id)
-                ->map(static fn (array $room): array => Arr::only($room, [
-                    'id', 'roomKey', 'roomType', 'roomSize', 'displayLabel',
-                    'assignedWorkerId', 'assignmentSource',
-                ]))
-                ->values()->all();
-
-            $safe['address'] = $payload['address'] ?? null;
+            $safe['address'] = $payload['address'] ?? ['fullAddress' => data_get($booking->property_details, 'address')];
             $safe['addressLatitude'] = $payload['addressLatitude'] ?? null;
             $safe['addressLongitude'] = $payload['addressLongitude'] ?? null;
         }
-        if ($this->shouldScopeV2WorkerRooms($booking)) {
-            $safe = $this->scopeNestedWorkerRoomData($safe, $ownedRooms);
+        foreach (['workerOffer', 'worker_offer', 'myAssignment', 'worker_assignment'] as $key) {
+            if (is_array($safe[$key] ?? null)) {
+                unset($safe[$key]['roomIds']);
+            }
         }
 
         return $safe;
@@ -775,7 +766,6 @@ final class CleaningBookingController
                 'roomType' => $schedule->room?->room_type,
                 'roomSize' => $schedule->room?->room_size,
                 'displayLabel' => $schedule->room?->display_label,
-                'assignedWorkerId' => $schedule->room?->assigned_worker_id,
             ]);
         $periodRooms = $booking->roomPeriods()
             ->with('room')
@@ -787,7 +777,6 @@ final class CleaningBookingController
                 'roomType' => $period->room_type,
                 'roomSize' => $period->room_size,
                 'displayLabel' => $period->room?->display_label,
-                'assignedWorkerId' => $period->room?->assigned_worker_id,
             ]);
 
         return $scheduledRooms->concat($periodRooms)
@@ -799,58 +788,6 @@ final class CleaningBookingController
     /**
      * @param  list<array{id:int,roomKey:mixed,roomType:mixed,roomSize:mixed,displayLabel:mixed,assignedWorkerId:mixed}>  $ownedRooms
      */
-    private function scopeNestedWorkerRoomData(array $safe, array $ownedRooms): array
-    {
-        $ownedIds = array_fill_keys(array_map(static fn (array $room): int => (int) $room['id'], $ownedRooms), true);
-        $ownedKeys = array_fill_keys(array_values(array_filter(array_map(
-            static fn (array $room): ?string => is_string($room['roomKey'] ?? null) ? mb_trim($room['roomKey']) : null,
-            $ownedRooms,
-        ))), true);
-        $ownedLabels = array_fill_keys(array_values(array_filter(array_map(
-            static fn (array $room): ?string => is_string($room['displayLabel'] ?? null) ? mb_trim($room['displayLabel']) : null,
-            $ownedRooms,
-        ))), true);
-
-        foreach (['workerOffer', 'worker_offer', 'myAssignment', 'worker_assignment'] as $key) {
-            if (! is_array($safe[$key] ?? null)) {
-                continue;
-            }
-
-            $nested = $safe[$key];
-            if (is_array($nested['roomIds'] ?? null)) {
-                $nested['roomIds'] = array_values(array_filter(
-                    $nested['roomIds'],
-                    static fn (mixed $roomId): bool => isset($ownedIds[(int) $roomId]),
-                ));
-            }
-            foreach (['workerFinishedPropertyRooms', 'worker_finished_property_rooms'] as $roomsKey) {
-                if (! is_array($nested[$roomsKey] ?? null)) {
-                    continue;
-                }
-                $nested[$roomsKey] = array_values(array_filter(
-                    $nested[$roomsKey],
-                    static function (mixed $snapshot) use ($ownedIds, $ownedKeys, $ownedLabels): bool {
-                        if (! is_array($snapshot)) {
-                            return false;
-                        }
-                        if (is_numeric($snapshot['id'] ?? null)) {
-                            return isset($ownedIds[(int) $snapshot['id']]);
-                        }
-                        $roomKey = $snapshot['roomKey'] ?? $snapshot['room_key'] ?? null;
-                        if (is_string($roomKey) && mb_trim($roomKey) !== '') {
-                            return isset($ownedKeys[mb_trim($roomKey)]);
-                        }
-                        $label = $snapshot['displayLabel'] ?? $snapshot['display_label'] ?? $snapshot['name'] ?? $snapshot['label'] ?? null;
-
-                        return is_string($label) && mb_trim($label) !== '' && isset($ownedLabels[mb_trim($label)]);
-                    },
-                ));
-            }
-            $safe[$key] = $nested;
-        }
-
-        return $safe;
-    }
 
     private function shouldScopeV2WorkerRooms(CleaningBooking $booking): bool
     {

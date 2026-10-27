@@ -84,6 +84,7 @@ final class DatabaseSeeder extends Seeder
             MarketingOfferSeeder::class,
             UserAppScenarioSeeder::class,
             CleaningConnectedDemoSeeder::class,
+            CleaningSupervisorVisitScenarioSeeder::class,
             PlatformCouponDemoSeeder::class,
         ];
     }

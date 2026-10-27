@@ -360,10 +360,18 @@ final class WorkerOrderSolvencyService
             }
         }
 
+        $equalShares = [];
+        $remainingServiceCents = (int) round($subtotal * 100);
+        for ($slot = 1; $slot <= $workerCount; $slot++) {
+            $slotCents = intdiv($remainingServiceCents, $workerCount - $slot + 1);
+            $equalShares[$slot] = (float) ($slotCents / 100);
+            $remainingServiceCents -= $slotCents;
+        }
+
         if ((string) $booking->property_type === 'event_assistance') {
             return [
-                'serviceShareAmount' => round($subtotal / $workerCount, 2),
-                'adminMarginAmount' => round($targetAdminMargin / $workerCount, 2),
+                'serviceShareAmount' => $equalShares[$this->workerSlotForAssignment($booking, $assignment) ?? 1],
+                'adminMarginAmount' => $this->allocatedMarginForSlot($targetAdminMargin, $equalShares, $this->workerSlotForAssignment($booking, $assignment) ?? 1),
                 'roomCount' => 0,
                 'roomsWeight' => 0.0,
                 'workerSlot' => null,
@@ -378,56 +386,14 @@ final class WorkerOrderSolvencyService
             ->whereNotNull('planned_worker_slot')
             ->get(['id', 'planned_worker_slot', 'weight']);
 
-        $totalWeight = round((float) $plannedRooms->sum(
-            static fn (CleaningBookingRoom $room): float => (float) $room->weight,
-        ), 2);
-
-        if ($totalWeight <= 0.0) {
-            $equalShares = array_fill(1, $workerCount, round($subtotal / $workerCount, 2));
-
-            return [
-                'serviceShareAmount' => $equalShares[$nextSlot],
-                'adminMarginAmount' => $this->allocatedMarginForSlot($targetAdminMargin, $equalShares, $nextSlot),
-                'roomCount' => 0,
-                'roomsWeight' => 0.0,
-                'workerSlot' => $nextSlot,
-                'roomIds' => [],
-            ];
-        }
-
-        $slotShares = [];
-        $slotWeights = [];
-        for ($slot = 1; $slot <= $workerCount; $slot++) {
-            $slotWeight = round((float) $plannedRooms
-                ->filter(static fn (CleaningBookingRoom $room): bool => (int) $room->planned_worker_slot === $slot)
-                ->sum(static fn (CleaningBookingRoom $room): float => (float) $room->weight), 2);
-            $slotWeights[$slot] = $slotWeight;
-            $slotShares[$slot] = $slotWeight > 0.0
-                ? round($subtotal * ($slotWeight / $totalWeight), 2)
-                : 0.0;
-        }
-
         $slotRooms = $plannedRooms
             ->filter(static fn (CleaningBookingRoom $room): bool => (int) $room->planned_worker_slot === $nextSlot)
             ->values();
-        $slotWeight = $slotWeights[$nextSlot] ?? 0.0;
-
-        if ($slotWeight <= 0.0) {
-            $equalShares = array_fill(1, $workerCount, round($subtotal / $workerCount, 2));
-
-            return [
-                'serviceShareAmount' => $equalShares[$nextSlot],
-                'adminMarginAmount' => $this->allocatedMarginForSlot($targetAdminMargin, $equalShares, $nextSlot),
-                'roomCount' => 0,
-                'roomsWeight' => 0.0,
-                'workerSlot' => $nextSlot,
-                'roomIds' => [],
-            ];
-        }
+        $slotWeight = round((float) $slotRooms->sum(static fn (CleaningBookingRoom $room): float => (float) $room->weight), 2);
 
         return [
-            'serviceShareAmount' => $slotShares[$nextSlot],
-            'adminMarginAmount' => $this->allocatedMarginForSlot($targetAdminMargin, $slotShares, $nextSlot),
+            'serviceShareAmount' => $equalShares[$nextSlot],
+            'adminMarginAmount' => $this->allocatedMarginForSlot($targetAdminMargin, $equalShares, $nextSlot),
             'roomCount' => $slotRooms->count(),
             'roomsWeight' => $slotWeight,
             'workerSlot' => $nextSlot,

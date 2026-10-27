@@ -12,6 +12,7 @@ use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningEquipmentReservation;
+use Modules\Cleaning\Support\CleaningRuntimeSettings;
 use RuntimeException;
 
 final class CleaningBookingVisitInitializationService
@@ -66,6 +67,8 @@ final class CleaningBookingVisitInitializationService
                 'requiredSimultaneousWorkers' => $requiredWorkers,
                 'currency' => $quote['currency'] ?? config('app.currency', 'SYP'),
                 'supervisor' => $quote['supervisor'] ?? null,
+                'supervisorFeeIncluded' => (float) ($quote['supervisor']['fee'] ?? 0),
+                'supervisorCompensationHourlyRate' => $requiredWorkers > 1 ? max(0.0, (float) CleaningRuntimeSettings::financial()->supervisor_compensation_hourly_rate) : null,
             ],
         ]);
 
@@ -402,6 +405,9 @@ final class CleaningBookingVisitInitializationService
                 'specialServicesTotal' => $specialServicesTotal,
                 'requiredSimultaneousWorkers' => $requiredWorkers,
                 'approvedTotal' => (float) $details['_room_period_v2_approved_total'],
+                // Backfill only creates a new session after attendance/work
+                // guards; an existing session's historical payout is untouched.
+                'supervisorFeeIncluded' => (float) data_get($details, '_supervisor_pricing.fee', 0),
             ],
         ]);
 

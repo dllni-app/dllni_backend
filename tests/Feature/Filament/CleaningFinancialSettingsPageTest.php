@@ -106,6 +106,29 @@ it('persists the per-worker transport allowance travel markup option', function 
         ->assertHasErrors(['travelMarkupType']);
 });
 
+it('persists supervisor customer billing separately from supervisor compensation', function (): void {
+    Livewire::test(FinancialSettings::class)
+        ->set('defaultCommissionRate', 25)
+        ->set('commissionType', 'percent')
+        ->set('travelMarkupType', 'worker_allowance')
+        ->set('travelMarkupValue', 10)
+        ->set('supervisorHourlyRate', 400)
+        ->set('supervisorCompensationHourlyRate', 200)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $setting = CleaningFinancialSetting::query()->findOrFail(1);
+    expect((float) $setting->default_commission_rate)->toBe(25.0)
+        ->and((string) $setting->travel_markup_type)->toBe('worker_allowance')
+        ->and((float) $setting->travel_markup_value)->toBe(10.0)
+        ->and((float) $setting->supervisor_hourly_rate)->toBe(400.0)
+        ->and((float) $setting->supervisor_compensation_hourly_rate)->toBe(200.0);
+
+    $this->get(FinancialSettings::getUrl([], isAbsolute: false))
+        ->assertSuccessful()
+        ->assertSee('أجر ساعة المشرف المستحق');
+});
+
 it('persists minimum order price and room pricing, deep multiplier, and times', function (): void {
     CleaningFinancialSetting::query()->create([
         'default_commission_rate' => 5,

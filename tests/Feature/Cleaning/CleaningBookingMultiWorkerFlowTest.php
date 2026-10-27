@@ -74,7 +74,8 @@ it('keeps the booking pending after the first worker accepts and finalizes when 
     $create->assertCreated();
 
     $orderId = (int) $create->json('order.id');
-    $roomIds = collect($create->json('order.roomAssignments'))->pluck('id')->values()->all();
+    $roomTasks = collect($create->json('order.roomTasks'));
+    expect($roomTasks)->not->toBeEmpty();
 
     $worker1User = User::factory()->create(['email' => 'multi-worker-1@example.com']);
     $worker1 = Worker::factory()->financiallyEligible()->create([
@@ -86,9 +87,7 @@ it('keeps the booking pending after the first worker accepts and finalizes when 
 
     Sanctum::actingAs($worker1User);
 
-    $acceptOne = postJson("/api/v1/cleaning-bookings/{$orderId}/accept", [
-        'roomIds' => [$roomIds[0]],
-    ]);
+    $acceptOne = postJson("/api/v1/cleaning-bookings/{$orderId}/accept");
 
     $acceptOne->assertOk();
     expect($acceptOne->json('data.status'))->toBe('pending');
@@ -100,8 +99,10 @@ it('keeps the booking pending after the first worker accepts and finalizes when 
     expect($acceptOne->json('data.workerAcceptance.accepted'))->toBe(1);
     expect($acceptOne->json('data.workerAcceptance.remaining'))->toBe(1);
     expect($acceptOne->json('data.myAssignment.status'))->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value);
-    expect($acceptOne->json('data.myAssignment.roomIds'))->toEqualCanonicalizing([$roomIds[0]]);
-    expect($acceptOne->json('data.worker_assignment.roomIds'))->toEqualCanonicalizing([$roomIds[0]]);
+    expect(collect($acceptOne->json('data.roomTasks'))->pluck('roomKey')->all())->toEqualCanonicalizing($roomTasks->pluck('roomKey')->all());
+    $acceptOne->assertJsonMissingPath('data.myAssignment.roomIds')->assertJsonMissingPath('data.worker_assignment.roomIds')
+        ->assertJsonMissingPath('data.roomAssignments')->assertJsonMissingPath('data.workerRoomAssignments')
+        ->assertJsonMissingPath('data.roomTasks.0.assignedWorkerId');
 
     $worker2User = User::factory()->create(['email' => 'multi-worker-2@example.com']);
     Worker::factory()->financiallyEligible()->create([
@@ -124,7 +125,9 @@ it('keeps the booking pending after the first worker accepts and finalizes when 
     expect($acceptTwo->json('data.workerAcceptance.isFulfilled'))->toBeTrue();
     expect($acceptTwo->json('data.accepted_workers_count'))->toBe(2);
     expect($acceptTwo->json('data.pending_workers_count'))->toBe(0);
-    expect(collect($acceptTwo->json('data.roomAssignments'))->pluck('assignedWorkerId'))->not->toContain(null);
+    expect(collect($acceptTwo->json('data.roomTasks'))->pluck('roomKey')->all())->toEqualCanonicalizing($roomTasks->pluck('roomKey')->all());
+    $acceptTwo->assertJsonMissingPath('data.myAssignment.roomIds')->assertJsonMissingPath('data.worker_assignment.roomIds')
+        ->assertJsonMissingPath('data.roomAssignments')->assertJsonMissingPath('data.roomTasks.0.assignedWorkerId');
 });
 
 it('moves to in progress only after the customer verifies start and all accepted workers approve', function (): void {
@@ -224,7 +227,7 @@ it('moves to in progress only after the customer verifies start and all accepted
     ]);
 });
 
-it('allows an accepted worker to claim rooms while the booking is still pending', function (): void {
+it('shows all shared room requirements after acceptance and removes room claiming', function (): void {
     $customer = User::factory()->create(['email' => 'claim-worker-customer@example.com']);
     Sanctum::actingAs($customer);
 
@@ -232,7 +235,8 @@ it('allows an accepted worker to claim rooms while the booking is still pending'
     $create->assertCreated();
 
     $orderId = (int) $create->json('order.id');
-    $roomIds = collect($create->json('order.roomAssignments'))->pluck('id')->values()->all();
+    $roomTasks = collect($create->json('order.roomTasks'));
+    expect($roomTasks)->not->toBeEmpty();
 
     $workerUser = User::factory()->create(['email' => 'claim-worker@example.com']);
     Worker::factory()->financiallyEligible()->create([
@@ -250,22 +254,13 @@ it('allows an accepted worker to claim rooms while the booking is still pending'
     expect($accept->json('data.status'))->toBe('pending');
     expect($accept->json('data.workerAcceptance.accepted'))->toBe(1);
 
-    $claim = postJson("/api/v1/cleaning-bookings/{$orderId}/rooms/claim", [
-        'roomIds' => [$roomIds[1], $roomIds[2]],
-    ]);
-
-    $claim->assertOk();
-    expect($claim->json('data.status'))->toBe('pending');
-    expect($claim->json('data.workerAcceptance.accepted'))->toBe(1);
-    expect($claim->json('data.workerAcceptance.remaining'))->toBe(1);
-    expect($claim->json('data.myAssignment.roomIds'))->toEqualCanonicalizing([$roomIds[1], $roomIds[2]]);
-    expect($claim->json('data.worker_assignment.roomIds'))->toEqualCanonicalizing([$roomIds[1], $roomIds[2]]);
-    expect(collect($claim->json('data.roomAssignments'))
-        ->whereIn('id', [$roomIds[1], $roomIds[2]])
-        ->pluck('assignedWorkerId'))->not->toContain(null);
+    expect(collect($accept->json('data.roomTasks'))->pluck('roomKey')->all())->toEqualCanonicalizing($roomTasks->pluck('roomKey')->all());
+    $accept->assertJsonMissingPath('data.myAssignment.roomIds')->assertJsonMissingPath('data.worker_assignment.roomIds')
+        ->assertJsonMissingPath('data.roomAssignments')->assertJsonMissingPath('data.roomTasks.0.assignedWorkerId');
+    postJson("/api/v1/cleaning-bookings/{$orderId}/rooms/claim", ['roomIds' => [$roomTasks->first()['id']]])->assertNotFound();
 });
 
-it('applies planned worker room slots to accepted workers as the team fills', function (): void {
+it('rejects planned worker allocations and retains shared room tasks for the accepted team', function (): void {
     $customer = User::factory()->create(['email' => 'planned-room-customer@example.com']);
     Sanctum::actingAs($customer);
 
@@ -288,6 +283,8 @@ it('applies planned worker room slots to accepted workers as the team fills', fu
         ],
     ];
 
+    postJson('/api/v1/user/cleaning/orders', $payload)->assertUnprocessable()->assertJsonValidationErrors('workerRoomAssignments');
+    unset($payload['workerRoomAssignments']);
     $create = postJson('/api/v1/user/cleaning/orders', $payload);
     $create->assertCreated();
 
@@ -307,15 +304,11 @@ it('applies planned worker room slots to accepted workers as the team fills', fu
     $acceptOne = postJson("/api/v1/cleaning-bookings/{$orderId}/accept");
     $acceptOne->assertOk();
     $firstAssignments = collect($acceptOne->json('data.roomAssignments'));
-    $workerOneSlots = $firstAssignments
-        ->where('assignedWorkerId', $worker1->id)
-        ->pluck('plannedWorkerSlot')
-        ->unique()
-        ->values();
-    expect($workerOneSlots)->toHaveCount(1);
-    expect($firstAssignments->whereNotNull('assignedWorkerId')->pluck('assignedWorkerId')->unique()->values()->all())
-        ->toEqual([$worker1->id]);
-    $workerOneSlot = (int) $workerOneSlots->first();
+    $roomKeys = collect($create->json('order.roomTasks'))->pluck('roomKey')->all();
+    expect($roomKeys)->not->toBeEmpty();
+    expect(collect($acceptOne->json('data.roomTasks'))->pluck('roomKey')->all())->toEqualCanonicalizing($roomKeys);
+    $acceptOne->assertJsonMissingPath('data.roomAssignments')->assertJsonMissingPath('data.roomTasks.0.plannedWorkerSlot')
+        ->assertJsonMissingPath('data.roomTasks.0.assignedWorkerId');
 
     $worker2User = User::factory()->create(['email' => 'planned-worker-2@example.com']);
     $worker2 = Worker::factory()->financiallyEligible()->create([
@@ -331,10 +324,7 @@ it('applies planned worker room slots to accepted workers as the team fills', fu
 
     $acceptTwo = postJson("/api/v1/cleaning-bookings/{$orderId}/accept");
     $acceptTwo->assertOk();
-    $finalAssignments = collect($acceptTwo->json('data.roomAssignments'));
-    expect($finalAssignments->pluck('assignedWorkerId'))->not->toContain(null);
-    expect($finalAssignments->pluck('assignedWorkerId')->unique()->values()->all())
-        ->toEqualCanonicalizing([$worker1->id, $worker2->id]);
-    expect($finalAssignments->where('plannedWorkerSlot', $workerOneSlot)->pluck('assignedWorkerId')->unique()->values()->all())
-        ->toEqual([$worker1->id]);
+    expect(collect($acceptTwo->json('data.roomTasks'))->pluck('roomKey')->all())->toEqualCanonicalizing($roomKeys);
+    $acceptTwo->assertJsonMissingPath('data.roomAssignments')->assertJsonMissingPath('data.workerRoomAssignments')
+        ->assertJsonMissingPath('data.roomTasks.0.plannedWorkerSlot')->assertJsonMissingPath('data.roomTasks.0.assignedWorkerId');
 });

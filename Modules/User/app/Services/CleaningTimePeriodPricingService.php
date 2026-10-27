@@ -181,15 +181,17 @@ final class CleaningTimePeriodPricingService
             );
             $base = $this->calculator->roundMoney($base + $supervisor['fee']);
         }
-        $priced = $this->calculator->provisional($base, $addons, 0, max(1, $peak));
+        // Transport allowance belongs to each booked worker seat, even when
+        // the room schedule's peak concurrency is lower than the chosen team.
+        $priced = $this->calculator->provisional($base, $addons, 0, $requestedWorkers);
         $minimum = max(0.0, (float) (CleaningRuntimeSettings::financial()->cleaning_minimum_order_price ?? 0));
         if ($priced['totalPrice'] < $minimum) {
             $base = $this->calculator->roundMoney(max($base, $minimum - $priced['travelFee'] - $addons));
-            $priced = $this->calculator->provisional($base, $addons, $base + $addons, max(1, $peak));
+            $priced = $this->calculator->provisional($base, $addons, $base + $addons, $requestedWorkers);
         }
         $this->allocateVisitPricing($visits, $base, $kits, $priced);
 
-        return ['algorithmVersion' => self::ALGORITHM, 'timezone' => $timezone, 'rooms' => $input['rooms'], 'visits' => $visits, 'requiredSimultaneousWorkers' => $peak, 'reconciliationRequired' => $reconciliation, 'basePrice' => $base, 'supervisor' => $supervisor, 'addonsTotal' => $addons, 'materialsTotal' => $materialsTotal, 'specialServicesTotal' => $specialTotal, 'materialKits' => array_values($kits), 'travelFee' => (float) $priced['travelFee'], 'adminMargin' => (float) $priced['adminMargin'], 'totalPrice' => (float) $priced['totalPrice'], 'currency' => (string) config('app.currency', 'SYP'), 'estimatedWorkMinutes' => array_sum(array_column($allSchedules, 'estimatedWorkMinutes'))];
+        return ['algorithmVersion' => self::ALGORITHM, 'timezone' => $timezone, 'rooms' => $input['rooms'], 'visits' => $visits, 'requestedWorkerCount' => $requestedWorkers, 'requiredSimultaneousWorkers' => $peak, 'reconciliationRequired' => $reconciliation, 'basePrice' => $base, 'supervisor' => $supervisor, 'addonsTotal' => $addons, 'materialsTotal' => $materialsTotal, 'specialServicesTotal' => $specialTotal, 'materialKits' => array_values($kits), 'travelFee' => (float) $priced['travelFee'], 'adminMargin' => (float) $priced['adminMargin'], 'totalPrice' => (float) $priced['totalPrice'], 'currency' => (string) config('app.currency', 'SYP'), 'estimatedWorkMinutes' => array_sum(array_column($allSchedules, 'estimatedWorkMinutes'))];
     }
 
     private function allocateVisitPricing(array &$visits, float $base, array $kits, array $priced): void

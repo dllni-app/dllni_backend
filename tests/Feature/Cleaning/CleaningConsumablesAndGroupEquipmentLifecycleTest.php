@@ -199,6 +199,9 @@ it('exposes custodial inventory to only the assigned supervisor and lets them ac
     Sanctum::actingAs($supervisor);
     $this->getJson("/api/v1/supervisor/bookings/{$booking->id}/inventory")
         ->assertOk()->assertJsonPath('data.materials.0.name', 'Liquid cleaner')
+        ->assertJsonPath('data.materials.0.unitPrice', 10)
+        ->assertJsonPath('data.materials.0.totalPrice', 30)
+        ->assertJsonPath('data.materialsTotal', 30)
         ->assertJsonPath('data.equipment.0.supervisorUserId', $supervisor->id)
         ->assertJsonPath('data.equipment.0.status', 'handed_over');
     $this->postJson("/api/v1/supervisor/bookings/{$booking->id}/materials/receive")
@@ -230,6 +233,9 @@ it('scopes worker inventory to their assigned solo booking and rejects other wor
     Sanctum::actingAs($worker->user);
     $this->getJson("/api/v1/cleaning/inventory/bookings/{$booking->id}")
         ->assertOk()->assertJsonPath('data.materials.0.name', 'Liquid cleaner')
+        ->assertJsonMissingPath('data.materials.0.unitPrice')
+        ->assertJsonMissingPath('data.materials.0.totalPrice')
+        ->assertJsonMissingPath('data.materialsTotal')
         ->assertJsonPath('data.equipment.0.workerId', $worker->id)
         ->assertJsonPath('data.equipment.0.status', 'handed_over');
 });

@@ -93,7 +93,7 @@ it('prices regular cleaning worker previews from the next planned room slot', fu
     expect($firstOffer['workerSlot'])->toBe(1)
         ->and($firstOffer['roomCount'])->toBe(1)
         ->and($firstOffer['roomsWeight'])->toBe(1.0)
-        ->and($firstOffer['serviceShareAmount'])->toBe(166.67)
+        ->and($firstOffer['serviceShareAmount'])->toBe(150.0)
         ->and($firstOffer['travelFee'])->toBe(10.0);
 
     CleaningBookingWorkerAssignment::query()->create([
@@ -103,10 +103,10 @@ it('prices regular cleaning worker previews from the next planned room slot', fu
         'accepted_at' => now(),
         'room_count' => 1,
         'rooms_weight' => 1.0,
-        'service_share_amount' => 166.67,
+        'service_share_amount' => 150,
         'travel_fee' => 10,
         'admin_margin_amount' => 42,
-        'worker_amount' => 176.67,
+        'worker_amount' => 160,
         'currency' => 'SYP',
     ]);
 
@@ -115,7 +115,7 @@ it('prices regular cleaning worker previews from the next planned room slot', fu
     expect($secondOffer['workerSlot'])->toBe(2)
         ->and($secondOffer['roomCount'])->toBe(1)
         ->and($secondOffer['roomsWeight'])->toBe(0.8)
-        ->and($secondOffer['serviceShareAmount'])->toBe(133.33)
+        ->and($secondOffer['serviceShareAmount'])->toBe(150.0)
         ->and($secondOffer['travelFee'])->toBe(10.0);
 });
 

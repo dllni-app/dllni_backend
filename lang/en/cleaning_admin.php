@@ -1067,6 +1067,7 @@ return [
             'in_progress' => 'In progress',
             'awaiting_customer_completion' => 'Awaiting customer completion',
             'time_extension_requested' => 'Time extension requested',
+            'partially_completed' => 'Partially completed',
             'completed' => 'Completed',
             'cancelled' => 'Cancelled',
         ],

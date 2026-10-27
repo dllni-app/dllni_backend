@@ -35,6 +35,8 @@ use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Models\CleaningBookingWorkerLocationPoint;
+use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
+use Modules\Cleaning\Services\CleaningBookingTeamPresentation;
 use Throwable;
 
 final class CleaningBookingResource extends Resource
@@ -230,11 +232,26 @@ final class CleaningBookingResource extends Resource
             ->values()
             ->all();
 
+        $team = app(CleaningBookingTeamPresentation::class);
+        $session = $team->currentSession($record);
+        if ($session !== null) {
+            // V2 visits have their own worker assignments. Never claim that
+            // zero workers accepted just because the parent has no legacy rows.
+            $workers = $session->acceptedWorkerAssignments()
+                ->whereNull('released_at')
+                ->with('worker.user')
+                ->get()
+                ->map(static fn (CleaningBookingSessionWorkerAssignment $assignment): array => self::sessionTrackingState($assignment))
+                ->values()
+                ->all();
+        }
+
         if ($workers === [] && $record->worker_id !== null) {
             $workers[] = self::legacyWorkerTrackingState($record);
         }
 
-        $requiredWorkers = max(1, (int) ($record->number_of_workers ?? 1));
+        $counts = $team->counts($record);
+        $requiredWorkers = $counts['required'];
         $activelyTrackedWorkers = collect($workers)
             ->filter(fn (array $worker): bool => (bool) ($worker['isTrackingActive'] ?? false))
             ->count();
@@ -246,11 +263,47 @@ final class CleaningBookingResource extends Resource
         return [
             'bookingStatusLabel' => $status?->label() ?? (string) ($record->status?->value ?? $record->status ?? '-'),
             'requiredWorkers' => $requiredWorkers,
-            'acceptedWorkers' => count($workers),
+            'acceptedWorkers' => $counts['accepted'],
             'activelyTrackedWorkers' => $activelyTrackedWorkers,
             'destinationLatitude' => $record->address_latitude !== null ? (float) $record->address_latitude : null,
             'destinationLongitude' => $record->address_longitude !== null ? (float) $record->address_longitude : null,
             'workers' => $workers,
+        ];
+    }
+
+    /** V2 has only the most recent location, not the legacy route-point history. */
+    private static function sessionTrackingState(CleaningBookingSessionWorkerAssignment $assignment): array
+    {
+        $worker = $assignment->worker;
+        $status = (string) ($assignment->status?->value ?? $assignment->status);
+        $lat = $assignment->last_latitude;
+        $lng = $assignment->last_longitude;
+        $hasCoordinates = $lat !== null && $lng !== null;
+        $routePoints = $hasCoordinates ? [[
+            'latitude' => (float) $lat,
+            'longitude' => (float) $lng,
+            'recordedAt' => self::dateTime($assignment->location_updated_at),
+        ]] : [];
+
+        return [
+            'assignmentId' => 'session-'.$assignment->id,
+            'workerId' => $assignment->worker_id,
+            'name' => $worker?->user?->name ?? $worker?->first_name ?? 'عامل غير متاح',
+            'status' => $status,
+            'statusLabel' => self::workerAssignmentStatusLabel($status),
+            'statusColor' => self::workerAssignmentStatusColor($status),
+            'startedTravelAt' => self::dateTime($assignment->started_travel_at),
+            'arrivedAt' => self::dateTime($assignment->arrived_at),
+            'locationUpdatedAt' => self::dateTime($assignment->location_updated_at),
+            'latitude' => $lat,
+            'longitude' => $lng,
+            'hasCoordinates' => $hasCoordinates,
+            'routePoints' => $routePoints,
+            'routePointsCount' => count($routePoints),
+            'trackingLabel' => self::trackingLabel($status, $assignment->started_travel_at, $assignment->arrived_at, $lat, $lng),
+            'trackingColor' => self::trackingColor($status, $assignment->started_travel_at, $assignment->arrived_at),
+            'locationEmptyLabel' => self::locationEmptyLabel($status, $assignment->started_travel_at, $assignment->arrived_at),
+            'isTrackingActive' => self::isTrackingActive($status, $assignment->started_travel_at, $assignment->arrived_at),
         ];
     }
 

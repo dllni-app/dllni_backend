@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Modules\Cleaning\Models\CleaningSpecialService;
+use Modules\Cleaning\Support\CleaningRuntimeSettings;
 
 final class CleaningTimePeriodQuoteService
 {
@@ -54,7 +55,15 @@ final class CleaningTimePeriodQuoteService
             'dirtinessLevels' => $service->supports_dirtiness ? ['light', 'heavy'] : [],
         ])->all();
 
-        return ['materialsPreview' => collect($visits)->flatMap(static fn (array $visit): array => $visit['timePeriods'])->flatMap(static fn (array $period): array => $period['materialsPreview'])->unique('materialTypeId')->values()->all(), 'contractVersion' => 2, 'rooms' => $quote['rooms'], 'visits' => $visits, 'pricing' => ['totalPrice' => $quote['totalPrice'], 'currency' => $quote['currency'], 'isPricingFinal' => true, 'coverage' => 'all_visits', 'supervisor' => $quote['supervisor'] ?? null], 'size' => ['estimatedWorkMinutes' => $quote['estimatedWorkMinutes'], 'estimatedDurationMinutes' => array_sum(array_column($visits, 'estimatedDurationMinutes')), 'estimatedHours' => round($quote['estimatedWorkMinutes'] / 60, 2)], 'requiredSimultaneousWorkers' => $quote['requiredSimultaneousWorkers'], 'reconciliationRequired' => $quote['reconciliationRequired'], 'pricingAlgorithm' => $quote['algorithmVersion'], 'schedulingPolicy' => ['timezone' => $quote['timezone'], 'minimumWorkers' => 1, 'maximumWorkers' => min(6, (int) config('cleaning_booking_v2.max_workers')), 'maximumDurationMinutes' => (int) config('cleaning_booking_v2.max_duration_minutes'), 'crossMidnightAllowed' => false], 'specialServicesCatalog' => $catalog];
+        // A distance-priced worker is not known when an open-count booking is
+        // quoted. Zero travel here is not a promise of free transportation.
+        // Keep the signed service quote intact, but never label this amount as
+        // the final customer total before a worker and route are known.
+        $financial = CleaningRuntimeSettings::financial();
+        $travelFeePending = (string) $financial->travel_markup_type !== 'worker_allowance'
+            && (float) $financial->travel_per_km > 0;
+
+        return ['materialsPreview' => collect($visits)->flatMap(static fn (array $visit): array => $visit['timePeriods'])->flatMap(static fn (array $period): array => $period['materialsPreview'])->unique('materialTypeId')->values()->all(), 'contractVersion' => 2, 'rooms' => $quote['rooms'], 'visits' => $visits, 'pricing' => ['basePrice' => $quote['basePrice'], 'addonsTotal' => $quote['addonsTotal'], 'materialsTotal' => $quote['materialsTotal'], 'specialServicesTotal' => $quote['specialServicesTotal'], 'travelFee' => $quote['travelFee'], 'adminMargin' => $quote['adminMargin'], 'totalPrice' => $quote['totalPrice'], 'currency' => $quote['currency'], 'isPricingFinal' => ! $travelFeePending, 'travelFeePending' => $travelFeePending, 'coverage' => 'all_visits', 'supervisor' => $quote['supervisor'] ?? null], 'size' => ['estimatedWorkMinutes' => $quote['estimatedWorkMinutes'], 'estimatedDurationMinutes' => array_sum(array_column($visits, 'estimatedDurationMinutes')), 'estimatedHours' => round($quote['estimatedWorkMinutes'] / 60, 2)], 'requiredSimultaneousWorkers' => $quote['requiredSimultaneousWorkers'], 'reconciliationRequired' => $quote['reconciliationRequired'], 'pricingAlgorithm' => $quote['algorithmVersion'], 'schedulingPolicy' => ['timezone' => $quote['timezone'], 'minimumWorkers' => 1, 'maximumWorkers' => min(6, (int) config('cleaning_booking_v2.max_workers')), 'maximumDurationMinutes' => (int) config('cleaning_booking_v2.max_duration_minutes'), 'crossMidnightAllowed' => false], 'specialServicesCatalog' => $catalog];
     }
 
     public function requestHash(array $input): string

@@ -122,6 +122,113 @@ it('restricts V2 visits to active assigned supervisors without exposing customer
     $this->getJson($url)->assertNotFound();
 });
 
+it('shows visit material prices only to the assigned supervisor', function (): void {
+    $owner = scheduledSupervisor();
+    $other = scheduledSupervisor();
+    $booking = scheduledV2Booking();
+    assignScheduledSupervisor($owner, $booking);
+    $session = $booking->sessions()->where('sequence', 1)->firstOrFail();
+    $session->forceFill(['materials_total' => 125.50])->saveQuietly();
+    $url = "/api/v1/supervisor/v2/bookings/{$booking->id}/visits/1";
+
+    $this->getJson($url)->assertUnauthorized();
+    Sanctum::actingAs($other);
+    $this->getJson($url)->assertNotFound();
+    Sanctum::actingAs($owner);
+    $this->getJson($url)->assertOk()->assertJsonPath('data.materialsTotal', 125.5);
+});
+
+it('reports persisted three-state material sourcing without exposing historical worker to room ownership', function (): void {
+    $supervisor = scheduledSupervisor();
+    $booking = scheduledV2Booking();
+    assignScheduledSupervisor($supervisor, $booking);
+    $session = $booking->sessions()->where('sequence', 1)->firstOrFail();
+    $room = $booking->rooms()->firstOrFail();
+    $workerId = $session->workerAssignments()->firstOrFail()->worker_id;
+    $room->update(['assigned_worker_id' => $workerId]);
+    foreach (['customer_all', 'customer_partial', 'platform_all'] as $index => $choice) {
+        DB::table('cleaning_time_periods')->insert([
+            'cleaning_booking_id' => $booking->id,
+            'cleaning_booking_session_id' => $session->id,
+            'period_key' => 'period.'.($index + 1),
+            'timezone' => 'Asia/Damascus',
+            'starts_at' => now(), 'ends_at' => now()->addHour(),
+            'materials_choice' => $choice,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+    }
+    Sanctum::actingAs($supervisor);
+    $this->getJson("/api/v1/supervisor/v2/bookings/{$booking->id}/visits/1")
+        ->assertOk()
+        ->assertJsonPath('data.materials.source', null)
+        ->assertJsonPath('data.materials.periods.0.source', 'customer_all')
+        ->assertJsonPath('data.materials.periods.1.source', 'customer_partial')
+        ->assertJsonPath('data.materials.periods.2.source', 'platform_all')
+        ->assertJsonMissingPath('data.rooms.0.assignedWorkerId')
+        ->assertJsonMissingPath('data.rooms.0.assignedWorkerName')
+        ->assertJsonMissingPath('data.rooms.0.assignmentSource');
+});
+
+it('projects saved supervisor compensation once per visit regardless of accepted worker count', function (): void {
+    $supervisor = scheduledSupervisor();
+    $booking = scheduledV2Booking();
+    assignScheduledSupervisor($supervisor, $booking);
+    $session = $booking->sessions()->where('sequence', 1)->firstOrFail();
+    CleaningBookingSessionSupervisorAssignment::query()->create([
+        'cleaning_booking_session_id' => $session->id,
+        'supervisor_user_id' => $supervisor->id,
+        'assigned_by_user_id' => $supervisor->id,
+        'assigned_at' => now(),
+        'compensation_hourly_rate' => 1200,
+        'active_slot' => 1,
+    ]);
+
+    Sanctum::actingAs($supervisor);
+    $this->getJson("/api/v1/supervisor/v2/bookings/{$booking->id}/visits/1")
+        ->assertOk()
+        ->assertJsonPath('data.financials.supervisorHourlyRate', 1200)
+        ->assertJsonPath('data.financials.supervisorScheduledMinutes', 120)
+        ->assertJsonPath('data.financials.supervisorShareAmount', 2400)
+        ->assertJsonPath('data.financials.supervisorCompensationStatus', 'projected')
+        ->assertJsonPath('data.financials.isFinal', false);
+});
+
+it('exposes persisted visit finances and worker entitlements as provisional without certifying attendance', function (): void {
+    $supervisor = scheduledSupervisor();
+    $booking = scheduledV2Booking();
+    assignScheduledSupervisor($supervisor, $booking);
+    $session = $booking->sessions()->where('sequence', 1)->firstOrFail();
+    $session->forceFill([
+        'base_price' => 2000, 'addons_total' => 500,
+        'materials_total' => 300, 'special_services_total' => 200,
+        'travel_fee' => 150, 'admin_margin_amount' => 400,
+        'total_price' => 3050, 'is_pricing_final' => true,
+        'pricing_snapshot' => ['currency' => 'SYP'],
+    ])->saveQuietly();
+    $session->workerAssignments()->firstOrFail()->forceFill([
+        'service_share_amount' => 800, 'travel_fee' => 75,
+        'admin_margin_amount' => 100, 'worker_amount' => 875, 'currency' => 'SYP',
+        'work_started_at' => now(),
+    ])->saveQuietly();
+
+    Sanctum::actingAs($supervisor);
+    $this->getJson("/api/v1/supervisor/v2/bookings/{$booking->id}/visits/1")
+        ->assertOk()
+        ->assertJsonPath('data.attendance.plannedWorkers', 2)
+        ->assertJsonPath('data.attendance.workStartedWorkers', 1)
+        ->assertJsonPath('data.attendance.actualWorkers', null)
+        ->assertJsonPath('data.financials.status', 'projected')
+        ->assertJsonPath('data.financials.isFinal', false)
+        ->assertJsonPath('data.financials.isPricingFinal', true)
+        ->assertJsonPath('data.financials.baseServiceTotal', 2000)
+        ->assertJsonPath('data.financials.specialServicesTotal', 200)
+        ->assertJsonPath('data.financials.materialsTotal', 300)
+        ->assertJsonPath('data.financials.supervisorShareAmount', null)
+        ->assertJsonPath('data.financials.workers.0.workerAmount', 875)
+        ->assertJsonPath('data.financials.workers.0.workerName', $session->workerAssignments()->firstOrFail()->worker->user->name)
+        ->assertJsonPath('data.financials.workers.0.isFinal', false);
+});
+
 it('denies V2 supervisor mutations with 422 and leaves session attendance unchanged', function (): void {
     $owner = scheduledSupervisor();
     $booking = scheduledV2Booking();

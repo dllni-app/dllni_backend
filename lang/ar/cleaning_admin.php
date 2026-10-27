@@ -1091,6 +1091,7 @@ return [
             'in_progress' => 'قيد التنفيذ',
             'awaiting_customer_completion' => 'بانتظار تأكيد العميل',
             'time_extension_requested' => 'تم طلب تمديد الوقت',
+            'partially_completed' => 'مكتمل جزئياً',
             'completed' => 'مكتمل',
             'cancelled' => 'ملغى',
         ],

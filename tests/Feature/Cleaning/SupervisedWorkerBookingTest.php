@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Models\Worker;
 use Laravel\Sanctum\Sanctum;
+use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 
@@ -42,7 +43,11 @@ it('scopes supervised team worker details and never reveals cleaning materials o
         ->assertJsonPath('data.serviceType', 'supervised_team')
         ->assertJsonPath('data.scopeRooms.0.cleaningMode', 'deep')
         ->assertJsonPath('data.scopeRooms.0.title', 'غرفة النوم')
-        ->assertJsonPath('data.allowedActions', ['view', 'sos']);
+        ->assertJsonPath('data.allowedActions', ['view', 'sos'])
+        ->assertJsonPath('data.myAttendance.canStartTravel', true)
+        ->assertJsonPath('data.myAttendance.canArrive', false)
+        ->assertJsonPath('data.myAttendance.startedTravelAt', null)
+        ->assertJsonPath('data.myAttendance.arrivedAt', null);
 
     expect($result->json('data'))->not->toHaveKeys(['materials', 'totalPrice', 'adminMargin']);
     expect(json_encode($result->json()))->not->toContain('secret-kit');
@@ -51,6 +56,57 @@ it('scopes supervised team worker details and never reveals cleaning materials o
         ->update(['status' => 'withdrawn']);
     $this->getJson('/api/v1/cleaning/supervised-worker/bookings/'.$booking->id)
         ->assertNotFound();
+});
+
+it('refreshes supervised worker attendance capabilities from the authenticated assignment', function (): void {
+    $booking = CleaningBooking::factory()->create([
+        'booking_kind' => 'supervised_team',
+        'status' => CleaningBookingStatus::WorkerAssigned,
+        'number_of_workers' => 2,
+    ]);
+    $member = Worker::factory()->create();
+    $otherMember = Worker::factory()->create();
+    foreach ([$member, $otherMember] as $worker) {
+        $booking->workerAssignments()->create([
+            'worker_id' => $worker->id,
+            'status' => 'accepted_waiting_for_order_start',
+            'accepted_at' => now(),
+        ]);
+    }
+
+    Sanctum::actingAs($member->user);
+    $detail = '/api/v1/cleaning/supervised-worker/bookings/'.$booking->id;
+    $this->getJson($detail)->assertOk()
+        ->assertJsonPath('data.myAttendance.canStartTravel', true)
+        ->assertJsonPath('data.myAttendance.canArrive', false);
+
+    $this->postJson('/api/v1/cleaning-bookings/'.$booking->id.'/start-travel')->assertOk();
+    $afterTravel = $this->getJson($detail)->assertOk()
+        ->assertJsonPath('data.myAttendance.canStartTravel', false)
+        ->assertJsonPath('data.myAttendance.canArrive', true);
+    expect($afterTravel->json('data.myAttendance.startedTravelAt'))->toBeString();
+
+    $this->postJson('/api/v1/cleaning-bookings/'.$booking->id.'/arrive')->assertOk();
+    $afterArrival = $this->getJson($detail)->assertOk()
+        ->assertJsonPath('data.myAttendance.canStartTravel', false)
+        ->assertJsonPath('data.myAttendance.canArrive', false);
+    expect($afterArrival->json('data.myAttendance.arrivedAt'))->toBeString();
+
+    $myAttendance = DB::table('cleaning_booking_worker_assignments')
+        ->where('cleaning_booking_id', $booking->id)->where('worker_id', $member->id)->first();
+    expect($myAttendance?->started_travel_at)->not->toBeNull()
+        ->and($myAttendance?->arrived_at)->not->toBeNull();
+    $this->assertDatabaseHas('cleaning_booking_worker_assignments', [
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $member->id,
+        'status' => 'awaiting_start_verification',
+    ]);
+    $this->assertDatabaseHas('cleaning_booking_worker_assignments', [
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $otherMember->id,
+        'started_travel_at' => null,
+        'arrived_at' => null,
+    ]);
 });
 
 it('refuses supervisor-owned worker execution and room claims at the API', function () {
@@ -66,11 +122,14 @@ it('refuses supervisor-owned worker execution and room claims at the API', funct
     ]);
     Sanctum::actingAs($worker->user);
 
-    foreach (['start-work', 'complete', 'rooms/claim'] as $path) {
+    foreach (['start-work', 'complete'] as $path) {
         $this->postJson('/api/v1/cleaning-bookings/'.$booking->id.'/'.$path, [])
             ->assertForbidden()
             ->assertJsonPath('code', 'SUPERVISED_TEAM_ACTION_FORBIDDEN');
     }
+    // Room claiming has no registered API route; all workers receive 404.
+    $this->postJson('/api/v1/cleaning-bookings/'.$booking->id.'/rooms/claim', [])
+        ->assertNotFound();
     $this->getJson('/api/v1/cleaning-bookings/'.$booking->id.'/security-code')
         ->assertForbidden();
     $this->assertDatabaseHas('cleaning_bookings', [

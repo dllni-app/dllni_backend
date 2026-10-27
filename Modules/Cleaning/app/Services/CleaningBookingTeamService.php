@@ -49,12 +49,13 @@ final class CleaningBookingTeamService
         return CleaningAssignmentMode::OpenCount->value;
     }
 
-    /**
-     * @param  array<int, array<string, mixed>>|null  $workerRoomAssignments
-     */
     public function syncRooms(CleaningBooking $booking, ?array $workerRoomAssignments = null): void
     {
-        DB::transaction(function () use ($booking, $workerRoomAssignments): void {
+        if ($workerRoomAssignments !== null && $workerRoomAssignments !== []) {
+            throw ValidationException::withMessages(['workerRoomAssignments' => ['Worker-to-room allocation is no longer supported.']]);
+        }
+
+        DB::transaction(function () use ($booking): void {
             $booking = CleaningBooking::query()
                 ->whereKey($booking->id)
                 ->lockForUpdate()
@@ -79,17 +80,14 @@ final class CleaningBookingTeamService
 
             $plan = WorkerRoomAssignmentPlanner::plan(
                 is_array($booking->property_details) ? $booking->property_details : [],
-                $workerRoomAssignments,
+                null,
                 $this->resolveAssignmentMode($booking),
                 max(1, (int) ($booking->number_of_workers ?? 1)),
                 $booking->preferred_worker_id !== null ? (int) $booking->preferred_worker_id : null,
             );
             $rooms = $plan['derivedRooms'];
-            $roomPlans = $plan['roomPlans'];
 
             foreach ($rooms as $room) {
-                $plannedAssignment = $roomPlans[$room['room_key']] ?? null;
-
                 CleaningBookingRoom::query()->create([
                     'cleaning_booking_id' => $booking->id,
                     'room_key' => $room['room_key'],
@@ -97,8 +95,8 @@ final class CleaningBookingTeamService
                     'room_size' => $room['room_size'],
                     'display_label' => $room['display_label'],
                     'weight' => $room['weight'],
-                    'planned_worker_slot' => $plannedAssignment['workerSlot'] ?? null,
-                    'planned_preferred_worker_id' => $plannedAssignment['preferredWorkerId'] ?? null,
+                    'planned_worker_slot' => null,
+                    'planned_preferred_worker_id' => null,
                     'assigned_worker_id' => null,
                     'assignment_source' => null,
                 ]);
@@ -110,7 +108,11 @@ final class CleaningBookingTeamService
 
     public function acceptWorker(CleaningBooking $booking, Worker $worker, ?array $roomIds = null): CleaningBooking
     {
-        return DB::transaction(function () use ($booking, $worker, $roomIds): CleaningBooking {
+        if ($roomIds !== null && $roomIds !== []) {
+            throw ValidationException::withMessages(['roomIds' => ['Worker-to-room allocation is no longer supported.']]);
+        }
+
+        return DB::transaction(function () use ($booking, $worker): CleaningBooking {
             $booking = $this->lockBooking($booking->id);
             $this->assertLegacyTeamMutationAllowed($booking);
             $worker = Worker::query()
@@ -119,7 +121,7 @@ final class CleaningBookingTeamService
                 ->firstOrFail();
 
             $this->ensureAcceptableBooking($booking, $worker);
-            $this->solvencyService->assertWorkerCanAcceptBooking($worker, $booking, $roomIds);
+            $this->solvencyService->assertWorkerCanAcceptBooking($worker, $booking);
 
             if (! $this->depositService->isWorkerEligibleForDispatch($worker)) {
                 throw new InvalidArgumentException('Worker is not eligible to accept new requests.');
@@ -160,14 +162,10 @@ final class CleaningBookingTeamService
 
             app(CleaningSpecialistEquipmentReservationService::class)->confirmForBooking($booking, $worker);
 
-            if ($roomIds !== null) {
-                $this->claimRoomsForWorker($booking, $worker->id, $roomIds, CleaningBookingRoomAssignmentSource::Worker);
-            }
-
             $booking = $this->recalculateBookingTeam(
                 $booking,
                 finalizeBooking: $this->isTeamFulfilled($booking),
-                applyPlannedAssignments: $roomIds === null,
+                applyPlannedAssignments: false,
             );
 
             return $booking->fresh([
@@ -184,47 +182,6 @@ final class CleaningBookingTeamService
         });
     }
 
-    public function claimRooms(CleaningBooking $booking, Worker $worker, ?array $roomIds = null): CleaningBooking
-    {
-        return DB::transaction(function () use ($booking, $worker, $roomIds): CleaningBooking {
-            $booking = $this->lockBooking($booking->id);
-
-            $assignment = $this->acceptedAssignmentForWorker($booking->id, $worker->id);
-
-            if ($assignment === null) {
-                throw new InvalidArgumentException('Worker must accept the booking before claiming rooms.');
-            }
-
-            if ($booking->status !== CleaningBookingStatus::Pending) {
-                throw new InvalidArgumentException('Rooms can only be claimed while the booking is still searching.');
-            }
-
-            $this->claimRoomsForWorker(
-                $booking,
-                $worker->id,
-                $roomIds,
-                CleaningBookingRoomAssignmentSource::Worker,
-            );
-
-            $booking = $this->recalculateBookingTeam(
-                $booking,
-                finalizeBooking: $this->isTeamFulfilled($booking),
-                applyPlannedAssignments: $roomIds === null,
-            );
-
-            return $booking->fresh([
-                'customer',
-                'worker.user',
-                'preferredWorker.user',
-                'rooms.assignedWorker.user',
-                'workerAssignments.worker.user',
-                'addons',
-                'billingPolicy',
-                'timeWarnings',
-                'disputes',
-            ]);
-        });
-    }
 
     public function rejectWorker(CleaningBooking $booking, Worker $worker, ?string $reason = null, bool $applyWorkerPenalty = true): CleaningBooking
     {
@@ -266,14 +223,6 @@ final class CleaningBookingTeamService
                     'rejected_at' => now(),
                 ]
             );
-
-            CleaningBookingRoom::query()
-                ->where('cleaning_booking_id', $booking->id)
-                ->where('assigned_worker_id', $worker->id)
-                ->update([
-                    'assigned_worker_id' => null,
-                    'assignment_source' => null,
-                ]);
 
             if ($hadAccepted) {
                 app(CleaningSpecialistEquipmentReservationService::class)->releaseUnstartedForWorker($booking, $worker);
@@ -348,61 +297,6 @@ final class CleaningBookingTeamService
         });
     }
 
-    public function assignRoomsFromCustomer(CleaningBooking $booking, array $assignments): CleaningBooking
-    {
-        return DB::transaction(function () use ($booking, $assignments): CleaningBooking {
-            $booking = $this->lockBooking($booking->id);
-            $this->assertLegacyTeamMutationAllowed($booking);
-
-            if (in_array($booking->status, [CleaningBookingStatus::InProgress, CleaningBookingStatus::Completed, CleaningBookingStatus::Cancelled], true)) {
-                throw new InvalidArgumentException('Rooms cannot be reassigned in the current status.');
-            }
-
-            $acceptedWorkerIds = $this->acceptedAssignmentWorkerIds($booking->id);
-            $roomsById = CleaningBookingRoom::query()
-                ->where('cleaning_booking_id', $booking->id)
-                ->lockForUpdate()
-                ->get()
-                ->keyBy('id');
-
-            foreach ($assignments as $assignment) {
-                $roomId = (int) $assignment['roomId'];
-                $workerId = isset($assignment['workerId']) && $assignment['workerId'] !== null ? (int) $assignment['workerId'] : null;
-
-                $room = $roomsById->get($roomId);
-                if (! $room instanceof CleaningBookingRoom) {
-                    throw new InvalidArgumentException('One or more room assignments are invalid.');
-                }
-
-                if ($workerId !== null && ! in_array($workerId, $acceptedWorkerIds, true)) {
-                    throw new InvalidArgumentException('Rooms can only be assigned to accepted workers.');
-                }
-
-                $room->forceFill([
-                    'assigned_worker_id' => $workerId,
-                    'assignment_source' => $workerId !== null
-                        ? CleaningBookingRoomAssignmentSource::Customer
-                        : null,
-                ])->save();
-            }
-
-            $shouldFinalize = $this->isTeamFulfilled($booking) || $booking->status === CleaningBookingStatus::WorkerAssigned;
-
-            $booking = $this->recalculateBookingTeam($booking, finalizeBooking: $shouldFinalize);
-
-            return $booking->fresh([
-                'customer',
-                'worker.user',
-                'preferredWorker.user',
-                'rooms.assignedWorker.user',
-                'workerAssignments.worker.user',
-                'addons',
-                'billingPolicy',
-                'timeWarnings',
-                'disputes',
-            ]);
-        });
-    }
 
     public function recalculateBookingTeam(
         CleaningBooking $booking,
@@ -411,7 +305,6 @@ final class CleaningBookingTeamService
     ): CleaningBooking {
         $booking = $this->lockBooking($booking->id);
         $this->assertLegacyTeamMutationAllowed($booking);
-        $this->repairMissingRoomPlan($booking);
 
         $roomQuery = CleaningBookingRoom::query()
             ->where('cleaning_booking_id', $booking->id)
@@ -426,25 +319,7 @@ final class CleaningBookingTeamService
         $acceptedAssignments = $assignmentQuery->get()->values();
         $totalRoomWeight = round((float) $rooms->sum(fn (CleaningBookingRoom $room): float => (float) $room->weight), 2);
 
-        if ($applyPlannedAssignments && $acceptedAssignments->isNotEmpty()) {
-            $this->applyPlannedAssignmentsToAcceptedWorkers($booking, $rooms, $acceptedAssignments);
-            $rooms = CleaningBookingRoom::query()
-                ->where('cleaning_booking_id', $booking->id)
-                ->lockForUpdate()
-                ->get()
-                ->values();
-            $totalRoomWeight = round((float) $rooms->sum(fn (CleaningBookingRoom $room): float => (float) $room->weight), 2);
-        }
-
-        if ($finalizeBooking && $acceptedAssignments->isNotEmpty()) {
-            $this->autoBalanceUnassignedRooms($rooms, $acceptedAssignments);
-            $rooms = CleaningBookingRoom::query()
-                ->where('cleaning_booking_id', $booking->id)
-                ->lockForUpdate()
-                ->get()
-                ->values();
-            $totalRoomWeight = round((float) $rooms->sum(fn (CleaningBookingRoom $room): float => (float) $room->weight), 2);
-        }
+        // Rooms are booking tasks shared by all accepted team workers.
 
         // Supervisor charges are collected for the supervisor's group hours,
         // not part of the workers' distributable cleaning wage.
@@ -452,7 +327,6 @@ final class CleaningBookingTeamService
         $subtotal = round(max(0.0,
             ((float) ($booking->base_price ?? 0)) + ((float) ($booking->addons_total ?? 0)) - $supervisorFee
         ), 2);
-        $isEventAssistance = (string) $booking->property_type === 'event_assistance';
         $includedAdminMarginBase = $this->pricingCalculator->minimumOrderAdminMarginBase(
             (float) ($booking->base_price ?? 0),
             (string) $booking->property_type,
@@ -466,20 +340,13 @@ final class CleaningBookingTeamService
         $primaryWorkerId = null;
         $primaryAcceptedAt = null;
 
-        foreach ($acceptedAssignments as $assignment) {
-            $workerRooms = $rooms->filter(
-                fn (CleaningBookingRoom $room): bool => (int) ($room->assigned_worker_id ?? 0) === (int) $assignment->worker_id
-            );
-
-            $roomCount = $workerRooms->count();
-            $roomsWeight = round((float) $workerRooms->sum(fn (CleaningBookingRoom $room): float => (float) $room->weight), 2);
-            $serviceShare = $isEventAssistance
-                ? round($subtotal / $requiredWorkers, 2)
-                : ($roomsWeight > 0.0 && $totalRoomWeight > 0.0
-                    ? round($subtotal * ($roomsWeight / $totalRoomWeight), 2)
-                    : (! $finalizeBooking
-                        ? round($subtotal / $requiredWorkers, 2)
-                        : 0.0));
+        $remainingServiceCents = (int) round($subtotal * 100);
+        foreach ($acceptedAssignments as $index => $assignment) {
+            $roomCount = $rooms->count();
+            $roomsWeight = $totalRoomWeight;
+            $slotCents = intdiv($remainingServiceCents, max(1, $requiredWorkers - $index));
+            $serviceShare = (float) ($slotCents / 100);
+            $remainingServiceCents -= $slotCents;
 
             $workerIncludedAdminMarginBase = $includedAdminMarginBase > 0.0 && $subtotal > 0.0
                 ? round($includedAdminMarginBase * ($serviceShare / $subtotal), 2)
@@ -612,83 +479,7 @@ final class CleaningBookingTeamService
     /**
      * @return array<int, array{workerSlot:int, preferredWorkerId:?int, rooms:array<int, array{roomKey:string, roomType:string, roomSize:string}>, roomsWeight:float}>
      */
-    public function exportPlannedWorkerRoomAssignments(CleaningBooking $booking): array
-    {
-        $rooms = $booking->relationLoaded('rooms')
-            ? $booking->rooms
-            : $booking->rooms()->orderBy('planned_worker_slot')->orderBy('room_key')->get();
 
-        $grouped = [];
-
-        foreach ($rooms as $room) {
-            if ($room->planned_worker_slot === null) {
-                continue;
-            }
-
-            $slot = (int) $room->planned_worker_slot;
-            $grouped[$slot] ??= [
-                'workerSlot' => $slot,
-                'preferredWorkerId' => $room->planned_preferred_worker_id !== null ? (int) $room->planned_preferred_worker_id : null,
-                'rooms' => [],
-                'roomsWeight' => 0.0,
-            ];
-
-            $grouped[$slot]['rooms'][] = [
-                'roomKey' => $room->room_key,
-                'roomType' => $room->room_type,
-                'roomSize' => (string) $room->room_size,
-            ];
-            $grouped[$slot]['roomsWeight'] = round($grouped[$slot]['roomsWeight'] + (float) $room->weight, 2);
-        }
-
-        ksort($grouped);
-
-        return array_values($grouped);
-    }
-
-    private function repairMissingRoomPlan(CleaningBooking $booking): void
-    {
-        if (
-            $this->resolveAssignmentMode($booking) !== CleaningAssignmentMode::OpenCount->value
-            || (int) ($booking->number_of_workers ?? 1) <= 1
-            || (string) $booking->property_type === 'event_assistance'
-        ) {
-            return;
-        }
-
-        $rooms = CleaningBookingRoom::query()
-            ->where('cleaning_booking_id', $booking->id)
-            ->lockForUpdate()
-            ->get();
-
-        if ($rooms->isEmpty() || $rooms->contains(fn (CleaningBookingRoom $room): bool => $room->planned_worker_slot !== null)) {
-            return;
-        }
-
-        $plan = WorkerRoomAssignmentPlanner::plan(
-            is_array($booking->property_details) ? $booking->property_details : [],
-            null,
-            CleaningAssignmentMode::OpenCount->value,
-            max(1, (int) ($booking->number_of_workers ?? 1)),
-            null,
-        );
-
-        if (($plan['errors'] ?? []) !== [] || ($plan['roomPlans'] ?? []) === []) {
-            return;
-        }
-
-        foreach ($rooms as $room) {
-            $plannedAssignment = $plan['roomPlans'][$room->room_key] ?? null;
-            if (! is_array($plannedAssignment)) {
-                continue;
-            }
-
-            $room->forceFill([
-                'planned_worker_slot' => $plannedAssignment['workerSlot'] ?? null,
-                'planned_preferred_worker_id' => $plannedAssignment['preferredWorkerId'] ?? null,
-            ])->save();
-        }
-    }
 
     private function resolveAssignmentMode(CleaningBooking $booking): string
     {
@@ -827,109 +618,11 @@ final class CleaningBookingTeamService
     /**
      * @param  array<int, mixed>|null  $roomIds
      */
-    private function claimRoomsForWorker(CleaningBooking $booking, int $workerId, ?array $roomIds, CleaningBookingRoomAssignmentSource $source): void
-    {
-        if ($roomIds !== null) {
-            $roomIds = array_values(array_unique(array_map('intval', $roomIds)));
-
-            // An explicit worker selection replaces only previous automatic
-            // suggestions. Customer/admin choices remain untouched.
-            CleaningBookingRoom::query()
-                ->where('cleaning_booking_id', $booking->id)
-                ->where('assigned_worker_id', $workerId)
-                ->where('assignment_source', CleaningBookingRoomAssignmentSource::Auto->value)
-                ->whereNotIn('id', $roomIds)
-                ->update([
-                    'assigned_worker_id' => null,
-                    'assignment_source' => null,
-                ]);
-        }
-
-        $query = CleaningBookingRoom::query()
-            ->where('cleaning_booking_id', $booking->id)
-            ->lockForUpdate();
-
-        if ($roomIds !== null) {
-            $query->whereIn('id', $roomIds);
-        } else {
-            $query->whereNull('assigned_worker_id');
-        }
-
-        $rooms = $query->get();
-
-        if ($roomIds !== null && $rooms->count() !== count($roomIds)) {
-            throw new InvalidArgumentException('One or more rooms do not belong to this booking.');
-        }
-
-        foreach ($rooms as $room) {
-            if ($room->assigned_worker_id !== null && (int) $room->assigned_worker_id !== $workerId) {
-                throw new InvalidArgumentException('One or more rooms are already assigned to another worker.');
-            }
-
-            $room->forceFill([
-                'assigned_worker_id' => $workerId,
-                'assignment_source' => $source,
-            ])->save();
-        }
-    }
 
     /**
      * @param  EloquentCollection<int, CleaningBookingRoom>  $rooms
      * @param  EloquentCollection<int, CleaningBookingWorkerAssignment>  $acceptedAssignments
      */
-    private function autoBalanceUnassignedRooms(EloquentCollection $rooms, EloquentCollection $acceptedAssignments): void
-    {
-        $unassignedRooms = $rooms
-            ->whereNull('assigned_worker_id')
-            ->sortByDesc(fn (CleaningBookingRoom $room): float => (float) $room->weight)
-            ->values();
-
-        if ($unassignedRooms->isEmpty() || $acceptedAssignments->isEmpty()) {
-            return;
-        }
-
-        $assignedWeights = $acceptedAssignments
-            ->mapWithKeys(fn (CleaningBookingWorkerAssignment $assignment): array => [
-                (int) $assignment->worker_id => round((float) $rooms
-                    ->where('assigned_worker_id', (int) $assignment->worker_id)
-                    ->sum(fn (CleaningBookingRoom $room): float => (float) $room->weight), 2),
-            ])
-            ->all();
-
-        $trustScores = Worker::query()
-            ->whereIn('id', array_keys($assignedWeights))
-            ->pluck('trust_score', 'id')
-            ->map(fn (mixed $score): int => (int) $score)
-            ->all();
-
-        foreach ($unassignedRooms as $room) {
-            $workerIds = array_keys($assignedWeights);
-            usort($workerIds, static function (int $leftWorkerId, int $rightWorkerId) use ($assignedWeights, $trustScores): int {
-                $weightComparison = $assignedWeights[$leftWorkerId] <=> $assignedWeights[$rightWorkerId];
-                if ($weightComparison !== 0) {
-                    return $weightComparison;
-                }
-
-                $trustComparison = ($trustScores[$rightWorkerId] ?? 0) <=> ($trustScores[$leftWorkerId] ?? 0);
-                if ($trustComparison !== 0) {
-                    return $trustComparison;
-                }
-
-                return $leftWorkerId <=> $rightWorkerId;
-            });
-
-            $targetWorkerId = (int) $workerIds[0];
-
-            CleaningBookingRoom::query()
-                ->whereKey($room->id)
-                ->update([
-                    'assigned_worker_id' => $targetWorkerId,
-                    'assignment_source' => CleaningBookingRoomAssignmentSource::Auto->value,
-                ]);
-
-            $assignedWeights[$targetWorkerId] = round($assignedWeights[$targetWorkerId] + (float) $room->weight, 2);
-        }
-    }
 
     private function broadcastTeamUpdated(CleaningBooking $booking): void
     {
@@ -943,133 +636,9 @@ final class CleaningBookingTeamService
      * @param  EloquentCollection<int, CleaningBookingRoom>  $rooms
      * @param  EloquentCollection<int, CleaningBookingWorkerAssignment>  $acceptedAssignments
      */
-    private function applyPlannedAssignmentsToAcceptedWorkers(
-        CleaningBooking $booking,
-        EloquentCollection $rooms,
-        EloquentCollection $acceptedAssignments,
-    ): void {
-        $slotWorkerMap = $this->slotWorkerMap($booking, $acceptedAssignments);
-
-        if ($slotWorkerMap === []) {
-            return;
-        }
-
-        // Automatic assignments may be reshuffled while the team is still
-        // being formed. Explicit customer, worker or admin choices are never
-        // overwritten. This lets trust score decide only the small unavoidable
-        // imbalance between otherwise balanced worker slots.
-        foreach ($rooms as $room) {
-            $source = $room->assignment_source?->value ?? $room->assignment_source;
-            if (
-                $room->planned_worker_slot !== null
-                && $source === CleaningBookingRoomAssignmentSource::Auto->value
-            ) {
-                $room->forceFill([
-                    'assigned_worker_id' => null,
-                    'assignment_source' => null,
-                ])->save();
-            }
-        }
-
-        foreach ($rooms as $room) {
-            if ($room->assigned_worker_id !== null || $room->planned_worker_slot === null) {
-                continue;
-            }
-
-            $workerId = $slotWorkerMap[(int) $room->planned_worker_slot] ?? null;
-            if ($workerId === null) {
-                continue;
-            }
-
-            $room->forceFill([
-                'assigned_worker_id' => $workerId,
-                'assignment_source' => CleaningBookingRoomAssignmentSource::Auto,
-            ])->save();
-        }
-    }
 
     /**
      * @param  EloquentCollection<int, CleaningBookingWorkerAssignment>  $acceptedAssignments
      * @return array<int, int>
      */
-    private function slotWorkerMap(CleaningBooking $booking, EloquentCollection $acceptedAssignments): array
-    {
-        if ($acceptedAssignments->isEmpty()) {
-            return [];
-        }
-
-        if ($this->resolveAssignmentMode($booking) === CleaningAssignmentMode::PreferredWorker->value) {
-            $preferredWorkerId = $booking->preferred_worker_id !== null ? (int) $booking->preferred_worker_id : null;
-
-            foreach ($acceptedAssignments as $assignment) {
-                if ($preferredWorkerId !== null && (int) $assignment->worker_id === $preferredWorkerId) {
-                    return [1 => (int) $assignment->worker_id];
-                }
-            }
-        }
-
-        $workerIds = $acceptedAssignments
-            ->pluck('worker_id')
-            ->map(static fn (mixed $workerId): int => (int) $workerId)
-            ->all();
-        $trustScores = Worker::query()
-            ->whereIn('id', $workerIds)
-            ->pluck('trust_score', 'id')
-            ->map(fn (mixed $score): int => (int) $score)
-            ->all();
-
-        $orderedAssignments = $acceptedAssignments
-            ->sort(static function (CleaningBookingWorkerAssignment $left, CleaningBookingWorkerAssignment $right) use ($trustScores): int {
-                $leftTrust = $trustScores[(int) $left->worker_id] ?? 0;
-                $rightTrust = $trustScores[(int) $right->worker_id] ?? 0;
-
-                if ($leftTrust !== $rightTrust) {
-                    return $rightTrust <=> $leftTrust;
-                }
-
-                $leftAcceptedAt = $left->accepted_at?->getTimestamp() ?? 0;
-                $rightAcceptedAt = $right->accepted_at?->getTimestamp() ?? 0;
-
-                if ($leftAcceptedAt !== $rightAcceptedAt) {
-                    return $leftAcceptedAt <=> $rightAcceptedAt;
-                }
-
-                return $left->id <=> $right->id;
-            })
-            ->values();
-
-        $slotWeights = CleaningBookingRoom::query()
-            ->where('cleaning_booking_id', $booking->id)
-            ->whereNotNull('planned_worker_slot')
-            ->get(['planned_worker_slot', 'weight'])
-            ->groupBy('planned_worker_slot')
-            ->map(fn ($slotRooms): float => round((float) $slotRooms->sum('weight'), 2))
-            ->all();
-
-        $slots = array_map('intval', array_keys($slotWeights));
-        usort($slots, static function (int $leftSlot, int $rightSlot) use ($slotWeights): int {
-            $weightComparison = ($slotWeights[$rightSlot] ?? 0.0) <=> ($slotWeights[$leftSlot] ?? 0.0);
-            if ($weightComparison !== 0) {
-                return $weightComparison;
-            }
-
-            return $leftSlot <=> $rightSlot;
-        });
-
-        if ($slots === []) {
-            $slots = range(1, $orderedAssignments->count());
-        }
-
-        $mapping = [];
-        foreach ($orderedAssignments as $index => $assignment) {
-            $slot = $slots[$index] ?? null;
-            if ($slot === null) {
-                break;
-            }
-
-            $mapping[$slot] = (int) $assignment->worker_id;
-        }
-
-        return $mapping;
-    }
 }

@@ -26,6 +26,21 @@ final class SupervisedWorkerBookingController
             abort(404);
         }
 
+        $status = $booking->status?->value ?? (string) $booking->status;
+        $canTravel = in_array($status, [
+            'worker_assigned', 'awaiting_start_verification',
+            'awaiting_worker_start_confirmation', 'in_progress',
+            'awaiting_customer_completion', 'time_extension_requested',
+        ], true);
+        $membershipStatus = $assignment->status?->value ?? (string) $assignment->status;
+        $canTravel = $canTravel && in_array(
+            $membershipStatus,
+            CleaningBookingWorkerAssignmentStatus::activeValues(),
+            true,
+        );
+        $travelStarted = $assignment->started_travel_at !== null;
+        $arrived = $assignment->arrived_at !== null;
+
         $booking->load([
             'rooms',
             'roomPeriods',
@@ -85,10 +100,17 @@ final class SupervisedWorkerBookingController
             'supervisor' => $supervisor ? [
                 'id' => $supervisor->supervisor_user_id,
                 'name' => $supervisor->supervisor?->name,
+                'phone' => $supervisor->supervisor?->phone,
             ] : null,
             'myMembership' => [
                 'assignmentId' => $assignment->id,
-                'status' => $assignment->status?->value ?? (string) $assignment->status,
+                'status' => $membershipStatus,
+            ],
+            'myAttendance' => [
+                'startedTravelAt' => $assignment->started_travel_at?->toIso8601String(),
+                'arrivedAt' => $assignment->arrived_at?->toIso8601String(),
+                'canStartTravel' => $canTravel && ! $travelStarted && ! $arrived,
+                'canArrive' => $canTravel && $travelStarted && ! $arrived,
             ],
             'scopeRooms' => $roomTasks->values(),
             'tasks' => $tasks->values(),
