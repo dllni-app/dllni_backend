@@ -11,7 +11,7 @@ return [
     ],
     'dispatch' => [
         'stale_location_minutes' => (int) env('DELIVERY_STALE_LOCATION_MINUTES', 5),
-        'offer_timeout_seconds' => (int) env('DELIVERY_OFFER_TIMEOUT_SECONDS', 60),
+        'offer_timeout_seconds' => (int) env('DELIVERY_OFFER_TIMEOUT_SECONDS', 120),
         'initial_search_radius_km' => (float) env('DELIVERY_INITIAL_SEARCH_RADIUS_KM', 5),
         'stop_when_no_driver' => filter_var(env('DELIVERY_STOP_WHEN_NO_DRIVER', false), FILTER_VALIDATE_BOOL),
         'no_candidate_retry_seconds' => (int) env('DELIVERY_NO_CANDIDATE_RETRY_SECONDS', 60),
