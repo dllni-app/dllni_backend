@@ -26,7 +26,19 @@ it('seeds canonical linked bookings as session-free booking-level team workflows
     });
 
     app(CleaningBillingPolicySeeder::class)->run();
+    $bookingInsertBindings = [];
+    DB::listen(function ($query) use (&$bookingInsertBindings): void {
+        if (str_starts_with(strtolower($query->sql), 'insert into "cleaning_bookings"')) {
+            $bookingInsertBindings[] = DB::connection()->prepareBindings($query->bindings);
+        }
+    });
     app(CleaningConnectedDemoSeeder::class)->run();
+
+    expect($bookingInsertBindings)->not->toBeEmpty();
+    foreach ($bookingInsertBindings as $bindings) {
+        expect(collect($bindings)->contains(fn ($value) => is_string($value)
+            && preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/', $value) === 1))->toBeFalse();
+    }
 
     $linked = CleaningBooking::query()->whereIn('booking_number', [
         'CLN-LINKED-001', 'CLN-LINKED-002',

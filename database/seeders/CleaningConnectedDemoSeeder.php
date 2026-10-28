@@ -6,6 +6,7 @@ namespace Database\Seeders;
 
 use App\Models\User;
 use App\Models\Worker;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -50,6 +51,7 @@ final class CleaningConnectedDemoSeeder extends Seeder
                 $date = $scenario['appointment']->toDateString();
                 $time = $scenario['appointment']->format('H:i');
                 $schedule = $scheduleService->estimate(240, 2, $date, $time);
+                $scheduledEndAt = CarbonImmutable::parse($schedule['scheduledEndAt']);
                 $margin = $scenario['base'] * 0.10;
                 $bookingId = $this->upsert('cleaning_bookings', ['booking_number' => $scenario['number']], [
                     'customer_id' => $customer->id,
@@ -62,8 +64,8 @@ final class CleaningConnectedDemoSeeder extends Seeder
                     'supervised_state' => $scenario['workStartedAt'] ? 'in_progress' : 'staffing',
                     'supervised_base_minutes' => 240,
                     'supervised_duration_minutes' => $schedule['durationMinutes'],
-                    'supervised_scheduled_end_at' => $schedule['scheduledEndAt'],
-                    'supervised_original_end_at' => $schedule['scheduledEndAt'],
+                    'supervised_scheduled_end_at' => $scheduledEndAt,
+                    'supervised_original_end_at' => $scheduledEndAt,
                     'property_type' => 'apartment',
                     'neighborhood_name' => 'الجميلية',
                     'property_details' => json_encode([
