@@ -275,16 +275,19 @@ it('reduces open-time service only after a coupon exhausts the final administrat
     $booking->refresh();
     $assignment->refresh();
 
+    // The initial quote includes 50 of administration margin in the service
+    // subtotal. At finalization the 75 margin contains that same 50; the
+    // customer gross is 300 + 10 + (75 - 50), not 300 + 10 + 75.
     expect((float) $booking->open_time_final_amount)->toBe(300.0)
-        ->and((float) $booking->subtotal_before_discount)->toBe(385.0)
-        ->and((float) $booking->discount_amount)->toBe(115.5)
+        ->and((float) $booking->subtotal_before_discount)->toBe(335.0)
+        ->and((float) $booking->discount_amount)->toBe(97.5)
         ->and((float) $booking->admin_margin_amount)->toBe(0.0)
         ->and((float) $booking->travel_fee)->toBe(10.0)
-        ->and((float) $booking->total_price)->toBe(269.5)
-        ->and((float) $assignment->service_share_amount)->toBe(259.5)
+        ->and((float) $booking->total_price)->toBe(237.5)
+        ->and((float) $assignment->service_share_amount)->toBe(227.5)
         ->and((float) $assignment->travel_fee)->toBe(10.0)
         ->and((float) $assignment->admin_margin_amount)->toBe(0.0)
-        ->and((float) $assignment->worker_amount)->toBe(269.5);
+        ->and((float) $assignment->worker_amount)->toBe(237.5);
 });
 
 it('does not finalize open-time pricing when cancellation happens before a finish timestamp exists', function (CleaningBookingStatus $fromStatus, bool $started): void {

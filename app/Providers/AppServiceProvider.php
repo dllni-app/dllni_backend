@@ -79,6 +79,8 @@ final class AppServiceProvider extends ServiceProvider
     {
         $this->app->useLangPath(base_path('lang'));
 
+        $this->configureLocalPublicStorageUrl();
+
         RateLimiter::for('cleaning-start-verification', function (Request $request): Limit {
             $userId = $request->user()?->id ?? 'guest';
             $orderId = (string) $request->route('order');
@@ -95,6 +97,28 @@ final class AppServiceProvider extends ServiceProvider
         $this->bootRestaurantPolicies();
         $this->bootSupermarketPolicies();
         $this->bootDeliveryPolicies();
+    }
+
+    /**
+     * A browser on the development host uses 127.0.0.1, while Android emulator
+     * requests use the emulator-only alias 10.0.2.2. An absolute public-disk
+     * URL frozen to either host makes the same asset inaccessible to the other.
+     * Keep production disk URLs unchanged and limit request-host reflection to
+     * an explicit allowlist of loopback/emulator names in the local environment.
+     */
+    private function configureLocalPublicStorageUrl(): void
+    {
+        if (! $this->app->environment('local') || ! $this->app->bound('request')) {
+            return;
+        }
+
+        $request = $this->app->make('request');
+        if (! $request instanceof Request
+            || ! in_array($request->getHost(), ['127.0.0.1', 'localhost', '10.0.2.2'], true)) {
+            return;
+        }
+
+        config()->set('filesystems.disks.public.url', $request->getSchemeAndHttpHost().'/storage');
     }
 
     private function bootDeliveryPolicies(): void

@@ -92,6 +92,10 @@ it('makes route-dependent transportation explicitly pending while preserving a s
 
     $created = $this->postJson('/api/v1/user/cleaning/orders', timePeriodStorePayload($input, $quote))
         ->assertCreated()->json();
+    $pendingBooking = CleaningBooking::query()->findOrFail($created['order']['id']);
+    expect($pendingBooking->is_pricing_final)->toBeFalse()
+        ->and($pendingBooking->sessions()->firstOrFail()->is_pricing_final)->toBeFalse()
+        ->and($pendingBooking->property_details['_time_period_v2']['pricing']['isPricingFinal'])->toBeFalse();
     $this->getJson('/api/v1/user/cleaning/orders/'.$created['order']['id'])
         ->assertOk()
         ->assertJsonPath('data.travelFeePending', true)
@@ -662,6 +666,8 @@ it('bills fixed travel for every selected team member even when peak room concur
         ->json('order.id');
     $booking = CleaningBooking::query()->findOrFail($id);
     expect($booking->number_of_workers)->toBe(2)
+        ->and($booking->is_pricing_final)->toBeTrue()
+        ->and($booking->sessions()->firstOrFail()->is_pricing_final)->toBeTrue()
         ->and((float) $booking->travel_fee)->toBe(20.0)
         ->and((int) $booking->sessions()->firstOrFail()->required_workers)->toBe(2)
         ->and((float) $booking->total_price)->toBe((float) $quote['pricing']['totalPrice']);

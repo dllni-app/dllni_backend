@@ -128,7 +128,7 @@ final class CleaningBookingInfolist
                                             ->label('العاملون المتبقون')
                                             ->state(fn (CleaningBooking $record): string => self::integer(app(CleaningBookingTeamPresentation::class)->counts($record)['remaining'])),
                                         TextEntry::make('active_supervisor')
-                                            ->label('المشرف المسؤول')
+                                            ->label('مشرف الحجز (الإسناد العام)')
                                             ->state(static function (CleaningBooking $record): string {
                                                 $active = $record->supervisorAssignments()
                                                     ->whereNull('released_at')
@@ -136,7 +136,7 @@ final class CleaningBookingInfolist
                                                     ->latest('assigned_at')
                                                     ->first();
 
-                                                return $active?->supervisor?->name ?: 'لم يتم تعيين مشرف';
+                                                return $active?->supervisor?->name ?: 'لا يوجد إسناد عام؛ راجع مشرف كل زيارة أدناه';
                                             })
                                             ->badge()
                                             ->color(static fn (CleaningBooking $record): string => $record->supervisorAssignments()
@@ -156,10 +156,6 @@ final class CleaningBookingInfolist
                                                 'ready' => 'info',
                                                 default => 'warning',
                                             }),
-                                        TextEntry::make('room_coverage')
-                                            ->label('تغطية الغرف')
-                                            ->state(fn ($record): string => self::roomCoverageLabel($record))
-                                            ->visible(fn ($record): bool => ! self::isEventAssistance($record)),
                                     ])
                                     ->columns(3),
 
@@ -287,7 +283,7 @@ final class CleaningBookingInfolist
                                             ->columnSpanFull(),
                                     ])
                                     ->columns(2),
-                                Section::make('توزيع الغرف')
+                                Section::make('الغرف المطلوبة')
                                     ->schema([
                                         RepeatableEntry::make('rooms')
                                             ->label('الغرف')
@@ -297,9 +293,14 @@ final class CleaningBookingInfolist
                                                     ->state(fn (CleaningBookingRoom $record): string => self::arabicRoomName($record))
                                                     ->placeholder('-')
                                                     ->weight('bold'),
-                                                TextEntry::make('assignedWorker.user.name')
-                                                    ->label('العامل المعيّن')
-                                                    ->placeholder('-'),
+                                                TextEntry::make('room_size')
+                                                    ->label('حجم الغرفة')
+                                                    ->formatStateUsing(static fn ($state): string => match ((string) $state) {
+                                                        'small' => 'صغيرة',
+                                                        'medium' => 'متوسطة',
+                                                        'large' => 'كبيرة',
+                                                        default => 'غير محدد',
+                                                    }),
                                             ])
                                             ->columns(2),
                                     ])

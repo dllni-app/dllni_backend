@@ -607,7 +607,12 @@ final class CleaningBookingController
                     return true;
                 }
                 if ($this->isPendingCandidateForWorker($booking, $worker)) {
-                    return true;
+                    // The parent-dispatch audience alone cannot prove the
+                    // worker can take a signed V2 session. The session gate
+                    // also checks skill/equipment, conflicts and allowance.
+                    return app(\Modules\Cleaning\Services\CleaningBookingWorkerSessionVisibilityService::class)
+                        ->visibleSessions($booking, $worker)
+                        ->isNotEmpty();
                 }
 
                 return $booking->sessions()
@@ -672,6 +677,20 @@ final class CleaningBookingController
         );
         $safe['locationSummary'] = $booking->neighborhood_name;
         $safe['neighborhoodName'] = $booking->neighborhood_name;
+
+        // Open-Time workers must see their real task instructions and planned
+        // duration on the offer card, without getting an unaccepted order's
+        // private address or customer-facing pricing.
+        if ((string) $booking->booking_kind === 'open_time') {
+            $safe['propertyDetails'] = [
+                'notes' => mb_trim((string) data_get($booking->property_details, 'notes', '')),
+            ];
+            $safe['openTime'] = [
+                'isOpenTime' => true,
+                'requestedWorkerCount' => max(1, (int) $booking->number_of_workers),
+                'expectedMaxMinutes' => max(15, (int) $booking->open_time_expected_max_minutes),
+            ];
+        }
 
         if ($this->isPendingCandidateForWorker($booking, $worker)) {
             $safe['specialServicesPreview'] = WorkerPendingSpecialServicesPreview::forBooking($booking);

@@ -849,6 +849,16 @@ final class CleaningBookingSessionLifecycleService
                 throw new InvalidArgumentException('Session must be awaiting customer completion confirmation.');
             }
 
+            // V2 operational groups require visit-level certified task segments,
+            // an approved supervisor liability and conserved funding. No
+            // booking-wide or administrative completion shortcut may settle
+            // such a visit, including while its quote is still provisional.
+            if ($booking->isV2OperationalGroup()) {
+                throw ValidationException::withMessages([
+                    'execution' => ['V2 group settlement is unavailable until the visit-level funded execution contract is enabled.'],
+                ]);
+            }
+
             $completedAt = now();
             $this->finalizeOpenTimeSession($booking, $locked, $completedAt);
             CleaningBookingSessionWorkerAssignment::query()
@@ -868,6 +878,26 @@ final class CleaningBookingSessionLifecycleService
                 ->where('cleaning_booking_session_id', $locked->id)
                 ->where('status', CleaningBookingWorkerAssignmentStatus::Completed->value)
                 ->get();
+
+            if ($locked->is_pricing_final) {
+                // A frozen customer quote is not an external funding source.
+                // Existing sessions may settle only inside that quote; V2
+                // supervised visits require configured supervisor liability.
+                $conservation = app(CleaningSessionFundingConservationService::class)->assess(
+                    $locked->getRawOriginal('total_price'),
+                    $assignments->map(static fn (CleaningBookingSessionWorkerAssignment $assignment): array => [
+                        'workerAmount' => $assignment->getRawOriginal('worker_amount'),
+                        'travelFee' => $assignment->getRawOriginal('travel_fee'),
+                    ])->all(),
+                    $locked->requiredWorkerCount(),
+                    $booking->isV2OperationalGroup() ? null : '0.00',
+                );
+                if (! in_array($conservation['status'], ['within_quote', 'balanced'], true)) {
+                    throw ValidationException::withMessages([
+                        'funding' => ['Session funding conservation could not be verified; settlement is blocked.'],
+                    ]);
+                }
+            }
 
             // A payable session cannot be declared settled without any
             // completed assignment carrying a positive commission.

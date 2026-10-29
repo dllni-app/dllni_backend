@@ -175,20 +175,21 @@ it('applies the coupon only after authoritative open-time repricing and keeps tr
 
     // 90 minutes at 200 SYP/hour = 300 service. Canonical final worker pricing
     // adds 75 admin (25%) and the 10 SYP minimum travel fee, so gross is 385.
-    // The 10% coupon is therefore 38.50 and is funded entirely by admin. Travel
+    // The 10% coupon applies to 375 of cleaning and admin only (excludes travel),
+    // so the discount is 37.50 and is funded entirely by admin. Travel
     // remains 10 and the worker service share remains the full 300.
     expect((float) $booking->open_time_final_amount)->toBe(300.0)
         ->and($booking->open_time_actual_minutes)->toBe(90)
         ->and($booking->open_time_billable_minutes)->toBe(90)
         ->and((float) $booking->base_price)->toBe(300.0)
         ->and((float) $booking->subtotal_before_discount)->toBe(385.0)
-        ->and((float) $booking->discount_amount)->toBe(38.5)
+        ->and((float) $booking->discount_amount)->toBe(37.5)
         ->and((float) $booking->travel_fee)->toBe(10.0)
-        ->and((float) $booking->admin_margin_amount)->toBe(36.5)
-        ->and((float) $booking->total_price)->toBe(346.5)
+        ->and((float) $booking->admin_margin_amount)->toBe(37.5)
+        ->and((float) $booking->total_price)->toBe(347.5)
         ->and((float) $assignment->service_share_amount)->toBe(300.0)
         ->and((float) $assignment->travel_fee)->toBe(10.0)
-        ->and((float) $assignment->admin_margin_amount)->toBe(36.5)
+        ->and((float) $assignment->admin_margin_amount)->toBe(37.5)
         ->and((float) $assignment->worker_amount)->toBe(310.0)
         ->and($booking->is_pricing_final)->toBeTrue();
 });

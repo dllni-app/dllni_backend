@@ -141,6 +141,20 @@ final class CleaningBookingShowController
         $safe['locationSummary'] = $booking->neighborhood_name;
         $safe['neighborhoodName'] = $booking->neighborhood_name;
 
+        // A candidate may review the task description and selected time before
+        // accepting an Open-Time offer. Keep full address, totals and other
+        // property metadata redacted until acceptance.
+        if ((string) $booking->booking_kind === 'open_time') {
+            $safe['propertyDetails'] = [
+                'notes' => mb_trim((string) data_get($booking->property_details, 'notes', '')),
+            ];
+            $safe['openTime'] = [
+                'isOpenTime' => true,
+                'requestedWorkerCount' => max(1, (int) $booking->number_of_workers),
+                'expectedMaxMinutes' => max(15, (int) $booking->open_time_expected_max_minutes),
+            ];
+        }
+
         if ($this->isWorkerDispatchCandidate($booking)) {
             $safe['specialServicesPreview'] = WorkerPendingSpecialServicesPreview::forBooking($booking);
         }

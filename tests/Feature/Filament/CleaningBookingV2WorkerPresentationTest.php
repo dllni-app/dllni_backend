@@ -96,3 +96,46 @@ it('excludes released visit workers and preserves legacy-only worker counting', 
     expect(app(CleaningBookingTeamPresentation::class)->counts($legacy))
         ->toMatchArray(['required' => 2, 'accepted' => 1, 'remaining' => 1]);
 });
+
+it('retains completed worker history in the Filament booking details', function (): void {
+    Filament::setCurrentPanel(Filament::getPanel('admin'));
+    app()->setLocale('ar');
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+    $admin = User::factory()->create(['is_active' => true]);
+    $admin->assignRole(Role::findOrCreate('admin', 'web'));
+
+    $booking = CleaningBooking::factory()->create([
+        'booking_kind' => 'standard',
+        'number_of_workers' => 1,
+        'status' => 'completed',
+    ]);
+    $session = $booking->sessions()->create([
+        'sequence' => 1,
+        'scheduled_date' => now()->toDateString(),
+        'scheduled_time' => '09:00',
+        'duration_hours' => 1,
+        'required_workers' => 1,
+        'status' => 'completed',
+    ]);
+    $worker = Worker::factory()->create();
+    $session->workerAssignments()->create([
+        'worker_id' => $worker->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::Completed->value,
+        'accepted_at' => now()->subHour(),
+        'arrived_at' => now()->subHour(),
+        'work_finished_at' => now(),
+        'service_share_amount' => 150,
+        'travel_fee' => 10,
+        'worker_amount' => 160,
+    ]);
+
+    expect(app(CleaningBookingTeamPresentation::class)->counts($booking))
+        ->toMatchArray(['required' => 1, 'accepted' => 1, 'remaining' => 0]);
+
+    $this->actingAs($admin)
+        ->get(CleaningBookingResource::getUrl('view', ['record' => $booking], isAbsolute: false))
+        ->assertSuccessful()
+        ->assertSee('العاملون الذين أنجزوا المهمة')
+        ->assertSee('1 من 1')
+        ->assertDontSee('لا يوجد عامل مؤكد لهذا الحجز بعد');
+});

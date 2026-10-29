@@ -15,6 +15,10 @@ final class CleaningOperationsCluster extends Cluster
 
     protected static ?string $navigationLabel = 'عمليات التنظيف';
 
+    // Filament does not derive the breadcrumb from the navigation label.
+    // Keep Arabic consistently in the cleaning booking workflow.
+    protected static ?string $clusterBreadcrumb = 'عمليات التنظيف';
+
     protected static ?int $navigationSort = 1;
 
     protected static ?SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;

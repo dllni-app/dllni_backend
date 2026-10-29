@@ -34,6 +34,18 @@ use Modules\Cleaning\Http\Controllers\API\ServicePricingController;
 use Modules\Cleaning\Http\Controllers\API\SupervisedWorkerBookingController;
 use Modules\Cleaning\Http\Controllers\API\SupervisorAppController;
 use Modules\Cleaning\Http\Controllers\API\SupervisorScheduledV2Controller;
+use Modules\Cleaning\Http\Controllers\API\SupervisorV2TaskAllocationController;
+use Modules\Cleaning\Http\Controllers\API\SupervisorV2VisitAttendanceController;
+use Modules\Cleaning\Http\Controllers\API\SupervisorV2VisitVerificationController;
+use Modules\Cleaning\Http\Controllers\API\SupervisorV2WorkerAttestationController;
+use Modules\Cleaning\Http\Controllers\API\SupervisorV2VisitFundingPreflightController;
+use Modules\Cleaning\Http\Controllers\API\SupervisorV2ExecutionReadinessController;
+use Modules\Cleaning\Http\Controllers\API\SupervisorV2ReplacementRequestController;
+use Modules\Cleaning\Http\Controllers\API\SupervisorV2VisitWorkController;
+use Modules\Cleaning\Http\Controllers\API\WorkerV2TaskWorkController;
+use Modules\Cleaning\Http\Controllers\API\VisitReplacementApprovalController;
+use Modules\Cleaning\Http\Controllers\API\WorkerV2ReplacementOfferController;
+use Modules\Cleaning\Http\Controllers\API\CustomerV2VisitVerificationCodeController;
 use Modules\Cleaning\Http\Controllers\API\SupervisorWorkflowController;
 use Modules\Cleaning\Http\Controllers\API\WorkerAccountProfileController;
 use Modules\Cleaning\Http\Controllers\API\WorkerAccountStatusController;
@@ -62,6 +74,9 @@ Route::prefix('v1')->group(function () {
         ->whereNumber('booking')
         ->whereNumber('visit')
         ->name('cleaning.supervisor-v2.visit.assign');
+    Route::post('admin/cleaning/v2/bookings/{booking}/visits/{visit}/replacement-requests/{replacement}/approve',
+        [VisitReplacementApprovalController::class, 'approve'])
+        ->middleware('auth:sanctum')->whereNumber('booking')->whereNumber('visit')->whereNumber('replacement');
     Route::prefix('supervisor')->group(function (): void {
         Route::post('login', [SupervisorAppController::class, 'login'])->middleware('throttle:6,1');
         Route::middleware(['auth:sanctum', EnsureSupervisor::class, RejectUnsupportedV2SupervisorExecution::class])->group(function (): void {
@@ -69,9 +84,43 @@ Route::prefix('v1')->group(function () {
             Route::get('v2/bookings/{booking}', [SupervisorScheduledV2Controller::class, 'show'])->whereNumber('booking');
             Route::get('v2/bookings/{booking}/visits/{visit}', [SupervisorScheduledV2Controller::class, 'visit'])
                 ->whereNumber('booking')->whereNumber('visit');
+            Route::post('v2/bookings/{booking}/visits/{visit}/task-assignments', SupervisorV2TaskAllocationController::class)
+                ->whereNumber('booking')->whereNumber('visit');
+            Route::get('v2/bookings/{booking}/visits/{visit}/attendance-certifications',
+                [SupervisorV2WorkerAttestationController::class, 'index'])->whereNumber('booking')->whereNumber('visit');
+            Route::post('v2/bookings/{booking}/visits/{visit}/attendance-certifications',
+                [SupervisorV2WorkerAttestationController::class, 'store'])->whereNumber('booking')->whereNumber('visit');
+            Route::get('v2/bookings/{booking}/visits/{visit}/funding-preflight',
+                SupervisorV2VisitFundingPreflightController::class)->whereNumber('booking')->whereNumber('visit');
+            Route::get('v2/bookings/{booking}/visits/{visit}/execution-readiness',
+                SupervisorV2ExecutionReadinessController::class)->whereNumber('booking')->whereNumber('visit');
+            Route::get('v2/bookings/{booking}/visits/{visit}/replacement-requests',
+                [SupervisorV2ReplacementRequestController::class, 'index'])->whereNumber('booking')->whereNumber('visit');
+            Route::post('v2/bookings/{booking}/visits/{visit}/replacement-requests',
+                [SupervisorV2ReplacementRequestController::class, 'store'])->whereNumber('booking')->whereNumber('visit');
+            Route::post('v2/bookings/{booking}/visits/{visit}/replacement-requests/{replacement}/nominate',
+                [SupervisorV2ReplacementRequestController::class, 'nominate'])
+                ->whereNumber('booking')->whereNumber('visit')->whereNumber('replacement');
+            Route::post('v2/bookings/{booking}/visits/{visit}/replacement-requests/{replacement}/reallocate',
+                [SupervisorV2ReplacementRequestController::class, 'reallocate'])
+                ->whereNumber('booking')->whereNumber('visit')->whereNumber('replacement');
+            Route::post('v2/bookings/{booking}/visits/{visit}/supervisor/{action}', SupervisorV2VisitAttendanceController::class)
+                ->whereNumber('booking')->whereNumber('visit')
+                ->whereIn('action', ['start-travel', 'arrive']);
+            Route::post('v2/bookings/{booking}/visits/{visit}/verification-requests',
+                [SupervisorV2VisitVerificationController::class, 'request'])->whereNumber('booking')->whereNumber('visit');
+            Route::get('v2/bookings/{booking}/visits/{visit}/verification/status',
+                [SupervisorV2VisitVerificationController::class, 'status'])->whereNumber('booking')->whereNumber('visit');
+            Route::post('v2/bookings/{booking}/visits/{visit}/verification/confirm',
+                [SupervisorV2VisitVerificationController::class, 'confirm'])
+                ->middleware('throttle:6,1')->whereNumber('booking')->whereNumber('visit');
+            Route::post('v2/bookings/{booking}/visits/{visit}/start', [SupervisorV2VisitWorkController::class, 'start'])
+                ->whereNumber('booking')->whereNumber('visit');
+            Route::post('v2/bookings/{booking}/visits/{visit}/finish', [SupervisorV2VisitWorkController::class, 'finish'])
+                ->whereNumber('booking')->whereNumber('visit');
             Route::post('v2/bookings/{booking}/visits/{visit}/{action}', [SupervisorScheduledV2Controller::class, 'unsupportedTransition'])
                 ->whereNumber('booking')->whereNumber('visit')
-                ->whereIn('action', ['start', 'finish', 'complete', 'verification-requests', 'handover-requests', 'attendance-incidents', 'replacement-requests']);
+                ->whereIn('action', ['complete', 'verification-requests', 'handover-requests', 'attendance-incidents', 'replacement-requests']);
             Route::get('me', [SupervisorAppController::class, 'me']);
             Route::post('logout', [SupervisorAppController::class, 'logout']);
             Route::get('notifications', [UserNotificationController::class, 'index']);
@@ -111,12 +160,21 @@ Route::prefix('v1')->group(function () {
         Route::post('{booking}/extensions/{extension}/decision', [SupervisorWorkflowController::class, 'extensionDecision']);
         Route::post('{booking}/handover-decision', [SupervisorWorkflowController::class, 'handoverDecision']);
     });
+    Route::get('user/cleaning/v2/bookings/{booking}/visits/{visit}/verification-code',
+        CustomerV2VisitVerificationCodeController::class)
+        ->middleware('auth:sanctum')->whereNumber('booking')->whereNumber('visit');
     Route::apiResource('cleaning-services', CleaningServiceController::class)->only(['index', 'show']);
     Route::apiResource('cleaning-services.pricing', ServicePricingController::class)->only(['index', 'show'])->scoped();
     Route::apiResource('cleaning-billing-policies', CleaningBillingPolicyController::class)->only(['index', 'show']);
     Route::get('cleaning/suite-config', CleaningSuiteConfigController::class);
 
     Route::middleware(['auth:sanctum'])->group(function (): void {
+        Route::get('cleaning/v2/replacement-offers', [WorkerV2ReplacementOfferController::class, 'index']);
+        Route::post('cleaning/v2/bookings/{booking}/visits/{visit}/replacement-requests/{replacement}/accept',
+            [WorkerV2ReplacementOfferController::class, 'accept'])
+            ->whereNumber('booking')->whereNumber('visit')->whereNumber('replacement');
+        Route::post('cleaning/v2/bookings/{booking}/visits/{visit}/tasks/{action}', WorkerV2TaskWorkController::class)
+            ->whereNumber('booking')->whereNumber('visit')->whereIn('action', ['start', 'finish']);
         Route::get('cleaning/neighborhoods', [CleaningNeighborhoodController::class, 'index']);
         Route::post('cleaning/neighborhoods/match', [CleaningNeighborhoodController::class, 'match']);
 

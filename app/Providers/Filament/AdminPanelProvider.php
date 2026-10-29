@@ -66,6 +66,23 @@ final class AdminPanelProvider extends PanelProvider
                 fn (): HtmlString => $this->forceLatinDigitsScript(),
             )
             ->renderHook(
+                PanelsRenderHook::HEAD_START,
+                fn (): HtmlString => new HtmlString(<<<'HTML'
+                <script>
+                    // Filament 5.3.5 initializes the persisted sidebar groups to null,
+                    // while groupIsCollapsed() immediately calls .includes().
+                    document.addEventListener('alpine:init', () => {
+                        queueMicrotask(() => {
+                            const sidebar = window.Alpine?.store('sidebar');
+                            if (sidebar && !Array.isArray(sidebar.collapsedGroups)) {
+                                sidebar.collapsedGroups = [];
+                            }
+                        });
+                    });
+                </script>
+                HTML),
+            )
+            ->renderHook(
                 PanelsRenderHook::BODY_END,
                 fn (): HtmlString => $this->alertSoundPoller(),
             )

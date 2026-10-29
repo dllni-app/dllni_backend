@@ -105,7 +105,7 @@ final class SupervisorScheduledV2Controller
     {
         if ($booking->sessions()->exists()) {
             $sessions = $this->scheduled->assignedSessions($user, $booking)
-                ->with(['workerAssignments.worker.user', 'activeSupervisorAssignment'])
+                ->with(['workerAssignments.worker.user', 'activeSupervisorAssignment', 'supervisorAttendances'])
                 ->get();
             $schedules = $booking->roomSchedules()->with('room')->get()->groupBy('cleaning_booking_session_id');
             $roomPeriods = $booking->roomPeriods()->with('room')->get()->groupBy('cleaning_booking_session_id');
@@ -130,6 +130,23 @@ final class SupervisorScheduledV2Controller
                     fn (CleaningBookingSessionWorkerAssignment $worker): bool => $worker->work_started_at !== null
                 );
                 $required = $session->requiredWorkerCount();
+                $actualAttendanceCertified = $session->activeSupervisorAssignment !== null
+                    && app(\Modules\Cleaning\Services\CleaningV2VisitWorkerAttestationService::class)
+                        ->allPresent($session, $session->activeSupervisorAssignment->id);
+                $noShowWorkers = $session->workerAttestations()->where('outcome', 'no_show')->count();
+                $supervisorAssignment = $session->activeSupervisorAssignment;
+                $supervisorAttendance = $session->supervisorAttendances->first(
+                    fn ($record): bool => $supervisorAssignment !== null
+                        && (int) $record->cleaning_booking_session_supervisor_assignment_id === (int) $supervisorAssignment->id,
+                );
+                $attendanceActions = [];
+                if ($session->isSupervisionInitialized() && $supervisorAssignment !== null && ! $session->isTerminal()) {
+                    if ($supervisorAttendance?->started_travel_at === null) {
+                        $attendanceActions[] = 'start_travel';
+                    } elseif ($supervisorAttendance->arrived_at === null) {
+                        $attendanceActions[] = 'arrive';
+                    }
+                }
                 $visitSchedules = $schedules->get($session->id, collect());
                 $visitRoomPeriods = $roomPeriods->get($session->id, collect());
                 $interval = $this->canonicalVisitInterval($session, $visitSchedules, $visitRoomPeriods);
@@ -148,8 +165,17 @@ final class SupervisorScheduledV2Controller
                         'source' => 'session', 'requiredWorkers' => $required,
                         'acceptedWorkers' => $accepted->count(), 'arrivedWorkers' => $arrived->count(),
                         'plannedWorkers' => $required, 'workStartedWorkers' => $attending->count(),
-                        'actualWorkers' => null, 'actualAttendanceCertified' => false,
+                        'actualWorkers' => $actualAttendanceCertified ? $required : null,
+                        'actualAttendanceCertified' => $actualAttendanceCertified,
+                        'noShowWorkers' => $noShowWorkers,
                         'teamReady' => $arrived->count() >= $required,
+                    ],
+                    // Provenance owned by the visit supervisor, not inferred
+                    // from any worker's arrival or booking-level start state.
+                    'supervisorAttendance' => [
+                        'startedTravelAt' => $supervisorAttendance?->started_travel_at?->toIso8601String(),
+                        'arrivedAt' => $supervisorAttendance?->arrived_at?->toIso8601String(),
+                        'allowedActions' => $attendanceActions,
                     ],
                     'financials' => $this->visitFinancials($session, $accepted, $interval),
                     'materials' => $this->materialsSources($materialsBySession->get($session->id, collect())),
@@ -274,7 +300,9 @@ final class SupervisorScheduledV2Controller
             'supervisorTravelAmount' => null,
             'plannedWorkerCount' => $session->requiredWorkerCount(),
             'actualWorkerCount' => null,
-            'actualAttendanceCertified' => false,
+            'actualAttendanceCertified' => $session->activeSupervisorAssignment !== null
+                && app(\Modules\Cleaning\Services\CleaningV2VisitWorkerAttestationService::class)
+                    ->allPresent($session, $session->activeSupervisorAssignment->id),
             'workers' => $accepted->map(static fn (CleaningBookingSessionWorkerAssignment $assignment): array => [
                 'workerId' => $assignment->worker_id,
                 'workerName' => $assignment->worker?->user?->name,

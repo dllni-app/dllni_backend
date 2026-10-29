@@ -117,6 +117,13 @@ final class UserCleaningOrderService
                         $requestedWorkers,
                         ($validated['serviceType'] ?? null) === 'supervised_team',
                     );
+                // The synthetic apartment is used only to derive the hourly rate.
+                // Its room estimate must never become the booked Open-Time duration.
+                if ($isOpenTime) {
+                    $selectedMinutes = (int) ($pricing['openTime']['expectedMaxMinutes'] ?? $validated['openTime']['expectedMaxMinutes'] ?? 480);
+                    $estimation['estimatedHours'] = round($selectedMinutes / 60, 2);
+                    $estimation['estimatedRawMinutes'] = $selectedMinutes;
+                }
             } catch (InvalidArgumentException $exception) {
                 throw ValidationException::withMessages([
                     'pricing' => [$exception->getMessage()],

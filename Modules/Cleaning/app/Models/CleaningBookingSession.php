@@ -103,6 +103,11 @@ final class CleaningBookingSession extends Model
         return $this->hasMany(CleaningBookingSessionTask::class, 'cleaning_booking_session_id');
     }
 
+    public function workerAttestations(): HasMany
+    {
+        return $this->hasMany(CleaningBookingSessionWorkerAttestation::class, 'cleaning_booking_session_id');
+    }
+
     public function executionVerifications(): HasMany
     {
         return $this->hasMany(CleaningBookingSessionVerification::class, 'cleaning_booking_session_id');
@@ -150,6 +155,11 @@ final class CleaningBookingSession extends Model
     {
         return $this->workerAssignments()
             ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
+    }
+
+    public function replacementRequests(): HasMany
+    {
+        return $this->hasMany(CleaningBookingSessionReplacementRequest::class, 'cleaning_booking_session_id');
     }
 
     public function casts(): array

@@ -24,7 +24,7 @@ beforeEach(function (): void {
     );
 });
 
-it('returns the exact planned room ids in the worker offer before acceptance', function (): void {
+it('does not promise worker-specific room ids in an offer', function (): void {
     $booking = CleaningBooking::factory()->create([
         'status' => CleaningBookingStatus::Pending->value,
         'assignment_mode' => 'open_count',
@@ -50,7 +50,6 @@ it('returns the exact planned room ids in the worker offer before acceptance', f
     app(CleaningBookingTeamService::class)->syncRooms($booking, null);
 
     $expectedRoomIds = $booking->rooms()
-        ->where('planned_worker_slot', 1)
         ->orderBy('id')
         ->pluck('id')
         ->map(static fn ($id): int => (int) $id)
@@ -67,14 +66,15 @@ it('returns the exact planned room ids in the worker offer before acceptance', f
         $booking->fresh(),
     );
 
-    expect($expectedRoomIds)->toHaveCount(1)
+    expect($expectedRoomIds)->toHaveCount(2)
+        ->and($booking->rooms()->whereNotNull('planned_worker_slot')->count())->toBe(0)
         ->and($offer['isPreview'])->toBeTrue()
         ->and($offer['workerSlot'])->toBe(1)
-        ->and($offer['roomCount'])->toBe(1)
-        ->and($offer['roomIds'])->toBe($expectedRoomIds);
+        ->and($offer['roomCount'])->toBe(0)
+        ->and($offer['roomIds'])->toBe([]);
 });
 
-it('assigns rooms immediately and deducts the admin percentage from all three workers by work share', function (): void {
+it('shares booking tasks across accepted workers while allocating margins equally', function (): void {
     $booking = CleaningBooking::factory()->create([
         'status' => CleaningBookingStatus::Pending->value,
         'assignment_mode' => 'open_count',
@@ -100,8 +100,7 @@ it('assigns rooms immediately and deducts the admin percentage from all three wo
     $teamService = app(CleaningBookingTeamService::class);
     $teamService->syncRooms($booking, null);
 
-    expect($booking->rooms()->orderBy('planned_worker_slot')->pluck('planned_worker_slot')->all())
-        ->toBe([1, 2, 3]);
+    expect($booking->rooms()->whereNotNull('planned_worker_slot')->count())->toBe(0);
 
     $createAcceptedWorker = function (int $acceptedAfterSeconds) use ($booking): array {
         $worker = Worker::factory()->create([
@@ -143,8 +142,8 @@ it('assigns rooms immediately and deducts the admin percentage from all three wo
 
     expect($firstOffer['workerSlot'])->toBe(1)
         ->and($firstOffer['workerId'])->toBe($firstWorker->id)
-        ->and($firstAssignment->room_count)->toBe(1)
-        ->and((float) $firstAssignment->rooms_weight)->toBe(1.0)
+        ->and($firstAssignment->room_count)->toBe(3)
+        ->and((float) $firstAssignment->rooms_weight)->toBe(3.0)
         ->and((float) $firstAssignment->service_share_amount)->toBe(1000.0)
         ->and((float) $firstAssignment->admin_margin_amount)->toBe(100.0)
         ->and((float) $firstAssignment->travel_fee)->toBe(10.0)
@@ -152,7 +151,7 @@ it('assigns rooms immediately and deducts the admin percentage from all three wo
         ->and((float) $provisionalBooking->admin_margin_amount)->toBe(300.0)
         ->and((float) $provisionalBooking->total_price)->toBe(3300.0);
 
-    expect($booking->rooms()->where('assigned_worker_id', $firstWorker->id)->count())->toBe(1);
+    expect($booking->rooms()->whereNotNull('assigned_worker_id')->count())->toBe(0);
 
     [$secondWorker] = $createAcceptedWorker(1);
     [$thirdWorker] = $createAcceptedWorker(2);
@@ -165,7 +164,7 @@ it('assigns rooms immediately and deducts the admin percentage from all three wo
         ->get();
 
     expect($assignments)->toHaveCount(3)
-        ->and($assignments->pluck('room_count')->all())->toBe([1, 1, 1])
+        ->and($assignments->pluck('room_count')->all())->toBe([3, 3, 3])
         ->and($assignments->pluck('service_share_amount')->map(fn ($value) => (float) $value)->all())
         ->toBe([1000.0, 1000.0, 1000.0])
         ->and($assignments->pluck('admin_margin_amount')->map(fn ($value) => (float) $value)->all())
@@ -173,7 +172,5 @@ it('assigns rooms immediately and deducts the admin percentage from all three wo
         ->and((float) $assignments->sum('admin_margin_amount'))->toBe(300.0)
         ->and((float) $finalBooking->admin_margin_amount)->toBe(300.0);
 
-    foreach ([$firstWorker, $secondWorker, $thirdWorker] as $worker) {
-        expect($booking->rooms()->where('assigned_worker_id', $worker->id)->count())->toBe(1);
-    }
+    expect($booking->rooms()->whereNotNull('assigned_worker_id')->count())->toBe(0);
 });

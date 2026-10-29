@@ -101,7 +101,8 @@ it('shows visit supervisor assignment only to authorized Filament operations act
     Livewire::test(SessionsRelationManager::class, [
         'ownerRecord' => $booking,
         'pageClass' => ViewCleaningBooking::class,
-    ])->assertActionVisible(visitSupervisorAction($session));
+    ])->assertActionVisible(visitSupervisorAction($session))
+        ->assertTableColumnExists('visit_supervisor');
 });
 
 it('hides visit supervisor assignment when the parent booking is terminal', function (): void {

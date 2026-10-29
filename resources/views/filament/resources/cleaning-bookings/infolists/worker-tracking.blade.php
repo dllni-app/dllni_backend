@@ -127,7 +127,7 @@
         </div>
 
         <div class="rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
-            <div class="text-xs text-gray-500 dark:text-gray-400">الفريق المؤكد</div>
+            <div class="text-xs text-gray-500 dark:text-gray-400">{{ $tracking['teamCountLabel'] ?? 'الفريق المؤكد' }}</div>
             <div class="mt-1 font-semibold text-gray-950 dark:text-white">{{ $acceptedWorkers }} من {{ $requiredWorkers }}</div>
         </div>
 

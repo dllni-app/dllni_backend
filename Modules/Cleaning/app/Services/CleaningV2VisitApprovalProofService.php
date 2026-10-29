@@ -45,6 +45,13 @@ final class CleaningV2VisitApprovalProofService
             return $this->invalid('booking_session_mismatch');
         }
 
+        $details = is_array($booking->property_details) ? $booking->property_details : [];
+        $pricing = $details['_time_period_v2']['pricing'] ?? null;
+        if (is_array($pricing) && ($pricing['travelFeePending'] ?? null) === true
+            && ($pricing['isPricingFinal'] ?? null) === false) {
+            return $this->invalid('travel_fee_pending');
+        }
+
         if ((string) $booking->booking_kind !== 'standard'
             || (int) $booking->number_of_workers <= 1
             || ! $booking->is_pricing_final
@@ -84,7 +91,7 @@ final class CleaningV2VisitApprovalProofService
         $quote = $quoteRows->first();
         if ((int) $quote->customer_id !== (int) $booking->customer_id
             || (int) ($quote->cleaning_booking_id ?? 0) !== (int) $booking->id
-            || ! is_string($quote->idempotency_key) || trim($quote->idempotency_key) === ''
+            || ! is_string($quote->idempotency_key) || mb_trim($quote->idempotency_key) === ''
             || ! is_string($quote->id) || ! preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i', $quote->id)
             || ! is_string($quote->request_hash) || ! preg_match('/^[0-9a-f]{64}$/i', $quote->request_hash)
             || ! is_string($quote->signature) || ! preg_match('/^[0-9a-f]{64}$/i', $quote->signature)) {
@@ -109,7 +116,7 @@ final class CleaningV2VisitApprovalProofService
             $quote->id.'|'.$quote->customer_id.'|'.$quote->request_hash.'|'.$pricingHash.'|'.$expiresAt->getTimestamp(),
             $key,
         );
-        if (! hash_equals(strtolower($quote->signature), $expected)) {
+        if (! hash_equals(mb_strtolower($quote->signature), $expected)) {
             return $this->invalid('quote_authentication_failed');
         }
 
@@ -150,8 +157,11 @@ final class CleaningV2VisitApprovalProofService
             || ! is_array($snapshot['rooms'] ?? null)
             || ! is_array($snapshot['visits'] ?? null)
             || $snapshot['visits'] === []
+            || ! $this->isInteger($snapshot['requestedWorkerCount'] ?? null)
+            || (int) $snapshot['requestedWorkerCount'] !== (int) $booking->number_of_workers
             || ! $this->isInteger($snapshot['requiredSimultaneousWorkers'] ?? null)
-            || (int) $snapshot['requiredSimultaneousWorkers'] !== (int) $booking->number_of_workers
+            || (int) $snapshot['requiredSimultaneousWorkers'] < 1
+            || (int) $snapshot['requiredSimultaneousWorkers'] > (int) $snapshot['requestedWorkerCount']
             || ! $this->moneyEquals($snapshot['totalPrice'] ?? null, $booking->total_price)) {
             return null;
         }
@@ -169,7 +179,7 @@ final class CleaningV2VisitApprovalProofService
             || ! $this->moneyEquals($details['_room_period_v2_approved_total'] ?? null, $snapshot['totalPrice'])
             || ! $this->moneyEquals($snapshot['totalPrice'], $booking->total_price)
             || (int) ($approved['requiredSimultaneousWorkers'] ?? 0) !== (int) $snapshot['requiredSimultaneousWorkers']
-            || !$this->sameValue($approved['rooms'] ?? null, $snapshot['rooms'])) {
+            || ! $this->sameValue($approved['rooms'] ?? null, $snapshot['rooms'])) {
             return null;
         }
 
@@ -179,7 +189,7 @@ final class CleaningV2VisitApprovalProofService
             if (! is_array($visit)
                 || ! $this->isInteger($visit['sequence'] ?? null)
                 || (int) $visit['sequence'] < 1
-                || ! is_string($visit['visitKey'] ?? null) || trim($visit['visitKey']) === ''
+                || ! is_string($visit['visitKey'] ?? null) || mb_trim($visit['visitKey']) === ''
                 || ! is_array($visit['roomSchedules'] ?? null) || $visit['roomSchedules'] === []) {
                 return null;
             }
@@ -214,10 +224,10 @@ final class CleaningV2VisitApprovalProofService
                 || ($sessionSnapshot['visitKey'] ?? null) !== $signedVisit['visitKey']
                 || ! $persistedSession->is_pricing_final
                 || ! $persistedSession->isSupervisionInitialized()
-                || (string) $persistedSession->supervision_mode !== ((int) ($signedVisit['requiredSimultaneousWorkers'] ?? 0) > 1
+                || (string) $persistedSession->supervision_mode !== ((int) $snapshot['requestedWorkerCount'] > 1
                     ? CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR
                     : CleaningBookingSession::SUPERVISION_MODE_WORKER)
-                || ! $this->signedVisitSourcesMatch($booking, $persistedSession, $signedVisit, $snapshot['rooms'])
+                || ! $this->signedVisitSourcesMatch($booking, $persistedSession, $signedVisit, $snapshot['rooms'], (int) $snapshot['requestedWorkerCount'])
                 || ! $this->signedVisitPeriodsMatch($booking, $persistedSession, $signedVisit)) {
                 return null;
             }
@@ -238,7 +248,7 @@ final class CleaningV2VisitApprovalProofService
             || ($sessionSnapshot['visitKey'] ?? null) !== $visitKey
             || (int) ($sessionSnapshot['contractVersion'] ?? 0) !== 2
             || (int) ($visit['sequence'] ?? 0) !== (int) $session->sequence
-            || (int) ($visit['requiredSimultaneousWorkers'] ?? 0) !== $session->requiredWorkerCount()
+            || (int) ($snapshot['requestedWorkerCount'] ?? 0) !== $session->requiredWorkerCount()
             || (int) ($visit['estimatedDurationMinutes'] ?? 0) <= 0
             || ! $this->moneyEquals($sessionSnapshot['includedAdminMargin'], $financial['includedAdminMargin'])
             || ! $this->moneyEquals($sessionSnapshot['cashRoundingAdjustment'], $financial['cashRoundingAdjustment'])
@@ -388,7 +398,7 @@ final class CleaningV2VisitApprovalProofService
     }
 
     /** Verify every sibling's persisted source, not just the visit requested by the caller. */
-    private function signedVisitSourcesMatch(CleaningBooking $booking, CleaningBookingSession $session, array $visit, array $signedRooms): bool
+    private function signedVisitSourcesMatch(CleaningBooking $booking, CleaningBookingSession $session, array $visit, array $signedRooms, int $requestedWorkers): bool
     {
         $schedules = $visit['roomSchedules'] ?? null;
         $financial = $visit['financial'] ?? null;
@@ -399,7 +409,10 @@ final class CleaningV2VisitApprovalProofService
             : null;
         if (! is_array($schedules) || $schedules === []
             || ! $this->sessionAnchorMatches($session, $schedules)
-            || (int) ($visit['requiredSimultaneousWorkers'] ?? 0) !== $session->requiredWorkerCount()
+            || $requestedWorkers !== $session->requiredWorkerCount()
+            || ! $this->isInteger($visit['requiredSimultaneousWorkers'] ?? null)
+            || (int) $visit['requiredSimultaneousWorkers'] < 1
+            || (int) $visit['requiredSimultaneousWorkers'] > $requestedWorkers
             || ! is_array($financial)
             || ! array_key_exists('includedAdminMargin', $financial)
             || ! array_key_exists('cashRoundingAdjustment', $financial)
@@ -633,10 +646,10 @@ final class CleaningV2VisitApprovalProofService
         $date = $session->getRawOriginal('scheduled_date');
         $time = $session->getRawOriginal('scheduled_time');
         if (is_string($date) && preg_match('/^\d{4}-\d{2}-\d{2} 00:00:00$/', $date)) {
-            $date = substr($date, 0, 10);
+            $date = mb_substr($date, 0, 10);
         }
         if (is_string($time) && preg_match('/^\d{2}:\d{2}:\d{2}$/', $time)) {
-            $time = substr($time, 0, 5);
+            $time = mb_substr($time, 0, 5);
         }
         $parsed = $this->parseLocalDateTime(is_string($date) && is_string($time) ? $date.' '.$time : null);
 

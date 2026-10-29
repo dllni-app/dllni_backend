@@ -108,6 +108,9 @@ beforeEach(function (): void {
         'commission_type' => 'percent',
         'cleaning_base_unit_price' => 50,
         'cleaning_minimum_order_price' => 0,
+        'travel_markup_type' => 'worker_allowance',
+        'travel_markup_value' => 0,
+        'travel_per_km' => 0,
         'cleaning_room_pricing_units' => CleaningFinancialDefaults::roomPricingUnits(),
         'cleaning_room_deep_multipliers' => CleaningFinancialDefaults::roomDeepMultipliers(2),
         'cleaning_room_time_minutes' => $minutes,
@@ -166,6 +169,33 @@ it('verifies accepted multi-visit signed proof stably across UTC and Damascus wi
     Queue::assertNothingPushed();
 });
 
+it('rejects signed group visits with pending route travel fees using an explicit proof reason', function (): void {
+    CleaningFinancialSetting::query()->whereKey(1)->update([
+        'travel_markup_type' => 'fixed',
+        'travel_per_km' => 10,
+        'travel_markup_value' => 0,
+    ]);
+    [$booking, $session] = createApprovalProofBooking();
+
+    expect($booking->property_details['_time_period_v2']['pricing']['travelFeePending'])->toBeTrue()
+        ->and($booking->is_pricing_final)->toBeFalse()
+        ->and($session->is_pricing_final)->toBeFalse();
+
+    $result = app(CleaningV2VisitApprovalProofService::class)->verify($booking, $session);
+    expect($result['valid'])->toBeFalse()
+        ->and($result['reasonCodes'])->toBe(['travel_fee_pending'])
+        ->and($result['evidenceDigest'])->toBeNull()
+        ->and($result['taskCandidates'])->toBe([]);
+
+    // A mismatched persisted finality flag does not make the signed pending fee final.
+    $booking->forceFill(['is_pricing_final' => true])->save();
+    $session->forceFill(['is_pricing_final' => true])->save();
+    $result = app(CleaningV2VisitApprovalProofService::class)->verify($booking->fresh(), $session->fresh());
+    expect($result['valid'])->toBeFalse()
+        ->and($result['reasonCodes'])->toBe(['travel_fee_pending'])
+        ->and($result['evidenceDigest'])->toBeNull();
+});
+
 it('fails closed without proof output when retained quote or required financial evidence is tampered', function (string $case): void {
     [$booking, $session] = createApprovalProofBooking();
     $originalAppKey = config('app.key');
@@ -221,8 +251,8 @@ it('fails closed without proof output when retained quote or required financial 
     'tampered source duration' => 'tampered_source_duration',
 ]);
 
-it('keeps a visit verifiable when another signed sibling is completed or worker-owned', function (string $case): void {
-    [$booking, $session] = createApprovalProofBooking(workerOwnedSibling: $case === 'worker_owned');
+it('keeps a visit verifiable when another signed sibling is completed or has lower concurrency', function (string $case): void {
+    [$booking, $session] = createApprovalProofBooking(workerOwnedSibling: $case === 'lower_concurrency');
     $sibling = $booking->sessions()->where('sequence', 2)->firstOrFail();
     $service = app(CleaningV2VisitApprovalProofService::class);
     expect($service->verify($booking->fresh(), $session->fresh())['valid'])->toBeTrue();
@@ -231,7 +261,7 @@ it('keeps a visit verifiable when another signed sibling is completed or worker-
         $sibling->forceFill(['status' => 'completed'])->save();
         $result = $service->verify($booking->fresh(), $session->fresh());
     } else {
-        expect($sibling->supervision_mode)->toBe(CleaningBookingSession::SUPERVISION_MODE_WORKER)
+        expect($sibling->supervision_mode)->toBe(CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR)
             ->and($service->verify($booking->fresh(), $session->fresh())['valid'])->toBeTrue();
     }
 
@@ -240,8 +270,27 @@ it('keeps a visit verifiable when another signed sibling is completed or worker-
     }
 })->with([
     'completed sibling' => 'completed',
-    'worker-owned sibling' => 'worker_owned',
+    'lower concurrency sibling retains the requested team' => 'lower_concurrency',
 ]);
+
+it('binds the signed requested team size to every visit even when a sibling has lower concurrency', function (): void {
+    [$booking, $session] = createApprovalProofBooking(workerOwnedSibling: true);
+    $sibling = $booking->sessions()->where('sequence', 2)->firstOrFail();
+    $proof = app(CleaningV2VisitApprovalProofService::class);
+    $signed = json_decode(DB::table('cleaning_booking_quotes')->where('cleaning_booking_id', $booking->id)->value('snapshot'), true, 512, JSON_THROW_ON_ERROR);
+
+    expect($signed['requestedWorkerCount'])->toBe(4)
+        ->and($signed['visits'][1]['requiredSimultaneousWorkers'])->toBe(1)
+        ->and($sibling->requiredWorkerCount())->toBe(4)
+        ->and($sibling->supervision_mode)->toBe(CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR)
+        ->and($proof->verify($booking->fresh(), $session->fresh())['valid'])->toBeTrue();
+
+    $sibling->forceFill(['required_workers' => 1, 'supervision_mode' => CleaningBookingSession::SUPERVISION_MODE_WORKER])->save();
+    $invalid = $proof->verify($booking->fresh(), $session->fresh());
+    expect($invalid['valid'])->toBeFalse()
+        ->and($invalid['evidenceDigest'])->toBeNull()
+        ->and($invalid['taskCandidates'])->toBe([]);
+});
 
 it('continues to reject a terminal selected visit', function (): void {
     [$booking, $session] = createApprovalProofBooking();
@@ -503,4 +552,3 @@ it('authenticates persisted time-period source links and rejects period tamperin
     'missing period' => 'missing_period',
     'missing schedule links' => 'missing_schedule_link',
 ]);
-

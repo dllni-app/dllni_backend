@@ -233,12 +233,19 @@ final class CleaningBookingResource extends Resource
             ->all();
 
         $team = app(CleaningBookingTeamPresentation::class);
-        $session = $team->currentSession($record);
+        $session = $team->displaySession($record);
         if ($session !== null) {
             // V2 visits have their own worker assignments. Never claim that
             // zero workers accepted just because the parent has no legacy rows.
-            $workers = $session->acceptedWorkerAssignments()
-                ->whereNull('released_at')
+            $sessionIsCompleted = $session->status === \Modules\Cleaning\Enums\CleaningBookingSessionStatus::Completed;
+            $assignments = $session->workerAssignments()
+                ->whereNull('released_at');
+            if ($sessionIsCompleted) {
+                $assignments->where('status', CleaningBookingWorkerAssignmentStatus::Completed->value);
+            } else {
+                $assignments->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
+            }
+            $workers = $assignments
                 ->with('worker.user')
                 ->get()
                 ->map(static fn (CleaningBookingSessionWorkerAssignment $assignment): array => self::sessionTrackingState($assignment))
@@ -264,6 +271,8 @@ final class CleaningBookingResource extends Resource
             'bookingStatusLabel' => $status?->label() ?? (string) ($record->status?->value ?? $record->status ?? '-'),
             'requiredWorkers' => $requiredWorkers,
             'acceptedWorkers' => $counts['accepted'],
+            'teamCountLabel' => $status === CleaningBookingStatus::Completed
+                ? 'العاملون الذين أنجزوا المهمة' : 'الفريق المؤكد',
             'activelyTrackedWorkers' => $activelyTrackedWorkers,
             'destinationLatitude' => $record->address_latitude !== null ? (float) $record->address_latitude : null,
             'destinationLongitude' => $record->address_longitude !== null ? (float) $record->address_longitude : null,

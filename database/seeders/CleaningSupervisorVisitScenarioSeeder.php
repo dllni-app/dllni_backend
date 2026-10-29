@@ -26,6 +26,15 @@ final class CleaningSupervisorVisitScenarioSeeder extends Seeder
             return;
         }
 
+        // This seeder deliberately resets synthetic visit states. Do not let a
+        // misconfigured local .env redirect those writes to a remote database.
+        $db = DB::connection();
+        if (! app()->environment('local')
+            || ! in_array((string) $db->getConfig('host'), ['127.0.0.1', 'localhost', '::1'], true)
+            || $db->getDatabaseName() !== 'alnadha_worker_test') {
+            throw new \RuntimeException('Supervisor V2 scenario seeding is restricted to the existing local QA database.');
+        }
+
         $source = CleaningBooking::query()->where('booking_number', 'CLN-LINKED-001')->first();
         $supervisor = User::query()->where('email', CleaningSupervisorSeeder::EMAIL)->first();
         $workers = Worker::query()->whereHas('user', fn ($query) => $query
@@ -36,6 +45,21 @@ final class CleaningSupervisorVisitScenarioSeeder extends Seeder
         }
 
         DB::transaction(function () use ($source, $supervisor, $workers): void {
+            // Synthetic QA inputs match CleaningConnectedDemoSeeder's explicit
+            // 200,000 SYP base / 20,000 SYP travel / 10% admin margin scenario.
+            // Do NOT inherit another test's mutated source booking values: they
+            // can be as low as 200 SYP and would fully consume the service pool
+            // with the included 60,000 SYP supervisor fee. This is test data,
+            // not a new authoritative pricing/quotation calculation.
+            $base = 200000.0;
+            $travel = 20000.0;
+            $margin = 20000.0;
+            $supervisorFee = 60000.0;
+            $workerServiceShare = round(($base - $supervisorFee) / 2, 2);
+            $lastWorkerShare = round($base - $supervisorFee - $workerServiceShare, 2);
+            $firstTravel = round($travel / 2, 2);
+            $lastTravel = round($travel - $firstTravel, 2);
+            $customerTotal = round($base + $travel + $margin, 2);
             // Scheduled, assigned, underway, completed, and cancelled visits.
             // Keep all dates relative to today so the fixtures never expire.
             foreach ([
@@ -54,7 +78,7 @@ final class CleaningSupervisorVisitScenarioSeeder extends Seeder
                 }
 
                 // Suppress real order notifications and queues for QA-only fixtures.
-                CleaningBooking::withoutEvents(function () use ($booking, $source, $scenario, $number, $date): void {
+                CleaningBooking::withoutEvents(function () use ($booking, $source, $scenario, $number, $date, $base, $travel, $margin, $customerTotal): void {
                     $details = $source->property_details ?? [];
                     $details['_supervisor_pricing'] = ['hourlyRate' => 30000, 'fee' => 60000];
                     $booking->forceFill([
@@ -65,6 +89,12 @@ final class CleaningSupervisorVisitScenarioSeeder extends Seeder
                         'status' => $scenario['booking'],
                         'scheduled_date' => $date,
                         'scheduled_time' => $scenario['time'],
+                        'base_price' => $base,
+                        'addons_total' => 0,
+                        'travel_fee' => $travel,
+                        'admin_margin_amount' => $margin,
+                        'total_price' => $scenario['visit'] === 'cancelled' ? 0 : $customerTotal,
+                        'is_pricing_final' => true,
                         'property_details' => $details,
                         'work_started_at' => $scenario['visit'] === 'in_progress' ? now()->subMinutes(30) : null,
                         'work_finished_at' => $scenario['visit'] === 'completed' ? now()->subDay() : null,
@@ -85,8 +115,23 @@ final class CleaningSupervisorVisitScenarioSeeder extends Seeder
                     'supervision_initialized_at' => now(),
                     'work_started_at' => $scenario['visit'] === 'in_progress' ? now()->subMinutes(30) : null,
                     'work_finished_at' => $scenario['visit'] === 'completed' ? now()->subDay() : null,
+                    'base_price' => $base,
+                    'addons_total' => 0,
+                    'materials_total' => 0,
+                    'special_services_total' => 0,
+                    'travel_fee' => $travel,
+                    'admin_margin_amount' => $margin,
+                    'extension_fee_total' => 0,
+                    'cancellation_fee' => 0,
+                    'total_price' => $customerTotal,
                     'is_pricing_final' => true,
-                    'pricing_snapshot' => ['seed' => 'supervisor-v2-visits', 'currency' => 'SYP'],
+                    'pricing_snapshot' => [
+                        'seed' => 'supervisor-v2-visits',
+                        'contractVersion' => 'supervisor_v2_qa_snapshot',
+                        'currency' => 'SYP',
+                        'supervisorFeeIncluded' => $supervisorFee,
+                        'syntheticAmounts' => true,
+                    ],
                 ]);
 
                 CleaningRoomSchedule::query()->updateOrCreate([
@@ -112,7 +157,7 @@ final class CleaningSupervisorVisitScenarioSeeder extends Seeder
                     'released_at' => null,
                 ]);
 
-                foreach ($workers as $worker) {
+                foreach ($workers->values() as $index => $worker) {
                     $isAccepted = $scenario['accepted'] > 0;
                     $hasArrived = in_array($scenario['visit'], ['in_progress', 'completed'], true);
                     $session->workerAssignments()->updateOrCreate(['worker_id' => $worker->id], [
@@ -121,7 +166,11 @@ final class CleaningSupervisorVisitScenarioSeeder extends Seeder
                         'arrived_at' => $hasArrived ? $start : null,
                         'work_started_at' => $hasArrived ? $start : null,
                         'work_finished_at' => $scenario['visit'] === 'completed' ? $start->addHours(2) : null,
-                        'service_share_amount' => 50000, 'worker_amount' => 50000, 'currency' => 'SYP',
+                        'service_share_amount' => $index === 0 ? $workerServiceShare : $lastWorkerShare,
+                        'travel_fee' => $index === 0 ? $firstTravel : $lastTravel,
+                        'admin_margin_amount' => $index === 0 ? round($margin / 2, 2) : round($margin - round($margin / 2, 2), 2),
+                        'worker_amount' => ($index === 0 ? $workerServiceShare + $firstTravel : $lastWorkerShare + $lastTravel),
+                        'currency' => 'SYP',
                     ]);
                 }
             }

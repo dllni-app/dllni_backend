@@ -12,6 +12,10 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Route;
 
+// Preserve historical QA/admin bookmarks without exposing a second Filament
+// panel or bypassing the canonical /admin authentication middleware.
+Route::redirect('/cleaning-admin', '/admin', 302)->name('cleaning-admin.legacy-redirect');
+
 Route::middleware('auth')->get('/admin/alert-sound-check', AlertSoundCheckController::class)->name('admin.alert-sound-check');
 
 Route::prefix('v1/apps')->group(function (): void {

@@ -70,7 +70,7 @@ it('stops the authoritative booking timer and keeps the final bill idempotent wi
         ->and(DB::table('cleaning_operational_action_audits')->where('action', 'admin_terminate_open_time_booking')->count())->toBe(1);
 });
 
-it('stops only the selected running open-time session and preserves siblings', function (): void {
+it('refuses to settle an unassigned open-time session and preserves its siblings', function (): void {
     $admin = phase3Admin();
     $booking = CleaningBooking::factory()->create([
         'booking_kind' => 'open_time',
@@ -106,14 +106,13 @@ it('stops only the selected running open-time session and preserves siblings', f
         'scheduled_time' => '10:00', 'work_started_at' => null,
         'status' => CleaningBookingSessionStatus::Scheduled,
     ]);
-    $closed = app(CleaningAdministrativeOperationsService::class)->terminateOpenTime($booking, $admin, 'Administrative close', $first);
-    expect($closed->status)->toBe(CleaningBookingSessionStatus::Completed)
-        ->and($closed->open_time_terminated_at)->not->toBeNull()
-        ->and($closed->open_time_terminated_by_id)->toBe($admin->id)
-        ->and($closed->customer_completed_at)->toBeNull()
+    expect(fn () => app(CleaningAdministrativeOperationsService::class)->terminateOpenTime($booking, $admin, 'Administrative close', $first))
+        ->toThrow(ValidationException::class);
+    expect($first->fresh()->status)->toBe(CleaningBookingSessionStatus::InProgress)
+        ->and($first->fresh()->payment_settled_at)->toBeNull()
         ->and($second->fresh()->status)->toBe(CleaningBookingSessionStatus::Scheduled)
         ->and($second->fresh()->work_finished_at)->toBeNull()
-        ->and(DB::table('cleaning_operational_action_audits')->where('action', 'admin_terminate_open_time_session')->count())->toBe(1);
+        ->and(DB::table('cleaning_operational_action_audits')->where('action', 'admin_terminate_open_time_session')->count())->toBe(0);
 });
 
 it('requires handover, worker acknowledgement, return report and final administrative confirmation', function (): void {

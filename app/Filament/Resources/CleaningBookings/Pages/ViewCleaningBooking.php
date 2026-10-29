@@ -34,6 +34,7 @@ use Modules\Cleaning\Services\CleaningAdministrativeOperationsService;
 use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
 use Modules\Cleaning\Services\CleaningMaterialInventoryService;
 use Modules\Cleaning\Services\CleaningSupervisorAssignmentService;
+use Modules\Cleaning\Services\CleaningSettledVisitFundingAuditService;
 use Modules\Cleaning\Services\SupervisedTeamService;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
@@ -65,6 +66,73 @@ final class ViewCleaningBooking extends ViewRecord
 
         return $schema->components([
             ...$existingComponents,
+            Section::make('مراجعة تسويات الزيارات')
+                ->description('تنبيه تدقيقي: قد تكون الزيارة مسجلة كمسددة رغم عدم إثبات تغطية كامل مستحقات العامل أو المشرف. لا تُعدّل هذه المراجعة أي مبالغ.')
+                ->schema([
+                    RepeatableEntry::make('settled_visit_financial_exceptions')
+                        ->hiddenLabel()
+                        ->getStateUsing(static fn (CleaningBooking $record): array =>
+                            app(CleaningSettledVisitFundingAuditService::class)->unresolved($record))
+                        ->schema([
+                            TextEntry::make('visit')->label('الزيارة'),
+                            TextEntry::make('status')->label('حالة التسوية')->badge()->color('danger'),
+                            TextEntry::make('quote')->label('السعر المسجل (ل.س)'),
+                            TextEntry::make('worker_amount')->label('مستحقات العمال (ل.س)'),
+                            TextEntry::make('travel')->label('التنقل المشمول بالمستحقات (ل.س)'),
+                            TextEntry::make('gap')->label('الحد الأدنى للعجز (ل.س)')->color('danger'),
+                            TextEntry::make('reason')->label('أسباب عدم التحقق')->columnSpanFull(),
+                        ])->columns(['default' => 1, 'md' => 2, 'xl' => 3]),
+                ])
+                ->visible(static fn (CleaningBooking $record): bool =>
+                    app(CleaningSettledVisitFundingAuditService::class)->unresolved($record) !== [])
+                ->columnSpanFull(),
+            Section::make('الزيارات المستقلة')
+                ->description('حالة كل زيارة وقرارات العمال والمشرف بشكل منفصل؛ قبول زيارة لا يعني قبول باقي الزيارات.')
+                ->schema([
+                    RepeatableEntry::make('independent_visit_overview')
+                        ->hiddenLabel()
+                        ->getStateUsing(static fn (CleaningBooking $record): array => $record->sessions()
+                            ->with(['workerAssignments.worker.user', 'activeSupervisorAssignment.supervisor'])
+                            ->orderBy('sequence')
+                            ->get()
+                            ->map(static function (CleaningBookingSession $session): array {
+                                // The independent-visit summary is historical
+                                // after completion; accepted-only scopes omit
+                                // completed workers and incorrectly show 0/N.
+                                $completed = $session->status === \Modules\Cleaning\Enums\CleaningBookingSessionStatus::Completed;
+                                $accepted = $session->workerAssignments
+                                    ->filter(static fn ($assignment): bool => $assignment->released_at === null && (
+                                        $completed
+                                            ? ($assignment->status?->value ?? $assignment->status) === \Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus::Completed->value
+                                            : in_array(
+                                                (string) ($assignment->status?->value ?? $assignment->status),
+                                                \Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus::acceptedValues(),
+                                                true,
+                                            )
+                                    ));
+
+                                return [
+                                    'visit_number' => 'الزيارة '.$session->sequence,
+                                    'scheduled_at' => ($session->scheduled_date?->format('Y-m-d') ?? '-')
+                                        .' '.mb_substr((string) $session->scheduled_time, 0, 5),
+                                    'status_label' => $session->status?->label() ?? 'غير محددة',
+                                    'worker_coverage' => $accepted->count().' / '.$session->requiredWorkerCount(),
+                                    'visit_supervisor' => $session->activeSupervisorAssignment?->supervisor?->name ?? 'لم يتم تعيين مشرف',
+                                    'accepted_workers' => $accepted->pluck('worker.user.name')->filter()->join('، ') ?: ($completed ? 'لا توجد سجلات إكمال للعمال' : 'لم يقبل أي عامل بعد'),
+                                ];
+                            })->all())
+                        ->schema([
+                            TextEntry::make('visit_number')->label('الزيارة')->weight('bold'),
+                            TextEntry::make('scheduled_at')->label('الموعد'),
+                            TextEntry::make('status_label')->label('حالة الزيارة')->badge(),
+                            TextEntry::make('worker_coverage')->label('العمال المقبولون / المطلوبون'),
+                            TextEntry::make('visit_supervisor')->label('مشرف الزيارة'),
+                            TextEntry::make('accepted_workers')->label('العاملون المقبولون'),
+                        ])
+                        ->columns(['default' => 1, 'md' => 2, 'xl' => 3]),
+                ])
+                ->visible(static fn (CleaningBooking $record): bool => $record->sessions()->exists())
+                ->columnSpanFull(),
             Section::make('تقارير التأخر وعدم التنقل')
                 ->description('سجل بلاغات العميل لكل زيارة دورية وعامل، مع الإجراء الذي اختاره ووقت إغلاق الحالة.')
                 ->schema([

@@ -67,6 +67,7 @@ final class UserCleaningOrderEstimationService
             ? Arr::get($propertyDetails, 'room_estimated_hours') : null;
         $address = Arr::has($propertyDetails, 'address') ? mb_trim((string) Arr::get($propertyDetails, 'address')) : null;
         $locationName = Arr::has($propertyDetails, 'location_name') ? mb_trim((string) Arr::get($propertyDetails, 'location_name')) : null;
+        $notes = Arr::has($propertyDetails, 'notes') ? mb_trim((string) Arr::get($propertyDetails, 'notes')) : null;
 
         if ($breakdown !== null) {
             $livingRoomSize = $this->deriveLivingRoomSizeFromBreakdown($breakdown['living_room']);
@@ -92,6 +93,7 @@ final class UserCleaningOrderEstimationService
         return [
             'address' => $address !== '' ? $address : null,
             'location_name' => $locationName !== '' ? $locationName : null,
+            'notes' => $notes !== '' ? $notes : null,
             'bedrooms' => $bedrooms,
             'rooms' => $rooms,
             'bathrooms' => $bathrooms,

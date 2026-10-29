@@ -273,6 +273,11 @@ final class SessionsRelationManager extends RelationManager
                     ->badge()
                     ->formatStateUsing(fn ($state): string => self::coverageLabel($state))
                     ->color(fn ($state): string => self::coverageColor($state)),
+                TextColumn::make('visit_supervisor')
+                    ->label('مشرف الزيارة')
+                    ->getStateUsing(static fn (CleaningBookingSession $record): string => $record->activeSupervisorAssignment?->supervisor?->name ?? 'لم يتم تعيين مشرف لهذه الزيارة')
+                    ->badge()
+                    ->color(static fn (CleaningBookingSession $record): string => $record->activeSupervisorAssignment !== null ? 'success' : 'warning'),
                 TextColumn::make('coverage_summary')
                     ->label('التغطية العددية')
                     ->getStateUsing(fn (CleaningBookingSession $record): string => sprintf(

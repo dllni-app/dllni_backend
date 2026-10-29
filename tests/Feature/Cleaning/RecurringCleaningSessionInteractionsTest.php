@@ -140,6 +140,51 @@ it('settles each recurring session commission exactly once without parent double
         ->count())->toBe(2);
 });
 
+it('rejects finalized solo session with unfunded travel before any commission or completion side effects', function (): void {
+    [$customer, $worker, $booking, $first] = makeRecurringSessionInteractionContext();
+    $assignment = $first->workerAssignments()->firstOrFail();
+    $assignment->forceFill(['travel_fee' => '210.00', 'worker_amount' => '1110.00'])->saveQuietly();
+    $priorBalance = (string) $worker->deposit()->firstOrFail()->current_balance;
+    $priorCount = CleaningDepositTransaction::query()->where('worker_id', $worker->id)->count();
+
+    expect(fn () => app(CleaningBookingSessionLifecycleService::class)
+        ->confirmCompletion($booking->fresh(), $first->fresh(), (int) $customer->id))
+        ->toThrow(ValidationException::class);
+
+    expect($first->fresh()->status)->toBe(CleaningBookingSessionStatus::AwaitingCustomerCompletion)
+        ->and($first->fresh()->payment_status)->toBe('ready')
+        ->and($first->fresh()->payment_settled_at)->toBeNull()
+        ->and($assignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion)
+        ->and((string) $worker->deposit()->firstOrFail()->current_balance)->toBe($priorBalance)
+        ->and(CleaningDepositTransaction::query()->where('worker_id', $worker->id)->count())->toBe($priorCount);
+});
+
+it('rejects finalized V2 group settlement without configured supervisor entitlement or verified funding', function (): void {
+    [$customer, $worker, $booking, $first] = makeRecurringSessionInteractionContext();
+    $booking->forceFill(['booking_kind' => 'standard', 'number_of_workers' => 2])->saveQuietly();
+    $first->forceFill(['required_workers' => 2])->saveQuietly();
+    $other = Worker::factory()->create(['user_id' => User::factory()->create()->id]);
+    CleaningBookingSessionWorkerAssignment::query()->create([
+        'cleaning_booking_session_id' => $first->id,
+        'worker_id' => $other->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion->value,
+        'accepted_at' => now()->subHour(),
+        'service_share_amount' => 0,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 0,
+        'worker_amount' => 0,
+        'currency' => 'SYP',
+    ]);
+
+    expect($booking->fresh()->isV2OperationalGroup())->toBeTrue();
+    expect(fn () => app(CleaningBookingSessionLifecycleService::class)
+        ->confirmCompletion($booking->fresh(), $first->fresh(), (int) $customer->id))
+        ->toThrow(ValidationException::class);
+    expect($first->fresh()->payment_status)->toBe('ready')
+        ->and($first->fresh()->status)->toBe(CleaningBookingSessionStatus::AwaitingCustomerCompletion)
+        ->and(CleaningDepositTransaction::query()->where('worker_id', $worker->id)->count())->toBe(0);
+});
+
 it('stores independent reviews for the same worker across recurring sessions', function (): void {
     [$customer, $worker, $booking, $first, $second] = makeRecurringSessionInteractionContext();
     $lifecycle = app(CleaningBookingSessionLifecycleService::class);
