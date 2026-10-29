@@ -7,6 +7,7 @@ namespace Database\Seeders;
 use Database\Seeders\Permissions\RestaurantOwnerEmployeePermissionsSeeder;
 use Database\Seeders\Permissions\SupermarketOwnerEmployeePermissionsSeeder;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Database\Seeders\CleaningBannerSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningBookingSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningCatalogScenarioSeeder;
@@ -84,7 +85,9 @@ final class DatabaseSeeder extends Seeder
             MarketingOfferSeeder::class,
             UserAppScenarioSeeder::class,
             CleaningConnectedDemoSeeder::class,
-            CleaningSupervisorVisitScenarioSeeder::class,
+            ...($this->canSeedLocalSupervisorVisitScenarios()
+                ? [CleaningSupervisorVisitScenarioSeeder::class]
+                : []),
             PlatformCouponDemoSeeder::class,
         ];
     }
@@ -92,5 +95,14 @@ final class DatabaseSeeder extends Seeder
     private function shouldSeedDemoData(): bool
     {
         return config('app.env') !== 'production';
+    }
+
+    private function canSeedLocalSupervisorVisitScenarios(): bool
+    {
+        $connection = DB::connection();
+
+        return app()->environment('local')
+            && in_array((string) $connection->getConfig('host'), ['127.0.0.1', 'localhost', '::1'], true)
+            && $connection->getDatabaseName() === 'alnadha_worker_test';
     }
 }
