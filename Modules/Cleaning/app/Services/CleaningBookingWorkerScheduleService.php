@@ -25,6 +25,16 @@ final class CleaningBookingWorkerScheduleService
         ?CleaningBookingSession $includeHistoricalSession = null,
     ): array {
         $schedule = $this->presenter->present($booking, $worker);
+        // A worker-scoped schedule can contain zero visible visits even when
+        // the booking has persisted visits. Never route that case to legacy
+        // parent acceptance, which would bypass visit-level eligibility.
+        $hasExecutionSessions = $booking->sessions()->exists();
+        $details = (array) ($booking->property_details ?? []);
+        $schedule['acceptanceMode'] = $hasExecutionSessions
+            ? 'session'
+            : (array_key_exists('_time_period_v2', $details) || $booking->isSupervisedTeam()
+                ? 'unavailable'
+                : 'legacy');
         $visibleSessions = $this->visibility->visibleSessions($booking, $worker);
         $visibleSessions = $this->includeHistoricalMutationSession(
             $booking,
