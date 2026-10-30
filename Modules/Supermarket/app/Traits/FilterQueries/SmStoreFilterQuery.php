@@ -35,6 +35,8 @@ trait SmStoreFilterQuery
                 AllowedSort::field('alphabet', 'name'),
                 AllowedSort::field('alphabetical', 'name'),
                 AllowedSort::callback('nearestBy', static fn (Builder $query, bool $descending, string $property) => $query),
+                AllowedSort::callback('nearest', static fn (Builder $query, bool $descending, string $property) => $query),
+                AllowedSort::field('rating', 'average_rating'),
                 AllowedSort::field('slug'),
                 AllowedSort::field('city'),
                 AllowedSort::field('neighborhood'),
