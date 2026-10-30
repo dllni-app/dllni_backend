@@ -64,6 +64,10 @@ final class SmStoresIndexController
 
         $sort = $request->validated('sort') ?? 'rating';
 
+        // Replace QueryBuilder's generic ordering with the discovery endpoint's explicit ranking.
+        // Otherwise its default created_at sort (or the ascending rating alias) wins.
+        $query->getEloquentBuilder()->reorder();
+
         match ($sort) {
             'nearest', 'nearestBy' => $this->applyNearestSort($query, $request),
             'alphabet', 'alphabetical' => $query->orderBy('name')->orderByDesc('is_featured'),
