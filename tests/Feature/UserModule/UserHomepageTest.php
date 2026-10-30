@@ -41,6 +41,38 @@ it('returns supermarket browse stores without authentication', function (): void
     ]);
 });
 
+it('sorts supermarket browse stores by rating by default and with the rating alias', function (): void {
+    $lowerRated = Modules\Supermarket\Models\SmStore::factory()->create([
+        'is_active' => true,
+        'suspension_until' => null,
+        'average_rating' => 2.0,
+        'created_at' => now(),
+    ]);
+    $higherRated = Modules\Supermarket\Models\SmStore::factory()->create([
+        'is_active' => true,
+        'suspension_until' => null,
+        'average_rating' => 4.9,
+        'created_at' => now()->subDay(),
+    ]);
+
+    foreach (['', '?sort=rating'] as $query) {
+        $response = $this->getJson('/api/v1/user/supermarket/stores'.$query);
+
+        $response->assertOk();
+        expect(collect($response->json('data'))->pluck('id')->all())
+            ->toBe([$higherRated->id, $lowerRated->id]);
+    }
+});
+
+it('accepts the nearest supermarket browse sort alias', function (): void {
+    Modules\Supermarket\Models\SmStore::factory()->create([
+        'is_active' => true,
+        'suspension_until' => null,
+    ]);
+
+    $this->getJson('/api/v1/user/supermarket/stores?sort=nearest')->assertOk();
+});
+
 it('returns restaurant details without authentication', function (): void {
     // Arrange
     $restaurant = Modules\Resturants\Models\Restaurant::factory()->create([
