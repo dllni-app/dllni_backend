@@ -23,9 +23,8 @@ final class CleaningIndependentOrdersSeeder extends Seeder
         $database = DB::connection();
         if (! app()->environment('local')
             || $database->getDriverName() !== 'mysql'
-            || ! in_array((string) $database->getConfig('host'), ['127.0.0.1', 'localhost', '::1'], true)
-            || $database->getDatabaseName() !== 'alnadha_worker_test') {
-            throw new RuntimeException('Independent order QA fixtures require the existing local MySQL test database.');
+            || ! in_array((string) $database->getConfig('host'), ['127.0.0.1', 'localhost', '::1'], true)) {
+            throw new RuntimeException('Independent order QA fixtures require a local MySQL database host.');
         }
 
         $source = CleaningBooking::query()->where('booking_number', 'CLN-LINKED-001')->firstOrFail();

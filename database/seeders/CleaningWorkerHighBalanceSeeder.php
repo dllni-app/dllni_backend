@@ -17,9 +17,8 @@ final class CleaningWorkerHighBalanceSeeder extends Seeder
     {
         $connection = DB::connection();
         if (! app()->environment('local')
-            || ! in_array((string) $connection->getConfig('host'), ['127.0.0.1', 'localhost', '::1'], true)
-            || $connection->getDatabaseName() !== 'alnadha_worker_test') {
-            throw new \RuntimeException('Worker QA deposits may only be seeded in the existing local test database.');
+            || ! in_array((string) $connection->getConfig('host'), ['127.0.0.1', 'localhost', '::1'], true)) {
+            throw new \RuntimeException('Worker QA deposits require a local test database host.');
         }
 
         $depositService = app(DepositService::class);

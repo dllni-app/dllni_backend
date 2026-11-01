@@ -23,9 +23,8 @@ final class CleaningLifecyclePhase2SupervisorSeeder extends Seeder
     {
         if (app()->environment('production')
             || config('database.default') !== 'mysql'
-            || ! in_array(config('database.connections.mysql.host'), ['127.0.0.1', 'localhost'], true)
-            || \Illuminate\Support\Facades\DB::connection()->getDatabaseName() !== 'alnadha_worker_test') {
-            throw new \RuntimeException('This fixture is restricted to the existing local QA database.');
+            || ! in_array(config('database.connections.mysql.host'), ['127.0.0.1', 'localhost'], true)) {
+            throw new \RuntimeException('This fixture requires a local MySQL database host.');
         }
 
         $user = User::query()->firstOrCreate(['email' => self::EMAIL], [

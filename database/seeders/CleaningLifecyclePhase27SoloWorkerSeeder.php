@@ -24,9 +24,8 @@ final class CleaningLifecyclePhase27SoloWorkerSeeder extends Seeder
     public function run(): void
     {
         if (app()->environment('production') || config('database.default') !== 'mysql'
-            || ! in_array(config('database.connections.mysql.host'), ['127.0.0.1', 'localhost'], true)
-            || DB::connection()->getDatabaseName() !== 'alnadha_worker_test') {
-            throw new \RuntimeException('QA Seeder cannot run against this database.');
+            || ! in_array(config('database.connections.mysql.host'), ['127.0.0.1', 'localhost'], true)) {
+            throw new \RuntimeException('QA Seeder requires a local MySQL database host.');
         }
 
         $source = Worker::query()->with('user', 'zones')->findOrFail(1);

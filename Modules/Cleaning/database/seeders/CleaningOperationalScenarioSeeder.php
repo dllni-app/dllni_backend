@@ -22,9 +22,8 @@ final class CleaningOperationalScenarioSeeder extends Seeder
             return;
         }
         $connection = DB::connection();
-        if (! in_array((string) $connection->getConfig('host'), ['127.0.0.1', 'localhost', '::1'], true)
-            || $connection->getDatabaseName() !== 'alnadha_worker_test') {
-            throw new \RuntimeException('Operational QA scenarios require the existing local QA database.');
+        if (! in_array((string) $connection->getConfig('host'), ['127.0.0.1', 'localhost', '::1'], true)) {
+            throw new \RuntimeException('Operational QA scenarios require a local database host.');
         }
         if (! Schema::hasTable('cleaning_bookings')) {
             return;

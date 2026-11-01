@@ -28,9 +28,8 @@ final class WorkerOrderJourneySeeder extends Seeder
     {
         $db = DB::connection();
         if (! app()->environment('local')
-            || ! in_array((string) $db->getConfig('host'), ['127.0.0.1', 'localhost', '::1'], true)
-            || $db->getDatabaseName() !== 'alnadha_worker_test') {
-            throw new \RuntimeException('Worker journey seeding is restricted to the existing local QA database.');
+            || ! in_array((string) $db->getConfig('host'), ['127.0.0.1', 'localhost', '::1'], true)) {
+            throw new \RuntimeException('Worker journey seeding requires a local database host.');
         }
         // CleaningWorkerArabicDataSeeder names cleaning.worker@dllni.sy
         // "رنا أحمد". Some older test DBs only contain WorkerSeeder's
