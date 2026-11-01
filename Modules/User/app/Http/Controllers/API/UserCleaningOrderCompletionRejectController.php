@@ -68,7 +68,7 @@ final class UserCleaningOrderCompletionRejectController
                 assignmentId: $request->targetAssignmentId(),
             );
         }
-        $updated->load(['worker.user', 'workerAssignments.worker.user', 'rooms.assignedWorker.user', 'timeWarnings', 'disputes', 'addons', 'billingPolicy']);
+        $updated->load(['worker.user', 'workerAssignments.worker.user', 'rooms', 'timeWarnings', 'disputes', 'addons', 'billingPolicy']);
 
         return UserCleaningBookingResource::make($updated)->additional([
             'message' => __('Completion rejection sent successfully.'),

@@ -162,14 +162,6 @@ final class CleaningBooking extends Model
         return $this->hasMany(CleaningBookingRoom::class, 'cleaning_booking_id');
     }
 
-    public function roomPeriods(): HasMany
-    {
-        return $this->hasMany(CleaningBookingRoomPeriod::class, 'cleaning_booking_id')
-            ->orderBy('visit_sequence')
-            ->orderBy('scheduled_date')
-            ->orderBy('scheduled_time');
-    }
-
     public function sessions(): HasMany
     {
         return $this->hasMany(CleaningBookingSession::class, 'cleaning_booking_id')
@@ -201,23 +193,12 @@ final class CleaningBooking extends Model
         return $this->hasMany(CleaningSupervisorAssignment::class, 'cleaning_booking_id');
     }
 
-    public function sessionSupervisorAssignments(): \Illuminate\Database\Eloquent\Relations\HasManyThrough
-    {
-        return $this->hasManyThrough(
-            CleaningBookingSessionSupervisorAssignment::class,
-            CleaningBookingSession::class,
-            'cleaning_booking_id',
-            'cleaning_booking_session_id',
-        );
-    }
-
     public function isV2OperationalGroup(): bool
     {
-        return in_array((string) $this->booking_kind, ['standard', 'open_time'], true)
+        // Tracking and list projections may select only a subset of columns.
+        return (string) ($this->getAttributes()['booking_kind'] ?? '') === 'open_time'
             && (int) $this->number_of_workers > 1
-            && ($this->sessions()->exists()
-                || $this->roomSchedules()->exists()
-                || $this->roomPeriods()->exists());
+            && $this->sessions()->exists();
     }
 
     public function isSupervisedTeam(): bool

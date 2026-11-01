@@ -3,76 +3,43 @@
 declare(strict_types=1);
 
 use App\Models\User;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Models\CleaningBooking;
-use Modules\Cleaning\Services\CleaningSupervisorEarnedCompensationService;
+use Modules\Cleaning\Services\CleaningSupervisorAssignmentService;
 
-function supervisorEarnedFixture(): array
-{
-    $booking = CleaningBooking::factory()->create([
-        'booking_kind' => 'open_time', 'number_of_workers' => 2,
-    ]);
-    $session = $booking->sessions()->create([
-        'sequence' => 1, 'session_type' => 'open_time',
-        'scheduled_date' => now()->toDateString(), 'scheduled_time' => '09:00',
-        'duration_hours' => 3, 'required_workers' => 2,
-        'status' => 'worker_assigned',
-    ]);
+it('tracks the active supervisor on the independent booking without a visit', function (): void {
+    $booking = CleaningBooking::factory()->create(['booking_kind' => 'standard']);
     $supervisor = User::factory()->create();
-    $assignment = $session->supervisorAssignments()->create([
+    $booking->supervisorAssignments()->create([
         'supervisor_user_id' => $supervisor->id,
         'assigned_by_user_id' => $supervisor->id,
-        'assigned_at' => now()->subHours(2),
-        'compensation_hourly_rate' => '120.00', 'active_slot' => 1,
-    ]);
-    $task = $session->executionTasks()->create([
-        'task_key' => 'visit_scope', 'source_kind' => 'visit_scope',
-        'required_workers' => 2, 'status' => 'allocated',
+        'assigned_at' => now(),
+        'active_slot' => 1,
     ]);
 
-    return [$session, $assignment, $task, $supervisor];
-}
-
-it('calculates earned supervisor payment from actual closed work minutes, not scheduled duration', function (): void {
-    [$session, $assignment, $task, $supervisor] = supervisorEarnedFixture();
-    $start = now()->startOfMinute()->subMinutes(60);
-    $assignment->workSegments()->create([
-        'cleaning_booking_session_id' => $session->id,
-        'initiating_task_id' => $task->id,
-        'started_at' => $start, 'ended_at' => $start->copy()->addMinutes(60),
-        'end_reason' => 'all_tasks_finished', 'ended_by_user_id' => $supervisor->id,
-        'active_slot' => null,
-    ]);
-    $result = app(CleaningSupervisorEarnedCompensationService::class)->assess($assignment);
-    expect($result)->toMatchArray([
-        'status' => 'calculated', 'minutes' => 60,
-        'hourlyRate' => '120.00', 'earnedAmount' => '120.00', 'reasonCodes' => [],
-    ]);
+    expect(app(CleaningSupervisorAssignmentService::class)->activeSupervisorId($booking))->toBe($supervisor->id)
+        ->and($booking->sessions()->exists())->toBeFalse();
 });
 
-it('rejects open supervisor segments and excludes duplicate overlapping worked time', function (): void {
-    [$session, $assignment, $task, $supervisor] = supervisorEarnedFixture();
-    $start = now()->startOfMinute()->subMinutes(60);
-    foreach ([[0, 40], [20, 60]] as [$from, $to]) {
-        $assignment->workSegments()->create([
-            'cleaning_booking_session_id' => $session->id,
-            'initiating_task_id' => $task->id,
-            'started_at' => $start->copy()->addMinutes($from),
-            'ended_at' => $start->copy()->addMinutes($to),
-            'end_reason' => 'replaced_by_next', 'ended_by_user_id' => $supervisor->id,
-            'active_slot' => null,
-        ]);
-    }
-    $result = app(CleaningSupervisorEarnedCompensationService::class)->assess($assignment);
-    expect($result['status'])->toBe('calculated')
-        ->and($result['minutes'])->toBe(60)
-        ->and($result['earnedAmount'])->toBe('120.00');
-    $assignment->workSegments()->create([
-        'cleaning_booking_session_id' => $session->id,
-        'initiating_task_id' => $task->id,
-        'started_at' => now(), 'active_slot' => 1,
-    ]);
-    $blocked = app(CleaningSupervisorEarnedCompensationService::class)->assess($assignment);
-    expect($blocked['status'])->toBe('blocked')
-        ->and($blocked['earnedAmount'])->toBeNull()
-        ->and($blocked['reasonCodes'])->toContain('supervisor_work_segment_unclosed');
+it('records supervisor compensation as a single booking-level liability, distinct from the quoted fee', function (): void {
+    $booking = CleaningBooking::factory()->create(['booking_kind' => 'standard']);
+    $supervisor = User::factory()->create();
+    $payable = [
+        'cleaning_booking_id' => $booking->id,
+        'supervisor_user_id' => $supervisor->id,
+        'amount' => 120,
+        'currency' => 'SYP',
+        'status' => 'accrued',
+        'accrued_at' => now(),
+        'created_at' => now(),
+        'updated_at' => now(),
+    ];
+    DB::table('cleaning_supervisor_compensation_payables')->insert($payable);
+
+    expect(DB::table('cleaning_supervisor_compensation_payables')->where('cleaning_booking_id', $booking->id)->first())
+        ->toMatchObject(['supervisor_user_id' => $supervisor->id, 'amount' => 120, 'currency' => 'SYP', 'status' => 'accrued']);
+
+    expect(fn () => DB::table('cleaning_supervisor_compensation_payables')->insert($payable))
+        ->toThrow(QueryException::class);
 });

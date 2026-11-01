@@ -22,10 +22,6 @@ function b1GuardBooking(int $workers): array
         'scheduled_time' => '09:00',
         'duration_hours' => 2,
         'required_workers' => $workers,
-        'supervision_mode' => $workers > 1
-            ? CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR
-            : CleaningBookingSession::SUPERVISION_MODE_WORKER,
-        'supervision_initialized_at' => now(),
         'coverage_status' => 'searching',
         'status' => 'worker_assigned',
     ]);
@@ -39,7 +35,7 @@ function b1GuardBooking(int $workers): array
     return [$booking, $session, $worker];
 }
 
-it('denies initialized group session execution through real worker routes while preserving attendance', function (): void {
+it('permits attendance for an assigned worker and requires verification for subsequent session work', function (): void {
     [$booking, $session, $worker] = b1GuardBooking(2);
     Sanctum::actingAs($worker->user);
     $base = "/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}";
@@ -47,23 +43,12 @@ it('denies initialized group session execution through real worker routes while 
     $this->postJson("$base/start-travel")->assertOk();
     $this->postJson("$base/arrive")->assertOk();
 
-    foreach ([
-        ['GET', "$base/security-code"],
-        ['POST', "$base/start-verification/confirm"],
-        ['POST', "$base/start-work"],
-        ['POST', "$base/complete"],
-        ['POST', "$base/completion/confirm"],
-        ['POST', "$base/completion/reject"],
-        ['POST', "$base/cancel"],
-        ['POST', "$base/skip"],
-    ] as [$method, $url]) {
-        $response = $method === 'GET' ? $this->getJson($url) : $this->postJson($url);
-        $response->assertUnprocessable()
-            ->assertJsonPath('code', 'CLEANING_V2_VISIT_EXECUTION_UNAVAILABLE');
-    }
+    $this->getJson("$base/security-code")->assertOk();
+    $this->postJson("$base/start-work")->assertUnprocessable();
+    $this->postJson("$base/complete")->assertUnprocessable();
 });
 
-it('denies group customer session and open-time mutations through real authenticated routes', function (): void {
+it('rejects customer session mutations without required verification and completion state', function (): void {
     [$booking, $session] = b1GuardBooking(2);
     Sanctum::actingAs($booking->customer);
 
@@ -76,9 +61,7 @@ it('denies group customer session and open-time mutations through real authentic
         "/api/v1/user/cleaning/orders/{$booking->id}/sessions/{$session->id}/open-time/extensions",
         "/api/v1/user/cleaning/orders/{$booking->id}/sessions/{$session->id}/open-time/end",
     ] as $url) {
-        $this->postJson($url)
-            ->assertUnprocessable()
-            ->assertJsonPath('code', 'CLEANING_V2_VISIT_EXECUTION_UNAVAILABLE');
+        $this->postJson($url)->assertUnprocessable();
     }
 });
 
@@ -94,12 +77,11 @@ it('keeps solo session attendance and execution routing outside the V2 group gua
         ->assertJsonMissing(['code' => 'CLEANING_V2_VISIT_EXECUTION_UNAVAILABLE']);
 });
 
-it('denies booking-wide group security code GET while preserving the solo route', function (): void {
+it('protects booking security code from workers without a booking-level assignment', function (): void {
     [$groupBooking, , $groupWorker] = b1GuardBooking(2);
     Sanctum::actingAs($groupWorker->user);
     $this->getJson("/api/v1/cleaning-bookings/{$groupBooking->id}/security-code")
-        ->assertUnprocessable()
-        ->assertJsonPath('code', 'CLEANING_V2_VISIT_EXECUTION_UNAVAILABLE');
+        ->assertForbidden();
 
     [$soloBooking, , $soloWorker] = b1GuardBooking(1);
     Sanctum::actingAs($soloWorker->user);

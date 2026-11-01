@@ -7,7 +7,6 @@ namespace Modules\Cleaning\Services;
 use App\Models\Worker;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
-use Modules\Cleaning\Support\CleaningRuntimeSettings;
 
 final class CleaningBookingSessionWorkerPricingService
 {
@@ -61,23 +60,7 @@ final class CleaningBookingSessionWorkerPricingService
 
     private function travelForWorker(CleaningBooking $booking, float $serviceShare, Worker $worker): float
     {
-        // The per-worker allowance is independent of both workers' addresses.
-        // Only distance-based travel needs geocoding to be available.
-        $usesFixedWorkerAllowance = (string) CleaningRuntimeSettings::financial()->travel_markup_type === 'worker_allowance';
-        if (! $usesFixedWorkerAllowance && (
-            $booking->address_latitude === null
-            || $booking->address_longitude === null
-            || blank($worker->home_address)
-            || $worker->home_latitude === null
-            || $worker->home_longitude === null
-        )) {
-            // Legacy bookings and workers can predate mandatory geocoding. Their
-            // session can still be settled safely; only transport pricing is
-            // unavailable, so preserve the zero-travel snapshot instead of
-            // failing the whole Open-Time completion transaction.
-            return 0.0;
-        }
-
+        // Only the configured per-worker allowance is used; location is irrelevant.
         $pricing = $this->pricingCalculator->finalizedForWorker(
             $serviceShare,
             0.0,

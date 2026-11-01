@@ -149,8 +149,6 @@ function createTrackingAssignment(
         'accepted_at' => now()->subHour(),
         'started_travel_at' => now()->subMinutes(5),
         'arrived_at' => null,
-        'room_count' => 0,
-        'rooms_weight' => 0,
         'service_share_amount' => 0,
         'travel_fee' => 0,
         'admin_margin_amount' => 0,

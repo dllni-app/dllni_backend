@@ -40,7 +40,7 @@ final class UserCleaningOrderStartVerificationConfirmController
         } catch (InvalidArgumentException $exception) {
             throw ValidationException::withMessages(['status' => [$exception->getMessage()]]);
         }
-        $updated->load(['worker.user', 'workerAssignments.worker.user', 'rooms.assignedWorker.user', 'timeWarnings', 'disputes', 'addons', 'billingPolicy']);
+        $updated->load(['worker.user', 'workerAssignments.worker.user', 'rooms', 'timeWarnings', 'disputes', 'addons', 'billingPolicy']);
 
         return UserCleaningBookingResource::make($updated)->additional([
             'message' => __('Security code verified successfully.'),

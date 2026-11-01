@@ -20,7 +20,7 @@ use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningNeighborhood;
-use Modules\Cleaning\Support\WorkerRoomAssignmentPlanner;
+use Modules\Cleaning\Support\CleaningRoomBlueprints;
 
 final class CleaningBookingForm
 {
@@ -198,7 +198,7 @@ final class CleaningBookingForm
         }
 
         $details = is_array($booking->property_details) ? $booking->property_details : [];
-        $rooms = WorkerRoomAssignmentPlanner::generateRoomBlueprints($details);
+        $rooms = CleaningRoomBlueprints::generateRoomBlueprints($details);
 
         if ($rooms === []) {
             $booking->loadMissing('rooms');

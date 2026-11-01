@@ -132,7 +132,7 @@ final class CleaningBookingService
             ? $booking->status
             : CleaningBookingStatus::tryFrom((string) $booking->status);
         $details = is_array($booking->property_details) ? $booking->property_details : [];
-        $hasSignedV2Pricing = array_key_exists('_room_period_v2_approved_total', $details)
+        $hasSignedV2Pricing = array_key_exists('_booking_v2_approved_total', $details)
             || array_key_exists('_time_period_v2', $details)
             || array_key_exists('_supervisor_pricing', $details);
 
@@ -149,11 +149,8 @@ final class CleaningBookingService
         );
     }
 
-    public function accept(CleaningBooking $booking, ?array $roomIds = null): CleaningBooking
+    public function accept(CleaningBooking $booking): CleaningBooking
     {
-        if ($roomIds !== null && $roomIds !== []) {
-            throw \Illuminate\Validation\ValidationException::withMessages(['roomIds' => ['Worker-to-room allocation is no longer supported.']]);
-        }
         $fromStatus = (string) $booking->status->value;
 
         $updated = DB::transaction(function () use ($booking): CleaningBooking {
@@ -1105,7 +1102,7 @@ final class CleaningBookingService
             'customer',
             'worker.user',
             'preferredWorker.user',
-            'rooms.assignedWorker.user',
+            'rooms',
             'workerAssignments.worker.user',
             'addons',
             'billingPolicy',

@@ -6,7 +6,6 @@ namespace Modules\Cleaning\Services;
 
 use App\Models\CleaningFinancialSetting;
 use App\Models\Worker;
-use InvalidArgumentException;
 use Modules\Cleaning\Support\CleaningRuntimeSettings;
 
 final class CleaningPricingCalculator
@@ -43,10 +42,9 @@ final class CleaningPricingCalculator
             'distanceKm' => null,
             'adminMargin' => $adminMargin,
             'includedAdminMargin' => $includedAdminMargin,
-            'totalPrice' => $this->roundMoney(
-                $serviceSubtotal + $travelFee + max(0.0, $adminMargin - $includedAdminMargin)
-            ),
-            'isPricingFinal' => false,
+            'totalPrice' => $this->roundMoney($serviceSubtotal + $travelFee),
+            // Transport is a configured worker allowance, not a future route quote.
+            'isPricingFinal' => true,
         ];
     }
 
@@ -60,78 +58,11 @@ final class CleaningPricingCalculator
     ): array {
         $financial = CleaningRuntimeSettings::financial();
 
-        if ((string) $financial->travel_markup_type === 'worker_allowance') {
-            return $this->finalizedPricing(
-                $basePrice,
-                $addonsTotal,
-                $this->workerTransportAllowance($financial, 1),
-                null,
-                $includedAdminMarginBase,
-                $financial,
-            );
-        }
-
-        $addr = 'home_'.'address';
-        $x = 'home_'.'latitude';
-        $y = 'home_'.'longitude';
-
-        if ($worker->{$addr} === null || mb_trim((string) $worker->{$addr}) === '' || $worker->{$x} === null || $worker->{$y} === null) {
-            throw new InvalidArgumentException('Required pricing data is incomplete.');
-        }
-
-        return $this->finalizedForCoordinates(
-            $basePrice,
-            $addonsTotal,
-            $a,
-            $b,
-            (float) $worker->{$x},
-            (float) $worker->{$y},
-            $includedAdminMarginBase,
-        );
-    }
-
-    public function finalizedForCoordinates(
-        float $basePrice,
-        float $addonsTotal,
-        ?float $a,
-        ?float $b,
-        float $c,
-        float $d,
-        float $includedAdminMarginBase = 0.0,
-    ): array {
-        $financial = CleaningRuntimeSettings::financial();
-
-        if ((string) $financial->travel_markup_type === 'worker_allowance') {
-            return $this->finalizedPricing(
-                $basePrice,
-                $addonsTotal,
-                $this->workerTransportAllowance($financial, 1),
-                null,
-                $includedAdminMarginBase,
-                $financial,
-            );
-        }
-
-        if ($a === null || $b === null) {
-            throw new InvalidArgumentException('Required pricing data is incomplete.');
-        }
-
-        $exactDistanceKm = $this->measureKm((float) $a, (float) $b, $c, $d);
-        $distanceKm = round($exactDistanceKm, 3);
-        $travelPerKm = max(0.0, (float) $financial->travel_per_km);
-        $calculatedTravelFee = $this->roundMoney($exactDistanceKm * $travelPerKm);
-
-        // The configured per-kilometre value is also the minimum transport fee.
-        // This prevents very short routes from producing values such as 1 SYP.
-        $travelFee = $travelPerKm > 0.0
-            ? max($this->roundMoney($travelPerKm), $calculatedTravelFee)
-            : 0.0;
-
         return $this->finalizedPricing(
             $basePrice,
             $addonsTotal,
-            $travelFee,
-            $distanceKm,
+            $this->workerTransportAllowance($financial, 1),
+            null,
             $includedAdminMarginBase,
             $financial,
         );
@@ -162,9 +93,7 @@ final class CleaningPricingCalculator
             'distanceKm' => $distanceKm,
             'adminMargin' => $adminMargin,
             'includedAdminMargin' => $includedAdminMargin,
-            'totalPrice' => $this->roundMoney(
-                $serviceSubtotal + $travelFee + max(0.0, $adminMargin - $includedAdminMargin)
-            ),
+            'totalPrice' => $this->roundMoney($serviceSubtotal + $travelFee),
             'isPricingFinal' => true,
         ];
     }
@@ -245,22 +174,8 @@ final class CleaningPricingCalculator
 
     private function workerTransportAllowance(CleaningFinancialSetting $financial, int $workerCount): float
     {
-        if ((string) $financial->travel_markup_type !== 'worker_allowance') {
-            return 0.0;
-        }
-
         return $this->roundMoney(
             max(0.0, (float) $financial->travel_markup_value) * max(1, $workerCount)
         );
-    }
-
-    private function measureKm(float $a, float $b, float $c, float $d): float
-    {
-        $r = 6371.0;
-        $da = deg2rad($c - $a);
-        $db = deg2rad($d - $b);
-        $h = sin($da / 2) ** 2 + cos(deg2rad($a)) * cos(deg2rad($c)) * sin($db / 2) ** 2;
-
-        return $r * (2 * atan2(sqrt($h), sqrt(1 - $h)));
     }
 }

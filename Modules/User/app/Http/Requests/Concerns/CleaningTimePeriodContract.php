@@ -20,6 +20,7 @@ final class CleaningTimePeriodContract
         return [
             'contractVersion' => ['sometimes', 'integer', Rule::in([2])],
             'quoteId' => ['sometimes', 'uuid'],
+            'quoteSignature' => ['sometimes', 'string', 'size:64', 'regex:/^[a-f0-9]{64}$/D'],
             'couponCode' => ['sometimes', 'nullable', 'string', 'max:50'],
             'idempotencyKey' => ['sometimes', 'uuid'],
             'neighborhoodId' => ['sometimes', 'nullable', 'integer', Rule::exists('cleaning_neighborhoods', 'id')->where('is_active', true)],
@@ -36,42 +37,43 @@ final class CleaningTimePeriodContract
             'rooms.*.cleaningMode' => ['required', Rule::in(['regular', 'deep'])],
             'rooms.*.estimatedHours' => ['sometimes', 'numeric', 'min:0.25', 'max:24'],
             'recurrence' => ['sometimes', 'array:cadence'],
-            'recurrence.cadence' => ['required_with:recurrence', Rule::in(['once', 'weekly', 'monthly', 'custom'])],            'visits' => ['required_if:contractVersion,2', 'array', 'min:1', 'max:30'],
-            'visits.*' => ['array:visitKey,sequence,roomSchedules,timePeriods'],
-            'visits.*.visitKey' => [...$opaqueKey, 'distinct'],
-            'visits.*.sequence' => ['required', 'integer', 'min:1', 'max:30', 'distinct'],
-            'visits.*.roomSchedules' => ['required', 'array', 'min:1', 'max:30'],
-            'visits.*.roomSchedules.*' => ['array:scheduleKey,roomKey,scheduledDate,scheduledTime,numberOfWorkers'],
-            'visits.*.roomSchedules.*.scheduleKey' => $scheduleKey,
-            'visits.*.roomSchedules.*.roomKey' => $roomKey,
-            'visits.*.roomSchedules.*.scheduledDate' => ['required', 'date_format:Y-m-d'],
-            'visits.*.roomSchedules.*.scheduledTime' => ['required', 'date_format:H:i'],
-            'visits.*.roomSchedules.*.numberOfWorkers' => ['required', 'integer', 'min:1', 'max:'.config('cleaning_booking_v2.max_workers', 20)],
-            'visits.*.timePeriods' => ['sometimes', 'array', 'max:30'],
-            'visits.*.timePeriods.*' => ['array:periodKey,roomScheduleKeys,materials,specialServices'],
-            'visits.*.timePeriods.*.periodKey' => $opaqueKey,
-            'visits.*.timePeriods.*.roomScheduleKeys' => ['required', 'array', 'min:1', 'max:30'],
-            'visits.*.timePeriods.*.roomScheduleKeys.*' => $scheduleKey,
-            'visits.*.timePeriods.*.materials' => ['required', 'array:choice,materialTypeIds'],
-            'visits.*.timePeriods.*.materials.choice' => ['required', Rule::in(['customer_all', 'customer_partial', 'platform_all'])],
-            'visits.*.timePeriods.*.materials.materialTypeIds' => ['present', 'array', 'max:64'],
-            // Validate uniqueness per period below; wildcard "distinct" incorrectly rejects IDs reused in another visit.
-            'visits.*.timePeriods.*.materials.materialTypeIds.*' => ['integer', Rule::exists('cleaning_material_types', 'id')->where('is_active', true)],
-            'visits.*.timePeriods.*.specialServices' => ['present', 'array', 'max:30'],
-            'visits.*.timePeriods.*.specialServices.*' => ['array:serviceKey,specialServiceId,targetRoomKeys,quantity,dirtinessLevel'],
-            'visits.*.timePeriods.*.specialServices.*.serviceKey' => $opaqueKey,
-            'visits.*.timePeriods.*.specialServices.*.specialServiceId' => ['required', 'integer', Rule::exists('cleaning_special_services', 'id')->where('is_active', true)],
-            'visits.*.timePeriods.*.specialServices.*.targetRoomKeys' => ['required', 'array', 'min:1', 'max:30'],
-            'visits.*.timePeriods.*.specialServices.*.targetRoomKeys.*' => $roomKey,
-            'visits.*.timePeriods.*.specialServices.*.quantity' => ['required', 'numeric', 'gt:0', 'max:10000'],
-            'visits.*.timePeriods.*.specialServices.*.dirtinessLevel' => ['present', 'nullable', Rule::in(['light', 'heavy'])],
+            'recurrence.cadence' => ['required_with:recurrence', Rule::in(['once', 'weekly', 'monthly', 'custom'])],
+            'appointments' => ['required_if:contractVersion,2', 'array', 'min:1', 'max:30'],
+            'appointments.*' => ['array:appointmentKey,sequence,roomSchedules,timePeriods'],
+            'appointments.*.appointmentKey' => [...$opaqueKey, 'distinct'],
+            'appointments.*.sequence' => ['required', 'integer', 'min:1', 'max:30', 'distinct'],
+            'appointments.*.roomSchedules' => ['required', 'array', 'min:1', 'max:30'],
+            'appointments.*.roomSchedules.*' => ['array:scheduleKey,roomKey,scheduledDate,scheduledTime,numberOfWorkers'],
+            'appointments.*.roomSchedules.*.scheduleKey' => $scheduleKey,
+            'appointments.*.roomSchedules.*.roomKey' => $roomKey,
+            'appointments.*.roomSchedules.*.scheduledDate' => ['required', 'date_format:Y-m-d'],
+            'appointments.*.roomSchedules.*.scheduledTime' => ['required', 'date_format:H:i'],
+            'appointments.*.roomSchedules.*.numberOfWorkers' => ['required', 'integer', 'min:1', 'max:'.config('cleaning_booking_v2.max_workers', 20)],
+            'appointments.*.timePeriods' => ['sometimes', 'array', 'max:30'],
+            'appointments.*.timePeriods.*' => ['array:periodKey,roomScheduleKeys,materials,specialServices'],
+            'appointments.*.timePeriods.*.periodKey' => $opaqueKey,
+            'appointments.*.timePeriods.*.roomScheduleKeys' => ['required', 'array', 'min:1', 'max:30'],
+            'appointments.*.timePeriods.*.roomScheduleKeys.*' => $scheduleKey,
+            'appointments.*.timePeriods.*.materials' => ['required', 'array:choice,materialTypeIds'],
+            'appointments.*.timePeriods.*.materials.choice' => ['required', Rule::in(['customer_all', 'customer_partial', 'platform_all'])],
+            'appointments.*.timePeriods.*.materials.materialTypeIds' => ['present', 'array', 'max:64'],
+            // Validate uniqueness per period below; material IDs can recur across independent appointments.
+            'appointments.*.timePeriods.*.materials.materialTypeIds.*' => ['integer', Rule::exists('cleaning_material_types', 'id')->where('is_active', true)],
+            'appointments.*.timePeriods.*.specialServices' => ['present', 'array', 'max:30'],
+            'appointments.*.timePeriods.*.specialServices.*' => ['array:serviceKey,specialServiceId,targetRoomKeys,quantity,dirtinessLevel'],
+            'appointments.*.timePeriods.*.specialServices.*.serviceKey' => $opaqueKey,
+            'appointments.*.timePeriods.*.specialServices.*.specialServiceId' => ['required', 'integer', Rule::exists('cleaning_special_services', 'id')->where('is_active', true)],
+            'appointments.*.timePeriods.*.specialServices.*.targetRoomKeys' => ['required', 'array', 'min:1', 'max:30'],
+            'appointments.*.timePeriods.*.specialServices.*.targetRoomKeys.*' => $roomKey,
+            'appointments.*.timePeriods.*.specialServices.*.quantity' => ['required', 'numeric', 'gt:0', 'max:10000'],
+            'appointments.*.timePeriods.*.specialServices.*.dirtinessLevel' => ['present', 'nullable', Rule::in(['light', 'heavy'])],
         ];
     }
 
     public static function validate(array $data, Validator $validator, bool $creating = false): void
     {
         if ((int) ($data['contractVersion'] ?? 0) !== 2) {
-            if (isset($data['rooms']) || isset($data['visits'])) {
+            if (isset($data['rooms']) || isset($data['appointments'])) {
                 $validator->errors()->add('contractVersion', 'إصدار الحجز غير صالح.');
             }
 
@@ -110,32 +112,32 @@ final class CleaningTimePeriodContract
                 }
             }
         }
-        $visitDates = [];
-        foreach ($data['visits'] as $i => $visit) {
-            $scheduledRooms = array_column($visit['roomSchedules'], 'roomKey');
-            $keys = array_column($visit['roomSchedules'], 'scheduleKey');
+        $appointmentDates = [];
+        foreach ($data['appointments'] as $i => $appointment) {
+            $scheduledRooms = array_column($appointment['roomSchedules'], 'roomKey');
+            $keys = array_column($appointment['roomSchedules'], 'scheduleKey');
             if (count($scheduledRooms) !== $rooms->count() || count(array_unique($scheduledRooms)) !== count($scheduledRooms) || array_diff($scheduledRooms, $rooms->keys()->all()) !== [] || count(array_unique($keys)) !== count($keys)) {
-                $validator->errors()->add("visits.$i.roomSchedules", 'حدد موعداً واحداً لكل غرفة في الزيارة.');
+                $validator->errors()->add("appointments.$i.roomSchedules", 'حدد موعداً واحداً لكل غرفة في الزيارة.');
             }
-            $periodKeys = array_column($visit['timePeriods'] ?? [], 'periodKey');
+            $periodKeys = array_column($appointment['timePeriods'] ?? [], 'periodKey');
             if (count(array_unique($periodKeys)) !== count($periodKeys)) {
-                $validator->errors()->add("visits.$i.timePeriods", 'معرف الفترة مكرر.');
+                $validator->errors()->add("appointments.$i.timePeriods", 'معرف الفترة مكرر.');
             }
-            foreach ($visit['timePeriods'] ?? [] as $periodIndex => $period) {
+            foreach ($appointment['timePeriods'] ?? [] as $periodIndex => $period) {
                 $ids = $period['materials']['materialTypeIds'] ?? [];
                 if (is_array($ids) && count($ids) !== count(array_unique($ids))) {
-                    $validator->errors()->add("visits.$i.timePeriods.$periodIndex.materials.materialTypeIds", 'لا يمكن تكرار المادة ضمن نفس الفترة.');
+                    $validator->errors()->add("appointments.$i.timePeriods.$periodIndex.materials.materialTypeIds", 'لا يمكن تكرار المادة ضمن نفس الفترة.');
                 }
             }
-            $dates = array_values(array_unique(array_column($visit['roomSchedules'], 'scheduledDate')));
-            if (count($dates) !== 1 || isset($visitDates[$dates[0]])) {
-                $validator->errors()->add("visits.$i.roomSchedules", 'كل زيارة في يوم واحد مختلف عن الزيارات الأخرى.');
+            $dates = array_values(array_unique(array_column($appointment['roomSchedules'], 'scheduledDate')));
+            if (count($dates) !== 1 || isset($appointmentDates[$dates[0]])) {
+                $validator->errors()->add("appointments.$i.roomSchedules", 'كل زيارة في يوم واحد مختلف عن الزيارات الأخرى.');
             }
             if ($dates !== []) {
-                $visitDates[$dates[0]] = true;
+                $appointmentDates[$dates[0]] = true;
             }
         }
-        $dates = array_keys($visitDates);
+        $dates = array_keys($appointmentDates);
         sort($dates);
         $cadence = $data['recurrence']['cadence'] ?? null;
         if ($cadence === 'once' && count($dates) !== 1) {
@@ -148,16 +150,16 @@ final class CleaningTimePeriodContract
                     ? $first->addWeeks($index)
                     : $first->addMonthsNoOverflow($index);
                 if ($cadence === 'monthly' && $expected->day !== $first->day) {
-                    $validator->errors()->add('visits', 'التاريخ الشهري المطلوب غير موجود في أحد الأشهر. اختر يوماً متاحاً.');
+                    $validator->errors()->add('appointments', 'التاريخ الشهري المطلوب غير موجود في أحد الأشهر. اختر يوماً متاحاً.');
                     break;
                 }
                 if ($expected->toDateString() !== $date) {
-                    $validator->errors()->add('visits', 'تواريخ الزيارات لا تتطابق مع التكرار الأسبوعي أو الشهري المحدد.');
+                    $validator->errors()->add('appointments', 'تواريخ الزيارات لا تتطابق مع التكرار الأسبوعي أو الشهري المحدد.');
                     break;
                 }
             }
         }        if (count($dates) > 1 && CarbonImmutable::parse($dates[0])->diffInDays(CarbonImmutable::parse(end($dates))) > 90) {
-            $validator->errors()->add('visits', 'يجب أن تقع جميع الزيارات ضمن فترة لا تتجاوز 90 يوماً.');
+            $validator->errors()->add('appointments', 'يجب أن تقع جميع الزيارات ضمن فترة لا تتجاوز 90 يوماً.');
         }
     }
 }

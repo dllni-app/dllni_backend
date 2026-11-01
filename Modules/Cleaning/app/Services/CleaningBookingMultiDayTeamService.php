@@ -25,10 +25,10 @@ final class CleaningBookingMultiDayTeamService
         private readonly CleaningBookingSessionStatusService $statusService,
     ) {}
 
-    public function acceptWorker(CleaningBooking $booking, Worker $worker, ?array $roomIds = null): CleaningBooking
+    public function acceptWorker(CleaningBooking $booking, Worker $worker): CleaningBooking
     {
         if (! $this->requiresFutureSessionReplacementFlow($booking)) {
-            return $this->legacyTeamService->acceptWorker($booking, $worker, $roomIds);
+            return $this->legacyTeamService->acceptWorker($booking, $worker);
         }
 
         return DB::transaction(function () use ($booking, $worker): CleaningBooking {
@@ -56,7 +56,7 @@ final class CleaningBookingMultiDayTeamService
             // conservative after partial completion because it sees the parent
             // aggregate, which is preferable to accepting a worker beyond their
             // allowed commission capacity.
-            $this->solvency->assertWorkerCanAcceptBooking($worker, $booking, null);
+            $this->solvency->assertWorkerCanAcceptBooking($worker, $booking);
 
             $assignment = CleaningBookingWorkerAssignment::query()
                 ->where('cleaning_booking_id', $booking->id)
@@ -78,8 +78,6 @@ final class CleaningBookingMultiDayTeamService
                     'worker_id' => $worker->id,
                     'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
                     'accepted_at' => now(),
-                    'room_count' => 0,
-                    'rooms_weight' => 0,
                     'service_share_amount' => 0,
                     'travel_fee' => 0,
                     'admin_margin_amount' => 0,

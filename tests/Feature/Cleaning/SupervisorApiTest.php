@@ -90,7 +90,12 @@ it('scopes lists and details to the active supervisor and explicit service kind'
     $mine = supervisorBooking($first, ['booking_number' => 'TEAM-ONE', 'scheduled_date' => '2026-10-16',
         'status' => CleaningBookingStatus::InProgress]);
     $theirs = supervisorBooking($second, ['booking_number' => 'TEAM-TWO', 'scheduled_date' => '2026-10-16']);
-    $legacy = CleaningBooking::factory()->create(['booking_kind' => 'standard', 'number_of_workers' => 3]);
+    $legacy = CleaningBooking::factory()->create([
+        'booking_kind' => 'standard',
+        'number_of_workers' => 3,
+        'status' => CleaningBookingStatus::Pending,
+        'scheduled_date' => '2026-10-17',
+    ]);
     DB::table('cleaning_supervisor_assignments')->insert([
         'cleaning_booking_id' => $legacy->id, 'supervisor_user_id' => $first->id,
         'assigned_at' => now(), 'active_slot' => 1, 'created_at' => now(), 'updated_at' => now(),
@@ -102,11 +107,13 @@ it('scopes lists and details to the active supervisor and explicit service kind'
     $this->getJson('/api/v1/supervisor/home')->assertOk()->assertJsonPath('data.todayTotal', 1)
         ->assertJsonPath('data.inProgress', 1)->assertJsonPath('data.awaitingHandover', 0);
     $this->getJson('/api/v1/supervisor/bookings/'.$theirs->id)->assertNotFound();
-    $this->getJson('/api/v1/supervisor/bookings/'.$legacy->id)->assertNotFound();
+    // A standard multi-worker order assigned to this supervisor is now
+    // supported; room-level scheduling is not a prerequisite.
+    $this->getJson('/api/v1/supervisor/bookings/'.$legacy->id)->assertOk();
     $this->getJson('/api/v1/supervisor/schedule?date=2026-10-16')->assertOk()->assertJsonCount(1, 'data');
 
     $mine->forceFill(['status' => CleaningBookingStatus::Completed])->save();
-    $this->getJson('/api/v1/supervisor/home')->assertOk()->assertJsonPath('data.nextBooking', null)
+    $this->getJson('/api/v1/supervisor/home')->assertOk()->assertJsonPath('data.nextBooking.id', $legacy->id)
         ->assertJsonPath('data.inProgress', 0);
 
     DB::table('cleaning_supervisor_assignments')->where('cleaning_booking_id', $mine->id)
@@ -119,10 +126,22 @@ it('derives two of three readiness from accepted arrived assignments', function 
     $booking = supervisorBooking($supervisor);
     foreach ([true, true, false] as $arrived) {
         $worker = Worker::factory()->create();
-        $booking->workerAssignments()->create([
+        $assignment = $booking->workerAssignments()->create([
             'worker_id' => $worker->id, 'status' => 'accepted',
             'accepted_at' => now(), 'arrived_at' => $arrived ? now() : null,
         ]);
+        if ($arrived) {
+            DB::table('cleaning_worker_attendance_proofs')->insert([
+                'cleaning_booking_id' => $booking->id,
+                'worker_assignment_id' => $assignment->id,
+                'code_hash' => hash('sha256', 'qa-attendance-'.$assignment->id),
+                'worker_code_ciphertext' => encrypt('123456'),
+                'expires_at' => now()->addHour(),
+                'confirmed_at' => now(),
+                'confirmed_by_user_id' => $supervisor->id,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
     }
     Sanctum::actingAs($supervisor);
 
@@ -136,6 +155,21 @@ it('derives two of three readiness from accepted arrived assignments', function 
         ->assertStatus(409);
     $this->assertDatabaseHas('cleaning_bookings', ['id' => $booking->id, 'work_started_at' => null]);
     $booking->workerAssignments()->whereNull('arrived_at')->update(['arrived_at' => now()]);
+    foreach ($booking->workerAssignments()->get() as $assignment) {
+        if (DB::table('cleaning_worker_attendance_proofs')->where('worker_assignment_id', $assignment->id)->exists()) {
+            continue;
+        }
+        DB::table('cleaning_worker_attendance_proofs')->insert([
+            'cleaning_booking_id' => $booking->id,
+            'worker_assignment_id' => $assignment->id,
+            'code_hash' => hash('sha256', 'qa-attendance-'.$assignment->id),
+            'worker_code_ciphertext' => encrypt('123456'),
+            'expires_at' => now()->addHour(),
+            'confirmed_at' => now(),
+            'confirmed_by_user_id' => $supervisor->id,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+    }
     $this->getJson('/api/v1/supervisor/bookings/'.$booking->id.'/attendance')
         ->assertOk()->assertJsonPath('data.arrivedWorkers', 3)->assertJsonPath('data.teamReady', true);
 });

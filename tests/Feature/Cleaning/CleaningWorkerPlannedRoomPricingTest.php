@@ -19,27 +19,24 @@ beforeEach(function (): void {
             'default_commission_rate' => 25,
             'commission_type' => 'percent',
             'commission_fixed_amount' => null,
-            'travel_per_km' => 10,
-            'travel_distance_start_point' => 'worker_home',
+            'travel_markup_type' => 'worker_allowance',
+            'travel_markup_value' => 10,
         ],
     );
 });
 
-it('uses travel per kilometre as the minimum transport fee', function (): void {
-    $pricing = app(CleaningPricingCalculator::class)->finalizedForCoordinates(
-        100,
-        0,
-        36.2,
-        37.1,
-        36.2,
-        37.1,
+it('uses the fixed transportation allowance regardless of worker coordinates', function (): void {
+    $pricing = app(CleaningPricingCalculator::class)->finalizedForWorker(
+        100, 0, null, null,
+        Worker::factory()->make(['home_address' => null, 'home_latitude' => null, 'home_longitude' => null]),
     );
 
-    expect($pricing['distanceKm'])->toBe(0.0)
-        ->and($pricing['travelFee'])->toBe(10.0);
+    expect($pricing['distanceKm'])->toBeNull()
+        ->and($pricing['travelFee'])->toBe(10.0)
+        ->and($pricing['isPricingFinal'])->toBeTrue();
 });
 
-it('prices regular cleaning worker previews from the next planned room slot', function (): void {
+it('prices regular cleaning worker previews from equal team shares', function (): void {
     $booking = CleaningBooking::factory()->create([
         'status' => CleaningBookingStatus::Pending->value,
         'assignment_mode' => 'open_count',
@@ -64,7 +61,6 @@ it('prices regular cleaning worker previews from the next planned room slot', fu
         'room_size' => 'small',
         'display_label' => 'Bedroom 1',
         'weight' => 1.0,
-        'planned_worker_slot' => 1,
     ]);
     CleaningBookingRoom::query()->create([
         'cleaning_booking_id' => $booking->id,
@@ -73,7 +69,6 @@ it('prices regular cleaning worker previews from the next planned room slot', fu
         'room_size' => 'small',
         'display_label' => 'Bathroom 1',
         'weight' => 0.8,
-        'planned_worker_slot' => 2,
     ]);
 
     $firstWorker = Worker::factory()->create([
@@ -91,8 +86,6 @@ it('prices regular cleaning worker previews from the next planned room slot', fu
     $firstOffer = $service->workerOfferForBooking($firstWorker, $booking);
 
     expect($firstOffer['workerSlot'])->toBe(1)
-        ->and($firstOffer['roomCount'])->toBe(1)
-        ->and($firstOffer['roomsWeight'])->toBe(1.0)
         ->and($firstOffer['serviceShareAmount'])->toBe(150.0)
         ->and($firstOffer['travelFee'])->toBe(10.0);
 
@@ -101,8 +94,6 @@ it('prices regular cleaning worker previews from the next planned room slot', fu
         'worker_id' => $firstWorker->id,
         'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
         'accepted_at' => now(),
-        'room_count' => 1,
-        'rooms_weight' => 1.0,
         'service_share_amount' => 150,
         'travel_fee' => 10,
         'admin_margin_amount' => 42,
@@ -113,8 +104,6 @@ it('prices regular cleaning worker previews from the next planned room slot', fu
     $secondOffer = $service->workerOfferForBooking($secondWorker, $booking->fresh());
 
     expect($secondOffer['workerSlot'])->toBe(2)
-        ->and($secondOffer['roomCount'])->toBe(1)
-        ->and($secondOffer['roomsWeight'])->toBe(0.8)
         ->and($secondOffer['serviceShareAmount'])->toBe(150.0)
         ->and($secondOffer['travelFee'])->toBe(10.0);
 });
@@ -192,8 +181,6 @@ it('keeps an accepted event worker on the equal preview until the whole team is 
         'worker_id' => $worker->id,
         'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
         'accepted_at' => now(),
-        'room_count' => 0,
-        'rooms_weight' => 0,
         'service_share_amount' => 0,
         'travel_fee' => 0,
         'admin_margin_amount' => 0,
@@ -247,8 +234,6 @@ it('normalizes finalized event assignments to equal service shares', function ()
             'worker_id' => $worker->id,
             'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
             'accepted_at' => now()->addSeconds($index),
-            'room_count' => $index === 0 ? 1 : 0,
-            'rooms_weight' => $index === 0 ? 1 : 0,
             'service_share_amount' => $index === 0 ? 1200 : 0,
             'travel_fee' => 10,
             'admin_margin_amount' => $index === 0 ? 300 : 0,
@@ -276,5 +261,5 @@ it('normalizes finalized event assignments to equal service shares', function ()
         ->toBe([400.0, 400.0, 400.0])
         ->and((float) $assignments->sum('service_share_amount'))->toBe(1200.0)
         ->and((float) $assignments->sum('admin_margin_amount'))->toBe(300.0)
-        ->and($assignments->pluck('room_count')->all())->toBe([0, 0, 0]);
+;
 });

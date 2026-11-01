@@ -40,7 +40,7 @@ it('persists the same provisional customer price shown by the estimate', functio
     expect((float) $booking->base_price)->toBe(2500.0)
         ->and((float) $booking->travel_fee)->toBe(0.0)
         ->and((float) $booking->admin_margin_amount)->toBe(625.0)
-        ->and((float) $booking->total_price)->toBe(3125.0)
+        ->and((float) $booking->total_price)->toBe(2500.0)
         ->and((bool) $booking->is_pricing_final)->toBeFalse();
 });
 
@@ -59,11 +59,11 @@ it('returns the user-facing service value consistently in order details', functi
 
     $payload = UserCleaningBookingResource::make($booking)->toArray(Request::create('/'));
 
-    expect($payload['basePrice'])->toBe(3125.0)
-        ->and($payload['servicePrice'])->toBe(3125.0)
+    expect($payload['basePrice'])->toBe(2500.0)
+        ->and($payload['servicePrice'])->toBe(2500.0)
         ->and($payload['bookingBasePrice'])->toBe(2500.0)
         ->and($payload['bookingAdminMargin'])->toBe(625.0)
-        ->and($payload['totalPrice'])->toBe(3125.0)
+        ->and($payload['totalPrice'])->toBe(2500.0)
         ->and($payload['travelFeePending'])->toBeTrue();
 });
 
@@ -125,11 +125,11 @@ it('marks a worker quote as preview and exposes net earnings as its display tota
     $offer = app(WorkerOrderSolvencyService::class)->workerOfferForBooking($worker, $booking);
 
     expect($offer['serviceShareAmount'])->toBe(1250.0)
-        ->and($offer['travelFee'])->toBe(5171.0)
+        ->and($offer['travelFee'])->toBe(0.0)
         ->and($offer['adminMarginAmount'])->toBe(313.0)
-        ->and($offer['grossTotalPrice'])->toBe(6421.0)
-        ->and($offer['workerAmount'])->toBe(6421.0)
-        ->and($offer['totalPrice'])->toBe(6421.0)
+        ->and($offer['grossTotalPrice'])->toBe(1250.0)
+        ->and($offer['workerAmount'])->toBe(1250.0)
+        ->and($offer['totalPrice'])->toBe(1250.0)
         ->and($offer['isPreview'])->toBeTrue()
         ->and($offer['isPricingFinal'])->toBeFalse();
 });
@@ -155,8 +155,6 @@ it('keeps the finalized booking margin exact across multiple worker assignments'
             'worker_id' => $worker->id,
             'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
             'accepted_at' => now(),
-            'room_count' => 1,
-            'rooms_weight' => 1,
             'service_share_amount' => 1250,
             'travel_fee' => 500,
             'admin_margin_amount' => 313,
@@ -177,7 +175,7 @@ it('keeps the finalized booking margin exact across multiple worker assignments'
         ->get();
 
     expect((float) $booking->admin_margin_amount)->toBe(625.0)
-        ->and((float) $booking->total_price)->toBe(4125.0)
+        ->and((float) $booking->total_price)->toBe(3500.0)
         ->and((float) $assignments->sum('admin_margin_amount'))->toBe(625.0)
         ->and((float) $assignments->sum('worker_amount'))->toBe(3500.0);
 });
@@ -223,5 +221,6 @@ it('does not include commission in the minimum when the raw subtotal happens to 
         'travel_fee' => 0,
         'is_pricing_final' => false,
     ])->fresh();
-    expect((float) $booking->total_price)->toBe(188.0);
+    expect((float) $booking->total_price)->toBe(150.0)
+        ->and((float) $booking->admin_margin_amount)->toBe(38.0);
 });

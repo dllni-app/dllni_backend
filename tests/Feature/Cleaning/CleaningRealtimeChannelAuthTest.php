@@ -8,6 +8,7 @@ use App\Providers\AppServiceProvider;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 
 beforeEach(function (): void {
@@ -101,3 +102,35 @@ it('authorizes committed team workers for private cleaning booking channel', fun
     'awaiting start verification' => [CleaningBookingWorkerAssignmentStatus::AwaitingStartVerification],
     'start approved' => [CleaningBookingWorkerAssignmentStatus::StartApproved],
 ]);
+
+it('limits supervisor booking subscriptions to active visit custody', function (): void {
+    $supervisor = User::factory()->create(['is_active' => true]);
+    $outsider = User::factory()->create(['is_active' => true]);
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => null,
+        'booking_kind' => 'standard',
+        'number_of_workers' => 2,
+    ]);
+    // Supervisor custody is per booking after visit/room allocation removal.
+    $assignment = $booking->supervisorAssignments()->create([
+        'supervisor_user_id' => $supervisor->id,
+        'assigned_by_user_id' => $supervisor->id,
+        'assigned_at' => now(),
+        'active_slot' => 1,
+    ]);
+    $authorize = function (User $actor) use ($booking) {
+        // Each HTTP request represents a different Sanctum principal.
+        // Reset the test process' cached auth guard between those principals.
+        app('auth')->forgetGuards();
+        return $this->withToken($actor->createToken('broadcast-test')->plainTextToken)
+            ->postJson('/broadcasting/auth', [
+                'socket_id' => '267922.520045',
+                'channel_name' => "private-cleaning-booking.{$booking->id}",
+            ]);
+    };
+
+    $authorize($outsider)->assertForbidden();
+    $authorize($supervisor)->assertOk();
+    $assignment->update(['released_at' => now(), 'active_slot' => null]);
+    $authorize($supervisor)->assertForbidden();
+});

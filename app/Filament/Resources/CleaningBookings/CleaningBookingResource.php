@@ -11,7 +11,6 @@ use App\Filament\Clusters\CleaningOperationsCluster;
 use App\Filament\Resources\CleaningBookings\Pages\EditCleaningBooking;
 use App\Filament\Resources\CleaningBookings\Pages\ListCleaningBookings;
 use App\Filament\Resources\CleaningBookings\Pages\ViewCleaningBooking;
-use App\Filament\Resources\CleaningBookings\RelationManagers\SessionsRelationManager;
 use App\Filament\Resources\CleaningBookings\Schemas\CleaningBookingForm;
 use App\Filament\Resources\CleaningBookings\Schemas\CleaningBookingInfolist;
 use App\Filament\Resources\CleaningBookings\Tables\CleaningBookingsTable;
@@ -140,8 +139,7 @@ final class CleaningBookingResource extends Resource
                 'customer',
                 'worker.user',
                 'preferredWorker.user',
-                'rooms.assignedWorker.user',
-                'rooms.plannedPreferredWorker.user',
+                'rooms',
                 'workerAssignments.worker.user',
                 'acceptedWorkerAssignments.worker.user',
             ])
@@ -191,9 +189,7 @@ final class CleaningBookingResource extends Resource
 
     public static function getRelations(): array
     {
-        return [
-            SessionsRelationManager::class,
-        ];
+        return [];
     }
 
     public static function getPages(): array
@@ -235,8 +231,8 @@ final class CleaningBookingResource extends Resource
         $team = app(CleaningBookingTeamPresentation::class);
         $session = $team->displaySession($record);
         if ($session !== null) {
-            // V2 visits have their own worker assignments. Never claim that
-            // zero workers accepted just because the parent has no legacy rows.
+            // Other service types may use session-scoped worker assignments.
+            // Standard cleaning bookings are always independently identified.
             $sessionIsCompleted = $session->status === \Modules\Cleaning\Enums\CleaningBookingSessionStatus::Completed;
             $assignments = $session->workerAssignments()
                 ->whereNull('released_at');

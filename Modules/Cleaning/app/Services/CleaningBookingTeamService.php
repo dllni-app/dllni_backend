@@ -11,14 +11,13 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 use Modules\Cleaning\Enums\CleaningAssignmentMode;
-use Modules\Cleaning\Enums\CleaningBookingRoomAssignmentSource;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Events\CleaningBookingTeamUpdated;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingRoom;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
-use Modules\Cleaning\Support\WorkerRoomAssignmentPlanner;
+use Modules\Cleaning\Support\CleaningRoomBlueprints;
 
 final class CleaningBookingTeamService
 {
@@ -49,12 +48,8 @@ final class CleaningBookingTeamService
         return CleaningAssignmentMode::OpenCount->value;
     }
 
-    public function syncRooms(CleaningBooking $booking, ?array $workerRoomAssignments = null): void
+    public function syncRooms(CleaningBooking $booking): void
     {
-        if ($workerRoomAssignments !== null && $workerRoomAssignments !== []) {
-            throw ValidationException::withMessages(['workerRoomAssignments' => ['Worker-to-room allocation is no longer supported.']]);
-        }
-
         DB::transaction(function () use ($booking): void {
             $booking = CleaningBooking::query()
                 ->whereKey($booking->id)
@@ -78,14 +73,9 @@ final class CleaningBookingTeamService
                 ->where('cleaning_booking_id', $booking->id)
                 ->delete();
 
-            $plan = WorkerRoomAssignmentPlanner::plan(
+            $rooms = CleaningRoomBlueprints::generateRoomBlueprints(
                 is_array($booking->property_details) ? $booking->property_details : [],
-                null,
-                $this->resolveAssignmentMode($booking),
-                max(1, (int) ($booking->number_of_workers ?? 1)),
-                $booking->preferred_worker_id !== null ? (int) $booking->preferred_worker_id : null,
             );
-            $rooms = $plan['derivedRooms'];
 
             foreach ($rooms as $room) {
                 CleaningBookingRoom::query()->create([
@@ -95,10 +85,6 @@ final class CleaningBookingTeamService
                     'room_size' => $room['room_size'],
                     'display_label' => $room['display_label'],
                     'weight' => $room['weight'],
-                    'planned_worker_slot' => null,
-                    'planned_preferred_worker_id' => null,
-                    'assigned_worker_id' => null,
-                    'assignment_source' => null,
                 ]);
             }
         });
@@ -106,12 +92,8 @@ final class CleaningBookingTeamService
         $this->broadcastTeamUpdated($booking->fresh(['rooms', 'workerAssignments.worker.user']));
     }
 
-    public function acceptWorker(CleaningBooking $booking, Worker $worker, ?array $roomIds = null): CleaningBooking
+    public function acceptWorker(CleaningBooking $booking, Worker $worker): CleaningBooking
     {
-        if ($roomIds !== null && $roomIds !== []) {
-            throw ValidationException::withMessages(['roomIds' => ['Worker-to-room allocation is no longer supported.']]);
-        }
-
         return DB::transaction(function () use ($booking, $worker): CleaningBooking {
             $booking = $this->lockBooking($booking->id);
             $this->assertLegacyTeamMutationAllowed($booking);
@@ -140,8 +122,6 @@ final class CleaningBookingTeamService
                     'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
                     'accepted_at' => now(),
                     'start_approved_at' => null,
-                    'room_count' => 0,
-                    'rooms_weight' => 0,
                     'service_share_amount' => 0,
                     'travel_fee' => 0,
                     'admin_margin_amount' => 0,
@@ -165,14 +145,13 @@ final class CleaningBookingTeamService
             $booking = $this->recalculateBookingTeam(
                 $booking,
                 finalizeBooking: $this->isTeamFulfilled($booking),
-                applyPlannedAssignments: false,
             );
 
             return $booking->fresh([
                 'customer',
                 'worker.user',
                 'preferredWorker.user',
-                'rooms.assignedWorker.user',
+                'rooms',
                 'workerAssignments.worker.user',
                 'addons',
                 'billingPolicy',
@@ -206,8 +185,6 @@ final class CleaningBookingTeamService
                     'status' => filled($reason)
                         ? CleaningBookingWorkerAssignmentStatus::Rejected
                         : CleaningBookingWorkerAssignmentStatus::Withdrawn,
-                    'room_count' => 0,
-                    'rooms_weight' => 0,
                     'service_share_amount' => 0,
                     'travel_fee' => 0,
                     'admin_margin_amount' => 0,
@@ -238,7 +215,7 @@ final class CleaningBookingTeamService
                 'customer',
                 'worker.user',
                 'preferredWorker.user',
-                'rooms.assignedWorker.user',
+                'rooms',
                 'workerAssignments.worker.user',
                 'addons',
                 'billingPolicy',
@@ -301,31 +278,26 @@ final class CleaningBookingTeamService
     public function recalculateBookingTeam(
         CleaningBooking $booking,
         bool $finalizeBooking = false,
-        bool $applyPlannedAssignments = true,
+        bool $administrativeReprice = false,
     ): CleaningBooking {
         $booking = $this->lockBooking($booking->id);
         $this->assertLegacyTeamMutationAllowed($booking);
-
-        $roomQuery = CleaningBookingRoom::query()
-            ->where('cleaning_booking_id', $booking->id)
-            ->lockForUpdate();
 
         $assignmentQuery = CleaningBookingWorkerAssignment::query()
             ->where('cleaning_booking_id', $booking->id)
             ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
             ->lockForUpdate();
 
-        $rooms = $roomQuery->get()->values();
         $acceptedAssignments = $assignmentQuery->get()->values();
-        $totalRoomWeight = round((float) $rooms->sum(fn (CleaningBookingRoom $room): float => (float) $room->weight), 2);
 
         // Rooms are booking tasks shared by all accepted team workers.
 
         // Supervisor charges are collected for the supervisor's group hours,
         // not part of the workers' distributable cleaning wage.
         $supervisorFee = max(0.0, (float) data_get($booking->property_details, '_supervisor_pricing.fee', 0));
+        $platformMaterials = max(0.0, (float) data_get($booking->property_details, '_time_period_v2.pricing.materialsTotal', 0));
         $subtotal = round(max(0.0,
-            ((float) ($booking->base_price ?? 0)) + ((float) ($booking->addons_total ?? 0)) - $supervisorFee
+            ((float) ($booking->base_price ?? 0)) + ((float) ($booking->addons_total ?? 0)) - $supervisorFee - $platformMaterials
         ), 2);
         $includedAdminMarginBase = $this->pricingCalculator->minimumOrderAdminMarginBase(
             (float) ($booking->base_price ?? 0),
@@ -335,6 +307,17 @@ final class CleaningBookingTeamService
             (float) ($booking->total_price ?? 0),
         );
         $requiredWorkers = max(1, (int) ($booking->number_of_workers ?? 1));
+        $hasFixedTransportSnapshot = ! $administrativeReprice
+            && ((bool) $booking->is_pricing_final
+                || (string) $booking->booking_kind === 'open_time');
+        $quotedAllowance = data_get($booking->property_details, '_booking_v2_transport_allowance_per_worker');
+        $quotedTravel = $quotedAllowance === null ? null : round((float) $quotedAllowance * $requiredWorkers, 2);
+        // New fixed-allowance bookings are already fully priced at creation.
+        // Reuse their customer-approved transport snapshot if no V2 snapshot exists.
+        if ($quotedTravel === null && $hasFixedTransportSnapshot) {
+            $quotedTravel = round((float) $booking->travel_fee, 2);
+            $quotedAllowance = round($quotedTravel / $requiredWorkers, 2);
+        }
         $totalTravelFee = 0.0;
         $totalAdminMargin = 0.0;
         $primaryWorkerId = null;
@@ -342,8 +325,6 @@ final class CleaningBookingTeamService
 
         $remainingServiceCents = (int) round($subtotal * 100);
         foreach ($acceptedAssignments as $index => $assignment) {
-            $roomCount = $rooms->count();
-            $roomsWeight = $totalRoomWeight;
             $slotCents = intdiv($remainingServiceCents, max(1, $requiredWorkers - $index));
             $serviceShare = (float) ($slotCents / 100);
             $remainingServiceCents -= $slotCents;
@@ -357,27 +338,27 @@ final class CleaningBookingTeamService
             $adminMargin = 0.0;
             $workerAmount = round($serviceShare, 2);
 
-            if ($worker instanceof Worker && $booking->address_latitude !== null && $booking->address_longitude !== null) {
+            if ($worker instanceof Worker && $quotedAllowance !== null) {
+                $pricing = $this->pricingCalculator->provisional($serviceShare, 0.0, $workerIncludedAdminMarginBase);
+                $travelFee = (float) $quotedAllowance;
+                $adminMargin = (float) $pricing['adminMargin'];
+                $workerAmount = max(0.0, round($serviceShare + $travelFee, 2));
+            } elseif ($worker instanceof Worker) {
                 $pricing = $this->pricingCalculator->finalizedForWorker(
                     $serviceShare,
                     0.0,
-                    (float) $booking->address_latitude,
-                    (float) $booking->address_longitude,
+                    $booking->address_latitude !== null ? (float) $booking->address_latitude : null,
+                    $booking->address_longitude !== null ? (float) $booking->address_longitude : null,
                     $worker,
                     $workerIncludedAdminMarginBase,
                 );
 
                 $travelFee = (float) $pricing['travelFee'];
                 $adminMargin = (float) $pricing['adminMargin'];
-                $workerAmount = max(
-                    0.0,
-                    round($serviceShare + $travelFee - (float) ($pricing['includedAdminMargin'] ?? 0.0), 2),
-                );
+                $workerAmount = max(0.0, round($serviceShare + $travelFee, 2));
             }
 
             $assignment->forceFill([
-                'room_count' => $roomCount,
-                'rooms_weight' => $roomsWeight,
                 'service_share_amount' => $serviceShare,
                 'travel_fee' => $travelFee,
                 'admin_margin_amount' => $adminMargin,
@@ -399,21 +380,24 @@ final class CleaningBookingTeamService
         }
 
         $periodApprovedTotal = (array) ($booking->property_details ?? []);
-        $customerPriceLock = isset($periodApprovedTotal['_room_period_v2_approved_total'])
-            ? round((float) $periodApprovedTotal['_room_period_v2_approved_total'], 2)
+        $customerPriceLock = ! $administrativeReprice && isset($periodApprovedTotal['_booking_v2_approved_total'])
+            ? round((float) $periodApprovedTotal['_booking_v2_approved_total'], 2)
             : null;
 
         if ($finalizeBooking && $acceptedAssignments->isNotEmpty()) {
             $booking->forceFill([
                 'status' => CleaningBookingStatus::WorkerAssigned,
                 'worker_id' => $primaryWorkerId,
-                'travel_fee' => round($totalTravelFee, 2),
-                'admin_margin_amount' => round($totalAdminMargin, 2),
-                'total_price' => $customerPriceLock ?? round($supervisorFee + $acceptedAssignments->sum(
-                    fn (CleaningBookingWorkerAssignment $assignment): float => (float) $assignment->worker_amount + (float) $assignment->admin_margin_amount
-                ), 2),
+                'travel_fee' => $quotedTravel ?? round($totalTravelFee, 2),
+                'admin_margin_amount' => $hasFixedTransportSnapshot
+                    ? (float) $booking->admin_margin_amount : round($totalAdminMargin, 2),
+                'total_price' => $customerPriceLock ?? ($hasFixedTransportSnapshot
+                    ? (float) $booking->total_price : round($supervisorFee + $acceptedAssignments->sum(
+                    fn (CleaningBookingWorkerAssignment $assignment): float => (float) $assignment->worker_amount
+                ), 2)),
                 'travel_distance_km' => null,
-                'is_pricing_final' => true,
+                'is_pricing_final' => (string) $booking->booking_kind !== 'open_time'
+                    || $booking->open_time_finalized_at !== null,
             ]);
             $this->couponPricingService->saveAfterTeamRecalculation($booking);
         } else {
@@ -427,11 +411,13 @@ final class CleaningBookingTeamService
             $booking->forceFill([
                 'status' => CleaningBookingStatus::Pending,
                 'worker_id' => null,
-                'travel_fee' => round((float) $provisionalPricing['travelFee'], 2),
-                'admin_margin_amount' => round((float) $provisionalPricing['adminMargin'], 2),
-                'total_price' => $customerPriceLock ?? round((float) $provisionalPricing['totalPrice'] + $supervisorFee, 2),
+                'travel_fee' => $quotedTravel ?? round((float) $provisionalPricing['travelFee'], 2),
+                'admin_margin_amount' => $hasFixedTransportSnapshot
+                    ? (float) $booking->admin_margin_amount : round((float) $provisionalPricing['adminMargin'], 2),
+                'total_price' => $customerPriceLock ?? ($hasFixedTransportSnapshot
+                    ? (float) $booking->total_price : round((float) $provisionalPricing['totalPrice'] + $supervisorFee, 2)),
                 'travel_distance_km' => null,
-                'is_pricing_final' => false,
+                'is_pricing_final' => (bool) $booking->is_pricing_final,
             ]);
             $this->couponPricingService->saveAfterTeamRecalculation($booking);
         }
@@ -440,7 +426,7 @@ final class CleaningBookingTeamService
             'customer',
             'worker.user',
             'preferredWorker.user',
-            'rooms.assignedWorker.user',
+            'rooms',
             'workerAssignments.worker.user',
             'addons',
             'billingPolicy',
@@ -477,7 +463,6 @@ final class CleaningBookingTeamService
     }
 
     /**
-     * @return array<int, array{workerSlot:int, preferredWorkerId:?int, rooms:array<int, array{roomKey:string, roomType:string, roomSize:string}>, roomsWeight:float}>
      */
 
 
@@ -616,7 +601,6 @@ final class CleaningBookingTeamService
     }
 
     /**
-     * @param  array<int, mixed>|null  $roomIds
      */
 
     /**

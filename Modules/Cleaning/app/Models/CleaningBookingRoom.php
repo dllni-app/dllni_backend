@@ -4,91 +4,24 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Models;
 
-use App\Models\Worker;
-use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Modules\Cleaning\Enums\CleaningBookingRoomAssignmentSource;
 
+/** Booked room descriptions are shared by the whole team, not owned by workers. */
 final class CleaningBookingRoom extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'cleaning_booking_id',
-        'room_key',
-        'room_type',
-        'room_size',
-        'display_label',
-        'weight',
-        'planned_worker_slot',
-        'planned_preferred_worker_id',
-        'assigned_worker_id',
-        'assignment_source',
-    ];
+    protected $fillable = ['cleaning_booking_id', 'room_key', 'room_type', 'room_size', 'display_label', 'weight'];
 
     public function booking(): BelongsTo
     {
         return $this->belongsTo(CleaningBooking::class, 'cleaning_booking_id');
     }
 
-    public function roomPeriods(): \Illuminate\Database\Eloquent\Relations\HasMany
-    {
-        return $this->hasMany(CleaningBookingRoomPeriod::class, 'cleaning_booking_room_id');
-    }
-
-    public function assignedWorker(): BelongsTo
-    {
-        return $this->belongsTo(Worker::class, 'assigned_worker_id');
-    }
-
-    public function plannedPreferredWorker(): BelongsTo
-    {
-        return $this->belongsTo(Worker::class, 'planned_preferred_worker_id');
-    }
-
     public function casts(): array
     {
-        return [
-            'weight' => 'decimal:2',
-            'planned_worker_slot' => 'integer',
-        ];
-    }
-
-    protected function assignmentSource(): Attribute
-    {
-        return Attribute::make(
-            get: static function (mixed $value): ?CleaningBookingRoomAssignmentSource {
-                if ($value === null || $value === '') {
-                    return null;
-                }
-
-                if ($value instanceof CleaningBookingRoomAssignmentSource) {
-                    return $value;
-                }
-
-                // Older production rows used "system" for automatic room
-                // assignment. The current enum calls the same source "auto".
-                if ((string) $value === 'system') {
-                    return CleaningBookingRoomAssignmentSource::Auto;
-                }
-
-                return CleaningBookingRoomAssignmentSource::from((string) $value);
-            },
-            set: static function (mixed $value): ?string {
-                if ($value === null || $value === '') {
-                    return null;
-                }
-
-                if ($value instanceof CleaningBookingRoomAssignmentSource) {
-                    return $value->value;
-                }
-
-                return (string) $value === 'system'
-                    ? CleaningBookingRoomAssignmentSource::Auto->value
-                    : CleaningBookingRoomAssignmentSource::from((string) $value)->value;
-            },
-        );
+        return ['weight' => 'decimal:2'];
     }
 }

@@ -30,9 +30,9 @@ final class CleaningTimePeriodCustomerDetailService
         $materials = DB::table('cleaning_time_period_materials')->whereIn('cleaning_time_period_id', $ids)->orderBy('cleaning_material_type_id')->get()->groupBy('cleaning_time_period_id');
         $services = DB::table('cleaning_time_period_services')->whereIn('cleaning_time_period_id', $ids)->orderBy('id')->get()->groupBy('cleaning_time_period_id');
         $byId = $schedules->keyBy('id');
-        $visits = [];
-        foreach ($booking->sessions()->orderBy('sequence')->get() as $session) {
-            $sessionSchedules = $schedules->where('cleaning_booking_session_id', $session->id);
+        $appointments = [];
+        foreach ([$booking] as $_booking) {
+            $sessionSchedules = $schedules;
             if ($sessionSchedules->isEmpty()) {
                 continue;
             }
@@ -52,7 +52,7 @@ final class CleaningTimePeriodCustomerDetailService
                 'endAt' => $date($row->ends_at),
             ])->values()->all();
             $periodItems = [];
-            foreach ($periods->where('cleaning_booking_session_id', $session->id) as $period) {
+            foreach ($periods as $period) {
                 $roomScheduleKeys = ($members->get($period->id) ?? collect())
                     ->map(static fn ($pivot): ?string => $byId->get($pivot->cleaning_room_schedule_id)?->schedule_key)
                     ->filter()->sort()->values()->all();
@@ -106,19 +106,19 @@ final class CleaningTimePeriodCustomerDetailService
                     'specialServices' => array_values($servicesByKey),
                 ];
             }
-            $visits[] = [
-                'visitKey' => (string) $first->visit_key,
-                'sequence' => (int) $session->sequence,
+            $appointments[] = [
+                'appointmentKey' => (string) data_get($booking->property_details, '_time_period_v2.appointments.0.appointmentKey', 'booking-'.$booking->id),
+                'sequence' => 1,
                 'startAt' => $date($first->starts_at),
                 'endAt' => $date($last->ends_at),
                 'timezone' => $tz,
                 'estimatedDurationMinutes' => (int) round($first->starts_at->diffInSeconds($last->ends_at) / 60),
-                'requiredSimultaneousWorkers' => (int) $session->required_workers,
+                'requiredSimultaneousWorkers' => (int) $booking->number_of_workers,
                 'roomSchedules' => $scheduleItems,
                 'timePeriods' => $periodItems,
             ];
         }
-        $dates = array_map(static fn (array $visit): string => mb_substr($visit['startAt'], 0, 10), $visits);
+        $dates = array_map(static fn (array $appointment): string => mb_substr($appointment['startAt'], 0, 10), $appointments);
         $acceptedTravel = (float) $booking->workerAssignments()
             ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
             ->sum('travel_fee');
@@ -136,10 +136,10 @@ final class CleaningTimePeriodCustomerDetailService
 
         return [
             'rooms' => $rooms,
-            'visits' => $visits,
+            'appointments' => $appointments,
             'recurrence' => [
-                'isRecurring' => count($visits) > 1,
-                'visitCount' => count($visits),
+                'isRecurring' => count($appointments) > 1,
+                'appointmentCount' => count($appointments),
                 'cadence' => $this->cadence($dates),
             ],
             'workforce' => ['requestedWorkers' => (int) $booking->number_of_workers],
@@ -151,7 +151,7 @@ final class CleaningTimePeriodCustomerDetailService
                 // after creation instead of presenting the subtotal as final.
                 'isPricingFinal' => ! $travelFeePending,
                 'travelFeePending' => $travelFeePending,
-                'coverage' => 'all_visits',
+                'coverage' => 'this_booking',
             ],
         ];
     }

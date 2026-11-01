@@ -83,12 +83,6 @@ final class CleaningRoomTypeResource extends Resource
             ->where('room_type', $record->code)->exists()) {
             return false;
         }
-        if (\Illuminate\Support\Facades\Schema::hasTable('cleaning_booking_room_periods')
-            && \Modules\Cleaning\Models\CleaningBookingRoomPeriod::query()
-                ->where('room_type', $record->code)->exists()) {
-            return false;
-        }
-
         return ! \Modules\Cleaning\Models\CleaningBooking::query()
             ->where('property_details', 'like', '%"'.$record->code.'"%')
             ->exists();

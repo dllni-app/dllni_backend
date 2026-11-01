@@ -346,11 +346,7 @@ final class CleaningOpenTimeBillingService
             $adminMargin = 0.0;
             $worker = $assignment->worker;
 
-            if (
-                $worker instanceof Worker
-                && $booking->address_latitude !== null
-                && $booking->address_longitude !== null
-            ) {
+            if ($worker instanceof Worker) {
                 $pricing = $this->pricingCalculator->finalizedForWorker(
                     $serviceShare,
                     0.0,

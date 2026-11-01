@@ -8,7 +8,6 @@ use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Modules\Cleaning\Models\CleaningSpecialService;
-use Modules\Cleaning\Support\CleaningRuntimeSettings;
 
 final class CleaningTimePeriodQuoteService
 {
@@ -32,43 +31,38 @@ final class CleaningTimePeriodQuoteService
 
     public function presentation(array $quote): array
     {
-        $visits = array_map(static function (array $visit): array {
-            unset($visit['financial']);
-            $visit['roomSchedules'] = array_map(static function (array $schedule): array {
+        $appointments = array_map(static function (array $appointment): array {
+            unset($appointment['financial']);
+            $appointment['roomSchedules'] = array_map(static function (array $schedule): array {
                 unset($schedule['basePrice']);
 
                 return $schedule;
-            }, $visit['roomSchedules']);
-            $visit['timePeriods'] = array_map(static function (array $period): array {
+            }, $appointment['roomSchedules']);
+            $appointment['timePeriods'] = array_map(static function (array $period): array {
                 unset($period['materialLines'], $period['serviceLines']);
 
                 return $period;
-            }, $visit['timePeriods']);
+            }, $appointment['timePeriods']);
 
-            $visit['startAt'] = collect($visit['roomSchedules'])->min('startAt');
-            $visit['endAt'] = collect($visit['roomSchedules'])->max('endAt');
+            $appointment['startAt'] = collect($appointment['roomSchedules'])->min('startAt');
+            $appointment['endAt'] = collect($appointment['roomSchedules'])->max('endAt');
 
-            return $visit;
-        }, $quote['visits']);
+            return $appointment;
+        }, $quote['appointments']);
         $catalog = CleaningSpecialService::query()->where('is_active', true)->with(['dirtinessLevels', 'dirtinessRules'])->get()->map(static fn (CleaningSpecialService $service): array => [
             'id' => $service->id, 'specialServiceId' => $service->id, 'name' => $service->name, 'description' => $service->description, 'imageUrl' => $service->imageUrl(), 'unitCode' => $service->unit_code, 'pricingUnit' => $service->pricing_unit, 'inputType' => $service->input_type, 'supportsDirtiness' => $service->supports_dirtiness, 'estimatedDurationMinutes' => $service->estimated_duration_minutes,
             'dirtinessLevels' => $service->supports_dirtiness ? ['light', 'heavy'] : [],
         ])->all();
 
-        // A distance-priced worker is not known when an open-count booking is
-        // quoted. Zero travel here is not a promise of free transportation.
-        // Keep the signed service quote intact, but never label this amount as
-        // the final customer total before a worker and route are known.
-        $financial = CleaningRuntimeSettings::financial();
-        $travelFeePending = (string) $financial->travel_markup_type !== 'worker_allowance'
-            && (float) $financial->travel_per_km > 0;
+        // The existing fixed worker allowance is included in the signed quote.
+        $travelFeePending = false;
 
-        return ['materialsPreview' => collect($visits)->flatMap(static fn (array $visit): array => $visit['timePeriods'])->flatMap(static fn (array $period): array => $period['materialsPreview'])->unique('materialTypeId')->values()->all(), 'contractVersion' => 2, 'rooms' => $quote['rooms'], 'visits' => $visits, 'pricing' => ['basePrice' => $quote['basePrice'], 'addonsTotal' => $quote['addonsTotal'], 'materialsTotal' => $quote['materialsTotal'], 'specialServicesTotal' => $quote['specialServicesTotal'], 'travelFee' => $quote['travelFee'], 'adminMargin' => $quote['adminMargin'], 'totalPrice' => $quote['totalPrice'], 'currency' => $quote['currency'], 'isPricingFinal' => ! $travelFeePending, 'travelFeePending' => $travelFeePending, 'coverage' => 'all_visits', 'supervisor' => $quote['supervisor'] ?? null], 'size' => ['estimatedWorkMinutes' => $quote['estimatedWorkMinutes'], 'estimatedDurationMinutes' => array_sum(array_column($visits, 'estimatedDurationMinutes')), 'estimatedHours' => round($quote['estimatedWorkMinutes'] / 60, 2)], 'requiredSimultaneousWorkers' => $quote['requiredSimultaneousWorkers'], 'reconciliationRequired' => $quote['reconciliationRequired'], 'pricingAlgorithm' => $quote['algorithmVersion'], 'schedulingPolicy' => ['timezone' => $quote['timezone'], 'minimumWorkers' => 1, 'maximumWorkers' => min(6, (int) config('cleaning_booking_v2.max_workers')), 'maximumDurationMinutes' => (int) config('cleaning_booking_v2.max_duration_minutes'), 'crossMidnightAllowed' => false], 'specialServicesCatalog' => $catalog];
+        return ['materialsPreview' => collect($appointments)->flatMap(static fn (array $appointment): array => $appointment['timePeriods'])->flatMap(static fn (array $period): array => $period['materialsPreview'])->unique('materialTypeId')->values()->all(), 'contractVersion' => 2, 'rooms' => $quote['rooms'], 'appointments' => $appointments, 'pricing' => ['basePrice' => $quote['basePrice'], 'addonsTotal' => $quote['addonsTotal'], 'materialsTotal' => $quote['materialsTotal'], 'specialServicesTotal' => $quote['specialServicesTotal'], 'travelFee' => $quote['travelFee'], 'adminMargin' => $quote['adminMargin'], 'totalPrice' => $quote['totalPrice'], 'currency' => $quote['currency'], 'isPricingFinal' => ! $travelFeePending, 'travelFeePending' => $travelFeePending, 'coverage' => 'all_appointments', 'supervisor' => $quote['supervisor'] ?? null], 'size' => ['estimatedWorkMinutes' => $quote['estimatedWorkMinutes'], 'estimatedDurationMinutes' => array_sum(array_column($appointments, 'estimatedDurationMinutes')), 'estimatedHours' => round($quote['estimatedWorkMinutes'] / 60, 2)], 'requiredSimultaneousWorkers' => $quote['requiredSimultaneousWorkers'], 'reconciliationRequired' => $quote['reconciliationRequired'], 'pricingAlgorithm' => $quote['algorithmVersion'], 'schedulingPolicy' => ['timezone' => $quote['timezone'], 'minimumWorkers' => 1, 'maximumWorkers' => min(6, (int) config('cleaning_booking_v2.max_workers')), 'maximumDurationMinutes' => (int) config('cleaning_booking_v2.max_duration_minutes'), 'crossMidnightAllowed' => false], 'specialServicesCatalog' => $catalog];
     }
 
     public function requestHash(array $input): string
     {
-        $keys = ['contractVersion', 'propertyType', 'propertyDetails', 'addressId', 'addressLatitude', 'addressLongitude', 'neighborhoodId', 'neighborhood', 'rooms', 'visits', 'recurrence', 'numberOfWorkers', 'assignmentMode', 'preferredWorkerId', 'preferredWorkerIds', 'genderPreference', 'workerScope', 'specificWorkerIds', 'couponCode', 'workEnvironmentConfirmation'];
+        $keys = ['contractVersion', 'propertyType', 'propertyDetails', 'addressId', 'addressLatitude', 'addressLongitude', 'neighborhoodId', 'neighborhood', 'rooms', 'appointments', 'recurrence', 'numberOfWorkers', 'assignmentMode', 'preferredWorkerId', 'preferredWorkerIds', 'genderPreference', 'workerScope', 'specificWorkerIds', 'couponCode', 'workEnvironmentConfirmation'];
         $payload = array_intersect_key($input, array_flip($keys));
         // Legacy preferred-worker request normalizers may derive a team count
         // differently between estimate and create. Worker identities are the

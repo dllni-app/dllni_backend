@@ -19,8 +19,7 @@ beforeEach(function (): void {
             'default_commission_rate' => 25,
             'commission_type' => 'percent',
             'commission_fixed_amount' => null,
-            'travel_per_km' => 10,
-            'travel_distance_start_point' => 'worker_home',
+            'travel_markup_value' => 10,
         ],
     );
 });
@@ -51,7 +50,6 @@ it('keeps a provisional equal service share for an accepted worker before rooms 
             'room_size' => 'small',
             'display_label' => "Bedroom {$index}",
             'weight' => 1.0,
-            'planned_worker_slot' => null,
         ]);
     }
 
@@ -66,8 +64,6 @@ it('keeps a provisional equal service share for an accepted worker before rooms 
         'worker_id' => $worker->id,
         'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
         'accepted_at' => now(),
-        'room_count' => 0,
-        'rooms_weight' => 0,
         'service_share_amount' => 0,
         'travel_fee' => 0,
         'admin_margin_amount' => 0,
@@ -114,7 +110,6 @@ it('repairs the worker offer view for an existing provisional assignment stored 
             'room_size' => 'small',
             'display_label' => "Bedroom {$index}",
             'weight' => 1.0,
-            'planned_worker_slot' => null,
         ]);
     }
 
@@ -129,8 +124,6 @@ it('repairs the worker offer view for an existing provisional assignment stored 
         'worker_id' => $worker->id,
         'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
         'accepted_at' => now(),
-        'room_count' => 0,
-        'rooms_weight' => 0,
         'service_share_amount' => 0,
         'travel_fee' => 10,
         'admin_margin_amount' => 0,

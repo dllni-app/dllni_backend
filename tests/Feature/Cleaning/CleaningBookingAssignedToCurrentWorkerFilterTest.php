@@ -37,8 +37,6 @@ it('shows accepted pending multi-worker bookings in the current worker orders fi
         'worker_id' => $worker->id,
         'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
         'accepted_at' => now(),
-        'room_count' => 0,
-        'rooms_weight' => 0,
         'service_share_amount' => 0,
         'travel_fee' => 0,
         'admin_margin_amount' => 0,
@@ -70,8 +68,6 @@ it('shows accepted pending multi-worker bookings in the current worker orders fi
         'worker_id' => $otherWorker->id,
         'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
         'accepted_at' => now(),
-        'room_count' => 0,
-        'rooms_weight' => 0,
         'service_share_amount' => 0,
         'travel_fee' => 0,
         'admin_margin_amount' => 0,
@@ -251,7 +247,7 @@ it('does not show converted preferred-worker booking again to the worker who rej
 });
 
 
-it('returns partially completed assigned bookings when a legacy room uses system assignment source', function (): void {
+it('returns partially completed assigned bookings without exposing deprecated room-claim fields', function (): void {
     $workerUser = User::factory()->create(['email' => 'legacy-room-source-worker@example.com']);
     $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     $customer = User::factory()->create(['email' => 'legacy-room-source-customer@example.com']);
@@ -268,8 +264,6 @@ it('returns partially completed assigned bookings when a legacy room uses system
         'worker_id' => $worker->id,
         'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
         'accepted_at' => now()->subHour(),
-        'room_count' => 1,
-        'rooms_weight' => 1,
         'service_share_amount' => 1000,
         'travel_fee' => 0,
         'admin_margin_amount' => 0,
@@ -284,10 +278,6 @@ it('returns partially completed assigned bookings when a legacy room uses system
         'room_size' => 'small',
         'display_label' => 'Legacy room',
         'weight' => 1,
-        'planned_worker_slot' => 1,
-        'planned_preferred_worker_id' => null,
-        'assigned_worker_id' => $worker->id,
-        'assignment_source' => 'system',
         'created_at' => now(),
         'updated_at' => now(),
     ]);
@@ -300,10 +290,6 @@ it('returns partially completed assigned bookings when a legacy room uses system
         'room_size' => 'small',
         'display_label' => 'Other worker room',
         'weight' => 1,
-        'planned_worker_slot' => 2,
-        'planned_preferred_worker_id' => null,
-        'assigned_worker_id' => $otherWorker->id,
-        'assignment_source' => 'admin',
         'created_at' => now(),
         'updated_at' => now(),
     ]);
@@ -312,7 +298,7 @@ it('returns partially completed assigned bookings when a legacy room uses system
         ->where('cleaning_booking_id', $booking->id)
         ->firstOrFail();
 
-    expect($legacyRoom->assignment_source?->value)->toBe('auto');
+    expect($legacyRoom->room_key)->toBe('legacy.system.room.1');
 
     Sanctum::actingAs($workerUser);
 
@@ -326,11 +312,9 @@ it('returns partially completed assigned bookings when a legacy room uses system
         ->firstWhere('id', $booking->id);
 
     expect($item)->not->toBeNull()
-        ->and(data_get($item, 'roomAssignments.0.assignmentSource'))->toBe('auto')
-        ->and(data_get($item, 'roomAssignments.0.roomKey'))->toBe('legacy.system.room.1')
-        ->and(collect(data_get($item, 'roomAssignments', []))->pluck('roomKey'))->not->toContain('legacy.other.room.2')
-        ->and(collect(data_get($item, 'roomAssignments', [])))->toHaveCount(1)
-        ->and(array_key_exists('address', $item))->toBeFalse();
+        ->and($item)->not->toHaveKey('roomAssignments')
+        ->and(collect($item['roomTasks'])->pluck('roomKey')->all())->toContain('legacy.system.room.1', 'legacy.other.room.2')
+        ->and($item['globalStatus'])->toBe('partially_completed');
 });
 
 it('does not use legacy room discovery for a supervised team without accepted visit proof', function (): void {
@@ -348,8 +332,6 @@ it('does not use legacy room discovery for a supervised team without accepted vi
         'worker_id' => $worker->id,
         'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
         'accepted_at' => now(),
-        'room_count' => 1,
-        'rooms_weight' => 1,
         'service_share_amount' => 100,
         'travel_fee' => 0,
         'admin_margin_amount' => 0,
@@ -363,8 +345,6 @@ it('does not use legacy room discovery for a supervised team without accepted vi
         'room_size' => 'small',
         'display_label' => 'Private team room',
         'weight' => 1,
-        'assigned_worker_id' => $worker->id,
-        'assignment_source' => 'auto',
     ]);
 
     Sanctum::actingAs($workerUser);
@@ -374,7 +354,7 @@ it('does not use legacy room discovery for a supervised team without accepted vi
 
     if ($visible !== null) {
         expect(array_key_exists('roomAssignments', $visible))->toBeFalse()
-            ->and(array_key_exists('address', $visible))->toBeFalse();
+            ->and($visible)->not->toHaveKeys(['customer', 'bookingTotalPrice', 'adminMargin']);
     } else {
         expect(collect($response->json('data'))->pluck('id'))->not->toContain($booking->id);
     }

@@ -33,42 +33,10 @@ return new class extends Migration
             $table->index(['verification_state', 'reversed_at'], 'cpfs_verification_idx');
         });
 
-        Schema::create('cleaning_visit_funding_reservations', static function (Blueprint $table): void {
-            $table->id();
-            $table->foreignId('cleaning_platform_funding_source_id');
-            $table->foreignId('cleaning_booking_session_id');
-            $table->string('currency', 8);
-            $table->decimal('reserved_amount', 16, 2);
-            $table->char('quote_evidence_digest', 64);
-            $table->decimal('worker_obligations_amount', 16, 2);
-            $table->decimal('supervisor_obligation_amount', 16, 2);
-            $table->foreignId('approved_by_user_id')->nullable();
-            $table->timestamp('approved_at')->nullable();
-            $table->timestamp('released_at')->nullable();
-            $table->string('release_reason', 255)->nullable();
-            // Future transactional reservation writer must lock the source row,
-            // check ALL active reservations, and set this slot atomically.
-            $table->unsignedTinyInteger('active_slot')->nullable();
-            $table->timestamps();
-
-            $table->foreign('cleaning_platform_funding_source_id', 'cvfr_source_fk')
-                ->references('id')->on('cleaning_platform_funding_sources')->restrictOnDelete();
-            $table->foreign('cleaning_booking_session_id', 'cvfr_visit_fk')
-                ->references('id')->on('cleaning_booking_sessions')->restrictOnDelete();
-            $table->foreign('approved_by_user_id', 'cvfr_approver_fk')
-                ->references('id')->on('users')->restrictOnDelete();
-            $table->unique(
-                ['cleaning_platform_funding_source_id', 'cleaning_booking_session_id', 'active_slot'],
-                'cvfr_source_visit_active_uq',
-            );
-            $table->index(['cleaning_booking_session_id', 'released_at'], 'cvfr_visit_release_idx');
-            $table->index(['cleaning_platform_funding_source_id', 'released_at'], 'cvfr_source_release_idx');
-        });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('cleaning_visit_funding_reservations');
         Schema::dropIfExists('cleaning_platform_funding_sources');
     }
 };

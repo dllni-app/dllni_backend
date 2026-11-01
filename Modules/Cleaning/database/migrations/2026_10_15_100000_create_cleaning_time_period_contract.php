@@ -30,10 +30,8 @@ return new class extends Migration
         Schema::create('cleaning_room_schedules', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('cleaning_booking_id')->constrained('cleaning_bookings', 'id', 'crs_booking_fk')->cascadeOnDelete();
-            $table->foreignId('cleaning_booking_session_id')->constrained('cleaning_booking_sessions', 'id', 'crs_visit_fk')->cascadeOnDelete();
             $table->foreignId('cleaning_booking_room_id')->constrained('cleaning_booking_rooms', 'id', 'crs_room_fk')->cascadeOnDelete();
             $table->string('schedule_key', 64);
-            $table->string('visit_key', 64);
             $table->string('timezone', 64);
             $table->dateTime('starts_at');
             $table->dateTime('ends_at');
@@ -42,14 +40,13 @@ return new class extends Migration
             $table->unsignedInteger('duration_minutes');
             $table->unsignedInteger('revision')->default(1);
             $table->timestamps();
-            $table->unique(['cleaning_booking_session_id', 'schedule_key'], 'crs_key_unique');
-            $table->unique(['cleaning_booking_session_id', 'cleaning_booking_room_id'], 'crs_room_unique');
+            $table->unique(['cleaning_booking_id', 'schedule_key'], 'crs_key_unique');
+            $table->unique(['cleaning_booking_id', 'cleaning_booking_room_id'], 'crs_room_unique');
             $table->index(['cleaning_booking_id', 'starts_at', 'ends_at'], 'crs_interval_idx');
         });
         Schema::create('cleaning_time_periods', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('cleaning_booking_id')->constrained('cleaning_bookings', 'id', 'ctp_booking_fk')->cascadeOnDelete();
-            $table->foreignId('cleaning_booking_session_id')->constrained('cleaning_booking_sessions', 'id', 'ctp_visit_fk')->cascadeOnDelete();
             $table->string('period_key', 64);
             $table->string('timezone', 64);
             $table->dateTime('starts_at');
@@ -57,7 +54,7 @@ return new class extends Migration
             $table->string('materials_choice', 32);
             $table->json('lineage')->nullable();
             $table->timestamps();
-            $table->unique(['cleaning_booking_session_id', 'period_key'], 'ctp_key_unique');
+            $table->unique(['cleaning_booking_id', 'period_key'], 'ctp_key_unique');
         });
         Schema::create('cleaning_time_period_room_schedules', function (Blueprint $table): void {
             $table->foreignId('cleaning_time_period_id')->constrained('cleaning_time_periods', 'id', 'ctpm_period_fk')->cascadeOnDelete();

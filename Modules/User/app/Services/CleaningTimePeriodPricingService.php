@@ -11,8 +11,8 @@ use Modules\Cleaning\Models\CleaningSpecialService;
 use Modules\Cleaning\Services\CleaningMaterialQuoteService;
 use Modules\Cleaning\Services\CleaningPricingCalculator;
 use Modules\Cleaning\Services\CleaningSpecialServiceQuoteService;
-use Modules\Cleaning\Support\CleaningRuntimeSettings;
 use Modules\Cleaning\Services\CleaningSupervisorHourlyPricing;
+use Modules\Cleaning\Support\CleaningRuntimeSettings;
 
 final class CleaningTimePeriodPricingService
 {
@@ -31,7 +31,7 @@ final class CleaningTimePeriodPricingService
         try {
             return $this->calculate($input);
         } catch (InvalidArgumentException $exception) {
-            throw ValidationException::withMessages(['visits' => ['تعذر تسعير الاختيارات الحالية. راجع المواد والخدمات المختارة.']]);
+            throw ValidationException::withMessages(['appointments' => ['تعذر تسعير الاختيارات الحالية. راجع المواد والخدمات المختارة.']]);
         }
     }
 
@@ -39,38 +39,38 @@ final class CleaningTimePeriodPricingService
     {
         $rooms = collect($input['rooms'])->keyBy('roomKey');
         $catalog = CleaningSpecialService::query()->where('is_active', true)->with(['dirtinessLevels', 'dirtinessRules'])->get()->keyBy('id');
-        $visits = [];
+        $appointments = [];
         $allSchedules = [];
         $base = $specialTotal = 0.0;
         $kits = [];
         $reconciliation = false;
         $timezone = (string) config('cleaning_booking_v2.timezone');
-        foreach ($input['visits'] as $visitIndex => $visit) {
+        foreach ($input['appointments'] as $appointmentIndex => $appointment) {
             $schedules = [];
             $periodServices = [];
             $addedMinutes = [];
             $seenTargets = [];
-            foreach ($visit['timePeriods'] ?? [] as $periodIndex => $period) {
+            foreach ($appointment['timePeriods'] ?? [] as $periodIndex => $period) {
                 $serviceKeys = [];
-                $memberRooms = collect($visit['roomSchedules'])->whereIn('scheduleKey', $period['roomScheduleKeys'])->pluck('roomKey')->all();
+                $memberRooms = collect($appointment['roomSchedules'])->whereIn('scheduleKey', $period['roomScheduleKeys'])->pluck('roomKey')->all();
                 foreach ($period['specialServices'] as $service) {
                     if (isset($serviceKeys[$service['serviceKey']])) {
-                        $this->invalid("visits.$visitIndex.timePeriods.$periodIndex", 'معرف الخدمة مكرر.');
+                        $this->invalid("appointments.$appointmentIndex.timePeriods.$periodIndex", 'معرف الخدمة مكرر.');
                     }
                     $serviceKeys[$service['serviceKey']] = true;
                     $entry = $catalog->get($service['specialServiceId']);
                     if ($entry === null || array_diff($service['targetRoomKeys'], $memberRooms) !== [] || count(array_unique($service['targetRoomKeys'])) !== count($service['targetRoomKeys'])) {
-                        $this->invalid("visits.$visitIndex.timePeriods.$periodIndex", 'حدد الغرف المستهدفة من داخل الفترة.');
+                        $this->invalid("appointments.$appointmentIndex.timePeriods.$periodIndex", 'حدد الغرف المستهدفة من داخل الفترة.');
                     }
                     $unit = (string) ($entry->unit_code ?: $entry->pricing_unit);
                     if (in_array($unit, ['piece', 'item', 'count', 'room', 'seat', 'window', 'door', 'unit'], true) && floor((float) $service['quantity']) !== (float) $service['quantity']) {
-                        $this->invalid("visits.$visitIndex.timePeriods.$periodIndex", 'تتطلب هذه الخدمة عدداً صحيحاً.');
+                        $this->invalid("appointments.$appointmentIndex.timePeriods.$periodIndex", 'تتطلب هذه الخدمة عدداً صحيحاً.');
                     }
                     if ((bool) $entry->supports_dirtiness && ! in_array($service['dirtinessLevel'], ['light', 'heavy'], true)) {
-                        $this->invalid("visits.$visitIndex.timePeriods.$periodIndex", 'اختر اتساخاً بسيطاً أو شديداً.');
+                        $this->invalid("appointments.$appointmentIndex.timePeriods.$periodIndex", 'اختر اتساخاً بسيطاً أو شديداً.');
                     }
                     if (! (bool) $entry->supports_dirtiness && $service['dirtinessLevel'] !== null) {
-                        $this->invalid("visits.$visitIndex.timePeriods.$periodIndex", 'هذه الخدمة لا تتطلب اختيار الاتساخ.');
+                        $this->invalid("appointments.$appointmentIndex.timePeriods.$periodIndex", 'هذه الخدمة لا تتطلب اختيار الاتساخ.');
                     }
                     $request = ['specialServiceId' => $entry->id, 'quantity' => $service['quantity'], 'dirtinessLevel' => $service['dirtinessLevel']];
                     $level = $entry->dirtinessLevels->firstWhere('slug', $service['dirtinessLevel']);
@@ -81,7 +81,7 @@ final class CleaningTimePeriodPricingService
                     foreach ($service['targetRoomKeys'] as $roomKey) {
                         $target = $entry->id.':'.$roomKey;
                         if (isset($seenTargets[$target])) {
-                            $this->invalid("visits.$visitIndex.timePeriods.$periodIndex", 'الخدمة مكررة للغرفة نفسها.');
+                            $this->invalid("appointments.$appointmentIndex.timePeriods.$periodIndex", 'الخدمة مكررة للغرفة نفسها.');
                         }
                         $seenTargets[$target] = true;
                         $addedMinutes[$roomKey] = ($addedMinutes[$roomKey] ?? 0) + (int) ceil(max(0, (int) $entry->estimated_duration_minutes) * (float) $service['quantity']);
@@ -90,7 +90,7 @@ final class CleaningTimePeriodPricingService
                     }
                 }
             }
-            foreach ($visit['roomSchedules'] as $scheduleIndex => $schedule) {
+            foreach ($appointment['roomSchedules'] as $scheduleIndex => $schedule) {
                 $room = $rooms->get($schedule['roomKey']);
                 if ($room === null) {
                     $this->invalid('rooms', 'الغرفة غير موجودة في الحجز.');
@@ -112,23 +112,23 @@ final class CleaningTimePeriodPricingService
                 $start = CarbonImmutable::createFromFormat('!Y-m-d H:i', $schedule['scheduledDate'].' '.$schedule['scheduledTime'], $timezone);
                 $end = $start->addMinutes($duration);
                 if ($start->lessThanOrEqualTo(CarbonImmutable::now($timezone)) || $end->toDateString() !== $start->toDateString()) {
-                    $this->invalid("visits.$visitIndex.roomSchedules.$scheduleIndex.scheduledTime", 'موعد الغرفة غير متاح. اختر موعداً مستقبلياً ينتهي في اليوم نفسه.');
+                    $this->invalid("appointments.$appointmentIndex.roomSchedules.$scheduleIndex.scheduledTime", 'موعد الغرفة غير متاح. اختر موعداً مستقبلياً ينتهي في اليوم نفسه.');
                 }
                 if ($duration > (int) config('cleaning_booking_v2.max_duration_minutes')) {
-                    $this->invalid("visits.$visitIndex.roomSchedules.$scheduleIndex.numberOfWorkers", 'مدة الغرفة تتجاوز 8 ساعات لكل عامل. زد عدد العمال.');
+                    $this->invalid("appointments.$appointmentIndex.roomSchedules.$scheduleIndex.numberOfWorkers", 'مدة الغرفة تتجاوز 8 ساعات لكل عامل. زد عدد العمال.');
                 }
                 $base += (float) $line['totalPrice'];
                 $schedules[] = [...$schedule, 'estimatedWorkMinutes' => $work, 'estimatedDurationMinutes' => $duration, 'startAt' => $start->toIso8601String(), 'endAt' => $end->toIso8601String(), 'basePrice' => (float) $line['totalPrice']];
             }
             $groups = $this->grouper->group($schedules);
-            $supplied = $visit['timePeriods'] ?? [];
+            $supplied = $appointment['timePeriods'] ?? [];
             $sources = [];
             foreach ($supplied as $period) {
                 $members = $period['roomScheduleKeys'];
                 sort($members, SORT_STRING);
                 $membership = implode('|', $members);
                 if (isset($sources[$membership]) || count(array_unique($members)) !== count($members)) {
-                    $this->invalid("visits.$visitIndex.timePeriods", 'كل موعد غرفة يتبع فترة واحدة فقط.');
+                    $this->invalid("appointments.$appointmentIndex.timePeriods", 'كل موعد غرفة يتبع فترة واحدة فقط.');
                 }
                 $sources[$membership] = $period;
             }
@@ -149,12 +149,12 @@ final class CleaningTimePeriodPricingService
                     unset($line['unitPrice'], $line['totalPrice']);
 
                     return $line;
-                }, $this->periodMaterials($preview, $schedules, $rooms->all(), $visit['visitKey'], $previewKits));
-                $group['materialLines'] = $this->periodMaterials($group, $schedules, $rooms->all(), $visit['visitKey'], $kits);
+                }, $this->periodMaterials($preview, $schedules, $rooms->all(), $appointment['appointmentKey'], $previewKits));
+                $group['materialLines'] = $this->periodMaterials($group, $schedules, $rooms->all(), $appointment['appointmentKey'], $kits);
             }
             unset($group);
             array_push($allSchedules, ...$schedules);
-            $visits[] = ['visitKey' => $visit['visitKey'], 'sequence' => (int) $visit['sequence'], 'roomSchedules' => $schedules, 'timePeriods' => $groups, 'requiredSimultaneousWorkers' => $this->grouper->peakWorkers($schedules), 'reconciliationRequired' => $needsReview, 'reconciliationSources' => $needsReview ? $supplied : []];
+            $appointments[] = ['appointmentKey' => $appointment['appointmentKey'], 'sequence' => (int) $appointment['sequence'], 'roomSchedules' => $schedules, 'timePeriods' => $groups, 'requiredSimultaneousWorkers' => $this->grouper->peakWorkers($schedules), 'reconciliationRequired' => $needsReview, 'reconciliationSources' => $needsReview ? $supplied : []];
         }
         $peak = $this->grouper->peakWorkers($allSchedules);
         // The customer chooses the team size; it must not equal the number of
@@ -183,69 +183,87 @@ final class CleaningTimePeriodPricingService
         }
         // Transport allowance belongs to each booked worker seat, even when
         // the room schedule's peak concurrency is lower than the chosen team.
-        $priced = $this->calculator->provisional($base, $addons, 0, $requestedWorkers);
+        $financial = CleaningRuntimeSettings::financial();
+        if ((float) $financial->travel_markup_value <= 0) {
+            $this->invalid('transport', 'يجب إعداد بدل مواصلات ثابت للعامل قبل تسعير الطلب.');
+        }
+        $perWorkerTravel = $this->calculator->roundMoney((float) $financial->travel_markup_value);
+        $priced = $this->calculator->provisional($base, $addons, 0, $requestedWorkers * count($appointments));
         $minimum = max(0.0, (float) (CleaningRuntimeSettings::financial()->cleaning_minimum_order_price ?? 0));
         if ($priced['totalPrice'] < $minimum) {
             $base = $this->calculator->roundMoney(max($base, $minimum - $priced['travelFee'] - $addons));
-            $priced = $this->calculator->provisional($base, $addons, $base + $addons, $requestedWorkers);
+            $priced = $this->calculator->provisional($base, $addons, $base + $addons, $requestedWorkers * count($appointments));
         }
-        $this->allocateVisitPricing($visits, $base, $kits, $priced);
+        $this->allocateAppointmentPricing($appointments, $base, $kits, $priced, (float) ($supervisor['fee'] ?? 0));
 
-        return ['algorithmVersion' => self::ALGORITHM, 'timezone' => $timezone, 'rooms' => $input['rooms'], 'visits' => $visits, 'requestedWorkerCount' => $requestedWorkers, 'requiredSimultaneousWorkers' => $peak, 'reconciliationRequired' => $reconciliation, 'basePrice' => $base, 'supervisor' => $supervisor, 'addonsTotal' => $addons, 'materialsTotal' => $materialsTotal, 'specialServicesTotal' => $specialTotal, 'materialKits' => array_values($kits), 'travelFee' => (float) $priced['travelFee'], 'adminMargin' => (float) $priced['adminMargin'], 'totalPrice' => (float) $priced['totalPrice'], 'currency' => (string) config('app.currency', 'SYP'), 'estimatedWorkMinutes' => array_sum(array_column($allSchedules, 'estimatedWorkMinutes'))];
+        return ['algorithmVersion' => self::ALGORITHM, 'timezone' => $timezone, 'rooms' => $input['rooms'], 'appointments' => $appointments, 'requestedWorkerCount' => $requestedWorkers, 'requiredSimultaneousWorkers' => $peak, 'reconciliationRequired' => $reconciliation, 'basePrice' => $base, 'supervisor' => $supervisor, 'addonsTotal' => $addons, 'materialsTotal' => $materialsTotal, 'specialServicesTotal' => $specialTotal, 'materialKits' => array_values($kits), 'travelFee' => (float) $priced['travelFee'], 'transportAllowancePerWorker' => $perWorkerTravel, 'adminMargin' => (float) $priced['adminMargin'], 'totalPrice' => (float) $priced['totalPrice'], 'currency' => (string) config('app.currency', 'SYP'), 'estimatedWorkMinutes' => array_sum(array_column($allSchedules, 'estimatedWorkMinutes'))];
     }
 
-    private function allocateVisitPricing(array &$visits, float $base, array $kits, array $priced): void
+    private function allocateAppointmentPricing(array &$appointments, float $base, array $kits, array $priced, float $supervisorFee): void
     {
         $rawBase = 0.0;
-        foreach ($visits as &$visit) {
-            $visitBase = array_sum(array_column($visit['roomSchedules'], 'basePrice'));
-            $material = array_sum(array_column(array_filter($kits, static fn (string $key): bool => str_starts_with($key, $visit['visitKey'].':'), ARRAY_FILTER_USE_KEY), 'totalPrice'));
+        foreach ($appointments as &$appointment) {
+            $appointmentBase = array_sum(array_column($appointment['roomSchedules'], 'basePrice'));
+            $material = array_sum(array_column(array_filter($kits, static fn (string $key): bool => str_starts_with($key, $appointment['appointmentKey'].':'), ARRAY_FILTER_USE_KEY), 'totalPrice'));
             $special = 0.0;
-            foreach ($visit['timePeriods'] as $period) {
+            foreach ($appointment['timePeriods'] as $period) {
                 foreach ($period['serviceLines'] as $service) {
                     $special += $service['quoteLine']['totalPrice'];
                 }
             }
-            $visit['financial'] = ['basePrice' => $visitBase, 'materialsTotal' => $material, 'specialServicesTotal' => $special, 'addonsTotal' => $material + $special];
-            $first = collect($visit['roomSchedules'])->min('startAt');
-            $last = collect($visit['roomSchedules'])->max('endAt');
-            $visit['estimatedDurationMinutes'] = (int) CarbonImmutable::parse($first)->diffInMinutes(CarbonImmutable::parse($last));
-            $rawBase += $visitBase;
+            $appointment['financial'] = ['basePrice' => $appointmentBase, 'materialsTotal' => $material, 'specialServicesTotal' => $special, 'addonsTotal' => $material + $special];
+            $first = collect($appointment['roomSchedules'])->min('startAt');
+            $last = collect($appointment['roomSchedules'])->max('endAt');
+            $appointment['estimatedDurationMinutes'] = (int) CarbonImmutable::parse($first)->diffInMinutes(CarbonImmutable::parse($last));
+            $rawBase += $appointmentBase;
         }
-        unset($visit);
-        $visits[0]['financial']['basePrice'] += $base - $rawBase;
-        $weight = array_sum(array_map(static fn (array $visit): float => $visit['financial']['basePrice'] + $visit['financial']['addonsTotal'], $visits));
+        unset($appointment);
+        // Allocate the supervisor fee to each independent order, in proportion
+        // to its booked working minutes. The sum remains the quoted fee.
+        $remainingSupervisorCents = (int) round($supervisorFee * 100);
+        $durationWeight = array_sum(array_map(static fn (array $appointment): int => array_sum(array_column($appointment['roomSchedules'], 'estimatedWorkMinutes')), $appointments));
+        foreach ($appointments as $index => &$appointment) {
+            $minutes = array_sum(array_column($appointment['roomSchedules'], 'estimatedWorkMinutes'));
+            $last = $index === array_key_last($appointments);
+            $cents = $last ? $remainingSupervisorCents : (int) round($supervisorFee * 100 * ($durationWeight > 0 ? $minutes / $durationWeight : 1 / count($appointments)));
+            $appointment['financial']['supervisorFee'] = $cents / 100;
+            $appointment['financial']['basePrice'] = round($appointment['financial']['basePrice'] + $cents / 100, 2);
+            $remainingSupervisorCents -= $cents;
+        }
+        unset($appointment);
+        $appointments[0]['financial']['basePrice'] = round($appointments[0]['financial']['basePrice'] + $base - $rawBase - $supervisorFee, 2);
+        $weight = array_sum(array_map(static fn (array $appointment): float => $appointment['financial']['basePrice'] + $appointment['financial']['addonsTotal'], $appointments));
         $remainingTravel = (int) round($priced['travelFee'] * 100);
         $remainingAdmin = (int) round($priced['adminMargin'] * 100);
         $included = (float) ($priced['includedAdminMargin'] ?? 0);
         $remainingIncluded = (int) round($included * 100);
-        $rawTotal = $base + array_sum(array_column(array_column($visits, 'financial'), 'addonsTotal')) + $priced['travelFee'] + $priced['adminMargin'] - $included;
+        $rawTotal = $base + array_sum(array_column(array_column($appointments, 'financial'), 'addonsTotal')) + $priced['travelFee'];
         $rounding = round($priced['totalPrice'] - $rawTotal, 2);
-        foreach ($visits as $index => &$visit) {
-            $share = $weight > 0 ? ($visit['financial']['basePrice'] + $visit['financial']['addonsTotal']) / $weight : 1 / count($visits);
-            $last = $index === array_key_last($visits);
-            $travel = $last ? $remainingTravel : (int) round($priced['travelFee'] * 100 * $share);
+        foreach ($appointments as $index => &$appointment) {
+            $share = $weight > 0 ? ($appointment['financial']['basePrice'] + $appointment['financial']['addonsTotal']) / $weight : 1 / count($appointments);
+            $last = $index === array_key_last($appointments);
+            $travel = $last ? $remainingTravel : intdiv((int) round($priced['travelFee'] * 100), count($appointments));
             $admin = $last ? $remainingAdmin : (int) round($priced['adminMargin'] * 100 * $share);
             $includedShare = $last ? $remainingIncluded : (int) round($included * 100 * $share);
-            $visitRounding = $last ? $rounding : 0.0;
-            $total = round($visit['financial']['basePrice'] + $visit['financial']['addonsTotal'] + ($travel + $admin - $includedShare) / 100 + $visitRounding, 2);
-            $visit['financial'] += ['travelFee' => $travel / 100, 'adminMargin' => $admin / 100, 'includedAdminMargin' => $includedShare / 100, 'cashRoundingAdjustment' => $visitRounding, 'totalPrice' => $total];
+            $appointmentRounding = $last ? $rounding : 0.0;
+            $total = round($appointment['financial']['basePrice'] + $appointment['financial']['addonsTotal'] + $travel / 100 + $appointmentRounding, 2);
+            $appointment['financial'] += ['travelFee' => $travel / 100, 'adminMargin' => $admin / 100, 'includedAdminMargin' => $includedShare / 100, 'cashRoundingAdjustment' => $appointmentRounding, 'totalPrice' => $total];
             $remainingTravel -= $travel;
             $remainingAdmin -= $admin;
             $remainingIncluded -= $includedShare;
         }
-        unset($visit);
+        unset($appointment);
     }
 
-    private function periodMaterials(array $group, array $schedules, array $rooms, string $visitKey, array &$kits): array
+    private function periodMaterials(array $group, array $schedules, array $rooms, string $appointmentKey, array &$kits): array
     {
         $choice = $group['materials']['choice'];
         $selected = array_unique(array_map('intval', $group['materials']['materialTypeIds']));
         if (($choice === 'customer_all' || $choice === 'platform_all') && $selected !== []) {
-            $this->invalid('visits', 'قائمة المواد الناقصة تخص خيار بعض المواد ناقصة فقط.');
+            $this->invalid('appointments', 'قائمة المواد الناقصة تخص خيار بعض المواد ناقصة فقط.');
         }
         if ($choice === 'customer_partial' && $selected === []) {
-            $this->invalid('visits', 'حدد المواد الناقصة.');
+            $this->invalid('appointments', 'حدد المواد الناقصة.');
         }
         if ($choice === 'customer_all') {
             return [];
@@ -268,7 +286,7 @@ final class CleaningTimePeriodPricingService
             }
         }
         if ($choice === 'customer_partial' && array_diff($selected, array_keys($lines)) !== []) {
-            $this->invalid('visits', 'المادة المختارة غير متوافقة مع غرف الفترة.');
+            $this->invalid('appointments', 'المادة المختارة غير متوافقة مع غرف الفترة.');
         }
         foreach ($lines as $id => $line) {
             if (in_array(mb_strtolower((string) $line['unit']), ['pack', 'package', 'bottle', 'piece'], true)) {
@@ -276,7 +294,7 @@ final class CleaningTimePeriodPricingService
             }
             $line['totalPrice'] = round($line['quantity'] * $line['unitPrice'], 2);
             $lines[$id] = $line;
-            $key = $visitKey.':'.$id;
+            $key = $appointmentKey.':'.$id;
             if (! isset($kits[$key]) || $kits[$key]['quantity'] < $line['quantity']) {
                 $kits[$key] = $line;
             }

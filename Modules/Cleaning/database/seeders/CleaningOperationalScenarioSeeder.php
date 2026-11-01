@@ -16,6 +16,16 @@ final class CleaningOperationalScenarioSeeder extends Seeder
 
     public function run(): void
     {
+        // These CLN-QA-* fixtures must never rewrite production booking or
+        // financial records when the general DatabaseSeeder is invoked.
+        if (! app()->environment('local')) {
+            return;
+        }
+        $connection = DB::connection();
+        if (! in_array((string) $connection->getConfig('host'), ['127.0.0.1', 'localhost', '::1'], true)
+            || $connection->getDatabaseName() !== 'alnadha_worker_test') {
+            throw new \RuntimeException('Operational QA scenarios require the existing local QA database.');
+        }
         if (! Schema::hasTable('cleaning_bookings')) {
             return;
         }
@@ -230,34 +240,34 @@ final class CleaningOperationalScenarioSeeder extends Seeder
 
         $ids['completed'] = $this->upsert('cleaning_booking_worker_assignments',
             ['cleaning_booking_id' => $refs['completed']->id, 'worker_id' => $w1],
-            ['status' => 'completed', 'accepted_at' => now()->subDays(2), 'work_started_at' => now()->subDays(2)->subHours(4), 'work_finished_at' => now()->subDays(2), 'room_count' => 4, 'rooms_weight' => 4.5, 'service_share_amount' => 180, 'travel_fee' => 10, 'admin_margin_amount' => 20, 'worker_amount' => 170, 'currency' => 'SYP']);
+            ['status' => 'completed', 'accepted_at' => now()->subDays(2), 'work_started_at' => now()->subDays(2)->subHours(4), 'work_finished_at' => now()->subDays(2), 'service_share_amount' => 180, 'travel_fee' => 10, 'admin_margin_amount' => 20, 'worker_amount' => 190, 'currency' => 'SYP']);
 
         $ids['partial_w1'] = $this->upsert('cleaning_booking_worker_assignments',
             ['cleaning_booking_id' => $refs['partial']->id, 'worker_id' => $w1],
-            ['status' => 'completed', 'accepted_at' => now()->subHours(5), 'work_started_at' => now()->subHours(4), 'work_finished_at' => now()->subHour(), 'room_count' => 2, 'rooms_weight' => 2.0, 'service_share_amount' => 90, 'travel_fee' => 12.5, 'admin_margin_amount' => 10, 'worker_amount' => 92.5, 'currency' => 'SYP']);
+            ['status' => 'completed', 'accepted_at' => now()->subHours(5), 'work_started_at' => now()->subHours(4), 'work_finished_at' => now()->subHour(), 'service_share_amount' => 90, 'travel_fee' => 12.5, 'admin_margin_amount' => 10, 'worker_amount' => 102.5, 'currency' => 'SYP']);
 
         $ids['partial_w2'] = $this->upsert('cleaning_booking_worker_assignments',
             ['cleaning_booking_id' => $refs['partial']->id, 'worker_id' => $w2],
-            ['status' => 'in_progress', 'accepted_at' => now()->subHours(5), 'work_started_at' => now()->subHours(4), 'room_count' => 2, 'rooms_weight' => 2.5, 'service_share_amount' => 90, 'travel_fee' => 12.5, 'admin_margin_amount' => 10, 'worker_amount' => 92.5, 'currency' => 'SYP']);
+            ['status' => 'in_progress', 'accepted_at' => now()->subHours(5), 'work_started_at' => now()->subHours(4), 'service_share_amount' => 90, 'travel_fee' => 12.5, 'admin_margin_amount' => 10, 'worker_amount' => 102.5, 'currency' => 'SYP']);
         $ids['progress'] = $this->upsert('cleaning_booking_worker_assignments',
             ['cleaning_booking_id' => $refs['progress']->id, 'worker_id' => $w1],
-            ['status' => 'in_progress', 'accepted_at' => now()->subHours(3), 'started_travel_at' => now()->subHours(2)->subMinutes(30), 'arrived_at' => now()->subHours(2), 'start_approved_at' => now()->subHours(2)->addMinutes(5), 'work_started_at' => now()->subHours(2)->addMinutes(10), 'room_count' => 3, 'rooms_weight' => 3.5, 'service_share_amount' => 90, 'travel_fee' => 10, 'admin_margin_amount' => 10, 'worker_amount' => 90, 'currency' => 'SYP']);
+            ['status' => 'in_progress', 'accepted_at' => now()->subHours(3), 'started_travel_at' => now()->subHours(2)->subMinutes(30), 'arrived_at' => now()->subHours(2), 'start_approved_at' => now()->subHours(2)->addMinutes(5), 'work_started_at' => now()->subHours(2)->addMinutes(10), 'service_share_amount' => 90, 'travel_fee' => 10, 'admin_margin_amount' => 10, 'worker_amount' => 100, 'currency' => 'SYP']);
 
         $ids['assigned'] = $this->upsert('cleaning_booking_worker_assignments',
             ['cleaning_booking_id' => $refs['assigned']->id, 'worker_id' => $w1],
-            ['status' => 'accepted_waiting_for_order_start', 'accepted_at' => now()->subMinutes(40), 'room_count' => 3, 'rooms_weight' => 3.2, 'service_share_amount' => 180, 'travel_fee' => 10, 'admin_margin_amount' => 20, 'worker_amount' => 170, 'currency' => 'SYP']);
+            ['status' => 'accepted_waiting_for_order_start', 'accepted_at' => now()->subMinutes(40), 'service_share_amount' => 180, 'travel_fee' => 10, 'admin_margin_amount' => 20, 'worker_amount' => 190, 'currency' => 'SYP']);
 
         $ids['awaiting'] = $this->upsert('cleaning_booking_worker_assignments',
             ['cleaning_booking_id' => $refs['awaiting']->id, 'worker_id' => $w1],
-            ['status' => 'awaiting_start_verification', 'accepted_at' => now()->subHours(2), 'started_travel_at' => now()->subHour(), 'arrived_at' => now()->subMinutes(20), 'room_count' => 3, 'rooms_weight' => 3.0, 'service_share_amount' => 180, 'travel_fee' => 10, 'admin_margin_amount' => 20, 'worker_amount' => 170, 'currency' => 'SYP']);
+            ['status' => 'awaiting_start_verification', 'accepted_at' => now()->subHours(2), 'started_travel_at' => now()->subHour(), 'arrived_at' => now()->subMinutes(20), 'service_share_amount' => 180, 'travel_fee' => 10, 'admin_margin_amount' => 20, 'worker_amount' => 190, 'currency' => 'SYP']);
 
         $rooms = [
-            ['bedroom_1', 'bedroom', 'medium', 'غرفة النوم الرئيسية', 1.2, $w1],
-            ['bedroom_2', 'bedroom', 'small', 'غرفة نوم صغيرة', 0.8, $w1],
-            ['bathroom_1', 'bathroom', 'medium', 'الحمام', 0.9, $w2],
-            ['kitchen_1', 'kitchen', 'medium', 'المطبخ', 1.6, $w2],
+            ['bedroom_1', 'bedroom', 'medium', 'غرفة النوم الرئيسية', 1.2],
+            ['bedroom_2', 'bedroom', 'small', 'غرفة نوم صغيرة', 0.8],
+            ['bathroom_1', 'bathroom', 'medium', 'الحمام', 0.9],
+            ['kitchen_1', 'kitchen', 'medium', 'المطبخ', 1.6],
         ];
-        foreach ($rooms as [$key, $type, $size, $label, $weight, $workerId]) {
+        foreach ($rooms as [$key, $type, $size, $label, $weight]) {
             DB::table('cleaning_booking_rooms')->updateOrInsert(
                 ['cleaning_booking_id' => $refs['partial']->id, 'room_key' => $key],
                 [
@@ -265,8 +275,6 @@ final class CleaningOperationalScenarioSeeder extends Seeder
                     'room_size' => $size,
                     'display_label' => $label,
                     'weight' => $weight,
-                    'assigned_worker_id' => $workerId,
-                    'assignment_source' => 'system',
                     'created_at' => now(),
                     'updated_at' => now(),
                 ],
@@ -357,7 +365,7 @@ final class CleaningOperationalScenarioSeeder extends Seeder
                 'service_share_amount' => 90,
                 'travel_fee' => 10,
                 'admin_margin_amount' => 10,
-                'worker_amount' => 90,
+                'worker_amount' => 100,
                 'currency' => 'SYP',
                 'created_at' => now(),
                 'updated_at' => now(),

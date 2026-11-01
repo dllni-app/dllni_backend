@@ -7,10 +7,8 @@ namespace Modules\Cleaning\Services;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-use Modules\Cleaning\Enums\CleaningBookingRoomAssignmentSource;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
-use Modules\Cleaning\Models\CleaningBookingRoom;
 
 /**
  * Last-hour decision is independent from internal geographic worker discovery.
@@ -152,16 +150,7 @@ final class CleaningLastHourCoverageService
                     throw ValidationException::withMessages(['choice' => ['All tasks can be combined only when one worker has accepted.']]);
                 }
 
-                // Update planned and effective room ownership together, including
-                // rooms awaiting a future worker. This is the customer's explicit request.
-                CleaningBookingRoom::query()
-                    ->where('cleaning_booking_id', $locked->id)
-                    ->update([
-                        'assigned_worker_id' => $workerId,
-                        'planned_worker_slot' => 1,
-                        'planned_preferred_worker_id' => $workerId,
-                        'assignment_source' => CleaningBookingRoomAssignmentSource::Customer->value,
-                    ]);
+                // This decision changes the team count, never room ownership.
                 $locked->forceFill([
                     'number_of_workers' => 1,
                     'last_hour_team_decision' => $choice,
@@ -169,7 +158,7 @@ final class CleaningLastHourCoverageService
                     'last_hour_team_decided_at' => now(),
                 ])->save();
                 $locked = $this->teams->recalculateBookingTeam(
-                    $locked, finalizeBooking: true, applyPlannedAssignments: false,
+                    $locked, finalizeBooking: true,
                 );
             } else {
                 // Keep looking for the missing workers. Do not silently expand
@@ -180,7 +169,7 @@ final class CleaningLastHourCoverageService
                 ])->save();
             }
 
-            return $locked->fresh(['customer', 'workerAssignments.worker.user', 'rooms.assignedWorker.user']);
+            return $locked->fresh(['customer', 'workerAssignments.worker.user', 'rooms']);
         });
 
         if ($choice === 'all_tasks') {

@@ -16,9 +16,9 @@ final class CleaningRoomSchedule extends Model
         return $this->belongsTo(CleaningBookingRoom::class, 'cleaning_booking_room_id');
     }
 
-    public function visit(): BelongsTo
+    public function booking(): BelongsTo
     {
-        return $this->belongsTo(CleaningBookingSession::class, 'cleaning_booking_session_id');
+        return $this->belongsTo(CleaningBooking::class, 'cleaning_booking_id');
     }
 
     public function casts(): array

@@ -100,7 +100,7 @@ it('preserves per-worker transport allowance across admin room and base-price ed
         ->and((float) $updated->travel_fee)->toBe(75.0 * $workerCount)
         ->and((float) $updated->total_price)->toBe((float) $quoted['totalPrice'])
         ->and((int) $updated->number_of_workers)->toBe($workerCount)
-        ->and($updated->is_pricing_final)->toBeFalse()
+        ->and($updated->is_pricing_final)->toBeTrue()
         ->and($updated->status)->toBe(CleaningBookingStatus::Pending);
 
     $edited = app(CleaningBookingAdminPricingService::class)->setBasePrice($updated, 5000);
@@ -108,7 +108,7 @@ it('preserves per-worker transport allowance across admin room and base-price ed
         ->and((float) $edited->travel_fee)->toBe(75.0 * $workerCount)
         ->and((float) $edited->total_price)->toBe(5000.0 + 75.0 * $workerCount)
         ->and((int) $edited->number_of_workers)->toBe($workerCount)
-        ->and($edited->is_pricing_final)->toBeFalse();
+        ->and($edited->is_pricing_final)->toBeTrue();
 })->with([2, 3]);
 
 it('preserves an approved extension charge when a coupon booking accepts and repeats extension pricing', function (): void {
@@ -375,8 +375,6 @@ it('keeps finalized multi-worker coupon shares stable after a full-team recalcul
             'worker_id' => $worker->id,
             'status' => 'accepted_waiting_for_order_start',
             'accepted_at' => now()->addSeconds($slot),
-            'room_count' => 0,
-            'rooms_weight' => 0,
             'service_share_amount' => 0,
             'travel_fee' => 0,
             'admin_margin_amount' => 0,
@@ -501,17 +499,13 @@ it('keeps pending coupon assignment shares gross-correct after admin price edits
         'worker_id' => $worker->id,
         'status' => 'accepted_waiting_for_order_start',
         'accepted_at' => now(),
-        'room_count' => 0,
-        'rooms_weight' => 0,
         'service_share_amount' => 0,
         'travel_fee' => 0,
         'admin_margin_amount' => 0,
         'worker_amount' => 0,
         'currency' => 'SYP',
     ]);
-    $booking->rooms()->orderBy('planned_worker_slot')->first()->update([
-        'assigned_worker_id' => $worker->id,
-    ]);
+    // Rooms remain shared booking tasks. Worker acceptance does not own rooms.
     $redemption = PlatformCouponRedemption::query()->create([
         'platform_coupon_id' => $coupon->id,
         'user_id' => $customer->id,
@@ -527,15 +521,12 @@ it('keeps pending coupon assignment shares gross-correct after admin price edits
     $booking = app(CleaningBookingAdminPricingService::class)->setBasePrice($booking->fresh(), 5000);
     $assignment->refresh();
     $redemption->refresh();
-
-    $assignedRoomWeight = (float) $booking->rooms()->where('assigned_worker_id', $worker->id)->sum('weight');
-    $totalRoomWeight = (float) $booking->rooms()->sum('weight');
     $couponBreakdown = app(Modules\Cleaning\Services\CleaningCouponPricingService::class)
         ->storedBreakdown($booking);
     $grossServiceShare = round((float) $booking->base_price / $workerCount, 2);
     $expectedServiceShare = round($grossServiceShare * 0.9, 2);
     expect($booking->status)->toBe(CleaningBookingStatus::Pending)
-        ->and($booking->is_pricing_final)->toBeFalse()
+        ->and($booking->is_pricing_final)->toBeTrue()
         ->and((float) $booking->base_price)->toBe(5000.0)
         ->and((float) $booking->discount_amount)->toBe(500.0)
         ->and((float) $couponBreakdown['assignmentWorkerNetFactor'])->toBe(0.9)
@@ -566,8 +557,6 @@ it('keeps pending coupon assignment shares gross-correct after admin price edits
 
     $booking = app(CleaningBookingAdminPricingService::class)->setBasePrice($booking, 5200);
     $assignment->refresh();
-    $assignedRoomWeight = (float) $booking->rooms()->where('assigned_worker_id', $worker->id)->sum('weight');
-    $totalRoomWeight = (float) $booking->rooms()->sum('weight');
     $couponBreakdown = app(Modules\Cleaning\Services\CleaningCouponPricingService::class)
         ->storedBreakdown($booking);
     $expectedServiceShare = round(

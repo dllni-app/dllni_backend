@@ -19,6 +19,7 @@ final class CleaningBookingSchedulePresenter
 {
     public function __construct(
         private readonly CleaningOpenTimeBillingService $openTimeBilling,
+        private readonly CleaningLocalQaClock $qaClock,
     ) {}
 
     /** @return array<string, mixed> */
@@ -156,6 +157,11 @@ final class CleaningBookingSchedulePresenter
             && $myAssignment->arrived_at === null
             && $myAssignment->work_started_at === null
             && ! $session->isTerminal();
+        $qaEarlyActionsAllowed = $hasMyActiveAssignment
+            && $viewerWorker instanceof Worker
+            && auth()->id() !== null
+            && (int) auth()->id() === (int) $viewerWorker->user_id
+            && $this->qaClock->permitted($viewerWorker->user, $session);
         $canArrive = $hasMyActiveAssignment
             && $myAssignment->started_travel_at !== null
             && $myAssignment->arrived_at === null
@@ -323,7 +329,7 @@ final class CleaningBookingSchedulePresenter
             $attendanceActionWorkerIds[CleaningBookingSessionAttendanceService::ACTION_CANCEL] = $noTravelWorkerIds->all();
         }
 
-        return [
+        $payload = [
             'id' => (int) $session->id,
             'sessionId' => (int) $session->id,
             'sequence' => (int) $session->sequence,
@@ -433,6 +439,11 @@ final class CleaningBookingSchedulePresenter
             'myAssignment' => $myAssignmentPayload,
             'workerAssignmentState' => $myAssignmentPayload,
         ];
+        if ($viewerWorker instanceof Worker) {
+            $payload['qaEarlyActionsAllowed'] = $qaEarlyActionsAllowed;
+        }
+
+        return $payload;
     }
 
     /** @return array<string, mixed>|null */
@@ -520,7 +531,7 @@ final class CleaningBookingSchedulePresenter
 
         if ($date !== null && $time !== '') {
             try {
-                $start = CarbonImmutable::parse("{$date} {$time}", config('app.timezone'));
+                $start = \Modules\Cleaning\Support\CleaningScheduledCivilTime::parse($date, $time);
             } catch (Throwable) {
                 $start = null;
             }

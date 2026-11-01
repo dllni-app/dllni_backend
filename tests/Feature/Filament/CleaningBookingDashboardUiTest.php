@@ -216,6 +216,8 @@ it('shows multiple preferred workers with Arabic labels and integer values', fun
     $booking = CleaningBooking::factory()->create([
         'status' => CleaningBookingStatus::Pending,
         'preferred_worker_id' => $firstWorker->id,
+        'worker_scope' => 'specific',
+        'specific_worker_ids' => [$firstWorker->id, $secondWorker->id],
         'scheduled_time' => '18:00:00',
         'estimated_sqm' => 35.40,
         'estimated_hours' => 2.00,
@@ -233,8 +235,6 @@ it('shows multiple preferred workers with Arabic labels and integer values', fun
         'room_size' => 'large',
         'display_label' => 'غرفة النوم 1',
         'weight' => 2.00,
-        'planned_worker_slot' => 1,
-        'planned_preferred_worker_id' => $firstWorker->id,
     ]);
 
     CleaningBookingRoom::query()->create([
@@ -244,8 +244,6 @@ it('shows multiple preferred workers with Arabic labels and integer values', fun
         'room_size' => 'large',
         'display_label' => 'الحمام 1',
         'weight' => 1.60,
-        'planned_worker_slot' => 2,
-        'planned_preferred_worker_id' => $secondWorker->id,
     ]);
 
     $this->get(CleaningBookingResource::getUrl('view', ['record' => $booking], isAbsolute: false))
@@ -284,14 +282,13 @@ it('distinguishes event assistance bookings and hides room information', functio
         'room_size' => 'medium',
         'display_label' => 'Living Room 1 - Medium',
         'weight' => 1.80,
-        'planned_worker_slot' => 1,
     ]);
 
     $this->get(CleaningBookingResource::getUrl('index', isAbsolute: false))
         ->assertSuccessful()
         ->assertSee('نوع الحجز')
         ->assertSee('مساعدة مناسبة')
-        ->assertSee('غير مطبق');
+        ->assertDontSee('غرف غير مخصصة');
 
     $this->get(CleaningBookingResource::getUrl('view', ['record' => $booking], isAbsolute: false))
         ->assertSuccessful()
@@ -346,7 +343,6 @@ it('shows Arabic room names final worker wages and the recorded worker route', f
         'room_size' => 'medium',
         'display_label' => 'Balcony 1 - Medium',
         'weight' => 1,
-        'assigned_worker_id' => $worker->id,
     ]);
 
     foreach ([
@@ -366,7 +362,7 @@ it('shows Arabic room names final worker wages and the recorded worker route', f
     $this->get(CleaningBookingResource::getUrl('view', ['record' => $booking], isAbsolute: false))
         ->assertSuccessful()
         ->assertSee('شرفة متوسطة')
-        ->assertSee('أجور العاملين النهائية')
+        ->assertSee('مستحقات العمال لهذا الطلب')
         ->assertSee('عامل المسار')
         ->assertSee('960 ل.س')
         ->assertSee('الخريطة ومسار العاملين')

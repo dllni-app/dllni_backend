@@ -17,7 +17,7 @@ final class CleaningFinancialSettingsSeeder extends Seeder
      */
     private const EXTENSION_RATE_PER_30_MINUTES = 200;
 
-    private const TRAVEL_PER_KM = 10;
+    private const DEFAULT_WORKER_ALLOWANCE = 10;
 
     /**
      * Prices after adopting the new Syrian currency denominations.
@@ -40,6 +40,8 @@ final class CleaningFinancialSettingsSeeder extends Seeder
 
     private function seedFinancialSettings(): void
     {
+        $existing = CleaningFinancialSetting::query()->find(1);
+
         CleaningFinancialSetting::query()->updateOrCreate(
             ['id' => 1],
             [
@@ -47,10 +49,10 @@ final class CleaningFinancialSettingsSeeder extends Seeder
                 'commission_type' => 'percent',
                 'commission_fixed_amount' => null,
                 'vat_rate' => 0.00,
-                'travel_markup_type' => 'fixed',
-                'travel_markup_value' => 0,
-                'travel_per_km' => self::TRAVEL_PER_KM,
-                'travel_distance_start_point' => 'worker_'.'home',
+                'travel_markup_type' => 'worker_allowance',
+                'travel_markup_value' => $existing === null
+                    ? self::DEFAULT_WORKER_ALLOWANCE
+                    : (float) $existing->travel_markup_value,
                 'coverage_thresholds' => [
                     'low' => 3,
                     'ok' => 7,

@@ -202,7 +202,7 @@ final class CleaningBookingSessionPricingService
                         'travel_distance_km' => null,
                         'admin_margin_amount' => (float) $provisional['adminMargin'],
                         'total_price' => round($base + (float) $provisional['adminMargin'] + (float) $session->extension_fee_total + (float) $session->cancellation_fee, 2),
-                        'is_pricing_final' => false,
+                        'is_pricing_final' => (bool) $session->is_pricing_final,
                     ])->saveQuietly();
                 }
             }

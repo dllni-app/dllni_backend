@@ -155,8 +155,6 @@ it('hides and warns about pending new requests when commission capacity is insuf
         'worker_id' => $worker->id,
         'status' => 'accepted_waiting_for_order_start',
         'accepted_at' => now(),
-        'room_count' => 0,
-        'rooms_weight' => 0,
         'service_share_amount' => 0,
         'travel_fee' => 0,
         'admin_margin_amount' => 900,

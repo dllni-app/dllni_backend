@@ -16,7 +16,8 @@ it('seeds cleaning financial settings with the event hourly rate and new SYP pri
 
     expect($setting)->not->toBeNull();
     expect((float) $setting->extension_rate_per_30_minutes)->toBe(200.0);
-    expect((float) $setting->travel_per_km)->toBe(10.0);
+    expect($setting->travel_markup_type)->toBe('worker_allowance');
+    expect((float) $setting->travel_markup_value)->toBeGreaterThanOrEqual(0.0);
     expect((float) $setting->cleaning_base_unit_price)->toBe(50.0);
     expect((float) $setting->cleaning_minimum_order_price)->toBe(CleaningFinancialDefaults::MINIMUM_ORDER_PRICE);
     expect($setting->cleaning_room_deep_multipliers)->toEqual(CleaningFinancialDefaults::roomDeepMultipliers());
@@ -53,4 +54,14 @@ it('is idempotent when run twice', function (): void {
 
     expect(CleaningFinancialSetting::query()->count())->toBe(1);
     expect((float) CleaningFinancialSetting::query()->value('extension_rate_per_30_minutes'))->toBe(200.0);
+});
+
+it('preserves an existing transport allowance when reseeding', function (): void {
+    CleaningFinancialSetting::query()->whereKey(1)->update(['travel_markup_value' => 135.5]);
+
+    $this->seed(CleaningFinancialSettingsSeeder::class);
+
+    $setting = CleaningFinancialSetting::query()->findOrFail(1);
+    expect($setting->travel_markup_type)->toBe('worker_allowance')
+        ->and((float) $setting->travel_markup_value)->toBe(135.5);
 });

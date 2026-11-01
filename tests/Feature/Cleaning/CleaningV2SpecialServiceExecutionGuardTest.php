@@ -62,31 +62,24 @@ function b1SpecialServiceLine(int $workerCount): array
     return [$booking, $line, $worker];
 }
 
-it('denies resource-scoped start and finish for V2 operational groups before mutation', function (): void {
+it('lets an eligible team worker execute a shared special service without changing the assigned worker unexpectedly', function (): void {
     [, $line, $worker] = b1SpecialServiceLine(2);
     Sanctum::actingAs($worker->user);
 
     $this->postJson("/api/v1/cleaning-booking-special-services/{$line->id}/start")
-        ->assertUnprocessable()
-        ->assertJsonPath('code', 'CLEANING_V2_VISIT_EXECUTION_UNAVAILABLE');
-    expect($line->fresh()->execution_status)->toBe('pending')
-        ->and($line->fresh()->assigned_worker_id)->toBeNull()
-        ->and($line->fresh()->started_at)->toBeNull();
-
-    $line->forceFill([
-        'assigned_worker_id' => $worker->id,
-        'execution_status' => 'in_progress',
-        'started_at' => now(),
-    ])->save();
+        ->assertOk()
+        ->assertJsonPath('data.specialService.execution_status', 'in_progress');
+    expect($line->fresh()->assigned_worker_id)->toBe($worker->id)
+        ->and($line->fresh()->started_at)->not->toBeNull();
     $startedAt = $line->fresh()->started_at?->toISOString();
 
     $this->postJson("/api/v1/cleaning-booking-special-services/{$line->id}/finish", [
         'status' => 'completed',
-    ])->assertUnprocessable()
-        ->assertJsonPath('code', 'CLEANING_V2_VISIT_EXECUTION_UNAVAILABLE');
-    expect($line->fresh()->execution_status)->toBe('in_progress')
+    ])->assertOk()
+        ->assertJsonPath('data.specialService.execution_status', 'completed');
+    expect($line->fresh()->execution_status)->toBe('completed')
         ->and($line->fresh()->started_at?->toISOString())->toBe($startedAt)
-        ->and($line->fresh()->completed_at)->toBeNull();
+        ->and($line->fresh()->completed_at)->not->toBeNull();
 });
 
 it('preserves the existing single-worker no-equipment special-service workflow', function (): void {

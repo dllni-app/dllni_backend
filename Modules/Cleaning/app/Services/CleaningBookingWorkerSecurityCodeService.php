@@ -472,6 +472,6 @@ final class CleaningBookingWorkerSecurityCodeService
 
     private function freshBooking(CleaningBooking $booking): CleaningBooking
     {
-        return $booking->fresh(['customer', 'worker.user', 'preferredWorker.user', 'rooms.assignedWorker.user', 'workerAssignments.worker.user', 'addons', 'billingPolicy', 'timeWarnings', 'disputes']);
+        return $booking->fresh(['customer', 'worker.user', 'preferredWorker.user', 'rooms', 'workerAssignments.worker.user', 'addons', 'billingPolicy', 'timeWarnings', 'disputes']);
     }
 }

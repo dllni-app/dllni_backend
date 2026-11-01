@@ -14,8 +14,9 @@ use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Http\Resources\CleaningBookingOperationalResource;
 use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 use Modules\Cleaning\Models\CleaningBooking;
-use Modules\Cleaning\Support\WorkerPendingSpecialServicesPreview;
+use Modules\Cleaning\Services\CleaningBookingWorkerSessionVisibilityService;
 use Modules\Cleaning\Support\WorkerBookingRequirementsPresenter;
+use Modules\Cleaning\Support\WorkerPendingSpecialServicesPreview;
 
 final class CleaningBookingShowController
 {
@@ -26,12 +27,16 @@ final class CleaningBookingShowController
             abort(404);
         }
         $worker = Auth::user()?->worker;
-        if ($worker instanceof Worker && $this->isWorkerDispatchCandidate($cleaning_booking)) {
+        if ($worker instanceof Worker && $this->shouldScopeV2WorkerRooms($cleaning_booking)) {
+            $eligibleOffer = $this->isWorkerDispatchCandidate($cleaning_booking)
+                && ((string) $cleaning_booking->booking_kind === 'standard'
+                    || app(CleaningBookingWorkerSessionVisibilityService::class)
+                        ->visibleSessions($cleaning_booking, $worker)->isNotEmpty());
+            abort_unless($this->workerHasAcceptedAssignment($cleaning_booking, $worker) || $eligibleOffer, 404);
+
             return response()->json(['data' => $this->workerDiscoveryPayload($cleaning_booking, $worker)]);
         }
-        if ($worker instanceof Worker && $this->shouldScopeV2WorkerRooms($cleaning_booking)) {
-            abort_unless($this->workerOwnsAcceptedVisit($cleaning_booking, $worker), 404);
-
+        if ($worker instanceof Worker && $this->isWorkerDispatchCandidate($cleaning_booking)) {
             return response()->json(['data' => $this->workerDiscoveryPayload($cleaning_booking, $worker)]);
         }
 
@@ -41,7 +46,7 @@ final class CleaningBookingShowController
             'customer',
             'worker.user',
             'preferredWorker.user',
-            'rooms.assignedWorker.user',
+            'rooms',
             'workerAssignments.worker.user',
             'addons',
             'billingPolicy',
@@ -85,7 +90,8 @@ final class CleaningBookingShowController
             ->exists();
 
         if (
-            (int) ($booking->worker_id ?? 0) === (int) $worker->id
+            ((int) $booking->number_of_workers === 1
+                && (int) ($booking->worker_id ?? 0) === (int) $worker->id)
             || $hasAcceptedAssignment
             || $hasAcceptedSessionAssignment
         ) {
@@ -115,7 +121,7 @@ final class CleaningBookingShowController
         $booking->loadMissing([
             'worker.user',
             'preferredWorker.user',
-            'rooms.assignedWorker.user',
+            'rooms',
             'workerAssignments.worker.user',
             'addons',
             'billingPolicy',
@@ -134,9 +140,12 @@ final class CleaningBookingShowController
             'urgencyLabel', 'cleaning_services', 'services', 'createdAt', 'updatedAt',
         ]);
 
+        $scopeVisitRooms = $this->shouldScopeV2WorkerRooms($booking);
         $safe['roomRequirements'] = WorkerBookingRequirementsPresenter::summarize(
-            $booking->rooms()->get()->map(fn ($room): array => ['id' => $room->id, 'roomKey' => $room->room_key, 'roomType' => $room->room_type, 'roomSize' => $room->room_size, 'displayLabel' => $room->display_label])->all(),
-            is_array($booking->property_details) ? $booking->property_details : null,
+            $scopeVisitRooms
+                ? $this->workerOwnedRoomProjection($booking, $worker)
+                : $booking->rooms()->get()->map(fn ($room): array => ['id' => $room->id, 'roomKey' => $room->room_key, 'roomType' => $room->room_type, 'roomSize' => $room->room_size, 'displayLabel' => $room->display_label])->all(),
+            $scopeVisitRooms ? null : (is_array($booking->property_details) ? $booking->property_details : null),
         );
         $safe['locationSummary'] = $booking->neighborhood_name;
         $safe['neighborhoodName'] = $booking->neighborhood_name;
@@ -159,7 +168,7 @@ final class CleaningBookingShowController
             $safe['specialServicesPreview'] = WorkerPendingSpecialServicesPreview::forBooking($booking);
         }
 
-        $safe['visits'] = $booking->sessions()
+        $acceptedSessions = $booking->sessions()
             ->whereHas('workerAssignments', function ($assignments) use ($worker): void {
                 $assignments->where('worker_id', $worker->id)
                     ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
@@ -197,26 +206,39 @@ final class CleaningBookingShowController
             ->where('worker_id', $worker->id)
             ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
             ->exists();
-        if ($safe['visits'] !== [] || $acceptedBookingWorker) {
-            $safe['roomTasks'] = $safe['visits'] !== []
-                ? $this->workerOwnedRoomProjection($booking, $worker)
-                : $booking->rooms()->get()->map(static fn ($room): array => [
+        if ($acceptedSessions !== [] && (string) $booking->booking_kind === 'open_time') {
+            $safe['sessions'] = $acceptedSessions;
+        }
+        if ($acceptedSessions !== [] || $acceptedBookingWorker) {
+            // Supervisor contact information is available only after accepting this booking.
+            if ($acceptedBookingWorker && is_array($payload['supervisorContact'] ?? null)) {
+                $safe['supervisorContact'] = $payload['supervisorContact'];
+            }
+            $safe['roomTasks'] = $booking->rooms()->get()->map(static fn ($room): array => [
                     'id' => $room->id, 'roomKey' => $room->room_key,
                     'roomType' => $room->room_type, 'roomSize' => $room->room_size,
                     'displayLabel' => $room->display_label,
                 ])->all();
-            // Booking-wide service price is safe for a worker who owns an
-            // accepted visit. Never expose it to an unaccepted dispatch
-            // candidate, and do not include customer grand totals.
+            // Booking-level service details are available after acceptance.
             $safe['bookingBasePrice'] = (float) ($payload['bookingBasePrice'] ?? $booking->base_price ?? 0);
             $safe['address'] = $payload['address'] ?? ['fullAddress' => data_get($booking->property_details, 'address')];
             $safe['addressLatitude'] = $payload['addressLatitude'] ?? null;
             $safe['addressLongitude'] = $payload['addressLongitude'] ?? null;
-            $safe = array_merge($safe, $this->acceptedWorkerOperationalDetails($booking, $worker, array_column($safe['visits'], 'id')));
+            $safe = array_merge($safe, $this->acceptedWorkerOperationalDetails($booking, $worker, array_column($acceptedSessions, 'id')));
         }
         foreach (['workerOffer', 'worker_offer', 'myAssignment', 'worker_assignment'] as $key) {
             if (is_array($safe[$key] ?? null)) {
                 unset($safe[$key]['roomIds']);
+                if ($scopeVisitRooms) {
+                    // Worker completion history can contain room/service details
+                    // assigned to other workers, so omit these aggregates.
+                    unset(
+                        $safe[$key]['workerFinishedPropertyRooms'],
+                        $safe[$key]['worker_finished_property_rooms'],
+                        $safe[$key]['workerFinishedCleaningServices'],
+                        $safe[$key]['worker_finished_cleaning_services'],
+                    );
+                }
             }
         }
 
@@ -224,25 +246,27 @@ final class CleaningBookingShowController
     }
 
     /**
-     * Materials and kits belong to the booking. Special services may belong to
-     * individual visits or workers, so exclude every service outside this
-     * worker's accepted visits, even if it belongs to the same booking.
+     * Materials and kits belong to the booking. Special services must respect
+     * any explicit worker assignment, and session-specific work remains scoped.
      *
-     * @param list<int> $acceptedSessionIds
+     * @param  list<int>  $acceptedSessionIds
      * @return array<string, mixed>
      */
     private function acceptedWorkerOperationalDetails(CleaningBooking $booking, Worker $worker, array $acceptedSessionIds): array
     {
-        if ($acceptedSessionIds === []) {
+        $acceptedBookingWorker = $booking->workerAssignments()
+            ->where('worker_id', $worker->id)
+            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
+            ->exists();
+        if ($acceptedSessionIds === [] && ! $acceptedBookingWorker) {
             return [];
         }
 
         $operational = (new CleaningBookingOperationalResource($booking))->toArray(request());
         $specialServices = array_values(array_filter(
             $operational['specialServices'],
-            static fn (array $service): bool =>
-                ($service['assignedWorkerId'] === null || $service['assignedWorkerId'] === (int) $worker->id)
-                && array_intersect($service['sessionIds'], $acceptedSessionIds) !== [],
+            static fn (array $service): bool => ($service['assignedWorkerId'] === null || $service['assignedWorkerId'] === (int) $worker->id)
+                && ($acceptedBookingWorker || array_intersect($service['sessionIds'], $acceptedSessionIds) !== []),
         ));
 
         return [
@@ -252,8 +276,15 @@ final class CleaningBookingShowController
         ];
     }
 
-    private function workerOwnsAcceptedVisit(CleaningBooking $booking, Worker $worker): bool
+    private function workerHasAcceptedAssignment(CleaningBooking $booking, Worker $worker): bool
     {
+        if ($booking->workerAssignments()
+            ->where('worker_id', $worker->id)
+            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
+            ->exists()) {
+            return true;
+        }
+
         return $booking->sessions()
             ->whereHas('workerAssignments', function ($assignments) use ($worker): void {
                 $assignments->where('worker_id', $worker->id)
@@ -264,49 +295,21 @@ final class CleaningBookingShowController
 
     private function workerOwnedRoomProjection(CleaningBooking $booking, Worker $worker): array
     {
-        $sessionIds = $booking->sessions()
-            ->whereHas('workerAssignments', function ($assignments) use ($worker): void {
-                $assignments->where('worker_id', $worker->id)
-                    ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
-            })
-            ->pluck('id');
-        if ($sessionIds->isEmpty()) {
+        if (! $this->workerHasAcceptedAssignment($booking, $worker)) {
             return [];
         }
 
-        $scheduledRooms = $booking->roomSchedules()
-            ->with('room')
-            ->whereIn('cleaning_booking_session_id', $sessionIds)
-            ->get()
-            ->map(static fn ($schedule): array => [
-                'id' => (int) $schedule->cleaning_booking_room_id,
-                'roomKey' => $schedule->room?->room_key,
-                'roomType' => $schedule->room?->room_type,
-                'roomSize' => $schedule->room?->room_size,
-                'displayLabel' => $schedule->room?->display_label,
-            ]);
-        $periodRooms = $booking->roomPeriods()
-            ->with('room')
-            ->whereIn('cleaning_booking_session_id', $sessionIds)
-            ->get()
-            ->map(static fn ($period): array => [
-                'id' => (int) $period->cleaning_booking_room_id,
-                'roomKey' => $period->room?->room_key,
-                'roomType' => $period->room_type,
-                'roomSize' => $period->room_size,
-                'displayLabel' => $period->room?->display_label,
-            ]);
-
-        return $scheduledRooms->concat($periodRooms)
-            ->unique('id')
-            ->values()
-            ->all();
+        return $booking->rooms()->get()->map(static fn ($room): array => [
+            'id' => (int) $room->id,
+            'roomKey' => $room->room_key,
+            'roomType' => $room->room_type,
+            'roomSize' => $room->room_size,
+            'displayLabel' => $room->display_label,
+        ])->all();
     }
 
     /**
-     * @param  list<array{id:int,roomKey:mixed,roomType:mixed,roomSize:mixed,displayLabel:mixed,assignedWorkerId:mixed}>  $ownedRooms
      */
-
     private function shouldScopeV2WorkerRooms(CleaningBooking $booking): bool
     {
         if ((int) $booking->number_of_workers <= 1
@@ -317,7 +320,6 @@ final class CleaningBookingShowController
         $details = is_array($booking->property_details) ? $booking->property_details : [];
 
         return $booking->isV2OperationalGroup()
-            || array_key_exists('_time_period_v2', $details)
-            || array_key_exists('_room_period_v2_approved_total', $details);
+            || array_key_exists('_time_period_v2', $details);
     }
 }

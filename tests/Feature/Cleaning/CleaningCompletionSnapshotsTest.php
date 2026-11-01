@@ -51,8 +51,6 @@ it('returns finished tasks and services for a single-worker booking that has an 
         'accepted_at' => now()->subHours(2),
         'start_approved_at' => now()->subHour(),
         'work_started_at' => now()->subHour(),
-        'room_count' => 1,
-        'rooms_weight' => 1,
         'service_share_amount' => 0,
         'travel_fee' => 0,
         'admin_margin_amount' => 0,
@@ -135,8 +133,6 @@ it('does not reuse booking snapshots for an empty assignment in a multi-worker o
         'status' => CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion,
         'accepted_at' => now()->subHour(),
         'work_finished_at' => now(),
-        'room_count' => 0,
-        'rooms_weight' => 0,
         'service_share_amount' => 0,
         'travel_fee' => 0,
         'admin_margin_amount' => 0,
@@ -166,7 +162,6 @@ it('keeps an explicit empty room selection empty despite existing cleaning rooms
         'room_key' => 'bedroom.medium.1',
         'room_type' => 'bedroom', 'room_size' => 'medium',
         'display_label' => 'Bedroom 1', 'weight' => 1,
-        'planned_worker_slot' => 1, 'assigned_worker_id' => $worker->id,
     ]);
 
     Sanctum::actingAs($user);
@@ -217,8 +212,6 @@ it('does not fabricate event services or rooms when completion sends no selectio
         'room_size' => 'medium',
         'display_label' => 'Living Room 1 - Medium',
         'weight' => 1.5,
-        'planned_worker_slot' => 1,
-        'assigned_worker_id' => $worker->id,
     ]);
 
     Sanctum::actingAs($workerUser);

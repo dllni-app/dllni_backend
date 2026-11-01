@@ -70,8 +70,6 @@ it('assigns all rooms to a single accepted worker only after customer chooses it
             'room_size' => 'small',
             'display_label' => 'غرفة نوم '.$slot,
             'weight' => 1,
-            'planned_worker_slot' => $slot,
-            'assigned_worker_id' => $slot === 1 ? $worker->id : null,
         ]);
     }
     $this->travelTo($this->startAt->copy()->subMinutes(50));
@@ -82,7 +80,7 @@ it('assigns all rooms to a single accepted worker only after customer chooses it
     expect($updated->status)->toBe(CleaningBookingStatus::WorkerAssigned);
     expect($updated->last_hour_team_decision)->toBe('all_tasks');
     expect(CleaningBookingRoom::query()->where('cleaning_booking_id', $this->booking->id)
-        ->where('assigned_worker_id', $worker->id)->count())->toBe(2);
+        ->count())->toBe(2);
     expect($service->decision($updated)['required'])->toBeFalse();
     Notification::assertSentTo(
         $worker->user,
@@ -90,7 +88,7 @@ it('assigns all rooms to a single accepted worker only after customer chooses it
     );
 });
 
-it('keeps original room assignments if customer chooses assigned-only', function (): void {
+it('keeps shared room descriptions if customer chooses accepted-only', function (): void {
     $worker = Worker::factory()->create();
     CleaningBookingWorkerAssignment::query()->create([
         'cleaning_booking_id' => $this->booking->id,
@@ -105,15 +103,13 @@ it('keeps original room assignments if customer chooses assigned-only', function
         'room_size' => 'small',
         'display_label' => 'غرفة نوم',
         'weight' => 1,
-        'planned_worker_slot' => 2,
-        'assigned_worker_id' => null,
     ]);
     $this->travelTo($this->startAt->copy()->subMinutes(50));
     $updated = app(CleaningLastHourCoverageService::class)
         ->decide($this->booking, 'assigned_only', null);
     expect($updated->last_hour_team_decision)->toBe('assigned_only');
     expect($updated->number_of_workers)->toBe(2);
-    expect($room->fresh()->assigned_worker_id)->toBeNull();
+    expect($room->fresh()->room_key)->toBe('bedroom-1');
     expect($updated->status)->toBe(CleaningBookingStatus::Pending);
 });
 

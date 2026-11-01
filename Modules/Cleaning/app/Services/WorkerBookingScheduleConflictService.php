@@ -15,6 +15,7 @@ use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
+use Modules\Cleaning\Support\CleaningScheduledCivilTime;
 use Throwable;
 
 final class WorkerBookingScheduleConflictService
@@ -321,9 +322,8 @@ final class WorkerBookingScheduleConflictService
             return null;
         }
 
-        try {
-            $start = CarbonImmutable::parse("{$date} {$time}", config('app.timezone'));
-        } catch (Throwable) {
+        $start = CleaningScheduledCivilTime::parse($date, $time);
+        if ($start === null) {
             return null;
         }
 

@@ -13,6 +13,7 @@ use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingRoom;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
@@ -128,7 +129,7 @@ final class CleaningBookingInfolist
                                             ->label('العاملون المتبقون')
                                             ->state(fn (CleaningBooking $record): string => self::integer(app(CleaningBookingTeamPresentation::class)->counts($record)['remaining'])),
                                         TextEntry::make('active_supervisor')
-                                            ->label('مشرف الحجز (الإسناد العام)')
+                                            ->label('مشرف الطلب')
                                             ->state(static function (CleaningBooking $record): string {
                                                 $active = $record->supervisorAssignments()
                                                     ->whereNull('released_at')
@@ -136,7 +137,7 @@ final class CleaningBookingInfolist
                                                     ->latest('assigned_at')
                                                     ->first();
 
-                                                return $active?->supervisor?->name ?: 'لا يوجد إسناد عام؛ راجع مشرف كل زيارة أدناه';
+                                                return $active?->supervisor?->name ?: 'لم يتم تعيين مشرف لهذا الطلب';
                                             })
                                             ->badge()
                                             ->color(static fn (CleaningBooking $record): string => $record->supervisorAssignments()
@@ -166,8 +167,8 @@ final class CleaningBookingInfolist
                             ]),
                         Group::make()
                             ->schema([
-                                Section::make('الملخص المالي')
-                                    ->description('الأرقام النهائية التي يحتاجها مدير المنصة لمراجعة الطلب وحصص الأطراف.')
+                                Section::make('الملخص المالي لهذا الطلب')
+                                    ->description('قيم مسجلة في الخادم لهذا الطلب وحده؛ المبالغ التقديرية ليست إثباتاً للدفع ولا تُجمع مع طلبات أخرى.')
                                     ->schema([
                                         TextEntry::make('financial_reconciliation_alert')
                                             ->label('تحذير التسوية المالية')
@@ -206,11 +207,38 @@ final class CleaningBookingInfolist
                                             ))
                                             ->visible(static fn (CleaningBooking $record): bool => (int) data_get($record->property_details, '_supervisor_pricing.billableMinutes', 0) > 0),
                                         TextEntry::make('supervisor_charge')
-                                            ->label('رسوم الإشراف ضمن السعر')
+                                            ->label('رسوم الإشراف المحتسبة ضمن خدمة العميل (ليست مستحق المشرف)')
                                             ->state(static fn (CleaningBooking $record): string => self::money(
                                                 data_get($record->property_details, '_supervisor_pricing.fee', 0),
                                             ))
                                             ->visible(static fn (CleaningBooking $record): bool => (int) data_get($record->property_details, '_supervisor_pricing.billableMinutes', 0) > 0),
+                                        TextEntry::make('supervisor_fee_difference')
+                                            ->label('فرق رسوم الإشراف عن مستحق المشرف (للمراجعة المحاسبية)')
+                                            ->state(static fn (CleaningBooking $record): string => self::money(
+                                                max(0.0,
+                                                    (float) data_get($record->property_details, '_supervisor_pricing.fee', 0)
+                                                    - (float) data_get($record->property_details, '_supervisor_pricing.compensationAmount', 0)
+                                                )
+                                            ))
+                                            ->visible(static fn (CleaningBooking $record): bool => (int) data_get($record->property_details, '_supervisor_pricing.billableMinutes', 0) > 0),
+                                        TextEntry::make('supervisor_compensation_unconfirmed')
+                                            ->label('مستحق المشرف — مخصص مقابل مصروف')
+                                            ->state(static function (CleaningBooking $record): string {
+                                                $payable = DB::table('cleaning_supervisor_compensation_payables')
+                                                    ->where('cleaning_booking_id', $record->id)->first();
+                                                if ($payable !== null) {
+                                                    return self::money($payable->amount).' — '.match ((string) $payable->status) {
+                                                        'accrued' => 'مستحق مثبت، لم يُثبت الصرف النقدي بعد',
+                                                        'paid' => 'مسدد في السجل المالي',
+                                                        default => 'حالة مالية تتطلب المراجعة',
+                                                    };
+                                                }
+
+                                                $planned = (float) data_get($record->property_details, '_supervisor_pricing.compensationAmount', 0);
+                                                return self::money($planned).' — متوقع وفق التسعير؛ لم ينشأ قيد استحقاق نهائي بعد';
+                                            })
+                                            ->visible(static fn (CleaningBooking $record): bool => (int) $record->number_of_workers > 1)
+                                            ->columnSpanFull(),
                                         TextEntry::make('financial_travel')
                                             ->label('رسوم التنقل')
                                             ->state(fn (CleaningBooking $record): string => self::money($record->travel_fee))
@@ -245,8 +273,8 @@ final class CleaningBookingInfolist
                                             ->weight('bold'),
                                     ])
                                     ->columns(2),
-                                Section::make('أجور العاملين النهائية')
-                                    ->description('المبلغ النهائي المستحق لكل عامل في هذا الطلب بعد اعتماد توزيع الخدمة ورسوم التنقل.')
+                                Section::make('مستحقات العمال لهذا الطلب')
+                                    ->description('القيم الحالية من الخادم، وتتغير وفق الحضور والتسوية؛ لا تصبح نهائية إلا بعد إغلاق الطلب مالياً.')
                                     ->schema([
                                         RepeatableEntry::make('acceptedWorkerAssignments')
                                             ->hiddenLabel()
@@ -256,8 +284,19 @@ final class CleaningBookingInfolist
                                                     ->placeholder('-')
                                                     ->weight('bold'),
                                                 TextEntry::make('worker_amount')
-                                                    ->label('الأجرة النهائية')
+                                                    ->label('الإجمالي قبل هامش الإدارة')
                                                     ->state(fn (CleaningBookingWorkerAssignment $record): string => self::finalWorkerAmount($record))
+                                                    ->weight('bold')
+                                                    ->color('info'),
+                                                TextEntry::make('admin_margin_amount')
+                                                    ->label('هامش الإدارة المقتطع')
+                                                    ->state(fn (CleaningBookingWorkerAssignment $record): string => self::money($record->admin_margin_amount)),
+                                                TextEntry::make('net_worker_amount')
+                                                    ->label('صافي مستحق العامل (بعد الهامش، يشمل التنقل)')
+                                                    ->state(fn (CleaningBookingWorkerAssignment $record): string => self::money(max(0.0,
+                                                        (float) ($record->worker_amount ?? ((float) $record->service_share_amount + (float) $record->travel_fee))
+                                                        - (float) $record->admin_margin_amount,
+                                                    )))
                                                     ->weight('bold')
                                                     ->color('success'),
                                                 TextEntry::make('status')
@@ -266,7 +305,7 @@ final class CleaningBookingInfolist
                                                     ->formatStateUsing(fn ($state): string => self::workerAssignmentStatusLabel($state))
                                                     ->color(fn ($state): string => self::workerAssignmentStatusColor($state)),
                                             ])
-                                            ->columns(3),
+                                            ->columns(4),
                                     ])
                                     ->visible(fn (CleaningBooking $record): bool => $record->acceptedWorkerAssignments()->exists()),
                                 Section::make('الأطراف')
@@ -436,13 +475,9 @@ final class CleaningBookingInfolist
             $names->push($record->preferredWorker->first_name ?: $record->preferredWorker->user?->name);
         }
 
-        $rooms = $record->relationLoaded('rooms')
-            ? $record->rooms
-            : $record->rooms()->with('plannedPreferredWorker.user')->get();
-
-        foreach ($rooms as $room) {
-            $worker = $room->plannedPreferredWorker;
-            if ($worker !== null) {
+        $workerIds = $record->specificWorkerIds();
+        if ($workerIds !== []) {
+            foreach (\App\Models\Worker::query()->with('user')->whereIn('id', $workerIds)->get() as $worker) {
                 $names->push($worker->first_name ?: $worker->user?->name);
             }
         }
@@ -465,23 +500,6 @@ final class CleaningBookingInfolist
         }
 
         return $record->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE;
-    }
-
-    private static function roomCoverageLabel(mixed $record): string
-    {
-        if (self::isEventAssistance($record)) {
-            return 'غير مطبق';
-        }
-
-        $totalRooms = max(0, (int) $record->rooms()->count());
-        if ($totalRooms === 0) {
-            return '-';
-        }
-
-        $assignedRooms = max(0, (int) $record->rooms()->whereNotNull('assigned_worker_id')->count());
-        $percent = (int) round(($assignedRooms / $totalRooms) * 100);
-
-        return sprintf('%d/%d (%d%%)', $assignedRooms, $totalRooms, $percent);
     }
 
     private static function workerAssignmentStatusLabel(mixed $state): string

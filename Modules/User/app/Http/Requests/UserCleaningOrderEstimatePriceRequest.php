@@ -12,18 +12,16 @@ use Modules\User\Http\Requests\Concerns\ResolvesEventVenueTypes;
 use Modules\User\Http\Requests\Concerns\ValidatesDynamicCleaningEvent;
 use Modules\User\Http\Requests\Concerns\ValidatesEventAssistanceSchedule;
 use Modules\User\Http\Requests\Concerns\ValidatesRecurringWorkerScope;
-use Modules\User\Http\Requests\Concerns\ValidatesWorkerRoomAssignments;
 use Modules\User\Models\UserAddress;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderEstimatePriceRequest extends FormRequest
 {
-    use \Modules\User\Http\Requests\Concerns\ValidatesRoomCleaningModes;
+    use Concerns\ValidatesRoomCleaningModes;
     use ResolvesEventVenueTypes;
     use ValidatesDynamicCleaningEvent;
     use ValidatesEventAssistanceSchedule;
     use ValidatesRecurringWorkerScope;
-    use ValidatesWorkerRoomAssignments;
 
     private const INCOMPLETE_ADDRESS_MESSAGE = 'يرجى تحديث العنوان المختار وتحديد موقعه على الخريطة قبل إنشاء الطلب.';
 
@@ -40,8 +38,8 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
         $isEventAssistance = $this->isEventAssistanceRequested();
 
         return [
-            ...\Modules\User\Http\Requests\Concerns\CleaningTimePeriodContract::rules(),
-            ...\Modules\User\Http\Requests\Concerns\RoomPeriodContract::rules(),
+            ...Concerns\CleaningTimePeriodContract::rules(),
+            'roomPeriods' => ['prohibited'],
             'propertyType' => ['required', 'string', Rule::in(UserCleaningOrderEstimationService::PROPERTY_TYPES)],
             'propertyDetails' => ['required', 'array'],
             'propertyDetails.address' => ['sometimes', 'nullable', 'string', 'max:500'],
@@ -132,17 +130,14 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             'scheduledDate' => [Rule::requiredIf($this->input('serviceType') === 'supervised_team'), 'sometimes', 'date_format:Y-m-d', 'after_or_equal:'.now(config('app.timezone'))->toDateString()],
             'scheduledTime' => [Rule::requiredIf($this->input('serviceType') === 'supervised_team'), 'sometimes', 'date_format:H:i'],
             'genderPreference' => ['nullable', 'string', Rule::in(array_column(GenderPreference::cases(), 'value'))],
-            ...$this->workerRoomAssignmentRules(),
+            'workerRoomAssignments' => ['prohibited'],
         ];
     }
 
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
-            \Modules\User\Http\Requests\Concerns\CleaningTimePeriodContract::validate($this->all(), $validator);
-            if ($this->exists('roomPeriods')) {
-                \Modules\User\Http\Requests\Concerns\RoomPeriodContract::validateConsistency($this->all(), $validator);
-            }
+            Concerns\CleaningTimePeriodContract::validate($this->all(), $validator);
             $this->validateRoomCleaningModes($validator);
             $this->validateRoomEstimatedHours($validator);
             $this->validateActiveRoomTypes($validator);
@@ -150,7 +145,6 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             $this->validateEventAssistanceSchedule($validator);
             $this->validateDynamicCleaningEvent($validator);
             $this->validateRecurringWorkerScope($validator);
-            $this->validateWorkerRoomAssignments($validator);
             $this->validateNewServiceScope($validator);
         });
     }
@@ -228,7 +222,7 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
                         $merge['neighborhood'] = $address->neighborhood;
                     }
                     $details = (array) $this->input('propertyDetails', []);
-                    if (trim((string) ($details['address'] ?? '')) === '') {
+                    if (mb_trim((string) ($details['address'] ?? '')) === '') {
                         $details['address'] = $this->formatUserAddress($address);
                     }
                     if (! array_key_exists('location_name', $details) && $address->label !== null) {

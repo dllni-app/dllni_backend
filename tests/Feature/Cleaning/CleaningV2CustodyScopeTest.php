@@ -5,7 +5,6 @@ declare(strict_types=1);
 use App\Models\User;
 use App\Models\Worker;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingMaterialKit;
@@ -15,7 +14,7 @@ use Modules\Cleaning\Models\CleaningSpecialServiceEquipment;
 use Modules\Cleaning\Services\CleaningEquipmentHandoverService;
 use Spatie\Permission\Models\Role;
 
-it('does not let a legacy booking-level supervisor receive initialized V2 visit custody', function (): void {
+it('allows the assigned booking supervisor to receive the shared material kit', function (): void {
     Role::findOrCreate('Cleaning Supervisor', 'web');
     $supervisor = User::factory()->create(['is_active' => true]);
     $supervisor->assignRole('Cleaning Supervisor');
@@ -33,8 +32,6 @@ it('does not let a legacy booking-level supervisor receive initialized V2 visit 
         'scheduled_time' => '09:00',
         'duration_hours' => 2,
         'required_workers' => 2,
-        'supervision_mode' => CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR,
-        'supervision_initialized_at' => now(),
         'coverage_status' => 'searching',
         'status' => 'scheduled',
     ]);
@@ -52,16 +49,17 @@ it('does not let a legacy booking-level supervisor receive initialized V2 visit 
     ]);
     Sanctum::actingAs($supervisor);
 
-    $this->getJson("/api/v1/supervisor/bookings/{$booking->id}/inventory")->assertNotFound();
-    $this->postJson("/api/v1/supervisor/bookings/{$booking->id}/materials/receive")->assertNotFound();
+    $this->getJson("/api/v1/supervisor/bookings/{$booking->id}/inventory")
+        ->assertOk()->assertJsonPath('data.materialKit.status', CleaningBookingMaterialKit::READY);
+    $this->postJson("/api/v1/supervisor/bookings/{$booking->id}/materials/receive")
+        ->assertOk()->assertJsonPath('data.materialKit.receivedBySupervisorUserId', $supervisor->id);
     $this->assertDatabaseHas('cleaning_booking_material_kits', [
         'cleaning_booking_id' => $booking->id,
-        'status' => CleaningBookingMaterialKit::READY,
-        'received_by_supervisor_user_id' => null,
+        'received_by_supervisor_user_id' => $supervisor->id,
     ]);
 });
 
-it('fails closed for uninitialized V2 worker material receipt and new booking-wide equipment checkout', function (): void {
+it('keeps worker material receipt restricted and requires custody checks for equipment checkout', function (): void {
     Role::findOrCreate('admin', 'web');
     Role::findOrCreate('Cleaning Supervisor', 'web');
     $admin = User::factory()->create(['is_active' => true]);
@@ -114,19 +112,19 @@ it('fails closed for uninitialized V2 worker material receipt and new booking-wi
 
     Sanctum::actingAs($worker->user);
     $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/materials/receive")
-        ->assertUnprocessable()
-        ->assertJsonPath('code', 'CLEANING_V2_VISIT_EXECUTION_UNAVAILABLE');
+        ->assertUnprocessable();
     $this->assertDatabaseHas('cleaning_booking_material_kits', [
         'cleaning_booking_id' => $booking->id,
         'status' => CleaningBookingMaterialKit::READY,
         'received_by_worker_id' => null,
     ]);
 
-    expect(fn () => app(CleaningEquipmentHandoverService::class)
-        ->checkoutForBooking($booking, $asset, $admin, 'Must use visit-scoped custody'))
-        ->toThrow(ValidationException::class);
-    expect($asset->fresh()->status)->toBe('available')
-        ->and(CleaningEquipmentReservation::query()->where('cleaning_booking_id', $booking->id)->count())->toBe(0);
+    $reservation = app(CleaningEquipmentHandoverService::class)
+        ->checkoutForBooking($booking, $asset, $admin, 'Assigned supervisor receives equipment custody');
+    expect($reservation->supervisor_user_id)->toBe($supervisor->id)
+        ->and($reservation->worker_id)->toBeNull()
+        ->and($asset->fresh()->status)->toBe('in_use')
+        ->and(CleaningEquipmentReservation::query()->where('cleaning_booking_id', $booking->id)->count())->toBe(1);
 });
 
 it('allows the owning supervisor to report return of equipment already physically held before V2 custody closure', function (): void {
@@ -146,8 +144,6 @@ it('allows the owning supervisor to report return of equipment already physicall
         'scheduled_time' => '09:00',
         'duration_hours' => 2,
         'required_workers' => 2,
-        'supervision_mode' => CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR,
-        'supervision_initialized_at' => now(),
         'coverage_status' => 'searching',
         'status' => 'scheduled',
     ]);
@@ -166,6 +162,14 @@ it('allows the owning supervisor to report return of equipment already physicall
         'status' => 'acknowledged',
         'handed_over_at' => now()->subMinutes(50),
         'acknowledged_at' => now()->subMinutes(45),
+    ]);
+    DB::table('cleaning_supervisor_assignments')->insert([
+        'cleaning_booking_id' => $booking->id,
+        'supervisor_user_id' => $supervisor->id,
+        'assigned_at' => now(),
+        'active_slot' => 1,
+        'created_at' => now(),
+        'updated_at' => now(),
     ]);
     Sanctum::actingAs($supervisor);
 

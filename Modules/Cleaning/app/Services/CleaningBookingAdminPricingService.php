@@ -10,7 +10,7 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Observers\CleaningBookingObserver;
-use Modules\Cleaning\Support\WorkerRoomAssignmentPlanner;
+use Modules\Cleaning\Support\CleaningRoomBlueprints;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class CleaningBookingAdminPricingService
@@ -20,6 +20,7 @@ final class CleaningBookingAdminPricingService
     public function __construct(
         private readonly CleaningBookingTeamService $teamService,
         private readonly UserCleaningOrderEstimationService $estimator,
+        private readonly CleaningPricingCalculator $pricingCalculator,
     ) {}
 
     public function setRoomQuantity(
@@ -28,8 +29,8 @@ final class CleaningBookingAdminPricingService
         string $roomSize,
         int $quantity,
     ): CleaningBooking {
-        if (! in_array($roomType, WorkerRoomAssignmentPlanner::ROOM_TYPE_ORDER, true)
-            || ! in_array($roomSize, WorkerRoomAssignmentPlanner::ROOM_SIZE_ORDER, true)
+        if (! in_array($roomType, CleaningRoomBlueprints::ROOM_TYPE_ORDER, true)
+            || ! in_array($roomSize, CleaningRoomBlueprints::ROOM_SIZE_ORDER, true)
             || $quantity < 0 || $quantity > self::MAX_ROOMS_PER_BUCKET) {
             throw new InvalidArgumentException('نوع الغرفة أو حجمها أو عددها غير صالح.');
         }
@@ -44,7 +45,7 @@ final class CleaningBookingAdminPricingService
                 : [];
 
             if ($breakdown === []) {
-                foreach (WorkerRoomAssignmentPlanner::generateRoomBlueprints($details) as $room) {
+                foreach (CleaningRoomBlueprints::generateRoomBlueprints($details) as $room) {
                     $type = (string) $room['room_type'];
                     $size = (string) $room['room_size'];
                     $breakdown[$type][$size] = (int) ($breakdown[$type][$size] ?? 0) + 1;
@@ -53,8 +54,8 @@ final class CleaningBookingAdminPricingService
 
             $breakdown[$roomType][$roomSize] = $quantity;
             $roomCount = 0;
-            foreach (WorkerRoomAssignmentPlanner::ROOM_TYPE_ORDER as $type) {
-                foreach (WorkerRoomAssignmentPlanner::ROOM_SIZE_ORDER as $size) {
+            foreach (CleaningRoomBlueprints::ROOM_TYPE_ORDER as $type) {
+                foreach (CleaningRoomBlueprints::ROOM_SIZE_ORDER as $size) {
                     $roomCount += max(0, (int) ($breakdown[$type][$size] ?? 0));
                 }
             }
@@ -84,6 +85,14 @@ final class CleaningBookingAdminPricingService
                 workerCount: max(1, (int) ($booking->number_of_workers ?? 1)),
             );
 
+            // Repricing must carry the server-quoted fixed transport allowance
+            // into team recalculation. Without this snapshot, a provisional
+            // recalculation can silently replace the customer's new quote.
+            $details['_booking_v2_transport_allowance_per_worker'] = round(
+                (float) $pricing['travelFee'] / $requiredWorkers,
+                2,
+            );
+
             // The final team recalculation emits one canonical update. Suppress
             // the intermediate snapshot update to avoid duplicate customer alerts.
             CleaningBookingObserver::withoutLifecycleUpdateNotificationsFor(
@@ -101,7 +110,7 @@ final class CleaningBookingAdminPricingService
 
             // Room keys remain stable for unchanged rooms, preserving existing
             // worker assignments. Removed keys are deleted only before travel.
-            $blueprints = WorkerRoomAssignmentPlanner::generateRoomBlueprints($details);
+            $blueprints = CleaningRoomBlueprints::generateRoomBlueprints($details);
             $roomKeys = array_column($blueprints, 'room_key');
             $booking->rooms()->whereNotIn('room_key', $roomKeys)->delete();
             foreach ($blueprints as $room) {
@@ -121,6 +130,7 @@ final class CleaningBookingAdminPricingService
             return $this->teamService->recalculateBookingTeam(
                 $booking,
                 finalizeBooking: $booking->isTeamFulfilled(),
+                administrativeReprice: true,
             );
         });
     }
@@ -135,14 +145,37 @@ final class CleaningBookingAdminPricingService
             $booking = CleaningBooking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
             $this->assertBookingIsEditable($booking);
 
+            // Preserve the order's authoritative per-worker allowance when
+            // present. For legacy orders without a quote snapshot, obtain the
+            // current configured fixed allowance from the backend, not the
+            // old route-derived travel_fee stored on a booking.
+            $details = (array) ($booking->property_details ?? []);
+            if (! array_key_exists('_booking_v2_transport_allowance_per_worker', $details)) {
+                $workerCount = max(1, (int) ($booking->number_of_workers ?? 1));
+                $quotedTransport = $this->pricingCalculator->provisional(
+                    0.0,
+                    0.0,
+                    0.0,
+                    $workerCount,
+                );
+                $details['_booking_v2_transport_allowance_per_worker'] = round(
+                    max(0.0, (float) $quotedTransport['travelFee']) / $workerCount,
+                    2,
+                );
+            }
+
             CleaningBookingObserver::withoutLifecycleUpdateNotificationsFor(
                 (int) $booking->id,
-                fn () => $booking->forceFill(['base_price' => round($basePrice, 2)])->save(),
+                fn () => $booking->forceFill([
+                    'base_price' => round($basePrice, 2),
+                    'property_details' => $details,
+                ])->save(),
             );
 
             return $this->teamService->recalculateBookingTeam(
                 $booking,
                 finalizeBooking: $booking->isTeamFulfilled(),
+                administrativeReprice: true,
             );
         });
     }

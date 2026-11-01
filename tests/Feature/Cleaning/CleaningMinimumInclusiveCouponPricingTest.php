@@ -54,8 +54,6 @@ it('does not add commission again when coupon applies to a minimum-inclusive cle
         'worker_id' => $worker->id,
         'status' => 'accepted_waiting_for_order_start',
         'accepted_at' => now(),
-        'room_count' => 1,
-        'rooms_weight' => 1,
         'service_share_amount' => 1500,
         'travel_fee' => 300,
         'admin_margin_amount' => 375,

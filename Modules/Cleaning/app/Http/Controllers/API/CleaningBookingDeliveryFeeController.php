@@ -33,59 +33,36 @@ final class CleaningBookingDeliveryFeeController
 
         $this->ensureWorkerCanViewBooking($cleaning_booking, $worker);
 
-        if ($cleaning_booking->address_latitude === null || $cleaning_booking->address_longitude === null) {
-            throw ValidationException::withMessages([
-                'bookingLocation' => ['Order location coordinates are required to calculate delivery fee.'],
-            ]);
-        }
-
-        $payload = $request->validate([
-            'workerLatitude' => ['nullable', 'numeric', 'between:-90,90'],
-            'workerLongitude' => ['nullable', 'numeric', 'between:-180,180'],
-            'worker_latitude' => ['nullable', 'numeric', 'between:-90,90'],
-            'worker_longitude' => ['nullable', 'numeric', 'between:-180,180'],
-        ]);
-
-        $originLatitude = $payload['workerLatitude'] ?? $payload['worker_latitude'] ?? $worker->home_latitude;
-        $originLongitude = $payload['workerLongitude'] ?? $payload['worker_longitude'] ?? $worker->home_longitude;
-
-        if ($originLatitude === null || $originLongitude === null) {
-            throw ValidationException::withMessages([
-                'workerLocation' => ['Worker location coordinates are required to calculate delivery fee.'],
-            ]);
-        }
-
-        try {
-            $pricing = $this->pricingCalculator->finalizedForCoordinates(
-                (float) ($cleaning_booking->base_price ?? 0),
-                (float) ($cleaning_booking->addons_total ?? 0),
-                (float) $cleaning_booking->address_latitude,
-                (float) $cleaning_booking->address_longitude,
-                (float) $originLatitude,
-                (float) $originLongitude,
-            );
-        } catch (InvalidArgumentException $exception) {
-            throw ValidationException::withMessages([
-                'deliveryFee' => [$exception->getMessage()],
-            ]);
-        }
+        // Keep this legacy read endpoint for clients, but never compute route
+        // distance or replace the transportation fee already quoted to a customer.
+        $pricedWorkers = max(1, (int) ($cleaning_booking->number_of_workers ?? 1));
+        $pricing = $this->pricingCalculator->provisional(
+            (float) ($cleaning_booking->base_price ?? 0),
+            (float) ($cleaning_booking->addons_total ?? 0),
+            0.0,
+            $pricedWorkers,
+        );
+        $bookingTransport = (bool) $cleaning_booking->is_pricing_final
+            ? (float) $cleaning_booking->travel_fee
+            : (float) $pricing['travelFee'];
+        $workerTransport = round($bookingTransport / $pricedWorkers, 2);
 
         return response()->json([
             'success' => true,
-            'message' => 'Delivery fee calculated successfully.',
+            'message' => 'Transportation allowance retrieved successfully.',
             'data' => [
                 'bookingId' => $cleaning_booking->id,
                 'booking_id' => $cleaning_booking->id,
-                'distanceKm' => $pricing['distanceKm'],
-                'distance_km' => $pricing['distanceKm'],
-                'deliveryFee' => $pricing['travelFee'],
-                'delivery_fee' => $pricing['travelFee'],
-                'travelFee' => $pricing['travelFee'],
-                'travel_fee' => $pricing['travelFee'],
-                'adminMargin' => $pricing['adminMargin'],
-                'admin_margin' => $pricing['adminMargin'],
-                'totalPrice' => $pricing['totalPrice'],
-                'total_price' => $pricing['totalPrice'],
+                'distanceKm' => null,
+                'distance_km' => null,
+                'deliveryFee' => $workerTransport,
+                'delivery_fee' => $workerTransport,
+                'travelFee' => $workerTransport,
+                'travel_fee' => $workerTransport,
+                'adminMargin' => (float) $pricing['adminMargin'],
+                'admin_margin' => (float) $pricing['adminMargin'],
+                'totalPrice' => round((float) $cleaning_booking->base_price + (float) $cleaning_booking->addons_total + $workerTransport, 2),
+                'total_price' => round((float) $cleaning_booking->base_price + (float) $cleaning_booking->addons_total + $workerTransport, 2),
                 'currency' => (string) config('app.currency', 'SYP'),
             ],
         ]);
@@ -122,7 +99,7 @@ final class CleaningBookingDeliveryFeeController
             'customer',
             'worker.user',
             'preferredWorker.user',
-            'rooms.assignedWorker.user',
+            'rooms',
             'workerAssignments.worker.user',
             'addons',
             'billingPolicy',

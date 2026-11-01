@@ -86,8 +86,6 @@ it('synchronizes the discounted booking and worker financial shares when a coupo
         'worker_id' => $worker->id,
         'status' => 'accepted_waiting_for_order_start',
         'accepted_at' => now(),
-        'room_count' => 1,
-        'rooms_weight' => 1,
         'service_share_amount' => 100000,
         'travel_fee' => 5000,
         'admin_margin_amount' => 10000,

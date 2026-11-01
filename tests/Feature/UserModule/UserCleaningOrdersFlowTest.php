@@ -81,6 +81,10 @@ function fundPreviouslyWorkedCleaningWorker(Worker $worker): void
 }
 
 it('creates a cleaning order for authenticated user', function (): void {
+    CleaningFinancialSetting::query()->updateOrCreate(['id' => 1], [
+        'travel_markup_type' => 'worker_allowance',
+        'travel_markup_value' => 10,
+    ]);
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
@@ -121,15 +125,15 @@ it('creates a cleaning order for authenticated user', function (): void {
         ->where('customer_id', $user->id)
         ->where('status', CleaningBookingStatus::Pending->value)
         ->where('number_of_workers', 2)
-        ->where('is_pricing_final', false)
+        ->where('is_pricing_final', true)
         ->exists())->toBeTrue();
 
     expect($response->json('order.numberOfWorkers'))->toBe(2);
     expect((float) $response->json('order.basePrice'))->toBeGreaterThan(0);
     expect($response->json('order.travelDistanceKm'))->toBeNull();
-    expect((float) $response->json('order.travelFee'))->toBe(0.0);
-    expect((float) $response->json('order.adminMargin'))->toBe(0.0);
-    expect((bool) $response->json('order.isPricingFinal'))->toBeFalse();
+    expect((float) $response->json('order.travelFee'))->toBe(20.0);
+    expect((float) $response->json('order.adminMargin'))->toBeGreaterThanOrEqual(0.0);
+    expect((bool) $response->json('order.isPricingFinal'))->toBeTrue();
     expect((float) $response->json('order.totalPrice'))->toBeGreaterThan(0);
     expect((float) $response->json('order.estimatedSqm'))->toBeGreaterThan(0);
     expect((float) $response->json('order.totalHours'))->toBeGreaterThan(0);
@@ -225,6 +229,11 @@ it('creates an open cleaning order with coupon deducted from provisional admin m
         2,
     );
     $expectedTotal = round($expectedGrossTotal - $expectedDiscount, 2);
+    $booking = CleaningBooking::query()->findOrFail((int) $response->json('order.id'));
+    $couponAllocation = app(\Modules\Cleaning\Services\CleaningCouponPricingService::class)
+        ->storedBreakdown($booking);
+    $expectedAdminMargin = (float) $couponAllocation['adminMargin'];
+    $expectedServiceAmount = (float) $couponAllocation['serviceAmount'];
 
     expect((float) $response->json('order.discountAmount'))->toBe($expectedDiscount)
         ->and((float) $response->json('order.subtotalBeforeDiscount'))->toBe($expectedGrossTotal)
@@ -234,7 +243,6 @@ it('creates an open cleaning order with coupon deducted from provisional admin m
         ->and($response->json('order.couponApplied'))->toBeTrue()
         ->and($response->json('order.couponCode'))->toBe('USERCREATE10');
 
-    $booking = CleaningBooking::query()->findOrFail((int) $response->json('order.id'));
     expect((float) $booking->base_price)->toBe((float) $response->json('order.basePrice'))
         ->and((float) $booking->admin_margin_amount)->toBe($expectedAdminMargin)
         ->and((float) $booking->discount_amount)->toBe($expectedDiscount)
@@ -255,7 +263,7 @@ it('creates an open cleaning order with coupon deducted from provisional admin m
 
     expect((float) $workerResponse->json('data.serviceShareAmount'))->toBe($expectedServiceAmount)
         ->and((float) $workerResponse->json('data.workerOffer.serviceShareAmount'))->toBe($expectedServiceAmount)
-        ->and((float) $workerResponse->json('data.workerOffer.adminMarginAmount'))->toBe($expectedAdminMargin)
+        ->and($workerResponse->json('data.workerOffer.adminMarginAmount'))->toBeNull()
         ->and($workerResponse->json('data.adminMargin'))->toBeNull()
         ->and($workerResponse->json('data.discountAmount'))->toBeNull();
 });
@@ -322,7 +330,7 @@ it('creates an open count order when preferred worker mode is requested without 
     $response->assertCreated();
     expect($response->json('order.assignmentMode'))->toBe('open_count');
     expect($response->json('order.preferredWorker'))->toBeNull();
-    expect($response->json('order.isPricingFinal'))->toBeFalse();
+    expect($response->json('order.isPricingFinal'))->toBeTrue();
 });
 
 it('rejects calculated cleaning values supplied by the client when creating an order', function (): void {
@@ -685,6 +693,10 @@ it('keeps both-specialty workers selectable while excluding unfunded or other-cu
 });
 
 it('returns estimated cleaning price from backend algorithm', function (): void {
+    CleaningFinancialSetting::query()->updateOrCreate(['id' => 1], [
+        'travel_markup_type' => 'worker_allowance',
+        'travel_markup_value' => 10,
+    ]);
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
@@ -714,11 +726,11 @@ it('returns estimated cleaning price from backend algorithm', function (): void 
     expect((string) $response->json('size.sizeTier'))->toBe('small');
     expect((float) $response->json('pricing.basePrice'))->toBe(282.0);
     expect($response->json('pricing.distanceKm'))->toBeNull();
-    expect((float) $response->json('pricing.travelFee'))->toBe(0.0);
+    expect((float) $response->json('pricing.travelFee'))->toBe(10.0);
     expect((float) $response->json('pricing.addonsTotal'))->toBe(0.0);
     expect((float) $response->json('pricing.adminMargin'))->toBe(0.0);
-    expect((bool) $response->json('pricing.isPricingFinal'))->toBeFalse();
-    expect((float) $response->json('pricing.totalPrice'))->toBe(282.0);
+    expect((bool) $response->json('pricing.isPricingFinal'))->toBeTrue();
+    expect((float) $response->json('pricing.totalPrice'))->toBe(292.0);
     expect($response->json('extendedTimeRanges.1'))->toMatchArray([
         'startMinutes' => 16,
         'endMinutes' => 30,
@@ -730,6 +742,10 @@ it('returns estimated cleaning price from backend algorithm', function (): void 
 });
 
 it('allows preferred worker mode to fall back to open count when no preferred worker is selected', function (): void {
+    CleaningFinancialSetting::query()->updateOrCreate(['id' => 1], [
+        'travel_markup_type' => 'worker_allowance',
+        'travel_markup_value' => 10,
+    ]);
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
@@ -745,12 +761,12 @@ it('allows preferred worker mode to fall back to open count when no preferred wo
     ]);
 
     $response->assertOk();
-    expect($response->json('pricing.isPricingFinal'))->toBeFalse();
-    expect($response->json('pricing.travelFee'))->toBe(0);
+    expect($response->json('pricing.isPricingFinal'))->toBeTrue();
+    expect($response->json('pricing.travelFee'))->toBe(10);
     expect($response->json('pricing.distanceKm'))->toBeNull();
 });
 
-it('accepts team worker room assignments on estimate-price and returns weighted pricing preview', function (): void {
+it('rejects deprecated team worker-room assignments at estimate time', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
@@ -790,15 +806,10 @@ it('accepts team worker room assignments on estimate-price and returns weighted 
         ],
     ]);
 
-    $response->assertOk();
-    expect($response->json('workerRoomAssignments'))->toHaveCount(2);
-    expect($response->json('workerRoomAssignments.0.workerSlot'))->toBe(1);
-    expect($response->json('workerRoomAssignments.0.roomsWeight'))->toBeGreaterThan(0);
-    expect($response->json('workerRoomAssignments.0.estimatedServiceShareAmount'))->toBeGreaterThan(0);
-    expect(collect($response->json('workerRoomAssignments.1.rooms'))->pluck('roomKey'))->toContain('living_room.medium.1');
+    $response->assertUnprocessable()->assertJsonValidationErrors('workerRoomAssignments');
 });
 
-it('accepts preferred worker room assignments on estimate-price', function (): void {
+it('rejects deprecated preferred worker-room assignments at estimate time', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
@@ -839,10 +850,7 @@ it('accepts preferred worker room assignments on estimate-price', function (): v
         ],
     ]);
 
-    $response->assertOk();
-    expect($response->json('workerRoomAssignments'))->toHaveCount(1);
-    expect($response->json('workerRoomAssignments.0.preferredWorkerId'))->toBe($preferredWorker->id);
-    expect(collect($response->json('workerRoomAssignments.0.rooms'))->pluck('roomKey'))->toContain('living_room.medium.1');
+    $response->assertUnprocessable()->assertJsonValidationErrors('workerRoomAssignments');
 });
 
 it('prefers room_size_breakdown for estimate-price when provided', function (): void {
@@ -944,23 +952,11 @@ it('accepts partial room_size_breakdown for estimate-price and treats missing co
         'assignmentMode' => 'preferred_worker',
         'preferredWorkerId' => $preferredWorker->id,
         'numberOfWorkers' => 1,
-        'workerRoomAssignments' => [
-            [
-                'workerSlot' => 1,
-                'preferredWorkerId' => $preferredWorker->id,
-                'rooms' => [
-                    ['roomKey' => 'bedroom.large.1', 'roomType' => 'bedroom', 'roomSize' => 'large'],
-                    ['roomKey' => 'bathroom.medium.1', 'roomType' => 'bathroom', 'roomSize' => 'medium'],
-                ],
-            ],
-        ],
     ]);
 
     $response->assertOk();
-    expect(collect($response->json('workerRoomAssignments.0.rooms'))->pluck('roomKey')->all())->toBe([
-        'bathroom.medium.1',
-        'bedroom.large.1',
-    ]);
+    expect($response->json('pricing.totalPrice'))->toBeGreaterThan(0)
+        ->and($response->json('workerRoomAssignments'))->toBeNull();
 });
 
 it('creates order with partial room_size_breakdown and persists zero-filled normalized breakdown', function (): void {
@@ -1005,7 +1001,7 @@ it('creates order with partial room_size_breakdown and persists zero-filled norm
     expect($response->json('order.propertyDetails.room_size_breakdown.kitchen.medium'))->toBe(0);
 });
 
-it('creates team order with worker room assignments and persists planned slots', function (): void {
+it('rejects deprecated team worker-room allocation at create time', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
@@ -1053,18 +1049,10 @@ it('creates team order with worker room assignments and persists planned slots',
         'termsAccepted' => true,
     ]);
 
-    $response->assertCreated();
-    expect($response->json('order.workerRoomAssignments'))->toHaveCount(2);
-    expect($response->json('order.workerRoomAssignments.0.workerSlot'))->toBe(1);
-    expect($response->json('order.roomAssignments.0.plannedWorkerSlot'))->not->toBeNull();
-    $this->assertDatabaseHas('cleaning_booking_rooms', [
-        'cleaning_booking_id' => (int) $response->json('order.id'),
-        'room_key' => 'bedroom.small.1',
-        'planned_worker_slot' => 1,
-    ]);
+    $response->assertUnprocessable()->assertJsonValidationErrors('workerRoomAssignments');
 });
 
-it('creates preferred worker order with worker room assignments', function (): void {
+it('rejects deprecated preferred worker-room allocation at create time', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
@@ -1110,15 +1098,7 @@ it('creates preferred worker order with worker room assignments', function (): v
         'termsAccepted' => true,
     ]);
 
-    $response->assertCreated();
-    expect($response->json('order.workerRoomAssignments'))->toHaveCount(1);
-    expect($response->json('order.workerRoomAssignments.0.preferredWorkerId'))->toBe($preferredWorker->id);
-    $this->assertDatabaseHas('cleaning_booking_rooms', [
-        'cleaning_booking_id' => (int) $response->json('order.id'),
-        'room_key' => 'bedroom.small.1',
-        'planned_worker_slot' => 1,
-        'planned_preferred_worker_id' => $preferredWorker->id,
-    ]);
+    $response->assertUnprocessable()->assertJsonValidationErrors('workerRoomAssignments');
 });
 
 it('validates room_size_breakdown shape and rejects invalid bucket keys', function (): void {
@@ -1190,8 +1170,7 @@ it('rejects invalid worker room assignments', function (): void {
             ],
         ],
     ])->assertUnprocessable()->assertJsonValidationErrors([
-        'workerRoomAssignments.0.workerSlot',
-        'workerRoomAssignments.0.rooms.0.roomKey',
+        'workerRoomAssignments',
     ]);
 });
 
@@ -1332,6 +1311,8 @@ it('returns finalized pricing when preferred worker is selected in estimate endp
             'default_commission_rate' => 10,
             'commission_type' => 'percent',
             'commission_fixed_amount' => null,
+            'travel_markup_type' => 'worker_allowance',
+            'travel_markup_value' => 10,
             'travel_per_km' => 10,
             'travel_distance_start_point' => 'worker_home',
         ]
@@ -1358,10 +1339,13 @@ it('returns finalized pricing when preferred worker is selected in estimate endp
 
     $response->assertOk();
     expect((bool) $response->json('pricing.isPricingFinal'))->toBeTrue();
-    expect((float) $response->json('pricing.distanceKm'))->toBe(11.119);
-    expect((float) $response->json('pricing.travelFee'))->toBe(112.0);
-    expect((float) $response->json('pricing.adminMargin'))->toBe(29.0);
-    expect((float) $response->json('pricing.totalPrice'))->toBe(423.0);
+    expect($response->json('pricing.distanceKm'))->toBeNull();
+    expect((float) $response->json('pricing.travelFee'))->toBe(10.0);
+    expect((float) $response->json('pricing.totalPrice'))->toBe(
+        round((float) $response->json('pricing.basePrice')
+            + (float) $response->json('pricing.addonsTotal')
+            + (float) $response->json('pricing.travelFee'), 2)
+    );
 });
 
 it('creates a cleaning order with totals matching a prior estimate for the same inputs', function (): void {

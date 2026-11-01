@@ -11,10 +11,6 @@ return new class extends Migration
 {
     /** @var array<string, array{column:string, previous:int, next:int, nullable:bool}> */
     private const COLUMNS = [
-        'cleaning_booking_room_periods' => [
-            'room_type' => ['column' => 'room_type', 'previous' => 32, 'next' => 64, 'nullable' => false],
-            'client_key' => ['column' => 'client_key', 'previous' => 64, 'next' => 68, 'nullable' => false],
-        ],
         'cleaning_material_quantity_rules' => [
             'room_type' => ['column' => 'room_type', 'previous' => 32, 'next' => 64, 'nullable' => true],
         ],

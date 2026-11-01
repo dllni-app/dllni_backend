@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningNeighborhood;
-use Modules\Cleaning\Support\WorkerRoomAssignmentPlanner;
+use Modules\Cleaning\Support\CleaningRoomBlueprints;
 
 final class EditCleaningBooking extends EditRecord
 {
@@ -48,7 +48,7 @@ final class EditCleaningBooking extends EditRecord
             $details = is_array($this->record->property_details) ? $this->record->property_details : [];
             $roomKeys = array_values(array_map(
                 static fn (array $room): string => (string) $room['room_key'],
-                WorkerRoomAssignmentPlanner::generateRoomBlueprints($details),
+                CleaningRoomBlueprints::generateRoomBlueprints($details),
             ));
         }
 
@@ -130,7 +130,7 @@ final class EditCleaningBooking extends EditRecord
     private function syncSelectedRooms(CleaningBooking $booking): void
     {
         $details = is_array($booking->property_details) ? $booking->property_details : [];
-        $blueprints = collect(WorkerRoomAssignmentPlanner::generateRoomBlueprints($details))
+        $blueprints = collect(CleaningRoomBlueprints::generateRoomBlueprints($details))
             ->keyBy(fn (array $room): string => (string) $room['room_key']);
 
         if ($blueprints->isEmpty()) {

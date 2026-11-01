@@ -9,7 +9,7 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
 
-it('exposes the requested cleaning mode for each persisted worker room', function (): void {
+it('exposes aggregate cleaning modes without deprecated worker room ownership', function (): void {
     $customer = User::factory()->create();
     $workerUser = User::factory()->create();
     $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
@@ -42,7 +42,6 @@ it('exposes the requested cleaning mode for each persisted worker room', functio
             'room_size' => 'small',
             'display_label' => "غرفة نوم {$index}",
             'weight' => 1,
-            'planned_worker_slot' => 1,
         ]);
     }
 
@@ -56,9 +55,8 @@ it('exposes the requested cleaning mode for each persisted worker room', functio
         ->assertJsonPath('data.propertyDetails.deep_room_count', 1)
         ->assertJsonPath('data.propertyDetails.regular_room_count', 1);
     $rooms = collect($response->json('data.roomAssignments'))->keyBy('roomKey');
-    expect($rooms->count())->toBe(2)
-        ->and($rooms['bedroom.small.1']['cleaningMode'])->toBe('deep')
-        ->and($rooms['bedroom.small.1']['cleaningModeLabel'])->toBe('تعزيل')
-        ->and($rooms['bedroom.small.2']['cleaningMode'])->toBe('regular')
-        ->and($rooms['bedroom.small.2']['cleaningModeLabel'])->toBe('حوسة');
+    // Rooms remain a booking-level description. Worker-specific room
+    // allocations were removed; don't leak unowned room tasks as assignments.
+    expect($rooms)->toBeEmpty()
+        ->and($booking->rooms()->doesntExist())->toBeFalse();
 });

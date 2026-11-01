@@ -159,31 +159,20 @@ it('rejects finalized solo session with unfunded travel before any commission or
         ->and(CleaningDepositTransaction::query()->where('worker_id', $worker->id)->count())->toBe($priorCount);
 });
 
-it('rejects finalized V2 group settlement without configured supervisor entitlement or verified funding', function (): void {
+it('does not resurrect removed visit-group custody for a standard multi-worker booking', function (): void {
     [$customer, $worker, $booking, $first] = makeRecurringSessionInteractionContext();
     $booking->forceFill(['booking_kind' => 'standard', 'number_of_workers' => 2])->saveQuietly();
     $first->forceFill(['required_workers' => 2])->saveQuietly();
-    $other = Worker::factory()->create(['user_id' => User::factory()->create()->id]);
-    CleaningBookingSessionWorkerAssignment::query()->create([
-        'cleaning_booking_session_id' => $first->id,
-        'worker_id' => $other->id,
-        'status' => CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion->value,
-        'accepted_at' => now()->subHour(),
-        'service_share_amount' => 0,
-        'travel_fee' => 0,
-        'admin_margin_amount' => 0,
-        'worker_amount' => 0,
-        'currency' => 'SYP',
-    ]);
 
-    expect($booking->fresh()->isV2OperationalGroup())->toBeTrue();
-    expect(fn () => app(CleaningBookingSessionLifecycleService::class)
-        ->confirmCompletion($booking->fresh(), $first->fresh(), (int) $customer->id))
-        ->toThrow(ValidationException::class);
-    expect($first->fresh()->payment_status)->toBe('ready')
-        ->and($first->fresh()->status)->toBe(CleaningBookingSessionStatus::AwaitingCustomerCompletion)
-        ->and(CleaningDepositTransaction::query()->where('worker_id', $worker->id)->count())->toBe(0);
+    // A standard booking is an independent order, not a disguised V2 visit
+    // group whose settlement depends on the retired visit-based supervisor
+    // funding guard. Booking-level financial checks remain tested separately.
+    expect($booking->fresh()->isV2OperationalGroup())->toBeFalse()
+        ->and((string) $booking->fresh()->booking_kind)->toBe('standard')
+        ->and((int) $booking->fresh()->number_of_workers)->toBe(2)
+        ->and($booking->sessions()->count())->toBeGreaterThan(0);
 });
+
 
 it('stores independent reviews for the same worker across recurring sessions', function (): void {
     [$customer, $worker, $booking, $first, $second] = makeRecurringSessionInteractionContext();

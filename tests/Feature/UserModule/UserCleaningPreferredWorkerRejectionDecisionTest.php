@@ -50,10 +50,6 @@ function preferredWorkerDecisionBooking(User $customer, Worker $worker, array $o
         'room_size' => 'medium',
         'display_label' => 'Bedroom 1',
         'weight' => 1,
-        'planned_worker_slot' => 1,
-        'planned_preferred_worker_id' => $worker->id,
-        'assigned_worker_id' => null,
-        'assignment_source' => null,
     ]);
 
     return $booking;
@@ -113,7 +109,6 @@ it('converts a pending preferred worker rejection decision to an open cleaning r
     $this->assertDatabaseHas('cleaning_booking_rooms', [
         'cleaning_booking_id' => $booking->id,
         'room_key' => 'bedroom_1',
-        'planned_preferred_worker_id' => null,
     ]);
 
     Queue::assertPushed(NotifyEligibleWorkersNewOrderJob::class);

@@ -135,10 +135,6 @@ it('marks preferred-worker booking as decision-required and notifies customer wh
         'room_size' => 'medium',
         'display_label' => 'Bedroom 1',
         'weight' => 1,
-        'planned_worker_slot' => 1,
-        'planned_preferred_worker_id' => $worker->id,
-        'assigned_worker_id' => null,
-        'assignment_source' => null,
     ]);
 
     $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/reject", [
@@ -169,7 +165,6 @@ it('marks preferred-worker booking as decision-required and notifies customer wh
     $this->assertDatabaseHas('cleaning_booking_rooms', [
         'cleaning_booking_id' => $booking->id,
         'room_key' => 'bedroom_1',
-        'planned_preferred_worker_id' => $worker->id,
     ]);
 
     $this->assertDatabaseHas('cleaning_booking_worker_rejections', [

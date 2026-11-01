@@ -16,10 +16,6 @@ final class CleaningBookingWorkerLocationsController
 {
     public function __invoke(Request $request, CleaningBooking $cleaning_booking): JsonResponse
     {
-        if ($this->isVisitScopedV2Group($cleaning_booking)) {
-            abort(404);
-        }
-
         $user = $request->user();
         $worker = $user?->worker;
 
@@ -36,6 +32,7 @@ final class CleaningBookingWorkerLocationsController
 
         $assignments = $cleaning_booking->workerAssignments()
             ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
+            ->when(! $isCustomer, fn ($query) => $query->where('worker_id', $worker->id))
             ->with('worker.user')
             ->orderBy('id')
             ->get();
@@ -110,19 +107,5 @@ final class CleaningBookingWorkerLocationsController
                 'avatarUrl' => null,
             ],
         ];
-    }
-
-    private function isVisitScopedV2Group(CleaningBooking $booking): bool
-    {
-        if ((int) $booking->number_of_workers <= 1
-            || ! in_array((string) $booking->booking_kind, ['standard', 'open_time'], true)) {
-            return false;
-        }
-
-        $details = is_array($booking->property_details) ? $booking->property_details : [];
-
-        return $booking->isV2OperationalGroup()
-            || array_key_exists('_time_period_v2', $details)
-            || array_key_exists('_room_period_v2_approved_total', $details);
     }
 }

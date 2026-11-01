@@ -562,7 +562,7 @@ return [
             'default_commission_rate' => 'نسبة العمولة الافتراضية (%)',
             'commission_fixed_amount' => 'قيمة العمولة الثابتة',
             'vat_rate' => 'نسبة الضريبة (%)',
-            'travel_markup_type' => 'طريقة احتساب تكاليف التنقل',
+            'travel_markup_type' => 'بدل المواصلات لكل عامل',
             'travel_markup_value' => 'قيمة بدل المواصلات لكل عامل',
             'travel_per_km' => 'رسوم التنقل لكل كيلومتر',
             'travel_distance_start_point' => 'نقطة بدء المسافة',

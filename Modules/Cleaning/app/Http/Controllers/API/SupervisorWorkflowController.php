@@ -44,7 +44,8 @@ final class SupervisorWorkflowController
             }
             if ($existing && $existing->status === 'pending' && Carbon::parse($existing->expires_at)->isFuture()
                 && $existing->attempts < 5) {
-                return ['status' => 'pending', 'expiresAt' => $existing->expires_at];
+                return ['status' => 'pending', 'expiresAt' => $existing->expires_at,
+                    'code' => Crypt::decryptString($existing->customer_code_ciphertext)];
             }
             $code = (string) random_int(100000, 999999);
             $attributes = [
@@ -68,11 +69,10 @@ final class SupervisorWorkflowController
                 'supervised_state' => 'verification_pending'])->save();
             $this->teams->activity($booking, $request->user()->id, 'verification_requested');
 
-            return ['status' => 'pending', 'expiresAt' => now()->addMinutes(10)->toIso8601String()];
+            return ['status' => 'pending', 'expiresAt' => now()->addMinutes(10)->toIso8601String(), 'code' => $code];
         });
 
-        // The secret is deliberately NOT returned to the supervisor. Only the authenticated customer may read it.
-        return $this->response($result);
+        return $this->response($result)->header('Cache-Control', 'private, no-store');
     }
 
     public function verificationStatus(Request $request, int $booking): JsonResponse
@@ -85,23 +85,14 @@ final class SupervisorWorkflowController
                 ($session->status === 'pending' && ! Carbon::parse($session->expires_at)->isFuture() ? 'expired' : $session->status),
             'expiresAt' => $session?->expires_at, 'verifiedAt' => $session?->verified_at,
             'teamState' => $order->supervised_state ?: 'staffing',
-            'entryActor' => 'supervisor', 'codeRecipient' => 'customer',
+            'entryActor' => 'customer', 'codeRecipient' => 'supervisor',
         ]);
     }
 
     public function customerVerificationCode(Request $request, int $booking): JsonResponse
     {
-        $order = $this->customer($request, $booking);
-        $session = DB::table('cleaning_supervisor_verifications')->where('cleaning_booking_id', $booking)->first();
-        abort_unless($order->status === CleaningBookingStatus::AwaitingStartVerification &&
-            $session && $session->status === 'pending' &&
-            Carbon::parse($session->expires_at)->isFuture() && $session->attempts < 5, 404);
-
-        return $this->response([
-            'code' => Crypt::decryptString($session->customer_code_ciphertext),
-            'expiresAt' => Carbon::parse($session->expires_at)->toIso8601String(),
-            'purpose' => 'supervisor_start_verification',
-        ])->header('Cache-Control', 'private, no-store');
+        $this->customer($request, $booking);
+        return response()->json(['code' => 'CODE_NOT_AVAILABLE', 'message' => 'يُعرض رمز التحقق للمشرف فقط.'], 404);
     }
 
     public function customerShow(Request $request, int $booking): JsonResponse
@@ -115,7 +106,7 @@ final class SupervisorWorkflowController
         if ($order->status === CleaningBookingStatus::AwaitingStartVerification && $verification
             && $verification->status === 'pending' && $verification->attempts < 5
             && Carbon::parse($verification->expires_at)->isFuture()) {
-            $actions[] = 'view_verification_code';
+            $actions[] = 'confirm_supervisor_arrival';
         }
         if ($order->status === CleaningBookingStatus::InProgress && $extensions->contains('status', 'pending')) {
             $actions[] = 'decide_extension';
@@ -137,7 +128,7 @@ final class SupervisorWorkflowController
     {
         $data = $request->validate(['code' => ['required', 'digits:6']]);
         $result = DB::transaction(function () use ($request, $booking, $data): array {
-            $order = $this->assigned($request, $booking, true);
+            $order = $this->customer($request, $booking, true);
             $this->failUnless($order->status === CleaningBookingStatus::AwaitingStartVerification
                 && $order->supervised_state === 'verification_pending', 'الطلب ليس في مرحلة التحقق.');
             $session = DB::table('cleaning_supervisor_verifications')
@@ -385,9 +376,30 @@ final class SupervisorWorkflowController
             ]);
             $order->forceFill(['status' => CleaningBookingStatus::Completed,
                 'supervised_state' => 'completed', 'work_finished_at' => $order->work_finished_at ?? now()])->save();
-            $order->workerAssignments()->whereIn('status', CleaningBookingWorkerAssignmentStatus::activeValues())
-                ->update(['status' => CleaningBookingWorkerAssignmentStatus::Completed->value,
-                    'work_finished_at' => $order->work_finished_at, 'updated_at' => now()]);
+            if (is_array(data_get($order->property_details, '_time_period_v2'))
+                && (int) $order->number_of_workers > 1) {
+                // A missing worker cannot become "completed" just because the
+                // supervisor submitted the team report. Only assignments with
+                // a supervisor-certified personal attendance proof are paid.
+                $confirmed = DB::table('cleaning_worker_attendance_proofs')
+                    ->where('cleaning_booking_id', $booking)
+                    ->whereNotNull('confirmed_at')
+                    ->where('confirmed_by_user_id', $request->user()->id)
+                    ->pluck('worker_assignment_id')->all();
+                $this->failUnless($confirmed !== [], 'لا يمكن إغلاق الطلب قبل توثيق حضور العمال المنفذين.');
+                $order->workerAssignments()->whereIn('id', $confirmed)
+                    ->whereIn('status', CleaningBookingWorkerAssignmentStatus::activeValues())
+                    ->update(['status' => CleaningBookingWorkerAssignmentStatus::Completed->value,
+                        'work_finished_at' => $order->work_finished_at, 'updated_at' => now()]);
+                $order->workerAssignments()->whereNotIn('id', $confirmed)
+                    ->whereIn('status', CleaningBookingWorkerAssignmentStatus::activeValues())
+                    ->update(['status' => CleaningBookingWorkerAssignmentStatus::Withdrawn->value,
+                        'updated_at' => now()]);
+            } else {
+                $order->workerAssignments()->whereIn('status', CleaningBookingWorkerAssignmentStatus::activeValues())
+                    ->update(['status' => CleaningBookingWorkerAssignmentStatus::Completed->value,
+                        'work_finished_at' => $order->work_finished_at, 'updated_at' => now()]);
+            }
             $this->completion->enforceAdminFeesInCompletionTransaction(
                 $order->fresh() ?? throw new LogicException('Completed supervisor booking is missing.')
             );
@@ -454,7 +466,11 @@ final class SupervisorWorkflowController
 
     private function customer(Request $request, int $id, bool $lock = false): CleaningBooking
     {
-        $query = CleaningBooking::query()->whereKey($id)->where('booking_kind', SupervisedTeamService::KIND)
+        $query = CleaningBooking::query()->whereKey($id)->where(function ($query): void {
+            $query->where('booking_kind', SupervisedTeamService::KIND)
+                ->orWhere(fn ($standard) => $standard->where('booking_kind', 'standard')
+                    ->where('number_of_workers', '>', 1));
+        })
             ->where('customer_id', $request->user()?->id);
         $result = ($lock ? $query->lockForUpdate() : $query)->first();
         abort_unless($result && $request->user()?->is_active, 404);

@@ -119,8 +119,6 @@ final class CleaningConnectedDemoSeeder extends Seeder
                         'status' => $status,
                         'accepted_at' => now()->subDay(),
                         'work_started_at' => $scenario['workStartedAt'],
-                        'room_count' => 2,
-                        'rooms_weight' => 2,
                         'service_share_amount' => $share,
                         'travel_fee' => $travel,
                         'admin_margin_amount' => $fee,
@@ -132,10 +130,10 @@ final class CleaningConnectedDemoSeeder extends Seeder
                 }
 
                 foreach ([
-                    ['key' => 'bedroom-1', 'type' => 'bedroom', 'label' => 'غرفة النوم الرئيسية', 'size' => 'medium', 'worker' => 0],
-                    ['key' => 'bedroom-2', 'type' => 'bedroom', 'label' => 'غرفة النوم الثانية', 'size' => 'small', 'worker' => 0],
-                    ['key' => 'kitchen-1', 'type' => 'kitchen', 'label' => 'المطبخ', 'size' => 'medium', 'worker' => 1],
-                    ['key' => 'bathroom-1', 'type' => 'bathroom', 'label' => 'الحمام', 'size' => 'small', 'worker' => 1],
+                    ['key' => 'bedroom-1', 'type' => 'bedroom', 'label' => 'غرفة النوم الرئيسية', 'size' => 'medium'],
+                    ['key' => 'bedroom-2', 'type' => 'bedroom', 'label' => 'غرفة النوم الثانية', 'size' => 'small'],
+                    ['key' => 'kitchen-1', 'type' => 'kitchen', 'label' => 'المطبخ', 'size' => 'medium'],
+                    ['key' => 'bathroom-1', 'type' => 'bathroom', 'label' => 'الحمام', 'size' => 'small'],
                 ] as $room) {
                     $this->upsert('cleaning_booking_rooms', [
                         'cleaning_booking_id' => $bookingId, 'room_key' => $room['key'],
@@ -144,8 +142,6 @@ final class CleaningConnectedDemoSeeder extends Seeder
                         'room_size' => $room['size'],
                         'display_label' => $room['label'],
                         'weight' => 1,
-                        'assigned_worker_id' => null,
-                        'assignment_source' => null,
                     ]);
                 }
 

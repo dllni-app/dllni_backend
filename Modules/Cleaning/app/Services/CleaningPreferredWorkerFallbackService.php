@@ -33,9 +33,6 @@ final class CleaningPreferredWorkerFallbackService
                 'converted_from_preferred_worker_at' => now(),
             ])->save();
 
-            $booking->rooms()->update([
-                'planned_preferred_worker_id' => null,
-            ]);
 
             NotifyEligibleWorkersNewOrderJob::dispatch($booking->id)->afterCommit();
 

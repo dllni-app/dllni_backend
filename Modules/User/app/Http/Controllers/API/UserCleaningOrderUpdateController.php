@@ -45,7 +45,7 @@ final class UserCleaningOrderUpdateController
         $updated->load([
             'worker.user',
             'preferredWorker.user',
-            'rooms.assignedWorker.user',
+            'rooms',
             'workerAssignments.worker.user',
             'timeWarnings',
             'disputes',

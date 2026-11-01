@@ -8,16 +8,12 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 use Modules\Cleaning\Services\CleaningExtendedTimePricingService;
-use Modules\Cleaning\Support\WorkerRoomAssignmentPlanner;
 use Modules\User\Http\Requests\UserCleaningOrderEstimatePriceRequest;
 use Modules\User\Models\UserAddress;
 use Modules\User\Services\EventAssistanceScheduleService;
 use Modules\User\Services\FemaleWorkerSafetyPolicyService;
 use Modules\User\Services\OpenTimeScheduleService;
-use Modules\User\Services\RecurringCleaningScheduleService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
-use Modules\User\Services\RoomPeriodPricingService;
-use Modules\User\Services\RoomPeriodBookingCreationService;
 use Modules\User\Support\CleaningWorkerCapacity;
 
 final class UserCleaningOrderEstimatePriceController
@@ -26,11 +22,8 @@ final class UserCleaningOrderEstimatePriceController
         UserCleaningOrderEstimatePriceRequest $request,
         UserCleaningOrderEstimationService $service,
         EventAssistanceScheduleService $eventSchedule,
-        RecurringCleaningScheduleService $recurringSchedule,
         OpenTimeScheduleService $openTimeSchedule,
         CleaningExtendedTimePricingService $extendedTimePricing,
-        RoomPeriodPricingService $roomPeriodPricing,
-        RoomPeriodBookingCreationService $periodCreation,
     ): JsonResponse {
         $validated = $request->validated();
         if (($validated['serviceType'] ?? null) === 'supervised_team' && ! config('cleaning_supervisor.booking_enabled')) {
@@ -52,53 +45,13 @@ final class UserCleaningOrderEstimatePriceController
         }
         if ((int) ($validated['contractVersion'] ?? 0) === 2) {
             $result = app(\Modules\User\Services\CleaningTimePeriodQuoteService::class)->estimate($request->user(), $validated);
-            return response()->json($result);
-        }
-        if (is_array($validated['roomPeriods'] ?? null)) {
-            try {
-                $quote = $roomPeriodPricing->quote($validated);
-            } catch (InvalidArgumentException $exception) {
-                throw ValidationException::withMessages(['roomPeriods' => [$exception->getMessage()]]);
-            }
 
-            return response()->json([
-                'size' => [
-                    'estimatedHours' => round($quote['estimatedWorkMinutes'] / 60, 2),
-                    'estimatedWorkMinutes' => $quote['estimatedWorkMinutes'],
-                    'estimatedDurationMinutes' => $quote['estimatedDurationMinutes'],
-                ],
-                'pricing' => [
-                    // Customer sees exactly one aggregate price, not hidden
-                    // transportation, labor, materials or commission lines.
-                    'totalPrice' => $quote['totalPrice'],
-                    'currency' => $quote['currency'],
-                    'isPricingFinal' => $quote['isPricingFinal'],
-                    'supervisor' => $quote['supervisor'] ?? null,
-                ],
-                'roomPeriods' => array_map(static fn (array $period): array => [
-                    'clientKey' => $period['clientKey'],
-                    'visitSequence' => $period['visitSequence'],
-                    'scheduledDate' => $period['scheduledDate'],
-                    'scheduledTime' => $period['scheduledTime'],
-                    'estimatedEndAt' => $period['estimatedEndAt'],
-                    'numberOfWorkers' => $period['numberOfWorkers'],
-                    'estimatedWorkMinutes' => $period['estimatedWorkMinutes'],
-                    'estimatedDurationMinutes' => $period['estimatedDurationMinutes'],
-                ], $quote['roomPeriods']),
-                'requiredSimultaneousWorkers' => $quote['requiredSimultaneousWorkers'],
-                'pricingAlgorithm' => $quote['algorithmVersion'],
-                'quoteSignature' => $periodCreation->signature($quote, $validated, (int) $request->user()->id),
-                'materialsPreview' => app(\Modules\Cleaning\Services\CleaningMaterialQuoteService::class)
-                    ->quote((array) $validated['propertyDetails'], null, false)['lines'],
-            ]);
+            return response()->json($result);
         }
         [$addressLatitude, $addressLongitude] = $this->resolveAddressCoordinates($validated, (int) $request->user()->id);
         $isEventAssistance = $service->isEventAssistanceType((string) $validated['propertyType']);
         $eventPlan = $isEventAssistance ? $eventSchedule->resolve($validated) : null;
         $openTimePlan = ! $isEventAssistance ? $openTimeSchedule->resolve($validated) : null;
-        $recurringPlan = ! $isEventAssistance && $openTimePlan === null
-            ? $recurringSchedule->resolve($validated)
-            : null;
 
         try {
             $estimation = $service->estimate(
@@ -107,21 +60,12 @@ final class UserCleaningOrderEstimatePriceController
                 isset($validated['serviceIds']) ? (array) $validated['serviceIds'] : null,
             );
             $singleVisitEstimatedHours = (float) $estimation['estimatedHours'];
-            $recurringSessionHours = $recurringPlan !== null
-                && (string) ($recurringPlan['calculationMode'] ?? RecurringCleaningScheduleService::CALCULATION_TASK) === RecurringCleaningScheduleService::CALCULATION_HOURS
-                    ? (float) ($recurringPlan['hoursPerVisit'] ?? $singleVisitEstimatedHours)
-                    : $singleVisitEstimatedHours;
 
             if ($eventPlan !== null) {
                 $estimation['estimatedHours'] = $eventPlan['totalHours'];
                 if (is_array($estimation['recommendation'] ?? null)) {
                     $estimation['recommendation']['hours'] = $eventPlan['totalHours'];
                 }
-            } elseif ($recurringPlan !== null) {
-                $estimation['estimatedHours'] = round(
-                    $recurringSessionHours * (int) $recurringPlan['sessionsCount'],
-                    2,
-                );
             }
 
             $preferredWorkerCount = is_array($validated['preferredWorkerIds'] ?? null)
@@ -158,9 +102,7 @@ final class UserCleaningOrderEstimatePriceController
                     static fn (array $session): float => (float) $session['hours'],
                     $eventPlan['sessions'],
                 ))
-                : ($recurringPlan !== null
-                    ? $recurringSessionHours
-                    : (float) $estimation['estimatedHours']));
+                : (float) $estimation['estimatedHours']);
             $capacity = CleaningWorkerCapacity::payload($capacityHours);
 
             $pricingPropertyDetails = (array) $validated['propertyDetails'];
@@ -194,44 +136,24 @@ final class UserCleaningOrderEstimatePriceController
                         max(1, (int) ($validated['openTime']['workerCount'] ?? $requestedWorkers)),
                         max(15, (int) ($validated['openTime']['expectedMaxMinutes'] ?? 480)),
                     )
-                    : ($recurringPlan !== null
-                    && (string) ($recurringPlan['calculationMode'] ?? RecurringCleaningScheduleService::CALCULATION_TASK) === RecurringCleaningScheduleService::CALCULATION_HOURS
-                        ? $service->priceRecurringHours(
-                            (string) $validated['propertyType'],
-                            $pricingPropertyDetails,
-                            $addressLatitude,
-                            $addressLongitude,
-                            $assignmentMode === 'preferred_worker' ? ($validated['preferredWorkerId'] ?? null) : null,
-                            $recurringSessionHours,
-                            $requestedWorkers,
-                            (bool) ($validated['requestMaterials'] ?? false),
-                            is_array($validated['specialServices'] ?? null) ? $validated['specialServices'] : [],
-                        )
-                        : $service->price(
-                            (string) $validated['propertyType'],
-                            $pricingPropertyDetails,
-                            $addressLatitude,
-                            $addressLongitude,
-                            $assignmentMode === 'preferred_worker' ? ($validated['preferredWorkerId'] ?? null) : null,
-                            isset($validated['serviceIds']) ? (array) $validated['serviceIds'] : null,
-                            (bool) ($validated['requestMaterials'] ?? false),
-                            is_array($validated['specialServices'] ?? null) ? $validated['specialServices'] : [],
-                            $requestedWorkers,
-                            ($validated['serviceType'] ?? null) === 'supervised_team',
-                        ));
+                    : $service->price(
+                        (string) $validated['propertyType'],
+                        $pricingPropertyDetails,
+                        $addressLatitude,
+                        $addressLongitude,
+                        $assignmentMode === 'preferred_worker' ? ($validated['preferredWorkerId'] ?? null) : null,
+                        isset($validated['serviceIds']) ? (array) $validated['serviceIds'] : null,
+                        (bool) ($validated['requestMaterials'] ?? false),
+                        is_array($validated['specialServices'] ?? null) ? $validated['specialServices'] : [],
+                        $requestedWorkers,
+                        ($validated['serviceType'] ?? null) === 'supervised_team',
+                    );
 
                 if ($isOpenTime && $openTimePlan !== null) {
                     $pricing = $openTimeSchedule->quote($openTimePlan, $pricing);
                     $estimation['estimatedHours'] = round(((int) $openTimePlan['totalExpectedMinutes']) / 60, 2);
                 }
 
-                if ($recurringPlan !== null && ! $isOpenTime) {
-                    $pricing = $recurringSchedule->quote(
-                        $recurringPlan,
-                        $pricing,
-                        $recurringSessionHours,
-                    );
-                }
             }
         } catch (InvalidArgumentException $exception) {
             throw ValidationException::withMessages([
@@ -260,7 +182,7 @@ final class UserCleaningOrderEstimatePriceController
                 ? []
                 : app(\Modules\Cleaning\Services\CleaningMaterialQuoteService::class)
                     ->quote($pricingPropertyDetails, null, false)['lines'],
-            'schedule' => ($eventPlan !== null || $recurringPlan !== null || $openTimePlan !== null) ? $pricing['schedule'] : null,
+            'schedule' => ($eventPlan !== null || $openTimePlan !== null) ? $pricing['schedule'] : null,
             'serviceType' => $validated['serviceType'] ?? 'standard',
             'supervisedTeam' => ($validated['serviceType'] ?? null) === 'supervised_team'
                 ? app(\Modules\Cleaning\Services\SupervisedTeamScheduleService::class)->estimate(

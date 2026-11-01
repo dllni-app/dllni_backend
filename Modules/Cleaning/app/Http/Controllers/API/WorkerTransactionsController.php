@@ -132,8 +132,6 @@ final class WorkerTransactionsController
             'totalPrice' => $grossAmount,
             'workerAmount' => $workerAmount,
             'bookingTotalPrice' => (float) ($booking->total_price ?? 0),
-            'roomCount' => (int) ($assignment?->room_count ?? 1),
-            'roomsWeight' => (float) ($assignment?->rooms_weight ?? 0),
             'adminMarginAmount' => (float) ($assignment?->admin_margin_amount ?? $booking->admin_margin_amount ?? 0),
             'currency' => $assignment?->currency ?? (string) config('app.currency', 'SYP'),
             'customer' => [

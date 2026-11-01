@@ -10,7 +10,7 @@ use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\CleaningBookingTeamService;
 
-it('can reshuffle only automatic room ownership while the team is forming so later higher-trust workers get the heavier balanced slot', function (): void {
+it('keeps rooms shared as workers arrive without trust-based room reassignment', function (): void {
     CleaningFinancialSetting::query()->updateOrCreate(
         ['id' => 1],
         [
@@ -42,7 +42,7 @@ it('can reshuffle only automatic room ownership while the team is forming so lat
     ]);
 
     $teamService = app(CleaningBookingTeamService::class);
-    $teamService->syncRooms($booking, null);
+    $teamService->syncRooms($booking);
 
     $accept = function (int $trust, int $offset) use ($booking): Worker {
         $worker = Worker::factory()->create([
@@ -57,8 +57,6 @@ it('can reshuffle only automatic room ownership while the team is forming so lat
             'worker_id' => $worker->id,
             'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
             'accepted_at' => now()->addSeconds($offset),
-            'room_count' => 0,
-            'rooms_weight' => 0,
             'service_share_amount' => 0,
             'travel_fee' => 0,
             'admin_margin_amount' => 0,
@@ -72,15 +70,15 @@ it('can reshuffle only automatic room ownership while the team is forming so lat
     $low = $accept(40, 0);
     $teamService->recalculateBookingTeam($booking->fresh(), finalizeBooking: false);
     $lowAssignment = CleaningBookingWorkerAssignment::query()->where('worker_id', $low->id)->firstOrFail();
-    expect((float) $lowAssignment->rooms_weight)->toBe(5.0);
+    expect((float) $lowAssignment->service_share_amount)->toBeGreaterThan(0);
 
     $high = $accept(95, 1);
     $teamService->recalculateBookingTeam($booking->fresh(), finalizeBooking: false);
     $lowAssignment->refresh();
     $highAssignment = CleaningBookingWorkerAssignment::query()->where('worker_id', $high->id)->firstOrFail();
 
-    expect((float) $highAssignment->rooms_weight)->toBe(5.0)
-        ->and((float) $lowAssignment->rooms_weight)->toBe(4.95);
+    expect((float) $highAssignment->service_share_amount)->toBeGreaterThan(0)
+        ->and((float) $lowAssignment->service_share_amount)->toBeGreaterThan(0);
 
     $medium = $accept(70, 2);
     $teamService->recalculateBookingTeam($booking->fresh(), finalizeBooking: true);
@@ -88,8 +86,9 @@ it('can reshuffle only automatic room ownership while the team is forming so lat
     $highAssignment->refresh();
     $mediumAssignment = CleaningBookingWorkerAssignment::query()->where('worker_id', $medium->id)->firstOrFail();
 
-    expect((float) $highAssignment->rooms_weight)->toBe(5.0)
-        ->and((float) $mediumAssignment->rooms_weight)->toBe(4.95)
-        ->and((float) $lowAssignment->rooms_weight)->toBe(4.7)
-        ->and($booking->rooms()->where('assignment_source', 'auto')->count())->toBe(9);
+    expect((float) $highAssignment->service_share_amount)->toBeGreaterThan(0)
+        ->and((float) $mediumAssignment->service_share_amount)->toBeGreaterThan(0)
+        ->and((float) $lowAssignment->service_share_amount)->toBeGreaterThan(0)
+        ->and(round((float) CleaningBookingWorkerAssignment::query()
+            ->where('cleaning_booking_id', $booking->id)->sum('service_share_amount'), 2))->toBe(14650.0);
 });

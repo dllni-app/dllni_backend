@@ -18,6 +18,8 @@ beforeEach(function (): void {
             'default_commission_rate' => 10,
             'commission_type' => 'percent',
             'commission_fixed_amount' => null,
+            'travel_markup_type' => 'worker_allowance',
+            'travel_markup_value' => 10,
             'travel_per_km' => 10,
             'travel_distance_start_point' => 'worker_home',
         ],
@@ -38,8 +40,6 @@ function makeAcceptedCleaningWorker(CleaningBooking $booking, int $trustScore, i
         'worker_id' => $worker->id,
         'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
         'accepted_at' => now()->addSeconds($acceptedAfterSeconds),
-        'room_count' => 0,
-        'rooms_weight' => 0,
         'service_share_amount' => 0,
         'travel_fee' => 0,
         'admin_margin_amount' => 0,
@@ -50,7 +50,7 @@ function makeAcceptedCleaningWorker(CleaningBooking $booking, int $trustScore, i
     return [$worker, $assignment];
 }
 
-it('repairs a legacy fifteen-room plan and immediately gives the accepted worker five rooms', function (): void {
+it('keeps fifteen rooms as shared booking tasks while pricing the first accepted worker', function (): void {
     $booking = CleaningBooking::factory()->create([
         'status' => CleaningBookingStatus::Pending->value,
         'assignment_mode' => 'open_count',
@@ -74,15 +74,8 @@ it('repairs a legacy fifteen-room plan and immediately gives the accepted worker
     ]);
 
     $teamService = app(CleaningBookingTeamService::class);
-    $teamService->syncRooms($booking, null);
+    $teamService->syncRooms($booking);
 
-    // Simulate bookings created before automatic worker-slot planning existed.
-    $booking->rooms()->update([
-        'planned_worker_slot' => null,
-        'planned_preferred_worker_id' => null,
-        'assigned_worker_id' => null,
-        'assignment_source' => null,
-    ]);
 
     [$worker, $assignment] = makeAcceptedCleaningWorker($booking, 80, 0);
 
@@ -90,17 +83,14 @@ it('repairs a legacy fifteen-room plan and immediately gives the accepted worker
     $assignment->refresh();
     $booking->refresh();
 
-    expect($assignment->room_count)->toBe(5)
-        ->and((float) $assignment->rooms_weight)->toBe(10.0)
+    expect($booking->rooms()->count())->toBe(15)
         ->and((float) $assignment->service_share_amount)->toBe(1000.0)
         ->and((float) $assignment->admin_margin_amount)->toBe(100.0)
-        ->and($booking->rooms()->where('assigned_worker_id', $worker->id)->count())->toBe(5)
-        ->and($booking->rooms()->whereNotNull('planned_worker_slot')->count())->toBe(15)
         ->and((float) $booking->admin_margin_amount)->toBe(300.0)
-        ->and((float) $booking->total_price)->toBe(3300.0);
+        ->and((float) $booking->total_price)->toBe(3030.0);
 });
 
-it('keeps work as balanced as possible while giving the slightly heavier share to higher-trust workers', function (): void {
+it('keeps rooms shared by all workers regardless of trust-score order', function (): void {
     $booking = CleaningBooking::factory()->create([
         'status' => CleaningBookingStatus::Pending->value,
         'assignment_mode' => 'open_count',
@@ -127,7 +117,7 @@ it('keeps work as balanced as possible while giving the slightly heavier share t
     ]);
 
     $teamService = app(CleaningBookingTeamService::class);
-    $teamService->syncRooms($booking, null);
+    $teamService->syncRooms($booking);
 
     [$lowTrustWorker] = makeAcceptedCleaningWorker($booking, 40, 0);
     [$highTrustWorker] = makeAcceptedCleaningWorker($booking, 95, 1);
@@ -140,16 +130,9 @@ it('keeps work as balanced as possible while giving the slightly heavier share t
         ->get()
         ->keyBy('worker_id');
 
-    $highWeight = (float) $assignments[$highTrustWorker->id]->rooms_weight;
-    $mediumWeight = (float) $assignments[$mediumTrustWorker->id]->rooms_weight;
-    $lowWeight = (float) $assignments[$lowTrustWorker->id]->rooms_weight;
-
-    expect($highWeight)->toBe(5.0)
-        ->and($mediumWeight)->toBe(4.95)
-        ->and($lowWeight)->toBe(4.7)
-        ->and($highWeight)->toBeGreaterThan($mediumWeight)
-        ->and($mediumWeight)->toBeGreaterThan($lowWeight)
-        ->and(round($highWeight - $lowWeight, 2))->toBeLessThanOrEqual(0.3);
+    expect($assignments)->toHaveCount(3)
+        ->and(round((float) $assignments->sum('service_share_amount'), 2))->toBe(14650.0)
+        ->and($booking->rooms()->count())->toBeGreaterThan(0);
 });
 
 it('does not rebuild and wipe the room plan after any worker has accepted', function (): void {
@@ -166,9 +149,9 @@ it('does not rebuild and wipe the room plan after any worker has accepted', func
     ]);
 
     $teamService = app(CleaningBookingTeamService::class);
-    $teamService->syncRooms($booking, null);
+    $teamService->syncRooms($booking);
     makeAcceptedCleaningWorker($booking, 80, 0);
 
-    expect(fn () => $teamService->syncRooms($booking->fresh(), null))
+    expect(fn () => $teamService->syncRooms($booking->fresh()))
         ->toThrow(ValidationException::class);
 });

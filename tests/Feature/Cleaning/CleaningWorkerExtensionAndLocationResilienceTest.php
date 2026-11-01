@@ -372,8 +372,6 @@ function createResilienceAssignment(
         'worker_completion_message' => null,
         'worker_finished_cleaning_services' => null,
         'worker_finished_property_rooms' => null,
-        'room_count' => 0,
-        'rooms_weight' => 0,
         'service_share_amount' => 0,
         'travel_fee' => 0,
         'admin_margin_amount' => 0,

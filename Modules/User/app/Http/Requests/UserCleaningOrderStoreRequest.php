@@ -11,19 +11,17 @@ use Modules\User\Http\Requests\Concerns\ResolvesEventVenueTypes;
 use Modules\User\Http\Requests\Concerns\ValidatesDynamicCleaningEvent;
 use Modules\User\Http\Requests\Concerns\ValidatesEventAssistanceSchedule;
 use Modules\User\Http\Requests\Concerns\ValidatesRecurringWorkerScope;
-use Modules\User\Http\Requests\Concerns\ValidatesWorkerRoomAssignments;
 use Modules\User\Models\UserAddress;
 use Modules\User\Services\FemaleWorkerSafetyPolicyService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderStoreRequest extends FormRequest
 {
-    use \Modules\User\Http\Requests\Concerns\ValidatesRoomCleaningModes;
+    use Concerns\ValidatesRoomCleaningModes;
     use ResolvesEventVenueTypes;
     use ValidatesDynamicCleaningEvent;
     use ValidatesEventAssistanceSchedule;
     use ValidatesRecurringWorkerScope;
-    use ValidatesWorkerRoomAssignments;
 
     private const INCOMPLETE_ADDRESS_MESSAGE = 'يرجى تحديث العنوان المختار وتحديد موقعه على الخريطة قبل إنشاء الطلب.';
 
@@ -39,8 +37,8 @@ final class UserCleaningOrderStoreRequest extends FormRequest
         $today = now(config('app.timezone'))->toDateString();
 
         return [
-            ...\Modules\User\Http\Requests\Concerns\CleaningTimePeriodContract::rules(),
-            ...\Modules\User\Http\Requests\Concerns\RoomPeriodContract::rules(),
+            ...Concerns\CleaningTimePeriodContract::rules(),
+            'roomPeriods' => ['prohibited'],
             'propertyType' => ['required', 'string', Rule::in(UserCleaningOrderEstimationService::PROPERTY_TYPES)],
             'propertyDetails' => ['required', 'array:address,location_name,bedrooms,rooms,bathrooms,toilets,kitchens,balconies,sheds,living_room_size,cleaning_mode,room_cleaning_modes,room_estimated_hours,room_size_breakdown,eventType,eventTypeId,dynamicAnswers,guestCount,venueType,customService,hours,specialRequirement,notes,requested_material_type_ids'],
             'propertyDetails.address' => ['required', 'string', 'max:500'],
@@ -135,7 +133,7 @@ final class UserCleaningOrderStoreRequest extends FormRequest
             'assignmentMode' => ['nullable', 'string', Rule::in(['preferred_worker', 'open_count'])],
             'numberOfWorkers' => ['nullable', 'integer', 'min:1', 'max:20'],
             'serviceType' => ['nullable', Rule::in(['standard', 'supervised_team'])],
-            ...$this->workerRoomAssignmentRules(),
+            'workerRoomAssignments' => ['prohibited'],
             'genderPreference' => ['nullable', 'string', Rule::in(['any', 'male', 'female'])],
             'workEnvironmentConfirmation' => [Rule::excludeIf(! $requiresFemaleWorkerSafetyConfirmation), Rule::requiredIf($requiresFemaleWorkerSafetyConfirmation), 'array:beneficiaryPresence,pledgeAccepted,pledgeVersion'],
             'workEnvironmentConfirmation.beneficiaryPresence' => [Rule::excludeIf(! $requiresFemaleWorkerSafetyConfirmation), Rule::requiredIf($requiresFemaleWorkerSafetyConfirmation), 'string', Rule::in([FemaleWorkerSafetyPolicyService::BENEFICIARY_FEMALE_PRESENT, FemaleWorkerSafetyPolicyService::BENEFICIARY_MALE_ALONE])],
@@ -157,13 +155,7 @@ final class UserCleaningOrderStoreRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
-            \Modules\User\Http\Requests\Concerns\CleaningTimePeriodContract::validate($this->all(), $validator, true);
-            if ($this->exists('roomPeriods')) {
-                \Modules\User\Http\Requests\Concerns\RoomPeriodContract::validateConsistency($this->all(), $validator);
-                if (! $this->filled('quoteSignature')) {
-                    $validator->errors()->add('quoteSignature', 'Review the newest price before submitting the booking.');
-                }
-            }
+            Concerns\CleaningTimePeriodContract::validate($this->all(), $validator, true);
             $this->validateRoomCleaningModes($validator);
             $this->validateRoomEstimatedHours($validator);
             $this->validateActiveRoomTypes($validator);
@@ -186,7 +178,6 @@ final class UserCleaningOrderStoreRequest extends FormRequest
                 }
             }
 
-            $this->validateWorkerRoomAssignments($validator);
             $this->validateNewServiceScope($validator);
         });
     }
@@ -195,7 +186,7 @@ final class UserCleaningOrderStoreRequest extends FormRequest
     {
         $merge = [];
         if ((int) $this->input('contractVersion') === 2) {
-            $schedules = collect((array) $this->input('visits', []))->flatMap(static fn ($visit): array => is_array($visit) ? (array) ($visit['roomSchedules'] ?? []) : []);
+            $schedules = collect((array) $this->input('appointments', []))->flatMap(static fn ($appointment): array => is_array($appointment) ? (array) ($appointment['roomSchedules'] ?? []) : []);
             $first = $schedules->sortBy(static fn ($schedule): string => is_array($schedule) ? (string) ($schedule['scheduledDate'] ?? '').' '.($schedule['scheduledTime'] ?? '') : '')->first();
             if (is_array($first)) {
                 $merge['scheduledDate'] = $first['scheduledDate'] ?? null;

@@ -31,8 +31,6 @@ it('separates accepted pending team bookings from new worker offers', function (
         'worker_id' => $worker->id,
         'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
         'accepted_at' => now(),
-        'room_count' => 0,
-        'rooms_weight' => 0,
         'service_share_amount' => 500,
         'travel_fee' => 50,
         'admin_margin_amount' => 20,

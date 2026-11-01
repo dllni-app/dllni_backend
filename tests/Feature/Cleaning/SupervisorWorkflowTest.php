@@ -14,7 +14,7 @@ use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
 use Spatie\Permission\Models\Role;
 
-function workflowPeopleAndBooking(int $arrived = 3): array
+function workflowPeopleAndBooking(int $arrived = 3, bool $seedConfirmedAttendance = true): array
 {
     Role::findOrCreate('Cleaning Supervisor', 'web');
     $supervisor = User::factory()->create(['is_active' => true]);
@@ -32,15 +32,64 @@ function workflowPeopleAndBooking(int $arrived = 3): array
         'assigned_at' => now(), 'active_slot' => 1, 'created_at' => now(), 'updated_at' => now(),
     ]);
     for ($i = 0; $i < 3; $i++) {
-        $booking->workerAssignments()->create([
+        $assignment = $booking->workerAssignments()->create([
             'worker_id' => Worker::factory()->create()->id,
             'status' => 'accepted', 'accepted_at' => now(),
             'arrived_at' => $i < $arrived ? now() : null,
         ]);
+        // Legacy workflow tests start after physical attendance confirmation.
+        // Record the confirmed proof explicitly; arrived_at alone no longer
+        // authorizes supervisor verification for a team.
+        if ($seedConfirmedAttendance && $i < $arrived) {
+            DB::table('cleaning_worker_attendance_proofs')->insert([
+                'cleaning_booking_id' => $booking->id,
+                'worker_assignment_id' => $assignment->id,
+                'code_hash' => hash('sha256', 'qa-attendance-'.$assignment->id),
+                'worker_code_ciphertext' => encrypt('123456'),
+                'expires_at' => now()->addHour(),
+                'confirmed_at' => now(),
+                'confirmed_by_user_id' => $supervisor->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
     }
 
     return [$supervisor, $customer, $booking];
 }
+
+it('requires individual worker attendance proofs before a standard team can request supervisor arrival verification', function () {
+    [$supervisor, $customer, $booking] = workflowPeopleAndBooking(seedConfirmedAttendance: false);
+    $booking->forceFill(['booking_kind' => 'standard'])->save();
+    $supervisorUrl = "/api/v1/supervisor/bookings/{$booking->id}";
+    Sanctum::actingAs($supervisor);
+    $this->postJson("$supervisorUrl/verification-requests")->assertConflict();
+
+    foreach ($booking->workerAssignments as $assignment) {
+        Sanctum::actingAs($assignment->worker->user);
+        $workerUrl = "/api/v1/cleaning-bookings/{$booking->id}/worker-attendance/code";
+        $code = $this->postJson($workerUrl)->assertOk()->json('data.code');
+        expect($code)->toMatch('/^\d{6}$/');
+        Sanctum::actingAs($customer);
+        $this->postJson("$supervisorUrl/worker-attendance/{$assignment->id}/confirm", ['code' => $code])
+            ->assertForbidden();
+        Sanctum::actingAs($supervisor);
+        $this->postJson("$supervisorUrl/worker-attendance/{$assignment->id}/confirm", ['code' => $code])
+            ->assertOk()->assertJsonPath('data.status', 'confirmed');
+        $this->postJson("$supervisorUrl/worker-attendance/{$assignment->id}/confirm", ['code' => $code])
+            ->assertOk();
+    }
+
+    $verificationCode = $this->postJson("$supervisorUrl/verification-requests")
+        ->assertOk()->assertJsonPath('data.status', 'pending')->json('data.code');
+    Sanctum::actingAs($customer);
+    $customerUrl = "/api/v1/supervised-team/customer/bookings/{$booking->id}";
+    $this->getJson("$customerUrl/verification-code")->assertNotFound();
+    $this->postJson("$customerUrl/verification/confirm", ['code' => $verificationCode])
+        ->assertOk()->assertJsonPath('data.status', 'verified');
+    $this->postJson("$customerUrl/verification/confirm", ['code' => $verificationCode])
+        ->assertConflict();
+});
 
 it('does not redirect unauthenticated mobile API requests to a nonexistent web login', function () {
     $this->get('/api/v1/supervisor/me', ['Accept' => 'text/html'])->assertUnauthorized();
@@ -56,18 +105,34 @@ it('blocks verification when the team is incomplete and protects customer secret
     $this->getJson("/api/v1/supervised-team/customer/bookings/{$booking->id}/verification-code")
         ->assertNotFound();
     $booking->workerAssignments()->whereNull('arrived_at')->update(['arrived_at' => now()]);
+    foreach ($booking->workerAssignments()->get() as $assignment) {
+        if (DB::table('cleaning_worker_attendance_proofs')->where('worker_assignment_id', $assignment->id)->exists()) {
+            continue;
+        }
+        DB::table('cleaning_worker_attendance_proofs')->insert([
+            'cleaning_booking_id' => $booking->id,
+            'worker_assignment_id' => $assignment->id,
+            'code_hash' => hash('sha256', 'qa-attendance-'.$assignment->id),
+            'worker_code_ciphertext' => encrypt('123456'),
+            'expires_at' => now()->addHour(),
+            'confirmed_at' => now(),
+            'confirmed_by_user_id' => $supervisor->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
     $this->postJson("$prefix/verification-requests")->assertOk()->assertJsonPath('data.status', 'pending')
         ->assertDontSee('customer_code_ciphertext');
     $this->postJson("$prefix/verification-requests")->assertOk();
     $this->assertDatabaseCount('cleaning_supervisor_verifications', 1);
     $this->getJson("$prefix/verification/status")->assertOk()
-        ->assertJsonPath('data.entryActor', 'supervisor')->assertJsonPath('data.codeRecipient', 'customer')
+        ->assertJsonPath('data.entryActor', 'customer')->assertJsonPath('data.codeRecipient', 'supervisor')
         ->assertJsonPath('data.teamState', 'verification_pending')->assertJsonMissingPath('data.code');
     $this->getJson("/api/v1/supervised-team/customer/bookings/{$booking->id}/verification-code")
         ->assertNotFound();
     Sanctum::actingAs($customer);
     $this->getJson("/api/v1/supervised-team/customer/bookings/{$booking->id}/verification-code")
-        ->assertOk()->assertJsonStructure(['data' => ['code', 'expiresAt']]);
+        ->assertNotFound();
 });
 
 it('completes verified team execution, customer decisions and a team-level report', function () {
@@ -76,13 +141,12 @@ it('completes verified team execution, customer decisions and a team-level repor
     $customerUrl = "/api/v1/supervised-team/customer/bookings/{$booking->id}";
     Sanctum::actingAs($supervisor);
     $this->postJson("$supervisorUrl/start")->assertStatus(409);
-    $this->postJson("$supervisorUrl/verification-requests")->assertOk();
+    $code = $this->postJson("$supervisorUrl/verification-requests")->assertOk()->json('data.code');
     Sanctum::actingAs($customer);
-    $code = $this->getJson("$customerUrl/verification-code")->assertOk()->json('data.code');
-    Sanctum::actingAs($supervisor);
-    $this->postJson("$supervisorUrl/verification/confirm", ['code' => '000000'])->assertUnprocessable();
-    $this->postJson("$supervisorUrl/verification/confirm", ['code' => $code])->assertOk()
+    $this->postJson("$customerUrl/verification/confirm", ['code' => '000000'])->assertUnprocessable();
+    $this->postJson("$customerUrl/verification/confirm", ['code' => $code])->assertOk()
         ->assertJsonPath('data.status', 'verified');
+    Sanctum::actingAs($supervisor);
     $this->getJson("$supervisorUrl")->assertJsonPath('data.teamState', 'verified');
     $this->postJson("$supervisorUrl/start")->assertOk()->assertJsonPath('data.teamState', 'in_progress');
     $this->postJson("$supervisorUrl/start")->assertOk(); // idempotent
@@ -122,11 +186,10 @@ it('rolls back supervisor report completion if mandatory team commission inserti
     $customerUrl = "/api/v1/supervised-team/customer/bookings/{$booking->id}";
 
     Sanctum::actingAs($supervisor);
-    $this->postJson("$supervisorUrl/verification-requests")->assertOk();
+    $code = $this->postJson("$supervisorUrl/verification-requests")->assertOk()->json('data.code');
     Sanctum::actingAs($customer);
-    $code = $this->getJson("$customerUrl/verification-code")->assertOk()->json('data.code');
+    $this->postJson("$customerUrl/verification/confirm", ['code' => $code])->assertOk();
     Sanctum::actingAs($supervisor);
-    $this->postJson("$supervisorUrl/verification/confirm", ['code' => $code])->assertOk();
     $this->postJson("$supervisorUrl/start")->assertOk();
     $this->postJson("$supervisorUrl/handover-requests")->assertCreated();
     Sanctum::actingAs($customer);
@@ -160,11 +223,10 @@ it('settles one commission per supervised worker and does not debit again on rep
     $customerUrl = "/api/v1/supervised-team/customer/bookings/{$booking->id}";
 
     Sanctum::actingAs($supervisor);
-    $this->postJson("$supervisorUrl/verification-requests")->assertOk();
+    $code = $this->postJson("$supervisorUrl/verification-requests")->assertOk()->json('data.code');
     Sanctum::actingAs($customer);
-    $code = $this->getJson("$customerUrl/verification-code")->assertOk()->json('data.code');
+    $this->postJson("$customerUrl/verification/confirm", ['code' => $code])->assertOk();
     Sanctum::actingAs($supervisor);
-    $this->postJson("$supervisorUrl/verification/confirm", ['code' => $code])->assertOk();
     $this->postJson("$supervisorUrl/start")->assertOk();
     $this->postJson("$supervisorUrl/handover-requests")->assertCreated();
     Sanctum::actingAs($customer);
@@ -255,11 +317,10 @@ it('restricts handover decisions to booking customer and retains disputes', func
     $prefix = "/api/v1/supervisor/bookings/{$booking->id}";
     $customerUrl = "/api/v1/supervised-team/customer/bookings/{$booking->id}";
     Sanctum::actingAs($supervisor);
-    $this->postJson("$prefix/verification-requests")->assertOk();
+    $code = $this->postJson("$prefix/verification-requests")->assertOk()->json('data.code');
     Sanctum::actingAs($customer);
-    $code = $this->getJson("$customerUrl/verification-code")->json('data.code');
+    $this->postJson("$customerUrl/verification/confirm", ['code' => $code])->assertOk();
     Sanctum::actingAs($supervisor);
-    $this->postJson("$prefix/verification/confirm", ['code' => $code])->assertOk();
     $this->postJson("$prefix/start")->assertOk();
     $this->postJson("$prefix/handover-requests")->assertCreated();
     $this->postJson("$customerUrl/handover-decision", ['decision' => 'confirmed'])->assertNotFound();
@@ -308,12 +369,14 @@ it('lets only the booking customer discover pending team decisions without expos
     $this->getJson($customerUrl)->assertNotFound();
     Sanctum::actingAs($customer);
     $this->getJson($customerUrl)->assertOk()
-        ->assertJsonPath('data.allowedActions', ['view_verification_code'])
+        ->assertJsonPath('data.allowedActions', ['confirm_supervisor_arrival'])
         ->assertJsonMissingPath('data.code')->assertDontSee('code_hash')->assertDontSee('customer_code_ciphertext');
-    $code = $this->getJson("$customerUrl/verification-code")->assertOk()
-        ->assertHeader('Cache-Control', 'no-store, private')->json('data.code');
+    $this->getJson("$customerUrl/verification-code")->assertNotFound();
     Sanctum::actingAs($supervisor);
-    $this->postJson("$supervisorUrl/verification/confirm", ['code' => $code])->assertOk();
+    $code = $this->postJson("$supervisorUrl/verification-requests")->assertOk()->json('data.code');
+    Sanctum::actingAs($customer);
+    $this->postJson("$customerUrl/verification/confirm", ['code' => $code])->assertOk();
+    Sanctum::actingAs($supervisor);
     $this->postJson("$supervisorUrl/start")->assertOk();
     $extension = $this->postJson("$supervisorUrl/extension-requests", [
         'additionalMinutes' => 30, 'reason' => 'نحتاج وقتاً إضافياً لإنهاء العمل',
@@ -337,14 +400,12 @@ it('never revives a cancelled booking with a previously issued verification code
     $supervisorUrl = "/api/v1/supervisor/bookings/{$booking->id}";
     $customerUrl = "/api/v1/supervised-team/customer/bookings/{$booking->id}";
     Sanctum::actingAs($supervisor);
-    $this->postJson("$supervisorUrl/verification-requests")->assertOk();
+    $code = $this->postJson("$supervisorUrl/verification-requests")->assertOk()->json('data.code');
     Sanctum::actingAs($customer);
-    $code = $this->getJson("$customerUrl/verification-code")->json('data.code');
     $booking->forceFill(['status' => CleaningBookingStatus::Cancelled])->save();
     $this->getJson("$customerUrl/verification-code")->assertNotFound();
     $this->getJson($customerUrl)->assertOk()->assertJsonPath('data.allowedActions', []);
-    Sanctum::actingAs($supervisor);
-    $this->postJson("$supervisorUrl/verification/confirm", ['code' => $code])->assertConflict();
+    $this->postJson("$customerUrl/verification/confirm", ['code' => $code])->assertConflict();
     $this->assertDatabaseHas('cleaning_bookings', ['id' => $booking->id, 'status' => 'cancelled']);
     $this->assertDatabaseHas('cleaning_supervisor_verifications', ['cleaning_booking_id' => $booking->id, 'status' => 'pending']);
 });
@@ -354,20 +415,21 @@ it('rejects expired or exhausted verification challenges without starting the te
     $supervisorUrl = "/api/v1/supervisor/bookings/{$booking->id}";
     $customerUrl = "/api/v1/supervised-team/customer/bookings/{$booking->id}";
     Sanctum::actingAs($supervisor);
-    $this->postJson("$supervisorUrl/verification-requests")->assertOk();
+    $code = $this->postJson("$supervisorUrl/verification-requests")->assertOk()->json('data.code');
     Sanctum::actingAs($customer);
-    $code = $this->getJson("$customerUrl/verification-code")->json('data.code');
-    Sanctum::actingAs($supervisor);
     if ($exhaustAttempts) {
         for ($attempt = 0; $attempt < 5; $attempt++) {
-            $this->postJson("$supervisorUrl/verification/confirm", ['code' => '000000'])->assertUnprocessable();
+            $this->postJson("$customerUrl/verification/confirm", ['code' => '000000'])->assertUnprocessable();
         }
         $this->assertDatabaseHas('cleaning_supervisor_verifications', ['cleaning_booking_id' => $booking->id, 'attempts' => 5]);
     } else {
         $this->travel(10)->minutes();
+        Sanctum::actingAs($supervisor);
         $this->getJson("$supervisorUrl/verification/status")->assertOk()->assertJsonPath('data.status', 'expired');
+        Sanctum::actingAs($customer);
     }
-    $this->postJson("$supervisorUrl/verification/confirm", ['code' => $code])->assertUnprocessable();
+    $this->postJson("$customerUrl/verification/confirm", ['code' => $code])->assertUnprocessable();
+    Sanctum::actingAs($supervisor);
     $this->postJson("$supervisorUrl/start")->assertConflict();
     Sanctum::actingAs($customer);
     $this->getJson("$customerUrl/verification-code")->assertNotFound();
@@ -385,4 +447,42 @@ it('rejects legacy customer lifecycle decisions for supervised team bookings', f
     'confirmation' => ['completion/confirm', []],
     'objection' => ['completion/reject', ['reason' => 'الخدمة تحتاج مراجعة']],
     'extension' => ['completion/extend-time', ['additionalMinutes' => 30]],
+]);
+
+it('rejects legacy lifecycle decisions for a standard multiworker booking under active supervision without changing custody', function (string $action, array $payload) {
+    [$supervisor, $customer, $booking] = workflowPeopleAndBooking();
+    $booking->forceFill([
+        'booking_kind' => 'standard',
+        'number_of_workers' => 3,
+        'status' => CleaningBookingStatus::AwaitingCustomerCompletion,
+        'customer_confirmed_at' => null,
+    ])->save();
+
+    DB::table('cleaning_supervisor_handovers')->insert([
+        'cleaning_booking_id' => $booking->id,
+        'supervisor_user_id' => $supervisor->id,
+        'status' => 'pending',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    Sanctum::actingAs($customer);
+
+    $this->postJson("/api/v1/user/cleaning/orders/{$booking->id}/$action", $payload)
+        ->assertForbidden()->assertJsonPath('code', 'SUPERVISED_TEAM_ACTION_FORBIDDEN');
+
+    $this->assertDatabaseHas('cleaning_bookings', [
+        'id' => $booking->id,
+        'status' => CleaningBookingStatus::AwaitingCustomerCompletion->value,
+        'customer_confirmed_at' => null,
+    ]);
+    $this->assertDatabaseHas('cleaning_supervisor_handovers', [
+        'cleaning_booking_id' => $booking->id,
+        'status' => 'pending',
+    ]);
+    expect($booking->workerAssignments()->where('status', 'accepted')->count())->toBe(3);
+})->with([
+    'standard verification' => ['start-verification/confirm', ['code' => '123456']],
+    'standard confirmation' => ['completion/confirm', []],
+    'standard objection' => ['completion/reject', ['reason' => 'Needs review']],
+    'standard extension' => ['completion/extend-time', ['additionalMinutes' => 30]],
 ]);

@@ -407,7 +407,9 @@ final class UserCleaningOrderEstimationService
             'travelFee' => $pricing['travelFee'],
             'distanceKm' => $pricing['distanceKm'],
             'adminMargin' => $pricing['adminMargin'],
-            'isPricingFinal' => $pricing['isPricingFinal'],
+            // Open-Time labor is billed by actual worked minutes at completion.
+            // Only transportation is final at estimate time.
+            'isPricingFinal' => false,
             'totalPrice' => $pricing['totalPrice'],
             'materials' => [],
             'specialServices' => [],

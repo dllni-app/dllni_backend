@@ -22,15 +22,15 @@ function timePeriodPayload(): array
 {
     $date = now('Asia/Damascus')->addDays(3)->toDateString();
 
-    return ['contractVersion' => 2, 'propertyType' => 'apartment', 'bookingKind' => 'standard', 'assignmentMode' => 'open_count', 'genderPreference' => 'any', 'propertyDetails' => ['address' => 'عنوان الحجز', 'room_size_breakdown' => ['bedroom' => ['medium' => 1], 'bathroom' => ['small' => 1], 'kitchen' => ['medium' => 1]]], 'addressLatitude' => 33.5138, 'addressLongitude' => 36.2765, 'rooms' => [['roomKey' => 'bedroom.1', 'roomType' => 'bedroom', 'size' => 'medium', 'cleaningMode' => 'deep'], ['roomKey' => 'bathroom.1', 'roomType' => 'bathroom', 'size' => 'small', 'cleaningMode' => 'regular'], ['roomKey' => 'kitchen.1', 'roomType' => 'kitchen', 'size' => 'medium', 'cleaningMode' => 'deep']], 'visits' => [['visitKey' => 'visit.1', 'sequence' => 1, 'roomSchedules' => [['scheduleKey' => 'schedule.1', 'roomKey' => 'bedroom.1', 'scheduledDate' => $date, 'scheduledTime' => '09:00', 'numberOfWorkers' => 2], ['scheduleKey' => 'schedule.2', 'roomKey' => 'bathroom.1', 'scheduledDate' => $date, 'scheduledTime' => '09:00', 'numberOfWorkers' => 1], ['scheduleKey' => 'schedule.3', 'roomKey' => 'kitchen.1', 'scheduledDate' => $date, 'scheduledTime' => '14:00', 'numberOfWorkers' => 2]], 'timePeriods' => []]]];
+    return ['contractVersion' => 2, 'propertyType' => 'apartment', 'bookingKind' => 'standard', 'assignmentMode' => 'open_count', 'genderPreference' => 'any', 'propertyDetails' => ['address' => 'عنوان الحجز', 'room_size_breakdown' => ['bedroom' => ['medium' => 1], 'bathroom' => ['small' => 1], 'kitchen' => ['medium' => 1]]], 'addressLatitude' => 33.5138, 'addressLongitude' => 36.2765, 'rooms' => [['roomKey' => 'bedroom.1', 'roomType' => 'bedroom', 'size' => 'medium', 'cleaningMode' => 'deep'], ['roomKey' => 'bathroom.1', 'roomType' => 'bathroom', 'size' => 'small', 'cleaningMode' => 'regular'], ['roomKey' => 'kitchen.1', 'roomType' => 'kitchen', 'size' => 'medium', 'cleaningMode' => 'deep']], 'appointments' => [['appointmentKey' => 'visit.1', 'sequence' => 1, 'roomSchedules' => [['scheduleKey' => 'schedule.1', 'roomKey' => 'bedroom.1', 'scheduledDate' => $date, 'scheduledTime' => '09:00', 'numberOfWorkers' => 2], ['scheduleKey' => 'schedule.2', 'roomKey' => 'bathroom.1', 'scheduledDate' => $date, 'scheduledTime' => '09:00', 'numberOfWorkers' => 1], ['scheduleKey' => 'schedule.3', 'roomKey' => 'kitchen.1', 'scheduledDate' => $date, 'scheduledTime' => '14:00', 'numberOfWorkers' => 2]], 'timePeriods' => []]]];
 }
 
 function timePeriodAcceptGroups(array $input, array $response): array
 {
-    foreach ($input['visits'] as $i => &$visit) {
-        $visit['timePeriods'] = array_map(static fn (array $period): array => array_intersect_key($period, array_flip(['periodKey', 'roomScheduleKeys', 'materials', 'specialServices'])), $response['visits'][$i]['timePeriods']);
+    foreach ($input['appointments'] as $i => &$appointment) {
+        $appointment['timePeriods'] = array_map(static fn (array $period): array => array_intersect_key($period, array_flip(['periodKey', 'roomScheduleKeys', 'materials', 'specialServices'])), $response['appointments'][$i]['timePeriods']);
     }
-    unset($visit);
+    unset($appointment);
 
     return $input;
 }
@@ -57,81 +57,91 @@ beforeEach(function (): void {
     Sanctum::actingAs(User::factory()->create());
 });
 
+it('quotes a fixed transport allowance for every worker on each independent order', function (): void {
+    CleaningFinancialSetting::query()->where('id', 1)->update([
+        'travel_markup_type' => 'worker_allowance',
+        'travel_markup_value' => 10,
+    ]);
+    $input = timePeriodPayload();
+    $input['numberOfWorkers'] = 3;
+    $second = $input['appointments'][0];
+    $second['appointmentKey'] = 'visit.2';
+    $second['sequence'] = 2;
+    foreach ($second['roomSchedules'] as &$schedule) {
+        $schedule['scheduleKey'] .= '.second';
+        $schedule['scheduledDate'] = now('Asia/Damascus')->addDays(4)->toDateString();
+    }
+    unset($schedule);
+    $input['appointments'][] = $second;
+    $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)
+        ->assertOk()->assertJsonPath('pricing.travelFee', 60)
+        ->assertJsonPath('pricing.travelFeePending', false)
+        ->assertJsonPath('pricing.isPricingFinal', true)->json();
+    $input = timePeriodAcceptGroups($input, $quote);
+    $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)->assertOk()->json();
+    $created = $this->postJson('/api/v1/user/cleaning/orders', timePeriodStorePayload($input, $quote))
+        ->assertCreated()->assertJsonCount(2, 'orders')->json();
+    $bookings = collect($created['orders'])->map(fn (array $order) => CleaningBooking::query()->findOrFail($order['id']));
+    expect($bookings->pluck('travel_fee')->map(fn ($fee) => (float) $fee)->all())->toBe([30.0, 30.0])
+        ->and((float) $bookings->sum('total_price'))->toBe((float) $quote['pricing']['totalPrice']);
+});
+
+it('rejects a new standard quote when the fixed worker allowance is not configured', function (): void {
+    CleaningFinancialSetting::query()->where('id', 1)->update([
+        'travel_markup_type' => 'worker_allowance',
+        'travel_markup_value' => 0,
+        'travel_per_km' => 10,
+    ]);
+    $this->postJson('/api/v1/user/cleaning/orders/estimate-price', timePeriodPayload())
+        ->assertUnprocessable()->assertJsonValidationErrors('transport');
+});
+
 it('groups exact matching intervals into one period with two independent room schedules', function (): void {
     $input = timePeriodPayload();
     $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)
-        ->assertOk()->assertJsonCount(2, 'visits.0.timePeriods')
-        ->assertJsonPath('visits.0.timePeriods.0.roomScheduleKeys', ['schedule.1', 'schedule.2'])
-        ->assertJsonPath('visits.0.roomSchedules.0.endAt', now('Asia/Damascus')->addDays(3)->format('Y-m-d').'T11:00:00+03:00')
+        ->assertOk()->assertJsonCount(2, 'appointments.0.timePeriods')
+        ->assertJsonPath('appointments.0.timePeriods.0.roomScheduleKeys', ['schedule.1', 'schedule.2'])
+        ->assertJsonPath('appointments.0.roomSchedules.0.endAt', now('Asia/Damascus')->addDays(3)->format('Y-m-d').'T11:00:00+03:00')
         ->assertJsonPath('requiredSimultaneousWorkers', 3)
-        ->assertJsonMissingPath('visits.0.financial')->assertJsonMissingPath('basePrice')->assertJsonMissingPath('visits.0.roomSchedules.0.basePrice')
+        ->assertJsonMissingPath('appointments.0.financial')->assertJsonMissingPath('basePrice')->assertJsonMissingPath('appointments.0.roomSchedules.0.basePrice')
         ->json();
     expect($quote['quoteSignature'])->toHaveLength(64);
 });
 
-it('makes route-dependent transportation explicitly pending while preserving a signed, itemized quote', function (): void {
+it('keeps transportation final even if a legacy distance mode is still stored', function (): void {
     CleaningFinancialSetting::query()->where('id', 1)->update([
         'travel_markup_type' => 'fixed',
-        'travel_per_km' => 10,
-        'travel_markup_value' => 0,
+        'travel_per_km' => 90000,
+        'travel_markup_value' => 10,
     ]);
 
     $input = timePeriodPayload();
     $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)
         ->assertOk()
-        ->assertJsonPath('pricing.travelFeePending', true)
-        ->assertJsonPath('pricing.isPricingFinal', false)
-        ->assertJsonPath('pricing.travelFee', 0)
+        ->assertJsonPath('pricing.travelFeePending', false)
+        ->assertJsonPath('pricing.isPricingFinal', true)
+        ->assertJsonPath('pricing.travelFee', 30)
         ->json();
 
     expect($quote['quoteSignature'])->toHaveLength(64)
         ->and($quote['pricing']['totalPrice'])->toBe(
             $quote['pricing']['basePrice'] + $quote['pricing']['addonsTotal']
-            + $quote['pricing']['travelFee'] + $quote['pricing']['adminMargin']
+            + $quote['pricing']['travelFee']
         );
 
     $created = $this->postJson('/api/v1/user/cleaning/orders', timePeriodStorePayload($input, $quote))
         ->assertCreated()->json();
     $pendingBooking = CleaningBooking::query()->findOrFail($created['order']['id']);
-    expect($pendingBooking->is_pricing_final)->toBeFalse()
-        ->and($pendingBooking->sessions()->firstOrFail()->is_pricing_final)->toBeFalse()
-        ->and($pendingBooking->property_details['_time_period_v2']['pricing']['isPricingFinal'])->toBeFalse();
+    expect($pendingBooking->is_pricing_final)->toBeTrue()
+        ->and($pendingBooking->sessions()->count())->toBe(0)
+        ->and($pendingBooking->property_details['_time_period_v2']['pricing']['isPricingFinal'])->toBeTrue();
     $this->getJson('/api/v1/user/cleaning/orders/'.$created['order']['id'])
         ->assertOk()
-        ->assertJsonPath('data.travelFeePending', true)
-        ->assertJsonPath('data.pricing.travelFeePending', true)
-        ->assertJsonPath('data.pricing.isPricingFinal', false);
+        ->assertJsonPath('data.travelFeePending', false)
+        ->assertJsonPath('data.pricing.travelFeePending', false)
+        ->assertJsonPath('data.pricing.isPricingFinal', true);
 
-    // Legacy signed snapshots lacked the new pending flag. If the accepted
-    // worker's route allowance is not reflected in what the customer pays,
-    // the customer detail must still acknowledge an unresolved transport fee.
-    $booking = CleaningBooking::query()->findOrFail($created['order']['id']);
-    $details = $booking->property_details;
-    unset($details['_time_period_v2']['pricing']['travelFeePending']);
-    $booking->forceFill(['property_details' => $details, 'travel_fee' => 10])->saveQuietly();
-    $booking->workerAssignments()->create([
-        'worker_id' => Worker::factory()->create()->id,
-        'status' => 'accepted_waiting_for_order_start',
-        'travel_fee' => 10,
-        'service_share_amount' => 150,
-        'admin_margin_amount' => 0,
-        'worker_amount' => 160,
-        'currency' => 'SYP',
-    ]);
-    $this->getJson('/api/v1/user/cleaning/orders/'.$booking->id)
-        ->assertOk()
-        ->assertJsonPath('data.travelFeePending', true)
-        ->assertJsonPath('data.pricing.isPricingFinal', false);
-
-    CleaningFinancialSetting::query()->where('id', 1)->update([
-        'travel_markup_type' => 'worker_allowance',
-        'travel_markup_value' => 10,
-    ]);
-    $fixed = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', timePeriodPayload())
-        ->assertOk()->assertJsonPath('pricing.travelFeePending', false)
-        ->assertJsonPath('pricing.isPricingFinal', true)->json();
-
-    expect($fixed['pricing']['travelFee'])->toBeGreaterThan(0);
+    expect((float) $pendingBooking->travel_fee)->toBe(30.0);
 });
 
 it('bills one supervisor across overlapping room schedules and snapshots approved group hours', function (): void {
@@ -152,35 +162,35 @@ it('bills one supervisor across overlapping room schedules and snapshots approve
     expect($booking->property_details['_supervisor_pricing'])->toMatchArray([
         'hourlyRate' => 180, 'billableMinutes' => 240, 'fee' => 720,
     ]);
-    expect((float) $booking->sessions()->firstOrFail()->pricing_snapshot['supervisorCompensationHourlyRate'])->toBe(75.0);
+    expect($booking->sessions()->count())->toBe(0);
 });
 
 it('keeps partial overlaps separate and treats touching endpoints as non-overlapping', function (): void {
     $input = timePeriodPayload();
-    $input['visits'][0]['roomSchedules'][1]['scheduledTime'] = '10:00';
+    $input['appointments'][0]['roomSchedules'][1]['scheduledTime'] = '10:00';
     $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)
-        ->assertOk()->assertJsonCount(3, 'visits.0.timePeriods')->assertJsonPath('requiredSimultaneousWorkers', 3);
-    $input['visits'][0]['roomSchedules'][1]['scheduledTime'] = '11:00';
+        ->assertOk()->assertJsonCount(3, 'appointments.0.timePeriods')->assertJsonPath('requiredSimultaneousWorkers', 3);
+    $input['appointments'][0]['roomSchedules'][1]['scheduledTime'] = '11:00';
     $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)
-        ->assertOk()->assertJsonCount(3, 'visits.0.timePeriods')->assertJsonPath('requiredSimultaneousWorkers', 2);
+        ->assertOk()->assertJsonCount(3, 'appointments.0.timePeriods')->assertJsonPath('requiredSimultaneousWorkers', 2);
 });
 
-it('persists normalized rooms visits periods membership and retries the same approved booking once', function (): void {
+it('persists normalized rooms appointments periods membership and retries the same approved booking once', function (): void {
     $input = timePeriodPayload();
     $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)->assertOk()->json();
     $store = timePeriodStorePayload($input, $quote);
-    $response = $this->postJson('/api/v1/user/cleaning/orders', $store)->assertCreated()->assertJsonPath('pricing.totalPrice', $quote['pricing']['totalPrice'])->assertJsonCount(2, 'visits.0.timePeriods');
+    $response = $this->postJson('/api/v1/user/cleaning/orders', $store)->assertCreated()->assertJsonPath('pricing.totalPrice', $quote['pricing']['totalPrice'])->assertJsonCount(2, 'appointments.0.timePeriods');
     $id = $response->json('order.id');
     $this->postJson('/api/v1/user/cleaning/orders', $store)->assertCreated()->assertJsonPath('order.id', $id);
     $this->assertDatabaseCount('cleaning_bookings', 1);
-    $this->assertDatabaseCount('cleaning_booking_sessions', 1);
+    $this->assertDatabaseCount('cleaning_booking_sessions', 0);
     $this->assertDatabaseCount('cleaning_room_schedules', 3);
     $this->assertDatabaseCount('cleaning_time_periods', 2);
     $this->assertDatabaseCount('cleaning_time_period_room_schedules', 3);
     $this->assertDatabaseHas('cleaning_booking_rooms', ['client_key' => 'bedroom.1', 'cleaning_mode' => 'deep']);
     expect((float) CleaningBooking::query()->findOrFail($id)->total_price)->toBe((float) $quote['pricing']['totalPrice']);
     $changed = $store;
-    $changed['visits'][0]['roomSchedules'][0]['scheduledTime'] = '08:00';
+    $changed['appointments'][0]['roomSchedules'][0]['scheduledTime'] = '08:00';
     $this->postJson('/api/v1/user/cleaning/orders', $changed)->assertUnprocessable()->assertJsonValidationErrors('idempotencyKey');
 });
 
@@ -213,9 +223,9 @@ it('returns authoritative service duration and requires explicit split reconcili
     $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)->assertOk()->json();
     $input = timePeriodAcceptGroups($input, $quote);
     $service = CleaningSpecialService::query()->create(['name' => 'تنظيف تجريبي', 'pricing_unit' => 'piece', 'unit_code' => 'piece', 'input_type' => 'quantity', 'base_unit_price' => 25, 'estimated_duration_minutes' => 60, 'supports_dirtiness' => false, 'is_active' => true]);
-    $input['visits'][0]['timePeriods'][0]['specialServices'] = [['serviceKey' => 'service.1', 'specialServiceId' => $service->id, 'targetRoomKeys' => ['bedroom.1'], 'quantity' => 1, 'dirtinessLevel' => null]];
-    $response = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)->assertOk()->assertJsonPath('reconciliationRequired', true)->assertJsonPath('quoteId', null)->assertJsonPath('visits.0.roomSchedules.0.estimatedWorkMinutes', 300)->assertJsonCount(3, 'visits.0.timePeriods')->json();
-    expect($response['visits'][0]['reconciliationSources'][0]['specialServices'][0]['targetRoomKeys'])->toBe(['bedroom.1']);
+    $input['appointments'][0]['timePeriods'][0]['specialServices'] = [['serviceKey' => 'service.1', 'specialServiceId' => $service->id, 'targetRoomKeys' => ['bedroom.1'], 'quantity' => 1, 'dirtinessLevel' => null]];
+    $response = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)->assertOk()->assertJsonPath('reconciliationRequired', true)->assertJsonPath('quoteId', null)->assertJsonPath('appointments.0.roomSchedules.0.estimatedWorkMinutes', 300)->assertJsonCount(3, 'appointments.0.timePeriods')->json();
+    expect($response['appointments'][0]['reconciliationSources'][0]['specialServices'][0]['targetRoomKeys'])->toBe(['bedroom.1']);
 });
 
 it('quotes a 31 square metre carpet cleaning without a false eight-hour room error', function (): void {
@@ -230,7 +240,7 @@ it('quotes a 31 square metre carpet cleaning without a false eight-hour room err
         'estimated_duration_minutes' => 2, 'supports_dirtiness' => false,
         'is_active' => true,
     ]);
-    $input['visits'][0]['timePeriods'][0]['specialServices'] = [[
+    $input['appointments'][0]['timePeriods'][0]['specialServices'] = [[
         'serviceKey' => 'carpet.31', 'specialServiceId' => $service->id,
         'targetRoomKeys' => ['bedroom.1'], 'quantity' => 31,
         'dirtinessLevel' => null,
@@ -238,10 +248,10 @@ it('quotes a 31 square metre carpet cleaning without a false eight-hour room err
 
     $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)
         ->assertOk()
-        ->assertJsonPath('visits.0.roomSchedules.0.estimatedWorkMinutes', 302)
-        ->assertJsonPath('visits.0.roomSchedules.0.estimatedDurationMinutes', 151)
-        ->assertJsonPath('pricing.travelFeePending', true)
-        ->assertJsonPath('pricing.isPricingFinal', false);
+        ->assertJsonPath('appointments.0.roomSchedules.0.estimatedWorkMinutes', 302)
+        ->assertJsonPath('appointments.0.roomSchedules.0.estimatedDurationMinutes', 151)
+        ->assertJsonPath('pricing.travelFeePending', false)
+        ->assertJsonPath('pricing.isPricingFinal', true);
 });
 
 it('keeps the same service on two room targets as two operational items', function (): void {
@@ -249,7 +259,7 @@ it('keeps the same service on two room targets as two operational items', functi
     $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)->assertOk()->json();
     $input = timePeriodAcceptGroups($input, $quote);
     $service = CleaningSpecialService::query()->create(['name' => 'خدمة مستقلة', 'pricing_unit' => 'piece', 'unit_code' => 'piece', 'input_type' => 'quantity', 'base_unit_price' => 25, 'estimated_duration_minutes' => 0, 'supports_dirtiness' => false, 'is_active' => true]);
-    $input['visits'][0]['timePeriods'][0]['specialServices'] = [['serviceKey' => 'service.1', 'specialServiceId' => $service->id, 'targetRoomKeys' => ['bedroom.1', 'bathroom.1'], 'quantity' => 2, 'dirtinessLevel' => null]];
+    $input['appointments'][0]['timePeriods'][0]['specialServices'] = [['serviceKey' => 'service.1', 'specialServiceId' => $service->id, 'targetRoomKeys' => ['bedroom.1', 'bathroom.1'], 'quantity' => 2, 'dirtinessLevel' => null]];
     $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)->assertOk()->json();
     $this->postJson('/api/v1/user/cleaning/orders', timePeriodStorePayload($input, $quote))->assertCreated();
     $this->assertDatabaseCount('cleaning_time_period_services', 2);
@@ -266,9 +276,9 @@ it('deduplicates material packages in a multi-room period and atomically rolls b
     $input = timePeriodPayload();
     $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)->assertOk()->json();
     $input = timePeriodAcceptGroups($input, $quote);
-    $input['visits'][0]['timePeriods'][0]['materials'] = ['choice' => 'customer_partial', 'materialTypeIds' => [$type->id]];
+    $input['appointments'][0]['timePeriods'][0]['materials'] = ['choice' => 'customer_partial', 'materialTypeIds' => [$type->id]];
     $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)->assertOk()->json();
-    $this->postJson('/api/v1/user/cleaning/orders', timePeriodStorePayload($input, $quote))->assertUnprocessable()->assertJsonValidationErrors('visits');
+    $this->postJson('/api/v1/user/cleaning/orders', timePeriodStorePayload($input, $quote))->assertUnprocessable()->assertJsonValidationErrors('appointments');
     $this->assertDatabaseCount('cleaning_bookings', 0);
     $this->assertDatabaseCount('cleaning_room_schedules', 0);
     $this->assertDatabaseCount('cleaning_time_periods', 0);
@@ -279,59 +289,67 @@ it('deduplicates material packages in a multi-room period and atomically rolls b
     expect((float) $material->fresh()->stock_quantity)->toBe(9.0);
 });
 
-it('allows the same missing material across weekly visits and rejects duplicates inside one period', function (): void {
+it('allows the same missing material across weekly appointments and rejects duplicates inside one period', function (): void {
     $unit = CleaningMaterialUnit::query()->create(['name' => 'عبوة', 'code' => 'v2_weekly_bottle', 'is_active' => true]);
     $type = CleaningMaterialType::query()->create(['name' => 'مادة تكرار', 'cleaning_material_unit_id' => $unit->id, 'price_per_unit' => 10, 'is_active' => true]);
     CleaningMaterialTypeQuantityRule::query()->create(['cleaning_material_type_id' => $type->id, 'quantity_per_room' => 0.25, 'is_active' => true, 'requires_admin_resolution' => false]);
     CleaningMaterial::query()->create(['name' => 'مخزون التكرار', 'cleaning_material_type_id' => $type->id, 'stock_quantity' => 100, 'is_active' => true]);
     $input = timePeriodPayload();
-    $second = $input['visits'][0];
-    $second['visitKey'] = 'visit.2';
+    $second = $input['appointments'][0];
+    $second['appointmentKey'] = 'visit.2';
     $second['sequence'] = 2;
     foreach ($second['roomSchedules'] as &$schedule) {
         $schedule['scheduleKey'] .= '.week2';
         $schedule['scheduledDate'] = now('Asia/Damascus')->addDays(10)->toDateString();
     }
     unset($schedule);
-    $input['visits'][] = $second;
+    $input['appointments'][] = $second;
     $input['recurrence'] = ['cadence' => 'weekly'];
     $initial = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)->assertOk()->json();
     $input = timePeriodAcceptGroups($input, $initial);
-    foreach ($input['visits'] as &$visit) {
-        $visit['timePeriods'][0]['materials'] = ['choice' => 'customer_partial', 'materialTypeIds' => [$type->id]];
+    foreach ($input['appointments'] as &$appointment) {
+        $appointment['timePeriods'][0]['materials'] = ['choice' => 'customer_partial', 'materialTypeIds' => [$type->id]];
     }
-    unset($visit);
+    unset($appointment);
     $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)
         ->assertOk()
         ->assertJsonMissingValidationErrors()
         ->json();
     $this->postJson('/api/v1/user/cleaning/orders', timePeriodStorePayload($input, $quote))
-        ->assertCreated()->assertJsonCount(2, 'visits');
-    $this->assertDatabaseCount('cleaning_booking_sessions', 2);
-    $this->assertDatabaseCount('cleaning_booking_materials', 1);
+        ->assertCreated()->assertJsonCount(2, 'orders');
+    $this->assertDatabaseCount('cleaning_bookings', 2);
+    $this->assertDatabaseCount('cleaning_booking_sessions', 0);
+    $this->assertDatabaseCount('cleaning_booking_materials', 2);
     $this->assertDatabaseHas('cleaning_booking_materials', ['cleaning_material_type_id' => $type->id, 'quantity' => 1]);
-    $this->assertDatabaseHas('cleaning_materials', ['cleaning_material_type_id' => $type->id, 'stock_quantity' => 99]);
+    $this->assertDatabaseHas('cleaning_materials', ['cleaning_material_type_id' => $type->id, 'stock_quantity' => 98]);
 
-    $input['visits'][0]['timePeriods'][0]['materials']['materialTypeIds'] = [$type->id, $type->id];
+    $input['appointments'][0]['timePeriods'][0]['materials']['materialTypeIds'] = [$type->id, $type->id];
     $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)
         ->assertUnprocessable()
-        ->assertJsonValidationErrors('visits.0.timePeriods.0.materials.materialTypeIds');
+        ->assertJsonValidationErrors('appointments.0.timePeriods.0.materials.materialTypeIds');
 });
 
-it('preserves separately dated recurring visits with one stable booking-wide room set', function (): void {
+it('creates independent bookings for separately dated appointments and preserves retry identity', function (): void {
     $input = timePeriodPayload();
-    $second = $input['visits'][0];
-    $second['visitKey'] = 'visit.2';
+    $second = $input['appointments'][0];
+    $second['appointmentKey'] = 'visit.2';
     $second['sequence'] = 2;
     foreach ($second['roomSchedules'] as &$schedule) {
         $schedule['scheduledDate'] = now('Asia/Damascus')->addDays(10)->toDateString();
     }
     unset($schedule);
-    $input['visits'][] = $second;
-    $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)->assertOk()->assertJsonCount(2, 'visits')->json();
-    $this->postJson('/api/v1/user/cleaning/orders', timePeriodStorePayload($input, $quote))->assertCreated();
-    $this->assertDatabaseCount('cleaning_booking_rooms', 3);
-    $this->assertDatabaseCount('cleaning_booking_sessions', 2);
+    $input['appointments'][] = $second;
+    $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)->assertOk()->assertJsonCount(2, 'appointments')->json();
+    $store = timePeriodStorePayload($input, $quote);
+    $created = $this->postJson('/api/v1/user/cleaning/orders', $store)->assertCreated()->assertJsonCount(2, 'orders')->json();
+    expect($created['orders'][0]['id'])->not->toBe($created['orders'][1]['id']);
+    expect(round(array_sum(array_map(static fn (array $order): float => (float) $order['totalPrice'], $created['orders'])), 2))
+        ->toBe(round((float) $quote['pricing']['totalPrice'], 2));
+    $this->postJson('/api/v1/user/cleaning/orders', $store)->assertCreated()->assertJsonPath('orders.1.id', $created['orders'][1]['id']);
+    $this->assertDatabaseCount('cleaning_bookings', 2);
+    $this->assertDatabaseCount('cleaning_quote_bookings', 2);
+    $this->assertDatabaseCount('cleaning_booking_rooms', 6);
+    $this->assertDatabaseCount('cleaning_booking_sessions', 0);
     $this->assertDatabaseCount('cleaning_room_schedules', 6);
     $this->assertDatabaseCount('cleaning_time_periods', 4);
 });
@@ -339,11 +357,11 @@ it('preserves separately dated recurring visits with one stable booking-wide roo
 it('rejects invalid room ownership quantities workers schedules and unsupported mixes', function (string $kind): void {
     $input = timePeriodPayload();
     match ($kind) {
-        'worker' => $input['visits'][0]['roomSchedules'][0]['numberOfWorkers'] = 0,
-        'missing' => array_pop($input['visits'][0]['roomSchedules']),
-        'duplicate' => $input['visits'][0]['roomSchedules'][1]['roomKey'] = 'bedroom.1',
-        'past' => $input['visits'][0]['roomSchedules'][0]['scheduledDate'] = '2020-01-01',
-        'overnight' => $input['visits'][0]['roomSchedules'][0]['scheduledTime'] = '23:00',
+        'worker' => $input['appointments'][0]['roomSchedules'][0]['numberOfWorkers'] = 0,
+        'missing' => array_pop($input['appointments'][0]['roomSchedules']),
+        'duplicate' => $input['appointments'][0]['roomSchedules'][1]['roomKey'] = 'bedroom.1',
+        'past' => $input['appointments'][0]['roomSchedules'][0]['scheduledDate'] = '2020-01-01',
+        'overnight' => $input['appointments'][0]['roomSchedules'][0]['scheduledTime'] = '23:00',
         'mixed' => $input['requestMaterials'] = true,
     };
     $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)->assertUnprocessable();
@@ -392,13 +410,13 @@ it('preserves single preferred-worker selection and checks the entire service in
     $input = timePeriodPayload();
     $input['propertyDetails']['room_size_breakdown'] = ['bathroom' => ['small' => 1]];
     $input['rooms'] = [$input['rooms'][1]];
-    $input['visits'][0]['roomSchedules'] = [$input['visits'][0]['roomSchedules'][1]];
+    $input['appointments'][0]['roomSchedules'] = [$input['appointments'][0]['roomSchedules'][1]];
     $input['assignmentMode'] = 'preferred_worker';
     $input['preferredWorkerId'] = $worker->id;
     $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)->assertOk()->json();
     $this->postJson('/api/v1/user/cleaning/orders', timePeriodStorePayload($input, $quote))->assertCreated();
     $this->assertDatabaseHas('cleaning_bookings', ['assignment_mode' => 'preferred_worker', 'preferred_worker_id' => $worker->id]);
-    $input['visits'][0]['roomSchedules'][0]['scheduledTime'] = '12:00';
+    $input['appointments'][0]['roomSchedules'][0]['scheduledTime'] = '12:00';
     $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)->assertUnprocessable()->assertJsonValidationErrors('preferredWorkerIds');
 });
 
@@ -424,29 +442,31 @@ it('rejects a consumed quote with a new key while allowing the original retry af
     $this->assertDatabaseCount('cleaning_bookings', 1);
 });
 
-it('keeps visit service prices on their real visit and visit totals equal to the approved total', function (): void {
+it('keeps each appointment service price on its independent booking and reconciles totals', function (): void {
     $input = timePeriodPayload();
-    $second = $input['visits'][0];
-    $second['visitKey'] = 'visit.2';
+    $second = $input['appointments'][0];
+    $second['appointmentKey'] = 'visit.2';
     $second['sequence'] = 2;
     foreach ($second['roomSchedules'] as &$schedule) {
         $schedule['scheduledDate'] = now('Asia/Damascus')->addDays(10)->toDateString();
     }
     unset($schedule);
-    $input['visits'][] = $second;
+    $input['appointments'][] = $second;
     $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)->assertOk()->json();
     $input = timePeriodAcceptGroups($input, $quote);
     $service = CleaningSpecialService::query()->create(['name' => 'خدمة الزيارة الثانية', 'pricing_unit' => 'piece', 'unit_code' => 'piece', 'input_type' => 'quantity', 'base_unit_price' => 125, 'estimated_duration_minutes' => 0, 'supports_dirtiness' => false, 'is_active' => true]);
-    $input['visits'][1]['timePeriods'][0]['specialServices'][] = ['serviceKey' => 'service.1', 'specialServiceId' => $service->id, 'targetRoomKeys' => ['bedroom.1'], 'quantity' => 1, 'dirtinessLevel' => null];
+    $input['appointments'][1]['timePeriods'][0]['specialServices'][] = ['serviceKey' => 'service.1', 'specialServiceId' => $service->id, 'targetRoomKeys' => ['bedroom.1'], 'quantity' => 1, 'dirtinessLevel' => null];
     $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)->assertOk()->json();
-    $id = $this->postJson('/api/v1/user/cleaning/orders', timePeriodStorePayload($input, $quote))->assertCreated()->json('order.id');
-    $booking = CleaningBooking::query()->findOrFail($id);
-    $sessions = $booking->sessions()->get();
-    expect((float) $sessions[0]->special_services_total)->toBe(0.0)
-        ->and((float) $sessions[1]->special_services_total)->toBe(125.0)
-        ->and(round((float) $sessions->sum('total_price'), 2))->toBe((float) $booking->total_price)
-        ->and((float) $sessions[0]->duration_hours)->toBe(7.0);
-    $this->assertDatabaseHas('cleaning_booking_special_service_sessions', ['cleaning_booking_session_id' => $sessions[1]->id]);
+    $created = $this->postJson('/api/v1/user/cleaning/orders', timePeriodStorePayload($input, $quote))
+        ->assertCreated()->assertJsonCount(2, 'orders')->json();
+    $bookings = CleaningBooking::query()->whereKey($created['orders'][0]['id'])
+        ->orWhereKey($created['orders'][1]['id'])->orderBy('scheduled_date')->get();
+    expect($bookings)->toHaveCount(2)
+        ->and((float) $bookings[0]->special_services_total)->toBe(0.0)
+        ->and((float) $bookings[1]->special_services_total)->toBe(125.0)
+        ->and(round((float) $bookings->sum('total_price'), 2))->toBe((float) $quote['pricing']['totalPrice'])
+        ->and($bookings[0]->sessions()->count())->toBe(0)
+        ->and($bookings[1]->sessions()->count())->toBe(0);
 });
 
 it('does not accept ignored coupon codes for period bookings', function (): void {
@@ -458,11 +478,11 @@ it('does not accept ignored coupon codes for period bookings', function (): void
 it('enforces concurrency and visit window policies on the server', function (string $kind): void {
     $input = timePeriodPayload();
     if ($kind === 'capacity') {
-        $input['visits'][0]['roomSchedules'][0]['numberOfWorkers'] = 20;
-        $input['visits'][0]['roomSchedules'][1]['numberOfWorkers'] = 20;
+        $input['appointments'][0]['roomSchedules'][0]['numberOfWorkers'] = 20;
+        $input['appointments'][0]['roomSchedules'][1]['numberOfWorkers'] = 20;
     } else {
-        $second = $input['visits'][0];
-        $second['visitKey'] = 'visit.2';
+        $second = $input['appointments'][0];
+        $second['appointmentKey'] = 'visit.2';
         $second['sequence'] = 2;
         if ($kind === 'window') {
             foreach ($second['roomSchedules'] as &$schedule) {
@@ -470,7 +490,7 @@ it('enforces concurrency and visit window policies on the server', function (str
             }
             unset($schedule);
         }
-        $input['visits'][] = $second;
+        $input['appointments'][] = $second;
     }
     $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)->assertUnprocessable();
 })->with(['capacity', 'window', 'duplicate_date']);
@@ -534,10 +554,10 @@ it('rehydrates approved V2 material choices and targeted services from database 
     $input = timePeriodPayload();
     $initial = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)->assertOk()->json();
     $input = timePeriodAcceptGroups($input, $initial);
-    $input['visits'][0]['timePeriods'][0]['materials'] = [
+    $input['appointments'][0]['timePeriods'][0]['materials'] = [
         'choice' => 'customer_partial', 'materialTypeIds' => [$type->id],
     ];
-    $input['visits'][0]['timePeriods'][0]['specialServices'] = [[
+    $input['appointments'][0]['timePeriods'][0]['specialServices'] = [[
         'serviceKey' => 'service.extra', 'specialServiceId' => $special->id,
         'targetRoomKeys' => ['bedroom.1', 'bathroom.1'],
         'quantity' => 2, 'dirtinessLevel' => null,
@@ -545,13 +565,13 @@ it('rehydrates approved V2 material choices and targeted services from database 
     $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)
         ->assertOk()->assertJsonPath('reconciliationRequired', false)->json();
     $created = $this->postJson('/api/v1/user/cleaning/orders', timePeriodStorePayload($input, $quote))
-        ->assertCreated()->assertJsonPath('visits.0.timePeriods.0.materials.choice', 'customer_partial')
-        ->assertJsonPath('visits.0.timePeriods.0.materials.materialTypeIds', [$type->id])
-        ->assertJsonPath('visits.0.timePeriods.0.specialServices.0.targetRoomKeys', ['bathroom.1', 'bedroom.1'])
-        ->assertJsonPath('pricing.coverage', 'all_visits')->json();
+        ->assertCreated()->assertJsonPath('appointments.0.timePeriods.0.materials.choice', 'customer_partial')
+        ->assertJsonPath('appointments.0.timePeriods.0.materials.materialTypeIds', [$type->id])
+        ->assertJsonPath('appointments.0.timePeriods.0.specialServices.0.targetRoomKeys', ['bathroom.1', 'bedroom.1'])
+        ->assertJsonPath('pricing.coverage', 'all_appointments')->json();
     $booking = CleaningBooking::query()->findOrFail($created['order']['id']);
     $data = $booking->property_details;
-    $data['_time_period_v2']['visits'] = [];
+    $data['_time_period_v2']['appointments'] = [];
     $data['_time_period_v2']['rooms'] = [];
     $booking->forceFill(['property_details' => $data])->saveQuietly();
 
@@ -559,11 +579,11 @@ it('rehydrates approved V2 material choices and targeted services from database 
         ->assertOk()->assertJsonPath('data.contractVersion', 2)
         ->assertJsonPath('data.rooms.0.roomKey', 'bedroom.1')
         ->assertJsonPath('data.rooms.0.cleaningMode', 'deep')
-        ->assertJsonPath('data.visits.0.timePeriods.0.materials.materialTypeIds', [$type->id])
-        ->assertJsonPath('data.visits.0.timePeriods.0.platformMaterials.0.materialTypeId', $type->id)
-        ->assertJsonPath('data.visits.0.timePeriods.0.specialServices.0.specialServiceId', $special->id)
-        ->assertJsonPath('data.visits.0.timePeriods.0.specialServices.0.targetRoomKeys', ['bathroom.1', 'bedroom.1'])
-        ->assertJsonPath('data.recurrence.visitCount', 1)
+        ->assertJsonPath('data.appointments.0.timePeriods.0.materials.materialTypeIds', [$type->id])
+        ->assertJsonPath('data.appointments.0.timePeriods.0.platformMaterials.0.materialTypeId', $type->id)
+        ->assertJsonPath('data.appointments.0.timePeriods.0.specialServices.0.specialServiceId', $special->id)
+        ->assertJsonPath('data.appointments.0.timePeriods.0.specialServices.0.targetRoomKeys', ['bathroom.1', 'bedroom.1'])
+        ->assertJsonPath('data.recurrence.appointmentCount', 1)
         ->assertJsonPath('data.pricing.totalPrice', $quote['pricing']['totalPrice'])
         ->assertJsonMissingPath('data.basePrice')
         ->assertJsonMissingPath('data.adminMargin')
@@ -580,30 +600,30 @@ it('rehydrates approved V2 material choices and targeted services from database 
 it('validates explicit weekly cadence and rejects monthly dates missing the requested day', function (): void {
     $this->travelTo(Carbon\CarbonImmutable::parse('2026-01-10 08:00:00', 'Asia/Damascus'));
     $input = timePeriodPayload();
-    foreach ($input['visits'][0]['roomSchedules'] as &$schedule) {
+    foreach ($input['appointments'][0]['roomSchedules'] as &$schedule) {
         $schedule['scheduledDate'] = '2026-01-31';
     }
     unset($schedule);
-    $second = $input['visits'][0];
-    $second['visitKey'] = 'visit.2';
+    $second = $input['appointments'][0];
+    $second['appointmentKey'] = 'visit.2';
     $second['sequence'] = 2;
     foreach ($second['roomSchedules'] as &$schedule) {
         $schedule['scheduledDate'] = '2026-02-28';
     }
     unset($schedule);
-    $input['visits'][] = $second;
+    $input['appointments'][] = $second;
     $input['recurrence'] = ['cadence' => 'monthly'];
     $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)
-        ->assertUnprocessable()->assertJsonValidationErrors('visits');
+        ->assertUnprocessable()->assertJsonValidationErrors('appointments');
     $this->assertDatabaseCount('cleaning_booking_quotes', 0);
 
     $input['recurrence'] = ['cadence' => 'weekly'];
-    foreach ($input['visits'][1]['roomSchedules'] as &$schedule) {
+    foreach ($input['appointments'][1]['roomSchedules'] as &$schedule) {
         $schedule['scheduledDate'] = '2026-02-07';
     }
     unset($schedule);
     $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)
-        ->assertOk()->assertJsonCount(2, 'visits');
+        ->assertOk()->assertJsonCount(2, 'appointments');
 });
 
 it('rejects inconsistent booking-wide team counts without limiting team size to room count', function (): void {
@@ -620,15 +640,15 @@ it('accepts more workers than rooms within server capacity and persists the requ
     $input = timePeriodPayload();
     $input['rooms'] = [$input['rooms'][0]];
     $input['propertyDetails']['room_size_breakdown'] = ['bedroom' => ['medium' => 1]];
-    $input['visits'][0]['roomSchedules'] = [$input['visits'][0]['roomSchedules'][0]];
-    $input['visits'][0]['roomSchedules'][0]['numberOfWorkers'] = 4;
+    $input['appointments'][0]['roomSchedules'] = [$input['appointments'][0]['roomSchedules'][0]];
+    $input['appointments'][0]['roomSchedules'][0]['numberOfWorkers'] = 4;
     $input['numberOfWorkers'] = 4;
 
     $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)
         ->assertOk()->assertJsonPath('requiredSimultaneousWorkers', 4)->json();
     $stored = $this->postJson('/api/v1/user/cleaning/orders', timePeriodStorePayload($input, $quote))
         ->assertCreated()->assertJsonPath('workforce.requestedWorkers', 4)
-        ->assertJsonPath('visits.0.roomSchedules.0.numberOfWorkers', 4)
+        ->assertJsonPath('appointments.0.roomSchedules.0.numberOfWorkers', 4)
         ->json();
     $this->getJson('/api/v1/user/cleaning/orders/'.$stored['order']['id'])
         ->assertOk()->assertJsonPath('data.workforce.requestedWorkers', 4);
@@ -648,8 +668,8 @@ it('bills fixed travel for every selected team member even when peak room concur
     $input = timePeriodPayload();
     $input['rooms'] = [$input['rooms'][0]];
     $input['propertyDetails']['room_size_breakdown'] = ['bedroom' => ['medium' => 1]];
-    $input['visits'][0]['roomSchedules'] = [$input['visits'][0]['roomSchedules'][0]];
-    $input['visits'][0]['roomSchedules'][0]['numberOfWorkers'] = 1;
+    $input['appointments'][0]['roomSchedules'] = [$input['appointments'][0]['roomSchedules'][0]];
+    $input['appointments'][0]['roomSchedules'][0]['numberOfWorkers'] = 1;
     $input['numberOfWorkers'] = 2;
 
     $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)
@@ -667,9 +687,8 @@ it('bills fixed travel for every selected team member even when peak room concur
     $booking = CleaningBooking::query()->findOrFail($id);
     expect($booking->number_of_workers)->toBe(2)
         ->and($booking->is_pricing_final)->toBeTrue()
-        ->and($booking->sessions()->firstOrFail()->is_pricing_final)->toBeTrue()
+        ->and($booking->sessions()->count())->toBe(0)
         ->and((float) $booking->travel_fee)->toBe(20.0)
-        ->and((int) $booking->sessions()->firstOrFail()->required_workers)->toBe(2)
         ->and((float) $booking->total_price)->toBe((float) $quote['pricing']['totalPrice']);
 });
 
@@ -680,26 +699,26 @@ it('requires customer authentication for the read-only V2 materials preview', fu
     ])->assertUnauthorized();
 });
 
-it('returns persisted weekly visit dates and a total covering all visits after reload', function (): void {
+it('returns separate weekly booking dates and each booking total after reload', function (): void {
     $input = timePeriodPayload();
-    $second = $input['visits'][0];
-    $second['visitKey'] = 'visit.2';
+    $second = $input['appointments'][0];
+    $second['appointmentKey'] = 'visit.2';
     $second['sequence'] = 2;
     foreach ($second['roomSchedules'] as &$schedule) {
         $schedule['scheduledDate'] = now('Asia/Damascus')->addDays(10)->toDateString();
     }
     unset($schedule);
-    $input['visits'][] = $second;
+    $input['appointments'][] = $second;
     $input['recurrence'] = ['cadence' => 'weekly'];
     $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)
-        ->assertOk()->assertJsonPath('pricing.coverage', 'all_visits')->json();
+        ->assertOk()->assertJsonPath('pricing.coverage', 'all_appointments')->json();
     $created = $this->postJson('/api/v1/user/cleaning/orders', timePeriodStorePayload($input, $quote))
-        ->assertCreated()->assertJsonPath('recurrence.visitCount', 2)->json();
+        ->assertCreated()->assertJsonCount(2, 'orders')->json();
     $this->getJson('/api/v1/user/cleaning/orders/'.$created['order']['id'])
-        ->assertOk()->assertJsonPath('data.recurrence.cadence', 'weekly')
-        ->assertJsonPath('data.recurrence.visitCount', 2)
-        ->assertJsonPath('data.pricing.coverage', 'all_visits')
-        ->assertJsonPath('data.visits.1.roomSchedules.0.scheduledDate', now('Asia/Damascus')->addDays(10)->toDateString());
+        ->assertOk()->assertJsonPath('data.recurrence.appointmentCount', 1)
+        ->assertJsonPath('data.pricing.coverage', 'this_booking');
+    $this->getJson('/api/v1/user/cleaning/orders/'.$created['orders'][1]['id'])
+        ->assertOk()->assertJsonPath('data.appointments.0.roomSchedules.0.scheduledDate', now('Asia/Damascus')->addDays(10)->toDateString());
 });
 
 it('scopes persisted V2 detail reads to the authenticated customer', function (): void {
@@ -729,13 +748,13 @@ it('retains all-materials supply decisions and an empty specialist selection on 
     $input = timePeriodPayload();
     $first = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)->assertOk()->json();
     $input = timePeriodAcceptGroups($input, $first);
-    $input['visits'][0]['timePeriods'][0]['materials'] = ['choice' => $choice, 'materialTypeIds' => []];
-    $input['visits'][0]['timePeriods'][0]['specialServices'] = [];
+    $input['appointments'][0]['timePeriods'][0]['materials'] = ['choice' => $choice, 'materialTypeIds' => []];
+    $input['appointments'][0]['timePeriods'][0]['specialServices'] = [];
     $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)->assertOk()->json();
     $result = $this->postJson('/api/v1/user/cleaning/orders', timePeriodStorePayload($input, $quote))
-        ->assertCreated()->assertJsonPath('visits.0.timePeriods.0.materials.choice', $choice)->json();
+        ->assertCreated()->assertJsonPath('appointments.0.timePeriods.0.materials.choice', $choice)->json();
     $this->getJson('/api/v1/user/cleaning/orders/'.$result['order']['id'])
-        ->assertOk()->assertJsonPath('data.visits.0.timePeriods.0.materials.choice', $choice)
-        ->assertJsonCount(0, 'data.visits.0.timePeriods.0.specialServices')
-        ->assertJsonCount($choice === 'platform_all' ? 1 : 0, 'data.visits.0.timePeriods.0.platformMaterials');
+        ->assertOk()->assertJsonPath('data.appointments.0.timePeriods.0.materials.choice', $choice)
+        ->assertJsonCount(0, 'data.appointments.0.timePeriods.0.specialServices')
+        ->assertJsonCount($choice === 'platform_all' ? 1 : 0, 'data.appointments.0.timePeriods.0.platformMaterials');
 })->with(['platform_all', 'customer_all']);

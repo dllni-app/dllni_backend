@@ -79,8 +79,6 @@ it('rechecks worker commission capacity atomically when accepting a booking', fu
         'worker_id' => $worker->id,
         'status' => 'accepted_waiting_for_order_start',
         'accepted_at' => now(),
-        'room_count' => 0,
-        'rooms_weight' => 0,
         'service_share_amount' => 7200,
         'travel_fee' => 0,
         'admin_margin_amount' => 800,

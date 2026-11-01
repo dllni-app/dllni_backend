@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Modules\User\Http\Controllers\API;
 
-use App\Models\CleaningFinancialSetting;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -29,14 +28,14 @@ final class UserCleaningOrderSessionController
         return $this->respond(fn () => $this->lifecycle->confirmSecurityCode(
             $booking,
             $session,
-            $request->user(),
+            (int) $request->user()->id,
             (string) $validated['code'],
         ), __('Security code verified successfully.'));
     }
 
     public function confirmCompletion(Request $request, CleaningBooking $booking, CleaningBookingSession $session): JsonResponse
     {
-        return $this->respond(fn () => $this->lifecycle->confirmCompletion($booking, $session, $request->user()), __('Completion confirmed successfully.'));
+        return $this->respond(fn () => $this->lifecycle->confirmCompletion($booking, $session, (int) $request->user()->id), __('Completion confirmed successfully.'));
     }
 
     public function rejectCompletion(Request $request, CleaningBooking $booking, CleaningBookingSession $session): JsonResponse
@@ -49,7 +48,7 @@ final class UserCleaningOrderSessionController
         return $this->respond(fn () => $this->lifecycle->rejectCompletion(
             $booking,
             $session,
-            $request->user(),
+            (int) $request->user()->id,
             $validated['message'] ?? $validated['reason'] ?? null,
         ), __('Completion rejected successfully.'));
     }
@@ -67,7 +66,7 @@ final class UserCleaningOrderSessionController
             $result = $this->lifecycle->requestExtension(
                 $booking,
                 $session,
-                $request->user(),
+                (int) $request->user()->id,
                 (int) $validated['additionalMinutes'],
                 $validated['message'] ?? null,
                 isset($validated['workerId']) ? (int) $validated['workerId'] : (isset($validated['worker_id']) ? (int) $validated['worker_id'] : null),
@@ -96,26 +95,17 @@ final class UserCleaningOrderSessionController
 
     public function cancel(Request $request, CleaningBooking $booking, CleaningBookingSession $session): JsonResponse
     {
-        $validated = $request->validate([
-            'reason' => ['nullable', 'string', 'max:1000'],
+        throw ValidationException::withMessages([
+            'booking' => ['Cancel the independent cleaning booking through its booking-level cancellation endpoint.'],
         ]);
-
-        $fee = CleaningFinancialSetting::currentUserCancellationFee();
-
-        return $this->respond(fn () => $this->lifecycle->cancelSession(
-            $booking,
-            $session,
-            'customer',
-            $validated['reason'] ?? null,
-            $fee,
-        ), __('Session cancelled successfully.'));
     }
 
     /** @param callable():CleaningBooking $callback */
     private function respond(callable $callback, string $message): JsonResponse
     {
         try {
-            $booking = $callback();
+            $result = $callback();
+            $booking = $result instanceof CleaningBookingSession ? $result->booking : $result;
         } catch (InvalidArgumentException $exception) {
             throw ValidationException::withMessages(['status' => [$exception->getMessage()]]);
         }

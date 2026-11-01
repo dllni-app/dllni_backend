@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Cleaning\Enums\CleaningBookingSessionCoverageStatus;
 use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
-use Throwable;
+use Modules\Cleaning\Support\CleaningScheduledCivilTime;
 
 final class CleaningBookingSession extends Model
 {
@@ -83,51 +83,9 @@ final class CleaningBookingSession extends Model
         return $this->belongsTo(CleaningBooking::class, 'cleaning_booking_id');
     }
 
-    public function roomPeriods(): HasMany
-    {
-        return $this->hasMany(CleaningBookingRoomPeriod::class, 'cleaning_booking_session_id');
-    }
-
     public function workerAssignments(): HasMany
     {
         return $this->hasMany(CleaningBookingSessionWorkerAssignment::class, 'cleaning_booking_session_id');
-    }
-
-    public function supervisorAssignments(): HasMany
-    {
-        return $this->hasMany(CleaningBookingSessionSupervisorAssignment::class, 'cleaning_booking_session_id');
-    }
-
-    public function executionTasks(): HasMany
-    {
-        return $this->hasMany(CleaningBookingSessionTask::class, 'cleaning_booking_session_id');
-    }
-
-    public function workerAttestations(): HasMany
-    {
-        return $this->hasMany(CleaningBookingSessionWorkerAttestation::class, 'cleaning_booking_session_id');
-    }
-
-    public function executionVerifications(): HasMany
-    {
-        return $this->hasMany(CleaningBookingSessionVerification::class, 'cleaning_booking_session_id');
-    }
-
-    public function supervisorAttendances(): HasMany
-    {
-        return $this->hasMany(CleaningBookingSessionSupervisorAttendance::class, 'cleaning_booking_session_id');
-    }
-
-    public function supervisorWorkSegments(): HasMany
-    {
-        return $this->hasMany(CleaningBookingSessionSupervisorWorkSegment::class, 'cleaning_booking_session_id');
-    }
-
-    public function activeSupervisorAssignment(): \Illuminate\Database\Eloquent\Relations\HasOne
-    {
-        return $this->hasOne(CleaningBookingSessionSupervisorAssignment::class, 'cleaning_booking_session_id')
-            ->where('active_slot', 1)
-            ->whereNull('released_at');
     }
 
     public function ratings(): HasMany
@@ -214,11 +172,7 @@ final class CleaningBookingSession extends Model
             return null;
         }
 
-        try {
-            return CarbonImmutable::parse("{$date} {$time}", config('app.timezone'));
-        } catch (Throwable) {
-            return null;
-        }
+        return CleaningScheduledCivilTime::parse($date, $time);
     }
 
     public function endsAt(): ?CarbonImmutable

@@ -5,6 +5,8 @@ declare(strict_types=1);
 use App\Models\CleaningDepositTransaction;
 use App\Models\User;
 use App\Models\Worker;
+use Illuminate\Contracts\Http\Kernel;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
@@ -575,6 +577,49 @@ it('refuses to settle a positive-fee session without a worker assignment', funct
         ->and($booking->fresh()->status)->not->toBe(CleaningBookingStatus::Completed);
 });
 
+it('completes a provisional visit without settling payment or debiting worker commission', function (): void {
+    [$customer, , $worker, $booking] = makeLifecycleScenario();
+    $session = makeLifecycleSession($booking, 1, now()->addDay()->toDateString(), '10:00');
+    $assignment = makeLifecycleAssignment($session, $worker);
+    $session->forceFill([
+        'status' => CleaningBookingSessionStatus::AwaitingCustomerCompletion,
+        'is_pricing_final' => false,
+        'admin_margin_amount' => 100,
+        'work_started_at' => now()->subHours(2),
+        'work_finished_at' => now(),
+        'payment_status' => 'pending',
+    ])->save();
+    $assignment->forceFill([
+        'status' => CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion,
+        'admin_margin_amount' => 100,
+        'work_finished_at' => now(),
+    ])->save();
+    $commissionCount = CleaningDepositTransaction::query()
+        ->where('worker_id', $worker->id)
+        ->where('type', 'commission')
+        ->count();
+
+    Sanctum::actingAs($customer);
+
+    $response = app(Kernel::class)->handle(Request::create(
+        "/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}/completion/confirm",
+        'POST',
+    ));
+
+    PHPUnit\Framework\Assert::assertSame(200, $response->getStatusCode());
+
+    $completedSession = CleaningBookingSession::query()->findOrFail($session->id);
+    $completedAssignment = CleaningBookingSessionWorkerAssignment::query()->findOrFail($assignment->id);
+    PHPUnit\Framework\Assert::assertSame(CleaningBookingSessionStatus::Completed->value, $completedSession->getRawOriginal('status'));
+    PHPUnit\Framework\Assert::assertSame('pending', $completedSession->getRawOriginal('payment_status'));
+    PHPUnit\Framework\Assert::assertNull($completedSession->getRawOriginal('payment_settled_at'));
+    PHPUnit\Framework\Assert::assertSame(CleaningBookingWorkerAssignmentStatus::Completed->value, $completedAssignment->getRawOriginal('status'));
+    PHPUnit\Framework\Assert::assertSame($commissionCount, CleaningDepositTransaction::query()
+        ->where('worker_id', $worker->id)
+        ->where('type', 'commission')
+        ->count());
+});
+
 it('refuses to settle a positive-fee session whose completed worker allocation is zero', function (): void {
     [$customer, , $worker, $booking] = makeLifecycleScenario();
     $session = makeLifecycleSession($booking, 1, now()->addDay()->toDateString(), '10:00');
@@ -628,7 +673,7 @@ it('does not settle a finalized event session when worker fees fail to reconcile
         ->and($session->fresh()->payment_settled_at)->toBeNull();
 });
 
-it('settles balanced worker commissions for a finalized event day only once', function (): void {
+it('does not settle a numerically balanced event day without verified funding, even when retried', function (): void {
     [$customer, , $worker, $booking] = makeLifecycleScenario();
     $secondWorker = Worker::factory()->create([
         'is_active' => true,
@@ -654,19 +699,19 @@ it('settles balanced worker commissions for a finalized event day only once', fu
 
     Sanctum::actingAs($customer);
     $route = "/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}/completion/confirm";
-    $this->postJson($route)->assertOk();
-    $this->postJson($route)->assertOk();
+    $this->postJson($route)->assertUnprocessable()->assertJsonValidationErrors('funding');
+    $this->postJson($route)->assertUnprocessable()->assertJsonValidationErrors('funding');
 
     $workerIds = [$worker->id, $secondWorker->id];
     $fees = CleaningDepositTransaction::query()
         ->whereIn('worker_id', $workerIds)
         ->where('type', 'commission')
         ->get();
-    expect($session->fresh()->status)->toBe(CleaningBookingSessionStatus::Completed)
-        ->and($session->fresh()->payment_status)->toBe('settled')
-        ->and($fees)->toHaveCount(2)
-        ->and($fees->pluck('worker_id')->unique()->count())->toBe(2)
-        ->and((float) $fees->sum('amount'))->toBe(300.0);
+    expect($session->fresh()->status)->toBe(CleaningBookingSessionStatus::AwaitingCustomerCompletion)
+        ->and($session->fresh()->payment_status)->toBe('ready')
+        ->and($session->fresh()->payment_settled_at)->toBeNull()
+        ->and($fees)->toHaveCount(0)
+        ->and($booking->fresh()->status)->not->toBe(CleaningBookingStatus::Completed);
 });
 
 it('rejects a session lifecycle action when the session belongs to another parent booking', function (): void {

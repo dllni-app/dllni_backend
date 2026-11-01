@@ -35,7 +35,7 @@ use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
 use Modules\Cleaning\Services\CleaningMaterialInventoryService;
 use Modules\Cleaning\Services\CleaningNeighborhoodResolver;
 use Modules\Cleaning\Services\DepositService;
-use Modules\Cleaning\Support\WorkerRoomAssignmentPlanner;
+use Modules\Cleaning\Support\CleaningRoomBlueprints;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 final class UserCleaningOrderService
@@ -130,15 +130,8 @@ final class UserCleaningOrderService
                 ]);
             }
 
-            $storedPricing = $preferredWorkerPricing ? $pricing : [
-                'basePrice' => $pricing['basePrice'],
-                'addonsTotal' => $pricing['addonsTotal'],
-                'travelFee' => 0.0,
-                'distanceKm' => null,
-                'adminMargin' => 0.0,
-                'isPricingFinal' => false,
-                'totalPrice' => round((float) $pricing['basePrice'] + (float) $pricing['addonsTotal'], 2),
-            ];
+            // A fixed transport allowance is priced before selecting a worker.
+            $storedPricing = $pricing;
 
             if ($explicitWorkerScope === CleaningBooking::WORKER_SCOPE_SPECIFIC) {
                 $this->guardSpecificWorkerCoverage($specificWorkerIds, $resolvedNeighborhood);
@@ -405,6 +398,7 @@ final class UserCleaningOrderService
                         null,
                         $requestMaterials,
                         $specialServices,
+                        max(1, (int) ($updates['number_of_workers'] ?? $booking->number_of_workers ?? 1)),
                     );
                 } catch (InvalidArgumentException $exception) {
                     throw ValidationException::withMessages([
@@ -1368,31 +1362,18 @@ final class UserCleaningOrderService
      */
     private function resolveStoredPricingForUpdate(array $pricing, array $validated, CleaningBooking $booking): array
     {
-        if ($this->shouldUsePreferredWorkerPricing($validated, $booking)) {
-            return [
-                'basePrice' => (float) $pricing['basePrice'],
-                'addonsTotal' => (float) $pricing['addonsTotal'],
-                'travelFee' => (float) $pricing['travelFee'],
-                'distanceKm' => $pricing['distanceKm'] !== null ? (float) $pricing['distanceKm'] : null,
-                'adminMargin' => (float) $pricing['adminMargin'],
-                'isPricingFinal' => (bool) $pricing['isPricingFinal'],
-                'totalPrice' => (float) $pricing['totalPrice'],
-            ];
-        }
-
         return [
             'basePrice' => (float) $pricing['basePrice'],
             'addonsTotal' => (float) $pricing['addonsTotal'],
-            'travelFee' => 0.0,
+            'travelFee' => (float) $pricing['travelFee'],
             'distanceKm' => null,
-            'adminMargin' => 0.0,
-            'isPricingFinal' => false,
-            'totalPrice' => round(((float) $pricing['basePrice']) + ((float) $pricing['addonsTotal']), 2),
+            'adminMargin' => (float) $pricing['adminMargin'],
+            'isPricingFinal' => (bool) $pricing['isPricingFinal'],
+            'totalPrice' => (float) $pricing['totalPrice'],
         ];
     }
 
     /**
-     * @param  array<int, array<string, mixed>>|null  $workerRoomAssignments
      * @return array<int, array<string, mixed>>|null
      */
 

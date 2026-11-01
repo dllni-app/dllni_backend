@@ -107,25 +107,33 @@ it('preserves redacted pending dispatch for the intended worker and denies guess
     $list = $this->getJson('/api/v1/cleaning-bookings?filter[status]=pending')->assertOk();
     $row = collect($list->json('data'))->firstWhere('id', $booking->id);
     expect($row)->not->toBeNull()
-        ->and($row['visits'])->toBe([])
+        ->and($row)->not->toHaveKey('visits')
         ->and($row)->not->toHaveKeys([
-            'customer', 'address', 'addressLatitude', 'addressLongitude', 'propertyDetails',
+            'customer', 'address', 'addressLatitude', 'addressLongitude',
             'bookingTotalPrice', 'bookingBasePrice', 'rooms', 'roomAssignments',
         ]);
 
     $detail = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")->assertOk();
     expect($detail->json('data.id'))->toBe($booking->id)
-        ->and($detail->json('data.visits'))->toBe([])
+        ->and($detail->json('data.visits'))->toBeNull()
         ->and($detail->json('data'))->not->toHaveKeys([
-            'customer', 'address', 'addressLatitude', 'addressLongitude', 'propertyDetails',
+            'customer', 'address', 'addressLatitude', 'addressLongitude',
             'bookingTotalPrice', 'bookingBasePrice', 'rooms', 'roomAssignments',
         ])
         ->and($detail->getContent())->not->toContain('private-customer@example.test')
         ->and($detail->getContent())->not->toContain('+963999111222')
         ->and($detail->getContent())->not->toContain('Private pending address');
+    // Open-Time offers intentionally include safe task notes; no raw address.
+    if ($bookingKind === 'open_time') {
+        expect($row['propertyDetails'])->toBe(['notes' => ''])
+            ->and($detail->json('data.propertyDetails'))->toBe(['notes' => '']);
+    } else {
+        expect($row)->not->toHaveKey('propertyDetails')
+            ->and($detail->json('data'))->not->toHaveKey('propertyDetails');
+    }
 })->with(['standard', 'open_time']);
 
-it('keeps an initialized V2 parent visible to a partial worker while exposing only the owned visit', function (): void {
+it('shows all shared room tasks to an accepted multi-worker booking member without visit payloads', function (): void {
     $worker = genericBookingWorker();
     $booking = CleaningBooking::factory()->create([
         'billing_policy_id' => genericBillingPolicy()->id,
@@ -150,8 +158,6 @@ it('keeps an initialized V2 parent visible to a partial worker while exposing on
         'room_size' => 'small',
         'display_label' => 'Owned Bedroom',
         'weight' => 1,
-        'assigned_worker_id' => $worker->id,
-        'planned_worker_slot' => 1,
     ]);
     $siblingRoom = $booking->rooms()->create([
         'room_key' => 'sibling-secret-room-key',
@@ -159,8 +165,6 @@ it('keeps an initialized V2 parent visible to a partial worker while exposing on
         'room_size' => 'large',
         'display_label' => 'Sibling Kitchen',
         'weight' => 1,
-        'assigned_worker_id' => $worker->id,
-        'planned_worker_slot' => 1,
     ]);
     $sessions = collect([1, 2])->map(fn (int $sequence): CleaningBookingSession => $booking->sessions()->create([
         'sequence' => $sequence,
@@ -170,8 +174,6 @@ it('keeps an initialized V2 parent visible to a partial worker while exposing on
         'scheduled_time' => '09:00',
         'duration_hours' => 2,
         'required_workers' => 2,
-        'supervision_mode' => CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR,
-        'supervision_initialized_at' => now(),
         'coverage_status' => 'searching',
         'status' => 'worker_assigned',
     ]));
@@ -185,7 +187,6 @@ it('keeps an initialized V2 parent visible to a partial worker while exposing on
         'status' => 'accepted',
         'accepted_at' => now(),
         'service_share_amount' => 0,
-        'rooms_weight' => 0,
         'worker_finished_property_rooms' => [
             ['id' => $ownedRoom->id, 'roomKey' => 'owned-room-key', 'displayLabel' => 'Owned Bedroom'],
             ['id' => $siblingRoom->id, 'roomKey' => 'sibling-secret-room-key', 'displayLabel' => 'Sibling Kitchen'],
@@ -198,10 +199,8 @@ it('keeps an initialized V2 parent visible to a partial worker while exposing on
         )->utc();
         CleaningRoomSchedule::query()->create([
             'cleaning_booking_id' => $booking->id,
-            'cleaning_booking_session_id' => $session->id,
             'cleaning_booking_room_id' => $room->id,
             'schedule_key' => $key.'.schedule',
-            'visit_key' => $key.'.visit',
             'timezone' => 'Asia/Damascus',
             'starts_at' => $start,
             'ends_at' => $start->addHours(2),
@@ -215,40 +214,26 @@ it('keeps an initialized V2 parent visible to a partial worker while exposing on
     $list = $this->getJson('/api/v1/cleaning-bookings?filter[status]=worker_assigned')->assertOk();
     $row = collect($list->json('data'))->firstWhere('id', $booking->id);
     expect($row)->not->toBeNull()
-        ->and($row['visits'])->toHaveCount(1)
-        ->and($row['visits'][0]['sequence'])->toBe(1)
+        ->and($row)->not->toHaveKey('visits')
         ->and($row['addressLatitude'])->toBe(33.5138)
         ->and($row['addressLongitude'])->toBe(36.2765)
-        ->and($row['roomAssignments'])->toHaveCount(1)
-        ->and($row['roomAssignments'][0]['id'])->toBe($ownedRoom->id)
-        ->and($row['roomAssignments'][0]['roomKey'])->toBe('owned-room-key')
-        ->and($row['roomAssignments'][0]['displayLabel'])->toBe('Owned Bedroom')
-        ->and($row['roomAssignments'][0]['assignedWorkerId'])->toBe($worker->id)
-        ->and($row['workerOffer']['roomIds'])->toBe([$ownedRoom->id])
-        ->and($row['worker_offer']['roomIds'])->toBe([$ownedRoom->id])
-        ->and($row['myAssignment']['roomIds'])->toBe([$ownedRoom->id])
-        ->and($row['worker_assignment']['roomIds'])->toBe([$ownedRoom->id])
-        ->and(collect($row['myAssignment']['workerFinishedPropertyRooms'])->pluck('id')->all())->toBe([$ownedRoom->id])
-        ->and(collect($row['worker_assignment']['worker_finished_property_rooms'])->pluck('id')->all())->toBe([$ownedRoom->id])
+        ->and($row['roomTasks'])->toHaveCount(2)
+        ->and($row['roomTasks'][0]['id'])->toBe($ownedRoom->id)
+        ->and($row['roomTasks'][0]['roomKey'])->toBe('owned-room-key')
+        ->and($row)->not->toHaveKey('roomAssignments')
+        ->and($row['workerOffer'])->not->toHaveKey('roomIds')
         ->and($row)->not->toHaveKeys(['customer', 'propertyDetails', 'rooms', 'bookingTotalPrice']);
 
     $detail = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")->assertOk();
-    expect($detail->json('data.visits'))->toHaveCount(1)
-        ->and($detail->json('data.visits.0.sequence'))->toBe(1)
+    expect($detail->json('data.visits'))->toBeNull()
         ->and($detail->json('data.addressLatitude'))->toBe(33.5138)
         ->and($detail->json('data.addressLongitude'))->toBe(36.2765)
-        ->and($detail->json('data.roomAssignments'))->toHaveCount(1)
-        ->and($detail->json('data.roomAssignments.0.id'))->toBe($ownedRoom->id)
-        ->and($detail->json('data.roomAssignments.0.roomKey'))->toBe('owned-room-key')
-        ->and($detail->json('data.workerOffer.roomIds'))->toBe([$ownedRoom->id])
-        ->and($detail->json('data.worker_offer.roomIds'))->toBe([$ownedRoom->id])
-        ->and($detail->json('data.myAssignment.roomIds'))->toBe([$ownedRoom->id])
-        ->and($detail->json('data.worker_assignment.roomIds'))->toBe([$ownedRoom->id])
-        ->and(collect($detail->json('data.myAssignment.workerFinishedPropertyRooms'))->pluck('id')->all())->toBe([$ownedRoom->id])
-        ->and(collect($detail->json('data.worker_assignment.worker_finished_property_rooms'))->pluck('id')->all())->toBe([$ownedRoom->id])
+        ->and($detail->json('data.roomTasks'))->toHaveCount(2)
+        ->and($detail->json('data.roomTasks.0.id'))->toBe($ownedRoom->id)
+        ->and($detail->json('data.roomTasks.0.roomKey'))->toBe('owned-room-key')
+        ->and($detail->json('data'))->not->toHaveKey('roomAssignments')
         ->and($detail->json('data'))->not->toHaveKeys(['customer', 'propertyDetails', 'rooms', 'bookingTotalPrice'])
-        ->and($detail->getContent())->not->toContain('sibling-secret-room-key')
-        ->and($detail->getContent())->not->toContain('Sibling Kitchen');
+        ->and(collect($detail->json('data.roomTasks'))->pluck('roomKey')->all())->toContain('sibling-secret-room-key');
 });
 
 it('fails closed for signed metadata-only multiworker V2 bookings without accepted visit proof', function (string $bookingKind): void {
@@ -315,7 +300,6 @@ it('scrubs nested room metadata for pending V2 dispatch before any visit is acce
         'room_size' => 'small',
         'display_label' => 'Pending A',
         'weight' => 1,
-        'planned_worker_slot' => 1,
     ]);
     $secondRoom = $booking->rooms()->create([
         'room_key' => 'pending-b',
@@ -323,36 +307,21 @@ it('scrubs nested room metadata for pending V2 dispatch before any visit is acce
         'room_size' => 'large',
         'display_label' => 'Pending B Secret',
         'weight' => 1,
-        'planned_worker_slot' => 1,
     ]);
     Sanctum::actingAs($worker->user);
 
     $list = $this->getJson('/api/v1/cleaning-bookings?filter[status]=pending')->assertOk();
     $row = collect($list->json('data'))->firstWhere('id', $booking->id);
+    // The preferred worker may see a redacted pending offer, but no private details.
     expect($row)->not->toBeNull()
-        ->and($row['visits'])->toBe([])
-        ->and($row['workerOffer']['roomIds'])->toBe([])
-        ->and($row['worker_offer']['roomIds'])->toBe([])
-        ->and($row['myAssignment']['roomIds'])->toBe([])
-        ->and($row['worker_assignment']['roomIds'])->toBe([])
-        ->and($row)->not->toHaveKey('roomAssignments')
-        ->and(json_encode($row))->not->toContain('Pending B Secret')
-        ->and(json_encode($row))->not->toContain('pending-b');
-
+        ->and($row)->not->toHaveKeys(['customer', 'address', 'addressLatitude', 'addressLongitude', 'visits', 'roomTasks', 'propertyDetails']);
     $detail = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")->assertOk();
-    expect($detail->json('data.visits'))->toBe([])
-        ->and($detail->json('data.workerOffer.roomIds'))->toBe([])
-        ->and($detail->json('data.worker_offer.roomIds'))->toBe([])
-        ->and($detail->json('data.myAssignment.roomIds'))->toBe([])
-        ->and($detail->json('data.worker_assignment.roomIds'))->toBe([])
-        ->and($detail->json('data'))->not->toHaveKey('roomAssignments')
-        ->and($detail->getContent())->not->toContain('Pending B Secret')
-        ->and($detail->getContent())->not->toContain('pending-b');
+    expect($detail->json('data'))->not->toHaveKeys(['customer', 'address', 'addressLatitude', 'addressLongitude', 'visits', 'roomTasks', 'propertyDetails']);
 
     expect($firstRoom->id)->not->toBe($secondRoom->id);
 });
 
-it('keeps uninitialized and mixed V2 groups scoped to each workers accepted visits', function (): void {
+it('lets accepted session workers see shared rooms but keeps customer PII redacted', function (): void {
     $firstWorker = genericBookingWorker();
     $secondWorker = genericBookingWorker();
     $outsider = genericBookingWorker();
@@ -386,7 +355,6 @@ it('keeps uninitialized and mixed V2 groups scoped to each workers accepted visi
         'room_size' => 'small',
         'display_label' => 'First worker room',
         'weight' => 1,
-        'assigned_worker_id' => $firstWorker->id,
     ]);
     $secondRoom = $booking->rooms()->create([
         'room_key' => 'mixed-sibling-secret-room',
@@ -394,7 +362,6 @@ it('keeps uninitialized and mixed V2 groups scoped to each workers accepted visi
         'room_size' => 'large',
         'display_label' => 'Second worker secret room',
         'weight' => 1,
-        'assigned_worker_id' => $secondWorker->id,
     ]);
     $sessions = collect([1, 2])->map(function (int $sequence) use ($booking): CleaningBookingSession {
         return $booking->sessions()->create([
@@ -405,8 +372,6 @@ it('keeps uninitialized and mixed V2 groups scoped to each workers accepted visi
             'scheduled_time' => $sequence === 1 ? '09:00' : '13:00',
             'duration_hours' => 2,
             'required_workers' => 2,
-            'supervision_mode' => $sequence === 2 ? CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR : null,
-            'supervision_initialized_at' => $sequence === 2 ? now() : null,
             'coverage_status' => 'searching',
             'status' => 'worker_assigned',
         ]);
@@ -426,10 +391,8 @@ it('keeps uninitialized and mixed V2 groups scoped to each workers accepted visi
         $start = CarbonImmutable::parse($session->scheduled_date->toDateString().' '.$time, 'Asia/Damascus')->utc();
         CleaningRoomSchedule::query()->create([
             'cleaning_booking_id' => $booking->id,
-            'cleaning_booking_session_id' => $session->id,
             'cleaning_booking_room_id' => $room->id,
             'schedule_key' => 'mixed.'.$session->sequence.'.schedule',
-            'visit_key' => 'mixed.'.$session->sequence.'.visit',
             'timezone' => 'Asia/Damascus',
             'starts_at' => $start,
             'ends_at' => $start->addHours(2),
@@ -441,25 +404,22 @@ it('keeps uninitialized and mixed V2 groups scoped to each workers accepted visi
 
     Sanctum::actingAs($firstWorker->user);
     $first = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")->assertOk();
-    expect($first->json('data.visits'))->toHaveCount(1)
-        ->and($first->json('data.visits.0.sequence'))->toBe(1)
+    expect($first->json('data.visits'))->toBeNull()
         ->and($first->json('data.addressLatitude'))->toBe(33.5101)
         ->and($first->json('data.addressLongitude'))->toBe(36.2911)
-        ->and($first->json('data.roomAssignments'))->toHaveCount(1)
-        ->and($first->json('data.roomAssignments.0.id'))->toBe($firstRoom->id)
-        ->and($first->getContent())->not->toContain('mixed-sibling-secret-room')
-        ->and($first->getContent())->not->toContain('Second worker secret room')
+        ->and($first->json('data.roomTasks'))->toHaveCount(2)
+        ->and($first->json('data.roomTasks.0.id'))->toBe($firstRoom->id)
+        ->and(collect($first->json('data.roomTasks'))->pluck('roomKey')->all())->toContain('mixed-sibling-secret-room')
         ->and($first->getContent())->not->toContain('mixed-v2-private@example.test')
         ->and($first->getContent())->not->toContain('+963944555666');
 
     Sanctum::actingAs($secondWorker->user);
     $second = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")->assertOk();
-    expect($second->json('data.visits'))->toHaveCount(1)
-        ->and($second->json('data.visits.0.sequence'))->toBe(2)
-        ->and($second->json('data.roomAssignments'))->toHaveCount(1)
-        ->and($second->json('data.roomAssignments.0.id'))->toBe($secondRoom->id)
-        ->and($second->getContent())->not->toContain('mixed-owned-room')
-        ->and($second->getContent())->not->toContain('First worker room');
+    expect($second->json('data.visits'))->toBeNull()
+        ->and($second->json('data.roomTasks'))->toHaveCount(2)
+        ->and(collect($second->json('data.roomTasks'))->pluck('id')->all())->toContain($firstRoom->id, $secondRoom->id)
+        ->and($second->getContent())->not->toContain('mixed-v2-private@example.test')
+        ->and($second->getContent())->not->toContain('+963944555666');
 
     Sanctum::actingAs($outsider->user);
     $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")->assertNotFound();
@@ -536,8 +496,6 @@ it('allows privileged operations access for legacy pending bookings but keeps si
         'scheduled_time' => '09:00',
         'duration_hours' => 2,
         'required_workers' => 2,
-        'supervision_mode' => CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR,
-        'supervision_initialized_at' => now(),
         'coverage_status' => 'searching',
         'status' => 'scheduled',
     ]);

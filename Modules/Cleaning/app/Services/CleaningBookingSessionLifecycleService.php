@@ -37,6 +37,7 @@ final class CleaningBookingSessionLifecycleService
         private readonly CleaningBookingSessionWorkerPricingService $pricingService,
         private readonly CleaningExtendedTimePricingService $extensionPricingService,
         private readonly CleaningLifecycleNotificationService $lifecycleNotifications,
+        private readonly CleaningLocalQaClock $qaClock,
     ) {}
 
     public function startTravel(
@@ -50,6 +51,7 @@ final class CleaningBookingSessionLifecycleService
             $assignment = $this->activeAssignment($locked, $worker, true);
 
             if ($assignment->started_travel_at === null) {
+                $this->qaClock->forScheduling($locked, auth()->user() instanceof \App\Models\User ? auth()->user() : null, 'worker_start_travel');
                 $startedAt = now();
                 $attendanceResolvedAt = ($assignment->late_reported_at !== null || $assignment->no_travel_reported_at !== null)
                     ? ($assignment->attendance_resolved_at ?? $startedAt)
@@ -700,7 +702,7 @@ final class CleaningBookingSessionLifecycleService
     }
 
     /**
-     * @param array<int,int> $workerIds
+     * @param  array<int,int>  $workerIds
      */
     private function broadcastCompletionRejected(
         CleaningBooking $booking,
@@ -879,6 +881,7 @@ final class CleaningBookingSessionLifecycleService
                 ->where('status', CleaningBookingWorkerAssignmentStatus::Completed->value)
                 ->get();
 
+            $legacySettlementEligible = false;
             if ($locked->is_pricing_final) {
                 // A frozen customer quote is not an external funding source.
                 // Existing sessions may settle only inside that quote; V2
@@ -897,11 +900,14 @@ final class CleaningBookingSessionLifecycleService
                         'funding' => ['Session funding conservation could not be verified; settlement is blocked.'],
                     ]);
                 }
+
+                $legacySettlementEligible = true;
             }
 
             // A payable session cannot be declared settled without any
             // completed assignment carrying a positive commission.
-            if ((float) $locked->admin_margin_amount > 0
+            if ($legacySettlementEligible
+                && (float) $locked->admin_margin_amount > 0
                 && $assignments->sum(static fn (CleaningBookingSessionWorkerAssignment $assignment): float => max(0.0, (float) $assignment->admin_margin_amount)) <= 0) {
                 throw ValidationException::withMessages([
                     'worker' => ['A payable session requires at least one completed worker commission.'],
@@ -925,6 +931,10 @@ final class CleaningBookingSessionLifecycleService
             }
 
             foreach ($assignments as $assignment) {
+                if (! $legacySettlementEligible) {
+                    continue;
+                }
+
                 $worker = $assignment->worker;
                 $adminFee = (float) $assignment->admin_margin_amount;
                 if ($adminFee > 0 && ! $worker instanceof Worker) {
@@ -942,13 +952,18 @@ final class CleaningBookingSessionLifecycleService
                 }
             }
 
-            $locked->forceFill([
+            $completionAttributes = [
                 'status' => CleaningBookingSessionStatus::Completed,
                 'work_finished_at' => $locked->work_finished_at ?? $completedAt,
                 'customer_completed_at' => $administrative ? $locked->customer_completed_at : ($locked->customer_completed_at ?? $completedAt),
-                'payment_status' => 'settled',
-                'payment_settled_at' => $locked->payment_settled_at ?? $completedAt,
-            ])->save();
+            ];
+
+            if ($legacySettlementEligible) {
+                $completionAttributes['payment_status'] = 'settled';
+                $completionAttributes['payment_settled_at'] = $locked->payment_settled_at ?? $completedAt;
+            }
+
+            $locked->forceFill($completionAttributes)->save();
 
             $this->refreshOpenTimeParentPricing($booking, $completedAt);
 

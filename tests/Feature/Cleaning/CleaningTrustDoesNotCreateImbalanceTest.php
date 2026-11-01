@@ -10,7 +10,7 @@ use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\CleaningBookingTeamService;
 
-it('does not create extra workload for a high-trust worker when the rooms divide evenly', function (): void {
+it('does not give high-trust workers private room ownership when tasks are shared', function (): void {
     CleaningFinancialSetting::query()->updateOrCreate(
         ['id' => 1],
         [
@@ -39,7 +39,7 @@ it('does not create extra workload for a high-trust worker when the rooms divide
     ]);
 
     $teamService = app(CleaningBookingTeamService::class);
-    $teamService->syncRooms($booking, null);
+    $teamService->syncRooms($booking);
 
     foreach ([100, 60, 20] as $index => $trustScore) {
         $worker = Worker::factory()->create([
@@ -54,8 +54,6 @@ it('does not create extra workload for a high-trust worker when the rooms divide
             'worker_id' => $worker->id,
             'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
             'accepted_at' => now()->addSeconds($index),
-            'room_count' => 0,
-            'rooms_weight' => 0,
             'service_share_amount' => 0,
             'travel_fee' => 0,
             'admin_margin_amount' => 0,
@@ -70,7 +68,7 @@ it('does not create extra workload for a high-trust worker when the rooms divide
         ->where('cleaning_booking_id', $booking->id)
         ->get();
 
-    expect($assignments->pluck('room_count')->sort()->values()->all())->toBe([5, 5, 5])
-        ->and($assignments->pluck('rooms_weight')->map(fn ($value) => (float) $value)->sort()->values()->all())
-        ->toBe([10.0, 10.0, 10.0]);
+    expect($assignments)->toHaveCount(3)
+        ->and(round((float) $assignments->sum('service_share_amount'), 2))->toBe(3000.0)
+        ->and($booking->rooms()->count())->toBe(15);
 });

@@ -19,24 +19,21 @@ it('calculates percentage administration margin from service costs without trave
             'default_commission_rate' => 10,
             'commission_type' => 'percent',
             'commission_fixed_amount' => null,
-            'travel_per_km' => 7500,
+            'travel_markup_type' => 'worker_allowance',
+            'travel_markup_value' => 7500,
         ],
     );
 
     $calculator = app(CleaningPricingCalculator::class);
-    $pricing = $calculator->finalizedForCoordinates(
+    $pricing = $calculator->provisional(
         basePrice: 100000,
         addonsTotal: 50000,
-        a: 36.20,
-        b: 37.15,
-        c: 35.00,
-        d: 39.00,
     );
 
     expect($pricing['travelFee'])->toBeGreaterThan(0)
         ->and($pricing['adminMargin'])->toBe(15000.0)
         ->and($pricing['totalPrice'])->toBe(
-            $calculator->roundMoney(150000 + (float) $pricing['travelFee'] + 15000),
+            $calculator->roundMoney(150000 + (float) $pricing['travelFee']),
         );
 });
 
@@ -58,10 +55,8 @@ it('keeps the worker eligible when at least one new order fits the commission ca
             'commission_type' => 'percent',
             'commission_fixed_amount' => null,
             'vat_rate' => 0,
-            'travel_markup_type' => 'fixed',
-            'travel_markup_value' => 0,
-            'travel_per_km' => 7500,
-            'travel_distance_start_point' => 'worker_home',
+            'travel_markup_type' => 'worker_allowance',
+            'travel_markup_value' => 7500,
         ],
     );
 

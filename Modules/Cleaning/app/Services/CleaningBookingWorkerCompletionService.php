@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Services;
 
 use App\Models\Worker;
+use App\Models\CleaningDepositTransaction;
 use App\Support\Broadcast\BroadcastAfterResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -28,7 +29,7 @@ final class CleaningBookingWorkerCompletionService
 
     public function confirm(CleaningBooking $booking, ?int $workerId = null, ?int $assignmentId = null): CleaningBooking
     {
-        abort_if($booking->isSupervisedTeam(), 403, 'استخدم تسليم طلب فريق المشرف.');
+        abort_if(app(CleaningGroupCustodyPolicy::class)->usesSupervisorCustody($booking), 403, 'استخدم تسليم طلب فريق المشرف.');
         $fromStatus = (string) $booking->status->value;
         $decisionWorkerId = null;
         $decisionAssignmentId = null;
@@ -111,7 +112,7 @@ final class CleaningBookingWorkerCompletionService
 
     public function reject(CleaningBooking $booking, ?string $message = null, ?int $workerId = null, ?int $assignmentId = null): CleaningBooking
     {
-        abort_if($booking->isSupervisedTeam(), 403, 'استخدم اعتراض طلب فريق المشرف.');
+        abort_if(app(CleaningGroupCustodyPolicy::class)->usesSupervisorCustody($booking), 403, 'استخدم اعتراض طلب فريق المشرف.');
         $fromStatus = (string) $booking->status->value;
         $decisionWorkerId = null;
         $decisionAssignmentId = null;
@@ -395,6 +396,13 @@ final class CleaningBookingWorkerCompletionService
 
     private function recordAdminFees(CleaningBooking $booking): void
     {
+        if (is_array(data_get($booking->property_details, '_time_period_v2'))
+            && ((int) $booking->number_of_workers > 1
+                || (float) data_get($booking->property_details, '_supervisor_pricing.compensationAmount', 0) > 0)) {
+            $this->settleIndependentBooking($booking);
+            return;
+        }
+
         // Sessions own their own commission identities; never charge the
         // booking-level reference in addition to session fees.
         if ($booking->sessions()->exists()) {
@@ -436,6 +444,95 @@ final class CleaningBookingWorkerCompletionService
                 $this->depositService->recordAdminFeeDebit($worker, $booking, $adminFee);
             }
         }
+    }
+
+    private function settleIndependentBooking(CleaningBooking $booking): void
+    {
+        $assignments = CleaningBookingWorkerAssignment::query()
+            ->where('cleaning_booking_id', $booking->id)->lockForUpdate()->orderBy('id')->get();
+        $confirmed = DB::table('cleaning_worker_attendance_proofs')
+            ->where('cleaning_booking_id', $booking->id)->whereNotNull('confirmed_at')
+            ->whereNotNull('confirmed_by_user_id')->lockForUpdate()->pluck('worker_assignment_id')->map(fn ($id): int => (int) $id)->all();
+        $participants = $assignments->filter(fn (CleaningBookingWorkerAssignment $assignment): bool =>
+            in_array((int) $assignment->id, $confirmed, true)
+            && $assignment->status === CleaningBookingWorkerAssignmentStatus::Completed
+            && $assignment->work_started_at !== null && $assignment->work_finished_at !== null
+        )->values();
+        if ($participants->isEmpty() || count($confirmed) !== $participants->count()) {
+            throw ValidationException::withMessages(['settlement' => ['All certified attendees must finish work before settlement.']]);
+        }
+
+        // A prior settlement is immutable. Both unique ledger identities and the
+        // locked booking protect repeated close requests from changing shares.
+        $details = (array) $booking->property_details;
+        if (isset($details['_actual_worker_settlement'])) {
+            return;
+        }
+
+        $supervisorFee = round(max(0, (float) data_get($details, '_supervisor_pricing.fee', 0)), 2);
+        $supervisorPay = round(max(0, (float) data_get($details, '_supervisor_pricing.compensationAmount', 0)), 2);
+        $platformMaterials = round(max(0, (float) data_get($details, '_time_period_v2.pricing.materialsTotal', 0)), 2);
+        $customerCents = (int) round((float) $booking->total_price * 100);
+        $serviceCents = (int) round(max(0, (float) $booking->base_price + (float) $booking->addons_total - $supervisorFee - $platformMaterials) * 100);
+        $travelCents = (int) round(max(0, (float) $booking->travel_fee) * 100);
+        $marginCents = (int) round(max(0, (float) $booking->admin_margin_amount) * 100);
+        $supervisorPayCents = (int) round($supervisorPay * 100);
+        if ($customerCents < $serviceCents + $travelCents + $supervisorPayCents
+            || $supervisorPayCents > (int) round($supervisorFee * 100)
+            || $marginCents > $serviceCents) {
+            throw ValidationException::withMessages(['settlement' => ['Customer quote does not fund worker, commission and supervisor liabilities.']]);
+        }
+        foreach ($assignments as $assignment) {
+            $reference = CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX
+                .hash('sha256', $assignment->worker_id.':'.$booking->id);
+            if (CleaningDepositTransaction::query()->where('reference', $reference)->exists()) {
+                throw ValidationException::withMessages(['settlement' => ['Existing commission debit requires reconciliation before final participant allocation.']]);
+            }
+        }
+
+        $supervisorId = app(CleaningSupervisorAssignmentService::class)->activeSupervisorId($booking);
+        if ($supervisorPayCents > 0 && $supervisorId === null) {
+            throw ValidationException::withMessages(['settlement' => ['An assigned supervisor is required to accrue compensation.']]);
+        }
+        $count = $participants->count();
+        foreach ($participants as $index => $assignment) {
+            $last = $index === $count - 1;
+            $service = $last ? $serviceCents : intdiv($serviceCents, $count - $index);
+            $margin = $last ? $marginCents : intdiv($marginCents, $count - $index);
+            $travel = $last ? $travelCents : intdiv($travelCents, $count - $index);
+            $serviceCents -= $service;
+            $marginCents -= $margin;
+            $travelCents -= $travel;
+            if (! $assignment->worker instanceof Worker) {
+                $assignment->load('worker');
+            }
+            if (! $assignment->worker instanceof Worker) {
+                throw ValidationException::withMessages(['settlement' => ['Certified worker is missing.']]);
+            }
+            $assignment->forceFill([
+                'service_share_amount' => $service / 100,
+                'admin_margin_amount' => $margin / 100,
+                'travel_fee' => $travel / 100,
+                'worker_amount' => ($service + $travel) / 100,
+            ])->save();
+            if ($margin > 0) {
+                $this->depositService->recordAdminFeeDebit($assignment->worker, $booking, $margin / 100);
+            }
+        }
+        foreach ($assignments as $assignment) {
+            if (! $participants->contains('id', $assignment->id)) {
+                $assignment->forceFill(['service_share_amount' => 0, 'admin_margin_amount' => 0, 'travel_fee' => 0, 'worker_amount' => 0])->save();
+            }
+        }
+        if ($supervisorPayCents > 0) {
+            DB::table('cleaning_supervisor_compensation_payables')->insert([
+                'cleaning_booking_id' => $booking->id, 'supervisor_user_id' => $supervisorId,
+                'amount' => $supervisorPay, 'currency' => (string) config('app.currency', 'SYP'),
+                'status' => 'accrued', 'accrued_at' => now(), 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+        $details['_actual_worker_settlement'] = ['participantAssignmentIds' => $participants->pluck('id')->all(), 'settledAt' => now()->toIso8601String()];
+        $booking->forceFill(['property_details' => $details])->save();
     }
 
     private function notifyWorkerDecision(
@@ -498,7 +595,7 @@ final class CleaningBookingWorkerCompletionService
             'customer',
             'worker.user',
             'preferredWorker.user',
-            'rooms.assignedWorker.user',
+            'rooms',
             'workerAssignments.worker.user',
             'addons',
             'billingPolicy',

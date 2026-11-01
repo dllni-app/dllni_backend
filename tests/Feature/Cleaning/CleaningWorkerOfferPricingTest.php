@@ -57,28 +57,28 @@ it('returns the current worker complete pricing before accepting the cleaning or
     $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}");
 
     $response->assertOk()
-        ->assertJsonPath('data.travelFee', 11120)
-        ->assertJsonPath('data.workerAmount', 16120)
+        ->assertJsonPath('data.travelFee', 0)
+        ->assertJsonPath('data.workerAmount', 5000)
         ->assertJsonPath('data.serviceShareAmount', 5000)
         ->assertJsonPath('data.totalHours', 2)
         ->assertJsonPath('data.workerOffer.serviceShareAmount', 5000)
-        ->assertJsonPath('data.workerOffer.travelFee', 11120)
-        ->assertJsonPath('data.workerOffer.adminMarginAmount', 500)
+        ->assertJsonPath('data.workerOffer.travelFee', 0)
         ->assertJsonPath('data.myAssignment.workerId', $worker->id)
         ->assertJsonPath('data.myAssignment.serviceShareAmount', 5000)
-        ->assertJsonPath('data.myAssignment.travelFee', 11120)
-        ->assertJsonPath('data.myAssignment.adminMarginAmount', 500)
-        ->assertJsonPath('data.myAssignment.workerAmount', 16120)
-        ->assertJsonPath('data.myAssignment.totalPrice', 16120)
-        ->assertJsonPath('data.myAssignment.grossTotalPrice', 16120)
+        ->assertJsonPath('data.myAssignment.travelFee', 0)
+        ->assertJsonPath('data.myAssignment.workerAmount', 5000)
+        ->assertJsonPath('data.myAssignment.totalPrice', 5000)
+        ->assertJsonPath('data.myAssignment.grossTotalPrice', 5000)
         ->assertJsonPath('data.myAssignment.totalHours', 2)
         ->assertJsonPath('data.myAssignment.isPreview', true)
         ->assertJsonPath('data.myAssignment.isPricingFinal', false);
     $response->assertJsonMissingPath('data.bookingBasePrice')
-        ->assertJsonMissingPath('data.bookingTotalPrice');
+        ->assertJsonMissingPath('data.bookingTotalPrice')
+        ->assertJsonMissingPath('data.workerOffer.adminMarginAmount')
+        ->assertJsonMissingPath('data.myAssignment.adminMarginAmount');
 });
 
-it('calculates the cleaning worker offer time and service share from the planned room weight', function (): void {
+it('divides the worker offer service share without deprecated planned room weighting', function (): void {
     CleaningFinancialSetting::query()->updateOrCreate(
         ['id' => 1],
         [
@@ -127,10 +127,6 @@ it('calculates the cleaning worker offer time and service share from the planned
         'room_size' => 'small',
         'display_label' => 'Bedroom 1 - Small',
         'weight' => 1,
-        'planned_worker_slot' => 1,
-        'planned_preferred_worker_id' => null,
-        'assigned_worker_id' => null,
-        'assignment_source' => null,
     ]);
     CleaningBookingRoom::query()->create([
         'cleaning_booking_id' => $booking->id,
@@ -139,10 +135,6 @@ it('calculates the cleaning worker offer time and service share from the planned
         'room_size' => 'large',
         'display_label' => 'Living Room 1 - Large',
         'weight' => 3,
-        'planned_worker_slot' => 2,
-        'planned_preferred_worker_id' => null,
-        'assigned_worker_id' => null,
-        'assignment_source' => null,
     ]);
 
     Sanctum::actingAs($workerUser);
@@ -150,10 +142,10 @@ it('calculates the cleaning worker offer time and service share from the planned
     $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}");
 
     $response->assertOk();
-    expect((float) $response->json('data.totalHours'))->toBe(2.0);
-    expect((float) $response->json('data.serviceShareAmount'))->toBe(100.0);
-    expect((float) $response->json('data.workerOffer.totalHours'))->toBe(2.0);
-    expect((float) $response->json('data.workerOffer.serviceShareAmount'))->toBe(100.0);
+    expect((float) $response->json('data.totalHours'))->toBe(4.0);
+    expect((float) $response->json('data.serviceShareAmount'))->toBe(200.0);
+    expect((float) $response->json('data.workerOffer.totalHours'))->toBe(4.0);
+    expect((float) $response->json('data.workerOffer.serviceShareAmount'))->toBe(200.0);
 });
 
 it('keeps every event worker on the full event duration and preserves the worker share after acceptance', function (): void {
@@ -289,12 +281,12 @@ it('uses the discounted admin margin in pending worker api offers without reduci
     $response->assertOk()
         ->assertJsonPath('data.serviceShareAmount', 960)
         ->assertJsonPath('data.workerOffer.serviceShareAmount', 960)
-        ->assertJsonPath('data.workerOffer.adminMarginAmount', 120)
         ->assertJsonPath('data.myAssignment.serviceShareAmount', 960)
-        ->assertJsonPath('data.myAssignment.adminMarginAmount', 120)
         ->assertJsonPath('data.myAssignment.workerAmount', 960);
     $response->assertJsonMissingPath('data.couponCode')
-        ->assertJsonMissingPath('data.subtotalBeforeDiscount');
+        ->assertJsonMissingPath('data.subtotalBeforeDiscount')
+        ->assertJsonMissingPath('data.workerOffer.adminMarginAmount')
+        ->assertJsonMissingPath('data.myAssignment.adminMarginAmount');
 });
 
 it('reduces pending worker service share only by coupon excess above admin margin', function (): void {
@@ -364,5 +356,5 @@ it('reduces pending worker service share only by coupon excess above admin margi
     $response->assertOk()
         ->assertJsonPath('data.serviceShareAmount', 935)
         ->assertJsonPath('data.workerOffer.serviceShareAmount', 935)
-        ->assertJsonPath('data.workerOffer.adminMarginAmount', 0);
+        ->assertJsonMissingPath('data.workerOffer.adminMarginAmount');
 });

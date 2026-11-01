@@ -384,7 +384,9 @@ it('denies legacy room, edit, cancel and security code writes for a persisted pa
 
     expect(fn () => app(CleaningBookingTeamService::class)->syncRooms($booking))
         ->toThrow(ValidationException::class);
-    expect(fn () => app(CleaningBookingTeamService::class)->assignRoomsFromCustomer($booking, [[
+    // Direct room ownership mutations were deliberately removed. Exercise the
+    // supported entrypoint's explicit rejection instead of invoking a deleted API.
+    expect(fn () => app(CleaningBookingTeamService::class)->syncRooms($booking, [[
         'roomId' => $room->id,
         'workerId' => $worker->id,
     ]]))->toThrow(ValidationException::class);

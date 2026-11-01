@@ -203,8 +203,8 @@ it('reduces open-time service only after a coupon exhausts the final administrat
             'default_commission_rate' => 25,
             'commission_type' => 'percent',
             'commission_fixed_amount' => null,
-            'travel_per_km' => 10,
-            'travel_distance_start_point' => 'worker_home',
+            'travel_markup_type' => 'worker_allowance',
+            'travel_markup_value' => 10,
         ],
     );
 
@@ -258,8 +258,6 @@ it('reduces open-time service only after a coupon exhausts the final administrat
         'status' => CleaningBookingWorkerAssignmentStatus::InProgress->value,
         'accepted_at' => now()->subHours(2),
         'work_started_at' => $startedAt,
-        'room_count' => 0,
-        'rooms_weight' => 0,
         'service_share_amount' => 200,
         'travel_fee' => 10,
         'admin_margin_amount' => 50,

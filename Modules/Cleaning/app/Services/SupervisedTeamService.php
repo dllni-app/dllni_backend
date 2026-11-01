@@ -32,7 +32,13 @@ final class SupervisedTeamService
     {
         $this->assertSupervisor($user);
 
-        return CleaningBooking::query()->where('booking_kind', self::KIND)
+        return CleaningBooking::query()->where(function (Builder $bookings): void {
+            $bookings->where('booking_kind', self::KIND)
+                ->orWhere(function (Builder $standard): void {
+                    $standard->where('booking_kind', 'standard')
+                        ->where('number_of_workers', '>', 1);
+                });
+        })
             ->whereExists(function ($query) use ($user): void {
                 $query->selectRaw('1')->from('cleaning_supervisor_assignments as sa')
                     ->whereColumn('sa.cleaning_booking_id', 'cleaning_bookings.id')
@@ -63,12 +69,19 @@ final class SupervisedTeamService
         ));
         $arrived = $accepted->filter(fn ($assignment): bool => $assignment->arrived_at !== null);
         $required = max(1, (int) $booking->number_of_workers);
+        $confirmedIds = in_array((string) $booking->booking_kind, ['standard', self::KIND], true) && $required > 1
+            ? DB::table('cleaning_worker_attendance_proofs')->where('cleaning_booking_id', $booking->id)
+                ->whereNotNull('confirmed_at')->pluck('worker_assignment_id')->all()
+            : null;
+        $verifiedArrivals = $confirmedIds === null ? $arrived : $arrived->filter(
+            fn ($assignment): bool => in_array($assignment->id, $confirmedIds, true)
+        );
 
         return [
             'requiredWorkers' => $required,
             'acceptedWorkers' => $accepted->count(),
-            'arrivedWorkers' => $arrived->count(),
-            'teamReady' => $arrived->count() >= $required,
+            'arrivedWorkers' => $verifiedArrivals->count(),
+            'teamReady' => $verifiedArrivals->count() >= $required,
             'workers' => $assignments->map(fn ($assignment): array => [
                 'assignmentId' => $assignment->id,
                 'workerId' => $assignment->worker_id,
@@ -77,6 +90,8 @@ final class SupervisedTeamService
                 'acceptedAt' => $assignment->accepted_at?->toIso8601String(),
                 'startedTravelAt' => $assignment->started_travel_at?->toIso8601String(),
                 'arrivedAt' => $assignment->arrived_at?->toIso8601String(),
+                'attendanceConfirmed' => $confirmedIds === null ? $assignment->arrived_at !== null
+                    : in_array($assignment->id, $confirmedIds, true),
             ])->all(),
         ];
     }
@@ -98,7 +113,6 @@ final class SupervisedTeamService
                 ], true)) {
                 $actions[] = 'request_verification';
                 if ($state === 'verification_pending') {
-                    $actions[] = 'confirm_verification';
                 }
             }
             if ($state === 'verified') {
@@ -131,7 +145,7 @@ final class SupervisedTeamService
         return [
             'id' => $booking->id,
             'bookingNumber' => $booking->booking_number,
-            'serviceType' => self::KIND,
+            'serviceType' => (string) $booking->booking_kind,
             'status' => $booking->status?->value ?? (string) $booking->status,
             'teamState' => $state,
             'scheduledDate' => $booking->scheduled_date?->format('Y-m-d'),

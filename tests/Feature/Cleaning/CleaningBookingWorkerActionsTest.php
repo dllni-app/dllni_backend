@@ -677,8 +677,6 @@ it('issues a security code from the current worker assignment rather than the ag
         'status' => CleaningBookingWorkerAssignmentStatus::AwaitingStartVerification->value,
         'accepted_at' => now()->subHour(),
         'arrived_at' => now()->subMinute(),
-        'room_count' => 0,
-        'rooms_weight' => 0,
         'service_share_amount' => 0,
         'travel_fee' => 0,
         'admin_margin_amount' => 0,

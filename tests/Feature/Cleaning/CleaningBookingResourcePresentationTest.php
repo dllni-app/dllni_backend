@@ -64,7 +64,7 @@ it('returns worker avatar and Arabic cleaning labels in booking payloads', funct
         ->assertJsonPath('data.openTime', null);
 });
 
-it('exposes the active visit supervisor only to a worker who accepted that visit on a standard group booking', function (): void {
+it('exposes the active booking supervisor only to a worker who accepted the standard group booking', function (): void {
     $workerUser = User::factory()->create();
     $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
     $otherWorkerUser = User::factory()->create();
@@ -88,23 +88,23 @@ it('exposes the active visit supervisor only to a worker who accepted that visit
     ]);
     $session->workerAssignments()->create(['worker_id' => $worker->id, 'status' => 'accepted', 'accepted_at' => now()]);
     $session->workerAssignments()->create(['worker_id' => $otherWorker->id, 'status' => 'pending']);
-    $session->supervisorAssignments()->create([
+    $booking->workerAssignments()->create(['worker_id' => $worker->id, 'status' => 'accepted', 'accepted_at' => now()]);
+    $booking->workerAssignments()->create(['worker_id' => $otherWorker->id, 'status' => 'pending']);
+    $booking->supervisorAssignments()->create([
         'supervisor_user_id' => $formerSupervisor->id,
         'assigned_by_user_id' => $formerSupervisor->id,
         'assigned_at' => now()->subHour(),
         'released_at' => now(),
         'active_slot' => null,
-        'compensation_hourly_rate' => 0,
     ]);
-    $session->supervisorAssignments()->create([
+    $booking->supervisorAssignments()->create([
         'supervisor_user_id' => $supervisor->id,
         'assigned_by_user_id' => $supervisor->id,
         'assigned_at' => now(),
         'active_slot' => 1,
-        'compensation_hourly_rate' => 0,
     ]);
 
-    expect($booking->supervisorAssignments()->count())->toBe(0);
+    expect($booking->supervisorAssignments()->count())->toBe(2);
     $acceptedRequest = \Illuminate\Http\Request::create('/api/v1/cleaning-bookings/'.$booking->id);
     $acceptedRequest->setUserResolver(fn () => $workerUser);
     $accepted = CleaningBookingResource::make($booking)->resolve($acceptedRequest);

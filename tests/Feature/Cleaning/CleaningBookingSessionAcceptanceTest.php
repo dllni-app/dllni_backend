@@ -100,6 +100,10 @@ it('accepts only the explicitly selected sessions and keeps the others available
     $second = makeExecutionSession($booking, 2, now()->addDays(2)->toDateString(), '10:00', 1.0);
     $third = makeExecutionSession($booking, 3, now()->addDays(3)->toDateString(), '10:00', 1.0);
 
+    $scheduleService = app(\Modules\Cleaning\Services\CleaningBookingWorkerScheduleService::class);
+    expect($scheduleService->present($booking, $worker)['myConfirmedWorkerAmount'])->toBeNull();
+    expect($scheduleService->present($booking, $worker)['myConfirmedWorkerHours'])->toBeNull();
+
     $result = app(CleaningBookingSessionAcceptanceService::class)
         ->acceptSelectedSessions($booking, $worker, [$first->id, $third->id]);
 
@@ -109,6 +113,12 @@ it('accepts only the explicitly selected sessions and keeps the others available
         ->and($second->fresh()->coverage_status->value)->toBe('searching')
         ->and($third->fresh()->coverage_status->value)->toBe('fully_covered')
         ->and($second->workerAssignments()->count())->toBe(0);
+
+    $expected = round((float) $first->workerAssignments()->sum('worker_amount')
+        + (float) $third->workerAssignments()->sum('worker_amount'), 2);
+    $schedule = $scheduleService->present($booking->fresh(), $worker);
+    expect($schedule['myConfirmedWorkerAmount'])->toBe($expected)
+        ->and($schedule['myConfirmedWorkerHours'])->toBe(2.0);
 });
 
 it('accepts an independently selected event day through the public API', function (): void {

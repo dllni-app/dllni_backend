@@ -25,7 +25,11 @@ function makeRecurringAttendanceVisit(int $minutesPastStart): array
         'is_active' => true,
         'is_suspended' => false,
     ]);
-    $scheduledAt = now(config('app.timezone'))->subMinutes($minutesPastStart);
+    // scheduled_date/time are visit-area civil values, not server/app UTC.
+    // Match CleaningBookingSession::startsAt() or a "5 minutes ago" visit
+    // inadvertently becomes hours late when the server runs in UTC.
+    $scheduledAt = now(config('cleaning_booking_v2.timezone', 'Asia/Damascus'))
+        ->subMinutes($minutesPastStart);
     $booking = CleaningBooking::factory()->create([
         'customer_id' => $customer->id,
         'worker_id' => $worker->id,

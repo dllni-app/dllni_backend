@@ -26,7 +26,9 @@ function makeRecurringAttendanceCloseoutVisit(int $minutesPastStart): array
         'is_active' => true,
         'is_suspended' => false,
     ]);
-    $scheduledAt = now(config('app.timezone'))->subMinutes($minutesPastStart);
+    // The visit's date/time are service-area civil values, not UTC app time.
+    $scheduledAt = now(config('cleaning_booking_v2.timezone', 'Asia/Damascus'))
+        ->subMinutes($minutesPastStart);
     $booking = CleaningBooking::factory()->create([
         'customer_id' => $customer->id,
         'worker_id' => $worker->id,

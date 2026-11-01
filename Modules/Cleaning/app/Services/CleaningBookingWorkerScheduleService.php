@@ -16,6 +16,7 @@ final class CleaningBookingWorkerScheduleService
         private readonly CleaningBookingSchedulePresenter $presenter,
         private readonly CleaningBookingWorkerSessionVisibilityService $visibility,
         private readonly CleaningBookingSessionWorkerPricingService $pricing,
+        private readonly CleaningBookingSessionAcceptanceService $acceptance,
     ) {}
 
     /** @return array<string, mixed> */
@@ -45,10 +46,18 @@ final class CleaningBookingWorkerScheduleService
 
         $scoped = $this->scopeToWorker($schedule, $visibleSessions);
         $previews = [];
+        $acceptable = [];
         foreach ($visibleSessions as $session) {
             if ($session->workerAssignments()->where('worker_id', $worker->id)
                 ->whereIn('status', \Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus::acceptedValues())->exists()) {
                 continue;
+            }
+
+            // This is the exact read-side eligibility gate used by the
+            // acceptance transaction, not a client-side status guess. A worker
+            // can accept a future visit even after accepting earlier visits.
+            if ($this->acceptance->canAcceptSession($booking, $session, $worker)) {
+                $acceptable[(int) $session->id] = true;
             }
 
             try {
@@ -68,13 +77,44 @@ final class CleaningBookingWorkerScheduleService
 
         foreach ($scoped['sessions'] as &$item) {
             if (is_array($item)) {
-                $item['pricingPreview'] = $previews[(int) ($item['sessionId'] ?? $item['id'] ?? 0)] ?? null;
+                $sessionId = (int) ($item['sessionId'] ?? $item['id'] ?? 0);
+                $item['pricingPreview'] = $previews[$sessionId] ?? null;
+                $item['canAccept'] = isset($acceptable[$sessionId]);
             }
         }
         unset($item);
         if (is_array($scoped['nextSession'] ?? null)) {
-            $scoped['nextSession']['pricingPreview'] = $previews[(int) ($scoped['nextSession']['sessionId'] ?? $scoped['nextSession']['id'] ?? 0)] ?? null;
+            $nextId = (int) ($scoped['nextSession']['sessionId'] ?? $scoped['nextSession']['id'] ?? 0);
+            $scoped['nextSession']['pricingPreview'] = $previews[$nextId] ?? null;
+            $scoped['nextSession']['canAccept'] = isset($acceptable[$nextId]);
         }
+
+        // Only persisted earnings from this worker's accepted visits belong in
+        // their mission header. Never add price previews or other workers'
+        // shares; the Flutter client must not recompute pricing totals.
+        $confirmedAmounts = collect($scoped['sessions'] ?? [])
+            ->map(static function (mixed $item): ?float {
+                if (! is_array($item)) {
+                    return null;
+                }
+                $assignment = $item['myAssignment'] ?? $item['workerAssignmentState'] ?? null;
+
+                return is_array($assignment) && is_numeric($assignment['workerAmount'] ?? null)
+                    ? (float) $assignment['workerAmount']
+                    : null;
+            })
+            ->filter(static fn (?float $amount): bool => $amount !== null);
+        $scoped['myConfirmedWorkerAmount'] = $confirmedAmounts->isEmpty()
+            ? null
+            : round((float) $confirmedAmounts->sum(), 2);
+        $acceptedVisits = collect($scoped['sessions'] ?? [])
+            ->filter(static fn (mixed $item): bool => is_array($item)
+                && is_array($item['myAssignment'] ?? $item['workerAssignmentState'] ?? null));
+        $scoped['myConfirmedWorkerHours'] = $acceptedVisits->isEmpty()
+            ? null
+            : round((float) $acceptedVisits->sum(
+                static fn (array $item): float => (float) ($item['durationHours'] ?? $item['hours'] ?? 0)
+            ), 2);
 
         return $this->sanitize($scoped, $worker);
     }

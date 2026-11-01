@@ -2,57 +2,33 @@
 
 declare(strict_types=1);
 
-use Modules\Cleaning\Support\WorkerRoomAssignmentPlanner;
+use Modules\Cleaning\Support\CleaningRoomBlueprints;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
-it('normalizes shed from room size breakdown and keeps it for room planning', function (): void {
-    $service = app(UserCleaningOrderEstimationService::class);
+it('normalizes sheds in the booked room breakdown', function (): void {
+    $details = app(UserCleaningOrderEstimationService::class)
+        ->normalizePropertyDetailsForStorage('villa', [
+            'room_size_breakdown' => [
+                'bedroom' => ['large' => 1],
+                'shed' => ['medium' => 1],
+            ],
+        ]);
 
-    $details = $service->normalizePropertyDetailsForStorage('villa', [
+    expect($details['room_size_breakdown']['shed']['medium'])->toBe(1)
+        ->and($details['room_size_breakdown']['shed']['small'])->toBe(0);
+});
+
+it('generates shed task descriptions without assigning a worker', function (): void {
+    $rooms = CleaningRoomBlueprints::generateRoomBlueprints([
         'room_size_breakdown' => [
             'bedroom' => ['large' => 1],
             'shed' => ['medium' => 1],
         ],
     ]);
 
-    expect($details['rooms'])->toBe(1);
-    expect($details['sheds'])->toBe(1);
-    expect($details['room_size_breakdown']['shed']['small'])->toBe(0);
-    expect($details['room_size_breakdown']['shed']['medium'])->toBe(1);
-});
-
-it('derives shed room keys for worker assignments', function (): void {
-    $plan = WorkerRoomAssignmentPlanner::plan(
-        [
-            'room_size_breakdown' => [
-                'bedroom' => ['large' => 1],
-                'shed' => ['medium' => 1],
-            ],
-        ],
-        [
-            [
-                'workerSlot' => 1,
-                'preferredWorkerId' => 10,
-                'rooms' => [
-                    [
-                        'roomKey' => 'bedroom.large.1',
-                        'roomType' => 'bedroom',
-                        'roomSize' => 'large',
-                    ],
-                    [
-                        'roomKey' => 'shed.medium.1',
-                        'roomType' => 'shed',
-                        'roomSize' => 'medium',
-                    ],
-                ],
-            ],
-        ],
-        'preferred_worker',
-        1,
-        10,
-    );
-
-    expect($plan['errors'])->toBe([]);
-    expect(array_column($plan['derivedRooms'], 'room_key'))->toContain('shed.medium.1');
-    expect($plan['roomPlans']['shed.medium.1']['workerSlot'])->toBe(1);
+    expect(array_column($rooms, 'room_key'))->toContain('shed.medium.1');
+    foreach ($rooms as $room) {
+        expect($room)->not->toHaveKey('workerSlot')
+            ->not->toHaveKey('assignedWorkerId');
+    }
 });

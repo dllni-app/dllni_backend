@@ -123,7 +123,7 @@ final class CleaningBookingPriceAdjustmentService
                 'reviewed_at' => now(),
             ])->save();
 
-            return $booking->fresh(['workerAssignments.worker.user', 'rooms.assignedWorker.user']);
+            return $booking->fresh(['workerAssignments.worker.user', 'rooms']);
         });
 
         BroadcastAfterResponse::send(new CleaningBookingPriceAdjustmentResolved(

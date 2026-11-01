@@ -117,8 +117,8 @@ it('applies the coupon only after authoritative open-time repricing and keeps tr
             'default_commission_rate' => 25,
             'commission_type' => 'percent',
             'commission_fixed_amount' => null,
-            'travel_per_km' => 10,
-            'travel_distance_start_point' => 'worker_home',
+            'travel_markup_type' => 'worker_allowance',
+            'travel_markup_value' => 10,
         ],
     );
 
@@ -156,8 +156,6 @@ it('applies the coupon only after authoritative open-time repricing and keeps tr
         'status' => CleaningBookingWorkerAssignmentStatus::InProgress->value,
         'accepted_at' => now()->subHours(2),
         'work_started_at' => $startedAt,
-        'room_count' => 0,
-        'rooms_weight' => 0,
         'service_share_amount' => 200,
         'travel_fee' => 10,
         'admin_margin_amount' => 50,

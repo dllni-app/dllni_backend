@@ -10,15 +10,14 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
+use LogicException;
 use Modules\Cleaning\Services\CleaningCouponPricingService;
 use Modules\User\Http\Requests\UserCleaningOrderStoreRequest;
 use Modules\User\Http\Resources\UserCleaningBookingResource;
 use Modules\User\Services\EventAssistanceScheduleService;
 use Modules\User\Services\OpenTimeScheduleService;
-use Modules\User\Services\RecurringCleaningScheduleService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 use Modules\User\Services\UserCleaningOrderService;
-use Modules\User\Services\RoomPeriodBookingCreationService;
 use Modules\User\Support\CleaningWorkerCapacity;
 
 final class UserCleaningOrderStoreController
@@ -28,11 +27,9 @@ final class UserCleaningOrderStoreController
         UserCleaningOrderService $service,
         UserCleaningOrderEstimationService $estimationService,
         EventAssistanceScheduleService $eventSchedule,
-        RecurringCleaningScheduleService $recurringSchedule,
         OpenTimeScheduleService $openTimeSchedule,
         PlatformCouponRedemptionService $platformCoupons,
         CleaningCouponPricingService $couponPricing,
-        RoomPeriodBookingCreationService $periodCreation,
     ): JsonResponse {
         $couponCode = $request->input('couponCode');
         Validator::make(['couponCode' => $couponCode], [
@@ -57,50 +54,15 @@ final class UserCleaningOrderStoreController
             }
         }
         if ((int) ($validated['contractVersion'] ?? 0) === 2) {
-            $booking = app(\Modules\User\Services\CleaningTimePeriodBookingService::class)->create($request->user(), $validated);
+            $timePeriodBookings = app(\Modules\User\Services\CleaningTimePeriodBookingService::class);
+            $booking = $timePeriodBookings->create($request->user(), $validated);
+            $orders = $timePeriodBookings->bookingsFor($booking);
             $details = app(\Modules\User\Services\CleaningTimePeriodCustomerDetailService::class)->forBooking($booking);
             if ($details === null) {
-                throw new \LogicException('Persisted V2 booking schedules are missing.');
+                throw new LogicException('Persisted V2 booking schedules are missing.');
             }
 
-            return response()->json(['order' => UserCleaningBookingResource::make($booking), 'contractVersion' => 2, ...$details], 201);
-        }
-        if (is_array($validated['roomPeriods'] ?? null)) {
-            if ($request->filled('couponCode')) {
-                throw ValidationException::withMessages([
-                    'couponCode' => ['Period-level coupon support is not available yet; no booking was created.'],
-                ]);
-            }
-
-            $booking = $periodCreation->create(
-                $request->user(),
-                $validated,
-                (string) $validated['quoteSignature'],
-            );
-            $booking->load([
-                'worker.user', 'preferredWorker.user',
-                'rooms.assignedWorker.user', 'workerAssignments.worker.user',
-                'timeWarnings', 'disputes', 'addons', 'billingPolicy',
-            ]);
-
-            return response()->json([
-                'order' => UserCleaningBookingResource::make($booking),
-                'roomPeriods' => $booking->roomPeriods()
-                    ->get()
-                    ->map(static fn ($period): array => [
-                        'clientKey' => $period->client_key,
-                        'visitSequence' => $period->visit_sequence,
-                        'roomType' => $period->room_type,
-                        'size' => $period->room_size,
-                        'cleaningMode' => $period->cleaning_mode,
-                        'scheduledDate' => $period->scheduled_date?->format('Y-m-d'),
-                        'scheduledTime' => substr((string) $period->scheduled_time, 0, 5),
-                        'numberOfWorkers' => $period->required_workers,
-                        'estimatedDurationMinutes' => $period->estimated_duration_minutes,
-                        'materials' => $period->materials,
-                        'specialServices' => $period->special_services,
-                    ])->values()->all(),
-            ], 201);
+            return response()->json(['order' => UserCleaningBookingResource::make($booking), 'orders' => UserCleaningBookingResource::collection($orders), 'contractVersion' => 2, ...$details], 201);
         }
         $validated = $this->withEventWorkerCount($validated);
         $this->assertWorkerCapacity($validated, $estimationService);
@@ -111,18 +73,12 @@ final class UserCleaningOrderStoreController
         $openTimePlan = ! $isEventAssistance
             ? $openTimeSchedule->resolve($validated)
             : null;
-        $recurringPlan = ! $isEventAssistance && $openTimePlan === null
-            ? $recurringSchedule->resolve($validated)
-            : null;
 
         $order = DB::transaction(function () use (
             $request,
             $service,
-            $estimationService,
             $eventSchedule,
             $eventPlan,
-            $recurringSchedule,
-            $recurringPlan,
             $openTimeSchedule,
             $openTimePlan,
             $platformCoupons,
@@ -189,66 +145,6 @@ final class UserCleaningOrderStoreController
                     ],
                 ]);
                 $order = $openTimeSchedule->materialize($order, $openTimePlan, $openTimePricing);
-            } elseif ($recurringPlan !== null) {
-                $sessionHours = (string) ($recurringPlan['calculationMode'] ?? RecurringCleaningScheduleService::CALCULATION_TASK) === RecurringCleaningScheduleService::CALCULATION_HOURS
-                    ? (float) ($recurringPlan['hoursPerVisit'] ?? $order->estimated_hours)
-                    : (float) $order->estimated_hours;
-                $singleVisitPricing = null;
-                if ((string) ($recurringPlan['calculationMode'] ?? RecurringCleaningScheduleService::CALCULATION_TASK) === RecurringCleaningScheduleService::CALCULATION_HOURS) {
-                    $hourPricing = $estimationService->priceRecurringHours(
-                        (string) $order->property_type,
-                        (array) ($order->property_details ?? []),
-                        $order->address_latitude,
-                        $order->address_longitude,
-                        $order->resolvedAssignmentMode() === 'preferred_worker' ? $order->preferred_worker_id : null,
-                        $sessionHours,
-                        max(1, (int) $order->number_of_workers),
-                        (bool) ($validated['requestMaterials'] ?? false),
-                        is_array($validated['specialServices'] ?? null) ? $validated['specialServices'] : [],
-                    );
-                    $storedHourPricing = $order->resolvedAssignmentMode() === 'preferred_worker'
-                        ? $hourPricing
-                        : [
-                            ...$hourPricing,
-                            'travelFee' => 0.0,
-                            'distanceKm' => null,
-                            'adminMargin' => 0.0,
-                            'isPricingFinal' => false,
-                            'totalPrice' => round((float) $hourPricing['basePrice'] + (float) $hourPricing['addonsTotal'], 2),
-                        ];
-                    $singleVisitPricing = $storedHourPricing;
-                    $order->forceFill([
-                        'estimated_hours' => $sessionHours,
-                        'total_hours' => $sessionHours,
-                        'base_price' => $storedHourPricing['basePrice'],
-                        'addons_total' => $storedHourPricing['addonsTotal'],
-                        'travel_fee' => $storedHourPricing['travelFee'],
-                        'travel_distance_km' => $storedHourPricing['distanceKm'],
-                        'admin_margin_amount' => $storedHourPricing['adminMargin'],
-                        'is_pricing_final' => $storedHourPricing['isPricingFinal'],
-                        'total_price' => $storedHourPricing['totalPrice'],
-                    ])->save();
-                    $order = $order->fresh();
-                } else {
-                    $singleVisitPricing = $estimationService->price(
-                        (string) $order->property_type,
-                        (array) ($order->property_details ?? []),
-                        $order->address_latitude,
-                        $order->address_longitude,
-                        $order->resolvedAssignmentMode() === 'preferred_worker' ? $order->preferred_worker_id : null,
-                        null,
-                        (bool) ($validated['requestMaterials'] ?? false),
-                        is_array($validated['specialServices'] ?? null) ? $validated['specialServices'] : [],
-                        max(1, (int) $order->number_of_workers),
-                    );
-                }
-
-                $recurringPricing = $recurringSchedule->quote(
-                    $recurringPlan,
-                    (array) $singleVisitPricing,
-                    $sessionHours,
-                );
-                $order = $recurringSchedule->materialize($order, $recurringPlan, $recurringPricing);
             }
 
             if (is_array($validated['specialServices'] ?? null) && $validated['specialServices'] !== []) {
@@ -312,7 +208,7 @@ final class UserCleaningOrderStoreController
         $order->load([
             'worker.user',
             'preferredWorker.user',
-            'rooms.assignedWorker.user',
+            'rooms',
             'workerAssignments.worker.user',
             'timeWarnings',
             'disputes',
@@ -357,12 +253,7 @@ final class UserCleaningOrderStoreController
             $propertyType,
             (array) ($validated['propertyDetails'] ?? []),
         );
-        $schedule = is_array($validated['schedule'] ?? null) ? $validated['schedule'] : [];
-        $calculationMode = mb_strtolower(mb_trim((string) ($schedule['calculationMode'] ?? RecurringCleaningScheduleService::CALCULATION_TASK)));
-        $capacityHours = mb_strtolower(mb_trim((string) ($schedule['mode'] ?? ''))) === 'recurring'
-            && $calculationMode === RecurringCleaningScheduleService::CALCULATION_HOURS
-                ? ceil(max(1.0, min(24.0, (float) ($schedule['hoursPerVisit'] ?? 0))) * 2) / 2
-                : (float) $estimation['estimatedHours'];
+        $capacityHours = (float) $estimation['estimatedHours'];
         $requiredWorkers = CleaningWorkerCapacity::requiredWorkers($capacityHours);
         $requestedWorkers = max(1, (int) ($validated['numberOfWorkers'] ?? 1));
 

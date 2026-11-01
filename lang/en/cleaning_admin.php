@@ -578,7 +578,7 @@ return [
             'default_commission_rate' => 'Default commission rate (%)',
             'commission_fixed_amount' => 'Fixed commission amount',
             'vat_rate' => 'VAT rate (%)',
-            'travel_markup_type' => 'Travel cost calculation',
+            'travel_markup_type' => 'Transport allowance per worker',
             'travel_markup_value' => 'Transport allowance per worker',
             'travel_per_km' => 'Travel fee per kilometer',
             'travel_distance_start_point' => 'Distance start point',

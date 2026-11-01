@@ -18,6 +18,8 @@ beforeEach(function (): void {
             'default_commission_rate' => 10,
             'commission_type' => 'percent',
             'commission_fixed_amount' => null,
+            'travel_markup_type' => 'worker_allowance',
+            'travel_markup_value' => 10,
             'travel_per_km' => 10,
             'travel_distance_start_point' => 'worker_home',
         ],
@@ -47,7 +49,7 @@ it('does not promise worker-specific room ids in an offer', function (): void {
         'address_longitude' => 37.1,
     ]);
 
-    app(CleaningBookingTeamService::class)->syncRooms($booking, null);
+    app(CleaningBookingTeamService::class)->syncRooms($booking);
 
     $expectedRoomIds = $booking->rooms()
         ->orderBy('id')
@@ -67,12 +69,9 @@ it('does not promise worker-specific room ids in an offer', function (): void {
     );
 
     expect($expectedRoomIds)->toHaveCount(2)
-        ->and($booking->rooms()->whereNotNull('planned_worker_slot')->count())->toBe(0)
         ->and($offer['isPreview'])->toBeTrue()
         ->and($offer['workerSlot'])->toBe(1)
-        ->and($offer['roomCount'])->toBe(0)
-        ->and($offer['roomIds'])->toBe([]);
-});
+;});
 
 it('shares booking tasks across accepted workers while allocating margins equally', function (): void {
     $booking = CleaningBooking::factory()->create([
@@ -98,9 +97,7 @@ it('shares booking tasks across accepted workers while allocating margins equall
     ]);
 
     $teamService = app(CleaningBookingTeamService::class);
-    $teamService->syncRooms($booking, null);
-
-    expect($booking->rooms()->whereNotNull('planned_worker_slot')->count())->toBe(0);
+    $teamService->syncRooms($booking);
 
     $createAcceptedWorker = function (int $acceptedAfterSeconds) use ($booking): array {
         $worker = Worker::factory()->create([
@@ -114,8 +111,6 @@ it('shares booking tasks across accepted workers while allocating margins equall
             'worker_id' => $worker->id,
             'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
             'accepted_at' => now()->addSeconds($acceptedAfterSeconds),
-            'room_count' => 0,
-            'rooms_weight' => 0,
             'service_share_amount' => 0,
             'travel_fee' => 0,
             'admin_margin_amount' => 0,
@@ -128,9 +123,8 @@ it('shares booking tasks across accepted workers while allocating margins equall
 
     [$firstWorker, $firstAssignment] = $createAcceptedWorker(0);
 
-    // This is the screenshot state: one worker has accepted while two workers
-    // are still missing. Their assigned room and administration share must be
-    // available immediately instead of remaining zero until team completion.
+    // The first accepted worker sees their financial share immediately,
+    // without owning an individual set of rooms.
     $teamService->recalculateBookingTeam($booking->fresh(), finalizeBooking: false);
     $firstAssignment->refresh();
     $provisionalBooking = $booking->fresh();
@@ -142,16 +136,12 @@ it('shares booking tasks across accepted workers while allocating margins equall
 
     expect($firstOffer['workerSlot'])->toBe(1)
         ->and($firstOffer['workerId'])->toBe($firstWorker->id)
-        ->and($firstAssignment->room_count)->toBe(3)
-        ->and((float) $firstAssignment->rooms_weight)->toBe(3.0)
         ->and((float) $firstAssignment->service_share_amount)->toBe(1000.0)
         ->and((float) $firstAssignment->admin_margin_amount)->toBe(100.0)
         ->and((float) $firstAssignment->travel_fee)->toBe(10.0)
         ->and((float) $firstAssignment->worker_amount)->toBe(1010.0)
         ->and((float) $provisionalBooking->admin_margin_amount)->toBe(300.0)
-        ->and((float) $provisionalBooking->total_price)->toBe(3300.0);
-
-    expect($booking->rooms()->whereNotNull('assigned_worker_id')->count())->toBe(0);
+        ->and((float) $provisionalBooking->total_price)->toBe(3030.0);
 
     [$secondWorker] = $createAcceptedWorker(1);
     [$thirdWorker] = $createAcceptedWorker(2);
@@ -164,13 +154,10 @@ it('shares booking tasks across accepted workers while allocating margins equall
         ->get();
 
     expect($assignments)->toHaveCount(3)
-        ->and($assignments->pluck('room_count')->all())->toBe([3, 3, 3])
         ->and($assignments->pluck('service_share_amount')->map(fn ($value) => (float) $value)->all())
         ->toBe([1000.0, 1000.0, 1000.0])
         ->and($assignments->pluck('admin_margin_amount')->map(fn ($value) => (float) $value)->all())
         ->toBe([100.0, 100.0, 100.0])
         ->and((float) $assignments->sum('admin_margin_amount'))->toBe(300.0)
         ->and((float) $finalBooking->admin_margin_amount)->toBe(300.0);
-
-    expect($booking->rooms()->whereNotNull('assigned_worker_id')->count())->toBe(0);
 });

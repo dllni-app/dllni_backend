@@ -11,7 +11,6 @@ use InvalidArgumentException;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
-use Modules\Cleaning\Models\CleaningBookingRoom;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Throwable;
 
@@ -33,7 +32,7 @@ final class WorkerOrderSolvencyService
         private readonly WorkerBookingScheduleConflictService $scheduleConflictService,
     ) {}
 
-    public function solvencyPayloadForBooking(Worker $worker, CleaningBooking $booking, ?array $roomIds = null): array
+    public function solvencyPayloadForBooking(Worker $worker, CleaningBooking $booking): array
     {
         $worker->loadMissing('deposit');
         $capacity = $this->workerCapacitySummary($worker, (int) $booking->id);
@@ -105,10 +104,10 @@ final class WorkerOrderSolvencyService
         return (bool) $this->solvencyPayloadForBooking($worker, $booking)['canReceiveOrder'];
     }
 
-    public function assertWorkerCanAcceptBooking(Worker $worker, CleaningBooking $booking, ?array $roomIds = null): void
+    public function assertWorkerCanAcceptBooking(Worker $worker, CleaningBooking $booking): void
     {
         CleaningWorkerDeposit::query()->where('worker_id', $worker->id)->lockForUpdate()->first();
-        $payload = $this->solvencyPayloadForBooking($worker->fresh(['deposit']) ?? $worker, $booking, $roomIds);
+        $payload = $this->solvencyPayloadForBooking($worker->fresh(['deposit']) ?? $worker, $booking);
 
         if (! (bool) $payload['canAcceptBooking']) {
             throw new InvalidArgumentException((string) ($payload['message'] ?? 'Worker cannot accept this booking.'));
@@ -165,8 +164,8 @@ final class WorkerOrderSolvencyService
      * administration margin is deducted.
      *
      * Regular cleaning previews use the next available planned worker slot, so
-     * the displayed service share matches the room plan shown to the customer.
-     * Event-assistance orders intentionally remain evenly split between workers.
+     * the displayed service share matches the equal team share.
+     * No rooms are allocated to individual workers.
      *
      * @return array<string, mixed>
      */
@@ -184,7 +183,6 @@ final class WorkerOrderSolvencyService
             && ! $isProvisionalEvent
             && (int) ($booking->platform_coupon_id ?? 0) <= 0
             && (float) ($assignment->service_share_amount ?? 0) <= 0.0
-            && (float) ($assignment->rooms_weight ?? 0) <= 0.0
             && ((float) ($booking->base_price ?? 0) + (float) ($booking->addons_total ?? 0)) > 0.0;
 
         if (
@@ -193,7 +191,7 @@ final class WorkerOrderSolvencyService
             && ! $isProvisionalEvent
             && ! $isProvisionalUnpricedAssignment
         ) {
-            $totalHours = $this->workerDurationHours($booking, (float) $assignment->rooms_weight);
+            $totalHours = $this->workerDurationHours($booking);
             $serviceShare = (float) $assignment->service_share_amount;
             $travelFee = (float) $assignment->travel_fee;
             $adminMargin = (float) $assignment->admin_margin_amount;
@@ -209,8 +207,6 @@ final class WorkerOrderSolvencyService
                     ? $assignment->status->value
                     : (string) $assignment->status,
                 'acceptedAt' => $assignment->accepted_at?->toIso8601String(),
-                'roomCount' => (int) $assignment->room_count,
-                'roomsWeight' => (float) $assignment->rooms_weight,
                 'workerSlot' => $workerSlot,
                 'totalHours' => $totalHours,
                 'serviceShareAmount' => $serviceShare,
@@ -221,34 +217,16 @@ final class WorkerOrderSolvencyService
                 'grossTotalPrice' => $grossWorkerTotal,
                 'netTotalPrice' => $workerAmount,
                 'currency' => (string) ($assignment->currency ?: config('app.currency', 'SYP')),
-                'roomIds' => [],
                 'isPricingFinal' => $isPricingFinal,
                 'isPreview' => ! $isPricingFinal,
             ];
         }
 
         $preview = $this->previewServiceShare($booking, $assignment);
-        $totalHours = $this->workerDurationHours($booking, (float) $preview['roomsWeight']);
+        $totalHours = $this->workerDurationHours($booking);
         $serviceShare = $preview['serviceShareAmount'];
-        $hasCompleteRoute = $booking->address_latitude !== null
-            && $booking->address_longitude !== null
-            && $worker->home_address !== null
-            && mb_trim((string) $worker->home_address) !== ''
-            && $worker->home_latitude !== null
-            && $worker->home_longitude !== null;
-
-        // A pending order may legitimately be listed before either side of the
-        // route is geocoded. Its solvency check still has a reliable provisional
-        // administration margin; transport is finalized only during acceptance.
-        $pricing = $hasCompleteRoute
-            ? $this->pricingCalculator->finalizedForWorker(
-                $serviceShare,
-                0.0,
-                (float) $booking->address_latitude,
-                (float) $booking->address_longitude,
-                $worker,
-            )
-            : $this->pricingCalculator->provisional($serviceShare, 0.0);
+        // The allowance is known when the offer is displayed. No geocoding needed.
+        $pricing = $this->pricingCalculator->provisional($serviceShare, 0.0);
         $travelFee = (float) $pricing['travelFee'];
         $adminMargin = $preview['adminMarginAmount'];
         $grossWorkerTotal = $this->grossWorkerTotal($serviceShare, $travelFee);
@@ -263,8 +241,6 @@ final class WorkerOrderSolvencyService
                     : (string) $assignment->status)
                 : null,
             'acceptedAt' => $assignment?->accepted_at?->toIso8601String(),
-            'roomCount' => $preview['roomCount'],
-            'roomsWeight' => $preview['roomsWeight'],
             'workerSlot' => $preview['workerSlot'],
             'totalHours' => $totalHours,
             'serviceShareAmount' => $serviceShare,
@@ -275,13 +251,12 @@ final class WorkerOrderSolvencyService
             'grossTotalPrice' => $grossWorkerTotal,
             'netTotalPrice' => $workerAmount,
             'currency' => (string) ($assignment?->currency ?: config('app.currency', 'SYP')),
-            'roomIds' => $preview['roomIds'],
-            'isPricingFinal' => false,
-            'isPreview' => true,
+            'isPricingFinal' => (bool) $booking->is_pricing_final,
+            'isPreview' => ! (bool) $booking->is_pricing_final,
         ];
     }
 
-    public function requiredCommissionForBookingAndWorker(CleaningBooking $booking, Worker $worker, ?array $roomIds = null): float
+    public function requiredCommissionForBookingAndWorker(CleaningBooking $booking, Worker $worker): float
     {
         return round((float) $this->workerOfferForBooking($worker, $booking)['adminMarginAmount'], 2);
     }
@@ -332,7 +307,7 @@ final class WorkerOrderSolvencyService
     }
 
     /**
-     * @return array{serviceShareAmount:float, adminMarginAmount:float, roomCount:int, roomsWeight:float, workerSlot:?int, roomIds:array<int, int>}
+     * @return array{serviceShareAmount:float, adminMarginAmount:float, workerSlot:?int}
      */
     private function previewServiceShare(
         CleaningBooking $booking,
@@ -372,32 +347,16 @@ final class WorkerOrderSolvencyService
             return [
                 'serviceShareAmount' => $equalShares[$this->workerSlotForAssignment($booking, $assignment) ?? 1],
                 'adminMarginAmount' => $this->allocatedMarginForSlot($targetAdminMargin, $equalShares, $this->workerSlotForAssignment($booking, $assignment) ?? 1),
-                'roomCount' => 0,
-                'roomsWeight' => 0.0,
                 'workerSlot' => null,
-                'roomIds' => [],
             ];
         }
 
         $nextSlot = $this->workerSlotForAssignment($booking, $assignment) ?? 1;
 
-        $plannedRooms = CleaningBookingRoom::query()
-            ->where('cleaning_booking_id', $booking->id)
-            ->whereNotNull('planned_worker_slot')
-            ->get(['id', 'planned_worker_slot', 'weight']);
-
-        $slotRooms = $plannedRooms
-            ->filter(static fn (CleaningBookingRoom $room): bool => (int) $room->planned_worker_slot === $nextSlot)
-            ->values();
-        $slotWeight = round((float) $slotRooms->sum(static fn (CleaningBookingRoom $room): float => (float) $room->weight), 2);
-
         return [
             'serviceShareAmount' => $equalShares[$nextSlot],
             'adminMarginAmount' => $this->allocatedMarginForSlot($targetAdminMargin, $equalShares, $nextSlot),
-            'roomCount' => $slotRooms->count(),
-            'roomsWeight' => $slotWeight,
             'workerSlot' => $nextSlot,
-            'roomIds' => $slotRooms->pluck('id')->map(static fn (mixed $id): int => (int) $id)->all(),
         ];
     }
 
@@ -428,7 +387,7 @@ final class WorkerOrderSolvencyService
         return (float) ($allocations[$targetSlot] ?? 0.0);
     }
 
-    private function workerDurationHours(CleaningBooking $booking, ?float $roomsWeight = null): ?float
+    private function workerDurationHours(CleaningBooking $booking): ?float
     {
         $details = is_array($booking->property_details) ? $booking->property_details : [];
         $bookingHours = (float) (
@@ -448,16 +407,6 @@ final class WorkerOrderSolvencyService
         $workerCount = max(1, (int) ($booking->number_of_workers ?? 1));
         if ($workerCount <= 1) {
             return round($bookingHours, 2);
-        }
-
-        if ($roomsWeight !== null && $roomsWeight > 0.0) {
-            $totalRoomWeight = round((float) CleaningBookingRoom::query()
-                ->where('cleaning_booking_id', $booking->id)
-                ->sum('weight'), 2);
-
-            if ($totalRoomWeight > 0.0) {
-                return round(max(0.25, $bookingHours * ($roomsWeight / $totalRoomWeight)), 2);
-            }
         }
 
         return round($bookingHours / $workerCount, 2);

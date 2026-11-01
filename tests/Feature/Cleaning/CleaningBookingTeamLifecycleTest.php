@@ -217,8 +217,6 @@ function createTeamAssignment(
         'work_started_at' => null,
         'work_finished_at' => null,
         'worker_completion_message' => null,
-        'room_count' => 0,
-        'rooms_weight' => 0,
         'service_share_amount' => 0,
         'travel_fee' => 0,
         'admin_margin_amount' => 0,

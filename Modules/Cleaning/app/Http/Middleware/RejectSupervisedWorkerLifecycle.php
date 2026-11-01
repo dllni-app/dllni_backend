@@ -26,11 +26,15 @@ final class RejectSupervisedWorkerLifecycle
             ], 403);
         }
 
-        if ($booking?->isV2OperationalGroup() && $this->isExecutionMutation($request)) {
+        if ($booking !== null
+            && (string) $booking->booking_kind === 'standard'
+            && (int) $booking->number_of_workers > 1
+            && $booking->supervisorAssignments()->where('active_slot', 1)->whereNull('released_at')->exists()
+            && $this->isExecutionMutation($request)) {
             return response()->json([
-                'code' => 'CLEANING_V2_VISIT_EXECUTION_UNAVAILABLE',
-                'message' => 'تنفيذ مجموعة التنظيف يتطلب مسار زيارة مهيأ ومعتمداً. إجراءات القبول والحضور والاستغاثة تبقى مستقلة.',
-            ], 422);
+                'code' => 'SUPERVISOR_ACTION_REQUIRED',
+                'message' => 'بدء العمل وإنهاؤه والتحقق من صلاحيات المشرف المعيّن لهذا الحجز.',
+            ], 403);
         }
 
         return $next($request);
@@ -50,9 +54,6 @@ final class RejectSupervisedWorkerLifecycle
             return false;
         }
 
-        return preg_match(
-            '#/cleaning-bookings/[^/]+/(security-code|price-adjustment-requests|start-work|complete|finish|cancel|open-time/|materials/receive)#',
-            $path,
-        ) === 1;
+        return preg_match('#/cleaning-bookings/[^/]+/(security-code|start-work|complete|finish)$#', $path) === 1;
     }
 }

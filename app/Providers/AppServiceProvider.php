@@ -181,6 +181,16 @@ final class AppServiceProvider extends ServiceProvider
                 return true;
             }
 
+            // Custody is now held by the active booking-level supervisor.
+            // Session-level supervisor assignments belonged to retired visits.
+            if ($user->is_active && $booking->supervisorAssignments()
+                ->where('supervisor_user_id', $user->id)
+                ->where('active_slot', 1)
+                ->whereNull('released_at')
+                ->exists()) {
+                return true;
+            }
+
             if ($user->worker && $booking->worker_id === $user->worker->id) {
                 return true;
             }

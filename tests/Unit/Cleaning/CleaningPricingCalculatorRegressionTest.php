@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\CleaningFinancialSetting;
+use App\Models\Worker;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Services\CleaningPricingCalculator;
 
@@ -14,7 +15,7 @@ it('does not round new SYP service amounts up to 500', function (): void {
     expect($calculator->roundMoney(960))->toBe(960.0);
 });
 
-it('includes the configured percent commission in provisional pricing', function (): void {
+it('deducts commission from the service revenue without adding it to the customer price', function (): void {
     CleaningFinancialSetting::query()->updateOrCreate(
         ['id' => 1],
         [
@@ -28,11 +29,11 @@ it('includes the configured percent commission in provisional pricing', function
 
     $regularCleaning = $calculator->provisional(240);
     expect($regularCleaning['adminMargin'])->toBe(60.0);
-    expect($regularCleaning['totalPrice'])->toBe(300.0);
+    expect($regularCleaning['totalPrice'])->toBe(240.0);
 
     $eventAssistance = $calculator->provisional(320 * 3);
     expect($eventAssistance['adminMargin'])->toBe(240.0);
-    expect($eventAssistance['totalPrice'])->toBe(1200.0);
+    expect($eventAssistance['totalPrice'])->toBe(960.0);
 });
 
 it('adds the configured transport allowance for every worker before and after worker pricing is finalized', function (): void {
@@ -44,7 +45,6 @@ it('adds the configured transport allowance for every worker before and after wo
             'commission_fixed_amount' => null,
             'travel_markup_type' => 'worker_allowance',
             'travel_markup_value' => 75,
-            'travel_per_km' => 999,
         ],
     );
 
@@ -52,15 +52,16 @@ it('adds the configured transport allowance for every worker before and after wo
 
     $provisional = $calculator->provisional(1000, 0, 0, 3);
     expect($provisional['travelFee'])->toBe(225.0)
-        ->and($provisional['totalPrice'])->toBe(1225.0);
+        ->and($provisional['totalPrice'])->toBe(1225.0)
+        ->and($provisional['isPricingFinal'])->toBeTrue();
 
-    $final = $calculator->finalizedForCoordinates(
+    $worker = Worker::factory()->make(['home_address' => null, 'home_latitude' => null, 'home_longitude' => null]);
+    $final = $calculator->finalizedForWorker(
         1000,
         0,
-        36.2,
-        37.1,
-        36.2,
-        37.1,
+        null,
+        null,
+        $worker,
     );
 
     expect($final['travelFee'])->toBe(75.0)
@@ -98,7 +99,7 @@ it('keeps commission inside the customer total when the minimum price includes i
         ->and($pricing['totalPrice'])->toBe(1500.0);
 });
 
-it('adds commission only for amounts above the commission-inclusive minimum base', function (): void {
+it('keeps commission in the customer subtotal even when the minimum base is exceeded', function (): void {
     CleaningFinancialSetting::query()->updateOrCreate(
         ['id' => 1],
         [
@@ -112,5 +113,5 @@ it('adds commission only for amounts above the commission-inclusive minimum base
 
     expect($pricing['adminMargin'])->toBe(425.0)
         ->and($pricing['includedAdminMargin'])->toBe(375.0)
-        ->and($pricing['totalPrice'])->toBe(1750.0);
+        ->and($pricing['totalPrice'])->toBe(1700.0);
 });

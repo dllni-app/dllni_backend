@@ -123,7 +123,7 @@ final class CleaningCustomerPricingObserver
         // Period V2 quotes are approved by the customer before store and must
         // not be silently changed by legacy provisional repricing.
         $details = (array) ($booking->property_details ?? []);
-        if (array_key_exists('_room_period_v2_approved_total', $details)) {
+        if (array_key_exists('_booking_v2_approved_total', $details)) {
             return false;
         }
 
@@ -239,8 +239,6 @@ final class CleaningCustomerPricingObserver
 
             if ($isEventAssistance) {
                 $values['service_share_amount'] = $serviceShare;
-                $values['room_count'] = 0;
-                $values['rooms_weight'] = 0;
             }
 
             $assignment->forceFill($values)->saveQuietly();

@@ -43,7 +43,7 @@ final class SupervisedWorkerBookingController
 
         $booking->load([
             'rooms',
-            'roomPeriods',
+            'roomSchedules.room',
             'specialServices.items',
             'supervisorAssignments.supervisor',
         ]);
@@ -62,23 +62,17 @@ final class SupervisedWorkerBookingController
                 ? ($booking->property_details['room_cleaning_modes'][$room->room_key] ?? null)
                 : null,
         ]);
-        $roomTitles = [
-            'bedroom' => 'غرفة نوم', 'bathroom' => 'حمام', 'toilet' => 'مرحاض',
-            'kitchen' => 'مطبخ', 'living_room' => 'غرفة معيشة',
-            'balcony' => 'شرفة', 'corridor' => 'ممر', 'shed' => 'مستودع',
-        ];
-        $tasks = $booking->roomPeriods->isNotEmpty()
-            ? $booking->roomPeriods->map(fn ($period) => [
-                'id' => $period->id,
-                'key' => $period->client_key,
-                'title' => $roomTitles[$period->room_type] ?? 'غرفة',
-                'roomType' => $period->room_type,
-                'roomSize' => $period->room_size,
-                'cleaningMode' => $period->cleaning_mode,
-                'notes' => $period->notes,
-                'scheduledDate' => $period->scheduled_date?->format('Y-m-d'),
-                'scheduledTime' => $period->scheduled_time,
-                'estimatedWorkMinutes' => $period->estimated_work_minutes,
+        $tasks = $booking->roomSchedules->isNotEmpty()
+            ? $booking->roomSchedules->map(fn ($schedule): array => [
+                'id' => $schedule->room?->id,
+                'key' => $schedule->room?->client_key,
+                'title' => $schedule->room?->display_label,
+                'roomType' => $schedule->room?->room_type,
+                'roomSize' => $schedule->room?->room_size,
+                'cleaningMode' => $schedule->room?->cleaning_mode,
+                'scheduledDate' => $schedule->starts_at?->setTimezone($schedule->timezone)->toDateString(),
+                'scheduledTime' => $schedule->starts_at?->setTimezone($schedule->timezone)->format('H:i'),
+                'estimatedWorkMinutes' => $schedule->work_minutes,
             ])
             : $roomTasks;
 

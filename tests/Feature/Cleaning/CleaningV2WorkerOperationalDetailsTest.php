@@ -8,9 +8,10 @@ use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningBookingSpecialService;
+use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Models\CleaningSpecialService;
 
-it('shows only operational special services from accepted worker visits', function (): void {
+it('shows shared booking-level special service tasks to accepted team members only', function (): void {
     $worker = Worker::factory()->create(['user_id' => User::factory()->create()->id]);
     $other = Worker::factory()->create();
     $booking = CleaningBooking::factory()->create([
@@ -24,6 +25,14 @@ it('shows only operational special services from accepted worker visits', functi
     ]));
     $sessions[0]->workerAssignments()->create(['worker_id' => $worker->id, 'status' => 'accepted', 'accepted_at' => now()]);
     $sessions[1]->workerAssignments()->create(['worker_id' => $other->id, 'status' => 'accepted', 'accepted_at' => now()]);
+    foreach ([$worker, $other] as $member) {
+        CleaningBookingWorkerAssignment::query()->create([
+            'cleaning_booking_id' => $booking->id,
+            'worker_id' => $member->id,
+            'status' => 'accepted_waiting_for_order_start',
+            'accepted_at' => now(),
+        ]);
+    }
     foreach (['My service', 'Other service'] as $index => $name) {
         $catalogService = CleaningSpecialService::query()->create([
             'name' => $name, 'pricing_unit' => 'piece', 'base_unit_price' => 100,
@@ -44,13 +53,15 @@ it('shows only operational special services from accepted worker visits', functi
     $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")
         ->assertOk()
         ->assertJsonPath('data.specialServices.0.name', 'My service')
-        ->assertJsonCount(1, 'data.specialServices')
+        ->assertJsonPath('data.specialServices.1.name', 'Other service')
+        ->assertJsonCount(2, 'data.specialServices')
         ->assertJsonStructure(['data' => ['materials', 'materialKit']]);
     Sanctum::actingAs($other->user);
     $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")
         ->assertOk()
-        ->assertJsonPath('data.specialServices.0.name', 'Other service')
-        ->assertJsonCount(1, 'data.specialServices');
+        ->assertJsonPath('data.specialServices.0.name', 'My service')
+        ->assertJsonPath('data.specialServices.1.name', 'Other service')
+        ->assertJsonCount(2, 'data.specialServices');
     $unassigned = Worker::factory()->create(['user_id' => User::factory()->create()->id]);
     Sanctum::actingAs($unassigned->user);
     $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")->assertNotFound();

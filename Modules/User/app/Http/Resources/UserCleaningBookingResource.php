@@ -37,11 +37,9 @@ final class UserCleaningBookingResource extends JsonResource
                 (float) ($this->total_price ?? 0),
             ) > 0.0;
 
-        // Temporary compatibility for the currently published Flutter app.
-        // That app historically expects basePrice to already be the displayed
-        // service value on order details. For a commission-inclusive minimum,
-        // use the authoritative customer total minus travel and expose the real
-        // margin separately so backend accounting remains unchanged.
+        // The customer sees the contracted service price. Administration margin
+        // is included in that price, never added again to what the customer pays.
+        // Older minimum-order snapshots retain their already-approved total.
         if ($discountAmount <= 0.0 && $extensionFeeTotal <= 0.0) {
             if ($legacyMinimumPriceCompatibility) {
                 $displayServicePrice = round(max(
@@ -52,7 +50,7 @@ final class UserCleaningBookingResource extends JsonResource
                 $payload['adminMargin'] = 0.0;
                 $payload['legacyMinimumPriceCompatibility'] = true;
             } else {
-                $displayServicePrice = round($bookingBasePrice + $bookingAdminMargin, 2);
+                $displayServicePrice = round($bookingBasePrice, 2);
             }
 
             $payload['basePrice'] = $displayServicePrice;
@@ -119,34 +117,6 @@ final class UserCleaningBookingResource extends JsonResource
         $payload['eventTypeId'] = $this->cleaning_event_type_id !== null ? (int) $this->cleaning_event_type_id : null;
         $payload['eventDynamicAnswers'] = $this->event_dynamic_answers ?? [];
 
-        // Room-period V2 has separate room-specific dates, workers and extras.
-        // Never flatten it into legacy booking-level fields: that would lose
-        // the selections the customer approved. Only the overall amount is
-        // public; transportation/material/commission lines stay internal.
-        $periods = $this->roomPeriods()
-            ->orderBy('visit_sequence')
-            ->orderBy('client_key')
-            ->get();
-        if ($periods->isNotEmpty()) {
-            $payload['roomPeriods'] = $periods->map(static fn ($period): array => [
-                'clientKey' => (string) $period->client_key,
-                'visitSequence' => (int) $period->visit_sequence,
-                'roomType' => (string) $period->room_type,
-                'size' => (string) $period->room_size,
-                'cleaningMode' => (string) $period->cleaning_mode,
-                'scheduledDate' => $period->scheduled_date?->format('Y-m-d'),
-                'scheduledTime' => mb_substr((string) $period->scheduled_time, 0, 5),
-                'numberOfWorkers' => (int) $period->required_workers,
-                'estimatedDurationMinutes' => (int) $period->estimated_duration_minutes,
-                'materials' => (array) $period->materials,
-                'specialServices' => (array) $period->special_services,
-                'notes' => $period->notes,
-            ])->values()->all();
-            $payload['schemaVersion'] = max(2, (int) $payload['schemaVersion']);
-            $payload['capabilities']['roomPeriods'] = true;
-            $payload['travelFeePending'] = false;
-        }
-
         // V2 is reconstructed from committed room/schedule/period/material/service rows.
         // The approved quote snapshot is only retained for read-only requirements
         // that have no separate inventory row when the customer brings materials.
@@ -157,7 +127,7 @@ final class UserCleaningBookingResource extends JsonResource
             if ($details !== null) {
                 $payload['contractVersion'] = 2;
                 $payload['rooms'] = $details['rooms'];
-                $payload['visits'] = $details['visits'];
+                $payload['appointments'] = $details['appointments'];
                 $payload['recurrence'] = $details['recurrence'];
                 $payload['workforce'] = $details['workforce'];
                 $payload['pricing'] = $details['pricing'];
@@ -172,12 +142,12 @@ final class UserCleaningBookingResource extends JsonResource
                 $payload['propertyDetails'] = $publicDetails;
                 $payload['property_details'] = $publicDetails;
                 $payload['approvedMaterialsPreview'] = $timePeriodSnapshot['materialsPreview'] ?? [];
-                $payload['materials'] = collect($details['visits'])
-                    ->flatMap(static fn (array $visit): array => $visit['timePeriods'])
+                $payload['materials'] = collect($details['appointments'])
+                    ->flatMap(static fn (array $appointment): array => $appointment['timePeriods'])
                     ->flatMap(static fn (array $period): array => $period['platformMaterials'])
                     ->values()->all();
-                $payload['specialServices'] = collect($details['visits'])
-                    ->flatMap(static fn (array $visit): array => $visit['timePeriods'])
+                $payload['specialServices'] = collect($details['appointments'])
+                    ->flatMap(static fn (array $appointment): array => $appointment['timePeriods'])
                     ->flatMap(static fn (array $period): array => $period['specialServices'])
                     ->values()->all();
                 $payload['travelFeePending'] = (bool) ($details['pricing']['travelFeePending'] ?? false);

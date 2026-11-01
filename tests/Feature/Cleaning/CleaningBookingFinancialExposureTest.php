@@ -67,7 +67,7 @@ it('does not warn when customer amount covers worker payout and margin', functio
     expect(app(CleaningBookingFinancialExposureService::class)->forBooking($booking)['gap'])->toBe(0.0);
 });
 
-it('detects a legacy V2 order which promises a supervisor fee but allocated its full base to workers', function (): void {
+it('reports the supervisor fee separately without inventing a supervisor compensation liability', function (): void {
     $booking = financialExposureBooking(3645, 725);
     $details = $booking->property_details;
     $details['_supervisor_pricing'] = [
@@ -104,7 +104,8 @@ it('detects a legacy V2 order which promises a supervisor fee but allocated its 
             'workerPayable' => 2920.0,
             'adminMargin' => 725.0,
             'supervisorFee' => 1400.0,
-            'gap' => 1400.0,
+            'supervisorCompensation' => 0.0,
+            'gap' => 0.0,
             'source' => 'session_assignments',
         ]);
     expect((float) $booking->fresh()->total_price)->toBe(3645.0);

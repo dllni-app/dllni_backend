@@ -27,7 +27,6 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\EventBookingStatus;
 use Modules\Cleaning\Models\CleaningBanner;
 use Modules\Cleaning\Models\CleaningBooking;
-use Modules\Cleaning\Models\CleaningBookingRoom;
 use Modules\Cleaning\Models\EventBooking;
 use Modules\Resturants\Models\Order;
 
@@ -203,13 +202,6 @@ final class CleaningOverview extends Page
                 'description' => __('cleaning_admin.overview.workload.active_jobs_hint'),
                 'icon' => 'heroicon-o-bolt',
                 'tone' => 'success',
-            ],
-            [
-                'label' => __('cleaning_admin.overview.workload.unassigned_rooms'),
-                'value' => CleaningBookingRoom::query()->whereNull('assigned_worker_id')->count(),
-                'description' => __('cleaning_admin.overview.workload.unassigned_rooms_hint'),
-                'icon' => 'heroicon-o-square-3-stack-3d',
-                'tone' => 'gray',
             ],
             [
                 'label' => __('cleaning_admin.overview.workload.pending_events'),

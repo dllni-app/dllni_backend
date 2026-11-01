@@ -53,7 +53,7 @@ final class UserCleaningOrderCompletionExtendTimeController
             'worker.user',
             'workerAssignments.worker.user',
             'sessions.workerAssignments.worker.user',
-            'rooms.assignedWorker.user',
+            'rooms',
             'timeWarnings',
             'disputes',
             'addons',

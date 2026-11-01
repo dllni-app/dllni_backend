@@ -16,7 +16,7 @@ use Modules\Cleaning\Models\CleaningBooking;
 final class CleaningBookingFinancialExposureService
 {
     /**
-     * @return array{customerTotal:float,workerPayable:float,adminMargin:float,supervisorFee:float,gap:float,source:string}|null
+     * @return array{customerTotal:float,workerPayable:float,adminMargin:float,supervisorFee:float,supervisorCompensation:float,gap:float,source:string}|null
      */
     public function forBooking(CleaningBooking $booking): ?array
     {
@@ -29,7 +29,7 @@ final class CleaningBookingFinancialExposureService
         $parentCount = (clone $parents)->count();
 
         if ($parentCount > 0) {
-            $payable = (float) $parents->sum('worker_amount');
+            $payable = (float) $parents->sum('worker_amount') - (float) $parents->sum('admin_margin_amount');
             $source = 'booking_assignments';
         } else {
             // Some V2 bookings have only session assignments. Never add both
@@ -38,6 +38,10 @@ final class CleaningBookingFinancialExposureService
                 ->join('cleaning_booking_session_worker_assignments as swa', 'swa.cleaning_booking_session_id', '=', 'cleaning_booking_sessions.id')
                 ->whereIn('swa.status', $accepted)
                 ->sum('swa.worker_amount');
+            $payable -= (float) $booking->sessions()
+                ->join('cleaning_booking_session_worker_assignments as swa', 'swa.cleaning_booking_session_id', '=', 'cleaning_booking_sessions.id')
+                ->whereIn('swa.status', $accepted)
+                ->sum('swa.admin_margin_amount');
             $source = 'session_assignments';
         }
 
@@ -55,13 +59,19 @@ final class CleaningBookingFinancialExposureService
             '_supervisor_pricing.fee',
             0,
         )), 2);
+        $supervisorCompensation = round(max(0.0, (float) data_get(
+            $booking->property_details,
+            '_supervisor_pricing.compensationAmount',
+            0,
+        )), 2);
 
         return [
             'customerTotal' => $customerTotal,
             'workerPayable' => $workerPayable,
             'adminMargin' => $adminMargin,
             'supervisorFee' => $supervisorFee,
-            'gap' => round(max(0.0, $workerPayable + $adminMargin + $supervisorFee - $customerTotal), 2),
+            'supervisorCompensation' => $supervisorCompensation,
+            'gap' => round(max(0.0, $workerPayable + $adminMargin + $supervisorCompensation - $customerTotal), 2),
             'source' => $source,
         ];
     }

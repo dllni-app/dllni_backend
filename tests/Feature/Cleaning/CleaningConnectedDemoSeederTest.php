@@ -52,7 +52,7 @@ it('seeds canonical linked bookings as session-free booking-level team workflows
             ->and($booking->sessions()->exists())->toBeFalse()
             ->and($booking->supervisorAssignments()->where('supervisor_user_id', $supervisor->id)
                 ->whereNull('released_at')->exists())->toBeTrue()
-            ->and($booking->rooms()->whereNotNull('assigned_worker_id')->exists())->toBeFalse();
+            ->and($booking->rooms()->doesntExist())->toBeFalse();
     }
 
     $scheduled = $linked->firstWhere('booking_number', 'CLN-LINKED-001');

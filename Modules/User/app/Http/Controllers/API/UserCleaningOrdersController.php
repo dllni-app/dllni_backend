@@ -18,7 +18,7 @@ final class UserCleaningOrdersController
             ->with([
                 'worker.user',
                 'preferredWorker.user',
-                'rooms.assignedWorker.user',
+                'rooms',
                 'workerAssignments.worker.user',
                 'timeWarnings',
                 'disputes',

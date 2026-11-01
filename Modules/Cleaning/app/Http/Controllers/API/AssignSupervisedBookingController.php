@@ -22,14 +22,11 @@ final class AssignSupervisedBookingController
             'reason' => ['nullable', 'string', 'min:10', 'max:500'],
         ]);
 
-        $isV2 = $request->routeIs('api.cleaning.supervisor-v2.assign');
-
         $result = $this->assignments->assign(
             $actor,
             $booking,
             (int) $data['supervisorUserId'],
             $data['reason'] ?? null,
-            $isV2,
         );
 
         return response()->json(['data' => $result], $result['unchanged'] ? 200 : 201);

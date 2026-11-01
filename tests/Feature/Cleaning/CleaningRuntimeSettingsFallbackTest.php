@@ -19,7 +19,7 @@ it('uses hard-coded operational defaults without inserting configuration rows', 
     $deposit = CleaningRuntimeSettings::deposit();
 
     expect((float) $financial->default_commission_rate)->toBe(10.0)
-        ->and((int) $financial->travel_per_km)->toBe(10)
+        ->and((int) $financial->travel_per_km)->toBe(0)
         ->and((int) $financial->extension_rate_per_30_minutes)->toBe(200)
         ->and($financial->extension_ranges)->toBe(CleaningRuntimeSettings::extensionRanges())
         ->and((int) $financial->cleaning_base_unit_price)->toBe(50)
@@ -72,7 +72,7 @@ it('prices cleaning and extension requests when the financial settings table is 
     $ranges = app(CleaningExtendedTimePricingService::class)->ranges();
 
     expect($pricing['adminMargin'])->toBe(100.0)
-        ->and($pricing['totalPrice'])->toBe(1100.0)
+        ->and($pricing['totalPrice'])->toBe(1010.0)
         ->and($ranges)->toHaveCount(6)
         ->and($ranges[0]['price'])->toBe(10.0)
         ->and($ranges[5]['price'])->toBe(500.0)

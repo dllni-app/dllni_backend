@@ -289,7 +289,7 @@ final class WorkerSessionMetricsService
         $assignment = $booking->workerAssignments->firstWhere('worker_id', $workerId);
         if ($assignment instanceof CleaningBookingWorkerAssignment) {
             if ((float) $assignment->worker_amount > 0) {
-                return (float) $assignment->worker_amount;
+                return max(0.0, round((float) $assignment->worker_amount - (float) $assignment->admin_margin_amount, 2));
             }
             return max(0.0, (float) $assignment->service_share_amount + (float) $assignment->travel_fee - (float) $assignment->admin_margin_amount);
         }

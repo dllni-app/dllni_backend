@@ -38,7 +38,7 @@ final class CleaningPreferredWorkerRejectionDecisionService
             ->with([
                 'worker.user',
                 'preferredWorker.user',
-                'rooms.assignedWorker.user',
+                'rooms',
                 'workerAssignments.worker.user',
                 'timeWarnings',
                 'disputes',
@@ -77,9 +77,6 @@ final class CleaningPreferredWorkerRejectionDecisionService
                     'preferred_worker_rejection_decided_at' => now(),
                 ])->save();
 
-                $booking->rooms()->update([
-                    'planned_preferred_worker_id' => null,
-                ]);
             });
 
             return $this->freshBooking($booking);
@@ -138,7 +135,7 @@ final class CleaningPreferredWorkerRejectionDecisionService
         return $booking->fresh([
             'worker.user',
             'preferredWorker.user',
-            'rooms.assignedWorker.user',
+            'rooms',
             'workerAssignments.worker.user',
             'timeWarnings',
             'disputes',

@@ -9,7 +9,7 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
 
-it('fails closed on booking-wide worker locations for a partial V2 worker', function (): void {
+it('limits worker location read to their own tracking while customers can see the team', function (): void {
     $customer = User::factory()->create();
     $firstUser = User::factory()->create(['name' => 'Owned V2 Worker', 'phone' => '+963900000001']);
     $firstWorker = Worker::factory()->create(['user_id' => $firstUser->id]);
@@ -69,13 +69,25 @@ it('fails closed on booking-wide worker locations for a partial V2 worker', func
     Sanctum::actingAs($firstUser);
 
     $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/worker-locations")
-        ->assertNotFound();
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.workerId', $firstWorker->id)
+        ->assertJsonPath('data.0.latitude', 33.5101);
 
     expect($response->getContent())
         ->not->toContain('Sibling Secret Worker')
         ->not->toContain('+963900000002')
         ->not->toContain('33.5999')
         ->not->toContain('36.3999');
+
+    Sanctum::actingAs($customer);
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/worker-locations")
+        ->assertOk()
+        ->assertJsonCount(2, 'data');
+
+    Sanctum::actingAs(User::factory()->create());
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/worker-locations")
+        ->assertForbidden();
 });
 
 it('preserves legacy solo worker location tracking', function (): void {

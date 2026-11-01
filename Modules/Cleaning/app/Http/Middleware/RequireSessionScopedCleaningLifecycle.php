@@ -8,6 +8,7 @@ use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Services\CleaningGroupCustodyPolicy;
 use Symfony\Component\HttpFoundation\Response;
 
 final class RequireSessionScopedCleaningLifecycle
@@ -23,7 +24,8 @@ final class RequireSessionScopedCleaningLifecycle
         }
 
         if (preg_match('#api/v1/user/cleaning/orders/.+/(start-verification/confirm|completion/(confirm|reject|extend-time))$#', $request->path()) === 1
-            && $booking?->isSupervisedTeam()) {
+            && $booking instanceof CleaningBooking
+            && app(CleaningGroupCustodyPolicy::class)->usesSupervisorCustody($booking)) {
             return response()->json([
                 'code' => 'SUPERVISED_TEAM_ACTION_FORBIDDEN',
                 'message' => 'استخدم إجراءات العميل الخاصة بطلب الفريق بإشراف.',

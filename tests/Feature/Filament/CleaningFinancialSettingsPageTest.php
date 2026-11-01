@@ -27,10 +27,8 @@ it('removes global worker finance controls and persists only shared trust settin
     CleaningFinancialSetting::query()->create([
         'default_commission_rate' => 5,
         'vat_rate' => 10,
-        'travel_markup_type' => 'fixed',
+        'travel_markup_type' => 'worker_allowance',
         'travel_markup_value' => 2000,
-        'travel_per_km' => 100,
-        'travel_distance_start_point' => 'worker_home',
         'coverage_thresholds' => ['low' => 2, 'ok' => 5],
         'time_billing_mode' => 'actual',
         'min_billable_minutes' => 30,
@@ -51,10 +49,8 @@ it('removes global worker finance controls and persists only shared trust settin
         ->set('defaultCommissionRate', 5)
         ->set('vatRate', 10)
         ->set('commissionType', 'percent')
-        ->set('travelMarkupType', 'fixed')
+        ->set('travelMarkupType', 'worker_allowance')
         ->set('travelMarkupValue', 2000)
-        ->set('travelPerKm', 100)
-        ->set('travelDistanceStartPoint', 'worker_home')
         ->set('coverageLow', 2)
         ->set('coverageOk', 5)
         ->set('timeBillingMode', 'actual')
@@ -82,26 +78,24 @@ it('removes global worker finance controls and persists only shared trust settin
 it('persists the per-worker transport allowance travel markup option', function (): void {
     $this->get(FinancialSettings::getUrl([], isAbsolute: false))
         ->assertSuccessful()
-        ->assertSee('رسوم حسب المسافة')
-        ->assertSee('بدل مواصلات لكل عامل');
+        ->assertDontSee('رسوم حسب المسافة')
+        ->assertSee(__('cleaning_admin.financial.fields.travel_markup_value'));
 
     Livewire::test(FinancialSettings::class)
         ->set('travelMarkupType', 'worker_allowance')
         ->assertSee(__('cleaning_admin.financial.hints.travel_worker_allowance'))
         ->assertDontSee('رسوم التنقل لكل كيلومتر')
         ->set('travelMarkupValue', 125)
-        ->set('travelPerKm', 999)
         ->call('save')
         ->assertHasNoErrors();
 
     $setting = CleaningFinancialSetting::query()->findOrFail(1);
 
     expect($setting->travel_markup_type)->toBe('worker_allowance')
-        ->and((float) $setting->travel_markup_value)->toBe(125.0)
-        ->and((float) $setting->travel_per_km)->toBe(0.0);
+        ->and((float) $setting->travel_markup_value)->toBe(125.0);
 
     Livewire::test(FinancialSettings::class)
-        ->set('travelMarkupType', 'percent')
+        ->set('travelMarkupType', 'fixed')
         ->call('save')
         ->assertHasErrors(['travelMarkupType']);
 });
@@ -133,10 +127,8 @@ it('persists minimum order price and room pricing, deep multiplier, and times', 
     CleaningFinancialSetting::query()->create([
         'default_commission_rate' => 5,
         'vat_rate' => 10,
-        'travel_markup_type' => 'fixed',
+        'travel_markup_type' => 'worker_allowance',
         'travel_markup_value' => 2000,
-        'travel_per_km' => 100,
-        'travel_distance_start_point' => 'worker_home',
         'coverage_thresholds' => ['low' => 2, 'ok' => 5],
         'time_billing_mode' => 'actual',
         'extension_rate_per_30_minutes' => 0,
@@ -167,10 +159,8 @@ it('persists the user cancellation fee from financial settings', function (): vo
     CleaningFinancialSetting::query()->create([
         'default_commission_rate' => 5,
         'vat_rate' => 10,
-        'travel_markup_type' => 'fixed',
+        'travel_markup_type' => 'worker_allowance',
         'travel_markup_value' => 2000,
-        'travel_per_km' => 100,
-        'travel_distance_start_point' => 'worker_home',
         'coverage_thresholds' => ['low' => 2, 'ok' => 5],
         'time_billing_mode' => 'actual',
         'extension_rate_per_30_minutes' => 0,

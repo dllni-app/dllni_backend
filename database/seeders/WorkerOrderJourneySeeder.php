@@ -26,6 +26,12 @@ final class WorkerOrderJourneySeeder extends Seeder
 
     public function run(): void
     {
+        $db = DB::connection();
+        if (! app()->environment('local')
+            || ! in_array((string) $db->getConfig('host'), ['127.0.0.1', 'localhost', '::1'], true)
+            || $db->getDatabaseName() !== 'alnadha_worker_test') {
+            throw new \RuntimeException('Worker journey seeding is restricted to the existing local QA database.');
+        }
         // CleaningWorkerArabicDataSeeder names cleaning.worker@dllni.sy
         // "رنا أحمد". Some older test DBs only contain WorkerSeeder's
         // worker1@dllni.sy (also Rana), so retain that local fallback.
@@ -140,7 +146,7 @@ final class WorkerOrderJourneySeeder extends Seeder
                 'addons_total' => 0,
                 'travel_fee' => $travel,
                 'admin_margin_amount' => $margin,
-                'total_price' => $base + $travel,
+                'total_price' => $base + $travel + $margin,
                 'is_pricing_final' => ! $isHourly || $isCompleted,
                 'open_time_hourly_rate' => $isHourly ? 100 : null,
                 'open_time_minimum_minutes' => $isHourly ? 60 : null,
@@ -202,7 +208,7 @@ final class WorkerOrderJourneySeeder extends Seeder
             'base_price' => $base,
             'travel_fee' => $travel,
             'admin_margin_amount' => $margin,
-            'total_price' => $base + $travel,
+            'total_price' => $base + $travel + $margin,
             'is_pricing_final' => (bool) $booking->is_pricing_final,
             'payment_status' => $status === 'completed' ? 'settled' : 'pending',
             'work_started_at' => $startedAt,
@@ -216,14 +222,14 @@ final class WorkerOrderJourneySeeder extends Seeder
             return;
         }
 
-        $workerAmount = $base + $travel - $margin;
+        // Administration margin belongs to the platform, charged on top of
+        // the service + travel amount, not withheld from this worker's share.
+        $workerAmount = $base + $travel;
         $assignmentId = $this->upsert('cleaning_booking_worker_assignments', ['cleaning_booking_id' => $booking->id, 'worker_id' => $worker->id], [
             'status' => $cancelled ? 'cancelled' : $assignmentStatus,
             'accepted_at' => $cancelled ? null : $scheduledAt->copy()->subDay(),
             'work_started_at' => $startedAt,
             'work_finished_at' => $finishedAt,
-            'room_count' => $booking->property_type === 'apartment' ? 3 : 0,
-            'rooms_weight' => $booking->property_type === 'apartment' ? 3 : 0,
             'service_share_amount' => $base,
             'travel_fee' => $travel,
             'admin_margin_amount' => $margin,
@@ -260,8 +266,6 @@ final class WorkerOrderJourneySeeder extends Seeder
                 'room_size' => $size,
                 'display_label' => $label,
                 'weight' => 1,
-                'assigned_worker_id' => $booking->status === CleaningBookingStatus::Pending ? null : $worker->id,
-                'assignment_source' => 'system',
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);

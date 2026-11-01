@@ -5,11 +5,9 @@ declare(strict_types=1);
 use App\Models\User;
 use Illuminate\Support\Facades\Validator;
 use Laravel\Sanctum\Sanctum;
-use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningRoomType;
 use Modules\Cleaning\Models\CleaningSpecialService;
 use Modules\User\Http\Requests\Concerns\CleaningTimePeriodContract;
-use Modules\User\Http\Requests\Concerns\RoomPeriodContract;
 use Modules\User\Http\Requests\UserCleaningMaterialsPreviewRequest;
 use Modules\User\Http\Requests\UserCleaningOrderEstimatePriceRequest;
 
@@ -17,50 +15,6 @@ function cleaningRoomCodeIdentityCode(int $length = 64): string
 {
     return 'a'.str_repeat('b', $length - 1);
 }
-
-function cleaningRoomCodeIdentityPeriodValidator(array $payload): Illuminate\Validation\Validator
-{
-    $validator = Validator::make($payload, RoomPeriodContract::rules());
-    $validator->after(static fn ($validator) => RoomPeriodContract::validateConsistency($payload, $validator));
-
-    return $validator;
-}
-
-it('accepts the maximum canonical room code and rejects a mismatched type prefix', function (): void {
-    $code = 'a'.str_repeat('b', 60).'-9x';
-    CleaningRoomType::query()->create([
-        'code' => $code,
-        'name' => 'نوع اختباري',
-        'regular_hourly_rate' => 100,
-        'deep_hourly_rate' => 200,
-        'suggested_minutes_by_size' => ['small' => ['regular' => 30, 'deep' => 60]],
-        'sort_order' => 99,
-        'is_active' => true,
-    ]);
-    $key = $code.'.1';
-    expect(mb_strlen($code.'.999'))->toBe(68);
-    $payload = [
-        'propertyType' => 'apartment', 'bookingKind' => 'standard',
-        'assignmentMode' => 'open_count',
-        'propertyDetails' => ['room_size_breakdown' => [$code => ['small' => 1]]],
-        'roomPeriods' => [[
-            'clientKey' => $key, 'visitSequence' => 1, 'roomType' => $code,
-            'size' => 'small', 'cleaningMode' => 'regular', 'scheduledDate' => now()->addDays(3)->toDateString(),
-            'scheduledTime' => '09:00', 'numberOfWorkers' => 1,
-            'materials' => ['providedByPlatform' => true, 'materialTypeIds' => []],
-            'specialServices' => [],
-        ]],
-    ];
-
-    $validator = cleaningRoomCodeIdentityPeriodValidator($payload);
-    expect($validator->passes())->toBeTrue($validator->errors()->toJson());
-    $maximumKeyValidator = Validator::make(['roomPeriods' => [['clientKey' => $code.'.999']]], [
-        'roomPeriods.0.clientKey' => RoomPeriodContract::rules()['roomPeriods.*.clientKey'],
-    ]);
-    expect($maximumKeyValidator->passes())->toBeTrue();
-    $payload['roomPeriods'][0]['roomType'] = 'bedroom';
-    expect(cleaningRoomCodeIdentityPeriodValidator($payload)->errors()->has('roomPeriods.0.roomType'))->toBeTrue();
-});
 
 it('parses custom hyphenated room mode and hour keys only for active catalog codes', function (): void {
     $code = 'a'.str_repeat('b', 60).'-9x';
@@ -94,7 +48,7 @@ it('parses custom hyphenated room mode and hour keys only for active catalog cod
     $archivedPayload = [
         'contractVersion' => 2,
         'rooms' => [['roomKey' => $code.'.1', 'roomType' => $code, 'size' => 'small', 'cleaningMode' => 'regular']],
-        'visits' => [],
+        'appointments' => [],
     ];
     $archivedRequest = UserCleaningOrderEstimatePriceRequest::create('/api/v1/user/cleaning/orders/estimate-price', 'POST', $archivedPayload);
     $archivedRequest->setContainer(app())->setRedirector(app('redirect'));
@@ -128,8 +82,8 @@ it('keeps opaque time-period keys at 64 while allowing 68 room references and 77
         'contractVersion' => 2,
         'propertyDetails' => ['room_size_breakdown' => [$code => ['small' => 1]]],
         'rooms' => [['roomKey' => $roomKey, 'roomType' => cleaningRoomCodeIdentityCode(), 'size' => 'small', 'cleaningMode' => 'regular']],
-        'visits' => [[
-            'visitKey' => 'visit.30', 'sequence' => 30,
+        'appointments' => [[
+            'appointmentKey' => 'visit.30', 'sequence' => 30,
             'roomSchedules' => [['scheduleKey' => $scheduleKey, 'roomKey' => $roomKey, 'scheduledDate' => now()->addDays(3)->toDateString(), 'scheduledTime' => '09:00', 'numberOfWorkers' => 1]],
             'timePeriods' => [[
                 'periodKey' => str_repeat('p', 64),
@@ -146,54 +100,6 @@ it('keeps opaque time-period keys at 64 while allowing 68 room references and 77
     $validator = Validator::make($payload, CleaningTimePeriodContract::rules());
     CleaningTimePeriodContract::validate($payload, $validator);
     expect($validator->passes())->toBeTrue($validator->errors()->toJson());
-});
-
-it('accepts and stores a signed room-period estimate with the maximum canonical key', function (): void {
-    $code = 'a'.str_repeat('b', 60).'-9x';
-    CleaningRoomType::query()->create([
-        'code' => $code, 'name' => 'نوع غرف طويل', 'regular_hourly_rate' => 100,
-        'deep_hourly_rate' => 200,
-        'suggested_minutes_by_size' => ['small' => ['regular' => 30, 'deep' => 60]],
-        'sort_order' => 99, 'is_active' => true,
-    ]);
-    Sanctum::actingAs(User::factory()->create());
-    $date = now('Asia/Damascus')->addDays(3)->toDateString();
-    $input = [
-        'propertyType' => 'apartment', 'bookingKind' => 'standard', 'assignmentMode' => 'open_count',
-        'propertyDetails' => [
-            'address' => 'عنوان اختبار', 'bedrooms' => 1, 'rooms' => 1,
-            'room_size_breakdown' => [$code => ['small' => 1]],
-        ],
-        'scheduledDate' => $date, 'scheduledTime' => '09:00',
-        'addressLatitude' => 33.5138, 'addressLongitude' => 36.2765,
-        'numberOfWorkers' => 1, 'termsAccepted' => true,
-        'roomPeriods' => [[
-            'clientKey' => $code.'.1', 'visitSequence' => 1, 'roomType' => $code,
-            'size' => 'small', 'cleaningMode' => 'regular', 'scheduledDate' => $date,
-            'scheduledTime' => '09:00', 'numberOfWorkers' => 1,
-            'materials' => ['providedByPlatform' => true, 'materialTypeIds' => []], 'specialServices' => [],
-        ]],
-    ];
-
-    $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)
-        ->assertOk()->assertJsonPath('roomPeriods.0.clientKey', $code.'.1')->json();
-    $stored = $this->postJson('/api/v1/user/cleaning/orders', [...$input, 'quoteSignature' => $quote['quoteSignature']])
-        ->assertCreated()->json();
-
-    $this->assertDatabaseHas('cleaning_booking_room_periods', [
-        'cleaning_booking_id' => $stored['order']['id'], 'client_key' => $code.'.1', 'room_type' => $code,
-    ]);
-
-    $booking = CleaningBooking::query()->findOrFail($stored['order']['id']);
-    $approvedCustomerTotal = (float) $booking->total_price;
-    expect($approvedCustomerTotal)->toBe((float) $quote['pricing']['totalPrice']);
-
-    // Catalog edits affect later quotes, never the signed price already approved.
-    CleaningRoomType::query()->where('code', $code)->update(['regular_hourly_rate' => 400]);
-    $laterQuote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)
-        ->assertOk()->json();
-    expect((float) $laterQuote['pricing']['totalPrice'])->toBeGreaterThan((float) $quote['pricing']['totalPrice'])
-        ->and((float) $booking->fresh()->total_price)->toBe($approvedCustomerTotal);
 });
 
 it('accepts a 77-character generated time-period schedule key through signed estimate and create', function (): void {
@@ -214,8 +120,8 @@ it('accepts a 77-character generated time-period schedule key through signed est
         'propertyDetails' => ['address' => 'عنوان اختبار', 'room_size_breakdown' => [$code => ['small' => 1]]],
         'addressLatitude' => 33.5138, 'addressLongitude' => 36.2765,
         'rooms' => [['roomKey' => $roomKey, 'roomType' => $code, 'size' => 'small', 'cleaningMode' => 'regular']],
-        'visits' => [[
-            'visitKey' => 'visit.30', 'sequence' => 30,
+        'appointments' => [[
+            'appointmentKey' => 'visit.30', 'sequence' => 30,
             'roomSchedules' => [[
                 'scheduleKey' => $scheduleKey, 'roomKey' => $roomKey,
                 'scheduledDate' => $date, 'scheduledTime' => '09:00', 'numberOfWorkers' => 1,
@@ -230,7 +136,7 @@ it('accepts a 77-character generated time-period schedule key through signed est
     ];
 
     $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)
-        ->assertOk()->assertJsonPath('visits.0.roomSchedules.0.scheduleKey', $scheduleKey)->json();
+        ->assertOk()->assertJsonPath('appointments.0.roomSchedules.0.scheduleKey', $scheduleKey)->json();
     $payload = [...$input, 'quoteId' => $quote['quoteId'], 'quoteSignature' => $quote['quoteSignature'],
         'idempotencyKey' => (string) Illuminate\Support\Str::uuid(), 'termsAccepted' => true];
     $created = $this->postJson('/api/v1/user/cleaning/orders', $payload)->assertCreated()->json();
