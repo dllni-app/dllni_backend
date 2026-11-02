@@ -11,12 +11,12 @@ use App\Enums\SystemAlertStatus;
 use App\Models\SystemAlert;
 use App\Models\Worker;
 use App\Notifications\Cleaning\NewOrderRequestNotification;
-use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
 use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Events\CleaningBookingCreated;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Services\DepositService;
@@ -39,13 +39,14 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
     public function handle(): void
     {
         $booking = CleaningBooking::find($this->cleaningBookingId);
-        if (! $booking) {
+        if (! $booking instanceof CleaningBooking
+            || $booking->status !== CleaningBookingStatus::Pending
+            || $booking->remainingWorkerCount() === 0) {
             return;
         }
 
         $depositService = app(DepositService::class);
         $solvencyService = app(WorkerOrderSolvencyService::class);
-        $bookingDateTime = $this->bookingDateTime($booking);
 
         $assignmentMode = $booking->resolvedAssignmentMode();
         $rejectedWorkerIds = $booking->rejections()->pluck('worker_id')->map(static fn (mixed $workerId): int => (int) $workerId)->all();
@@ -73,7 +74,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
                 ->with(['user', 'deposit'])
                 ->first();
 
-            if (! $worker instanceof Worker || ! $this->isDispatchable($worker, $bookingDateTime, $depositService)) {
+            if (! $worker instanceof Worker || ! $this->isDispatchable($worker, $depositService)) {
                 $this->createDispatchAlert(
                     $booking,
                     'preferred_worker_not_eligible',
@@ -101,7 +102,17 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             return;
         }
 
-        $workers = Worker::query()
+        // Match the worker's pending-order feed: configured working hours and
+        // legacy neighborhood coverage do not limit new-order notifications.
+        // Scan in batches so the first 50 ineligible workers cannot hide an
+        // eligible worker appearing later in the database.
+        $notifiedCount = 0;
+        $ineligibleCount = 0;
+        $financiallyBlockedCount = 0;
+        $lastBlockedPayload = null;
+        $candidateCount = 0;
+
+        Worker::query()
             ->where('is_active', true)
             ->where(function ($query): void {
                 $query->whereNull('is_suspended')->orWhere('is_suspended', false);
@@ -115,48 +126,55 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
                 fn ($query) => $query->where('gender', $booking->gender_preference->value),
             )
             ->whereNotIn('id', array_values(array_unique(array_merge($rejectedWorkerIds, $acceptedWorkerIds))))
-            ->when(
-                $booking->neighborhood_id !== null,
-                fn ($query) => $query->coversNeighborhood((int) $booking->neighborhood_id),
-            )
             ->with(['user', 'deposit'])
-            ->limit(50)
-            ->get();
+            ->chunkById(50, function ($workers) use (
+                $booking,
+                $depositService,
+                $solvencyService,
+                &$notifiedCount,
+                &$ineligibleCount,
+                &$financiallyBlockedCount,
+                &$lastBlockedPayload,
+                &$candidateCount,
+            ): bool {
+                $candidateCount += $workers->count();
 
-        if ($workers->isEmpty()) {
+                foreach ($workers as $worker) {
+                    if (! $this->isDispatchable($worker, $depositService)) {
+                        $ineligibleCount++;
+
+                        continue;
+                    }
+
+                    $solvency = $solvencyService->solvencyPayloadForBooking($worker, $booking);
+                    if (! (bool) $solvency['canReceiveOrder']) {
+                        $financiallyBlockedCount++;
+                        $lastBlockedPayload = $solvency;
+
+                        continue;
+                    }
+
+                    $this->notifyWorkerAboutNewOrder($worker, $booking);
+                    $notifiedCount++;
+
+                    // Preserve the former 50-notification cap, but apply it
+                    // after eligibility checks instead of before them.
+                    if ($notifiedCount >= 50) {
+                        return false;
+                    }
+                }
+
+                return true;
+            });
+
+        if ($candidateCount === 0) {
             $this->createDispatchAlert(
                 $booking,
-                $booking->neighborhood_id !== null ? 'no_neighborhood_coverage' : 'no_active_workers',
-                $booking->neighborhood_id !== null
-                    ? 'No active worker covers the booking neighborhood.'
-                    : 'No active worker is available for this booking.',
+                'no_active_workers',
+                'No active worker is available for this booking.',
             );
 
             return;
-        }
-
-        $notifiedCount = 0;
-        $ineligibleCount = 0;
-        $financiallyBlockedCount = 0;
-        $lastBlockedPayload = null;
-
-        foreach ($workers as $worker) {
-            if (! $this->isDispatchable($worker, $bookingDateTime, $depositService)) {
-                $ineligibleCount++;
-
-                continue;
-            }
-
-            $solvency = $solvencyService->solvencyPayloadForBooking($worker, $booking);
-            if (! (bool) $solvency['canReceiveOrder']) {
-                $financiallyBlockedCount++;
-                $lastBlockedPayload = $solvency;
-
-                continue;
-            }
-
-            $this->notifyWorkerAboutNewOrder($worker, $booking);
-            $notifiedCount++;
         }
 
         if ($notifiedCount === 0 && $financiallyBlockedCount > 0) {
@@ -181,29 +199,11 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
         }
     }
 
-    private function isDispatchable(Worker $worker, ?Carbon $bookingDateTime, DepositService $depositService): bool
+    private function isDispatchable(Worker $worker, DepositService $depositService): bool
     {
         return $worker->user !== null
             && (bool) $worker->user->is_active
-            && $bookingDateTime !== null
-            && $worker->isAvailableAt($bookingDateTime)
             && $depositService->isWorkerEligibleForDispatch($worker);
-    }
-
-    private function bookingDateTime(CleaningBooking $booking): ?Carbon
-    {
-        if ($booking->scheduled_date === null || $booking->scheduled_time === null) {
-            return null;
-        }
-
-        try {
-            return Carbon::parse(
-                $booking->scheduled_date->format('Y-m-d').' '.mb_trim((string) $booking->scheduled_time),
-                config('app.timezone'),
-            );
-        } catch (Throwable) {
-            return null;
-        }
     }
 
     private function notifyWorkerAboutNewOrder(Worker $worker, CleaningBooking $booking): void
