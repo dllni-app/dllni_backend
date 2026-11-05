@@ -6,7 +6,6 @@ namespace App\Jobs;
 
 use App\Models\PlatformCoupon;
 use App\Models\User;
-use App\Notifications\PlatformCouponAvailableNotification;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -46,7 +45,11 @@ final class DispatchPlatformCouponNotifications implements ShouldQueue
 
         $query->select(['id', 'name', 'email', 'phone', 'fcm_token'])->chunkById(500, function ($users) use ($coupon): void {
             foreach ($users as $user) {
-                $user->notify(new PlatformCouponAvailableNotification($coupon));
+                // Reuse the idempotent path also used when a user verifies an account.
+                // A retry or the second dispatch path must not create a new UUID
+                // for a coupon the same customer has already received.
+                (new DispatchAvailablePlatformCouponNotificationsToUser((int) $user->id))
+                    ->notifyOnce($user, $coupon);
             }
         });
 

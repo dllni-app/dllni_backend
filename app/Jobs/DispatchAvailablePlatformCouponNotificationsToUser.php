@@ -54,7 +54,7 @@ final class DispatchAvailablePlatformCouponNotificationsToUser implements Should
             });
     }
 
-    private function notifyOnce(User $user, PlatformCoupon $coupon): void
+    public function notifyOnce(User $user, PlatformCoupon $coupon): void
     {
         if ($this->alreadyNotified($user, $coupon)) {
             return;

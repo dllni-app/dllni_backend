@@ -116,6 +116,30 @@ it('does not create duplicate coupon notifications when the dispatch job runs mo
         ->and(data_get($notifications->first()?->data, 'couponId'))->toBe($coupon->id);
 });
 
+it('does not duplicate a coupon across the welcome and broadcast notification jobs', function (): void {
+    $user = User::factory()->create([
+        'is_active' => true,
+        'module_type' => null,
+        'fcm_token' => null,
+    ]);
+
+    $coupon = PlatformCoupon::query()->create(newUserCouponData([
+        'code' => 'TWOPATHS10',
+        'audience_type' => PlatformCoupon::AUDIENCE_ALL_USERS,
+    ]));
+
+    (new DispatchAvailablePlatformCouponNotificationsToUser($user->id))->handle();
+    (new \App\Jobs\DispatchPlatformCouponNotifications($coupon->id))->handle();
+    (new \App\Jobs\DispatchPlatformCouponNotifications($coupon->id))->handle();
+
+    $notifications = $user->fresh()->notifications()
+        ->where('type', PlatformCouponAvailableNotification::class)
+        ->get();
+
+    expect($notifications)->toHaveCount(1)
+        ->and(data_get($notifications->first()?->data, 'couponId'))->toBe($coupon->id);
+});
+
 /** @return array<string, mixed> */
 function newUserCouponData(array $overrides = []): array
 {
