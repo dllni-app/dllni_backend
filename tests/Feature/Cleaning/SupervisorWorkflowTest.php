@@ -149,7 +149,7 @@ it('completes verified team execution, customer decisions and a team-level repor
     $code = $this->getJson("$customerUrl/verification-code")->assertOk()->json('data.code');
     Sanctum::actingAs($supervisor);
     $this->postJson("$supervisorUrl/verification/confirm", ['code' => '000000'])->assertUnprocessable();
-    $this->postJson("$customerUrl/verification/confirm", ['code' => $code])->assertOk()
+    $this->postJson("$supervisorUrl/verification/confirm", ['code' => $code])->assertOk()
         ->assertJsonPath('data.status', 'verified');
     Sanctum::actingAs($supervisor);
     $this->getJson("$supervisorUrl")->assertJsonPath('data.teamState', 'verified');
