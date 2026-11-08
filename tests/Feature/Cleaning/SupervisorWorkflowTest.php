@@ -80,14 +80,17 @@ it('requires individual worker attendance proofs before a standard team can requ
             ->assertOk();
     }
 
-    $verificationCode = $this->postJson("$supervisorUrl/verification-requests")
-        ->assertOk()->assertJsonPath('data.status', 'pending')->json('data.code');
+    $this->postJson("$supervisorUrl/verification-requests")
+        ->assertOk()->assertJsonPath('data.status', 'pending')->assertJsonMissingPath('data.code');
     Sanctum::actingAs($customer);
     $customerUrl = "/api/v1/supervised-team/customer/bookings/{$booking->id}";
-    $this->getJson("$customerUrl/verification-code")->assertNotFound();
+    $verificationCode = $this->getJson("$customerUrl/verification-code")->assertOk()->json('data.code');
     $this->postJson("$customerUrl/verification/confirm", ['code' => $verificationCode])
+        ->assertNotFound();
+    Sanctum::actingAs($supervisor);
+    $this->postJson("$supervisorUrl/verification/confirm", ['code' => $verificationCode])
         ->assertOk()->assertJsonPath('data.status', 'verified');
-    $this->postJson("$customerUrl/verification/confirm", ['code' => $verificationCode])
+    $this->postJson("$supervisorUrl/verification/confirm", ['code' => $verificationCode])
         ->assertConflict();
 });
 
@@ -126,13 +129,13 @@ it('blocks verification when the team is incomplete and protects customer secret
     $this->postJson("$prefix/verification-requests")->assertOk();
     $this->assertDatabaseCount('cleaning_supervisor_verifications', 1);
     $this->getJson("$prefix/verification/status")->assertOk()
-        ->assertJsonPath('data.entryActor', 'customer')->assertJsonPath('data.codeRecipient', 'supervisor')
+        ->assertJsonPath('data.entryActor', 'supervisor')->assertJsonPath('data.codeRecipient', 'customer')
         ->assertJsonPath('data.teamState', 'verification_pending')->assertJsonMissingPath('data.code');
     $this->getJson("/api/v1/supervised-team/customer/bookings/{$booking->id}/verification-code")
         ->assertNotFound();
     Sanctum::actingAs($customer);
     $this->getJson("/api/v1/supervised-team/customer/bookings/{$booking->id}/verification-code")
-        ->assertNotFound();
+        ->assertOk()->assertJsonPath('data.purpose', 'supervisor_arrival');
 });
 
 it('completes verified team execution, customer decisions and a team-level report', function () {
@@ -141,9 +144,11 @@ it('completes verified team execution, customer decisions and a team-level repor
     $customerUrl = "/api/v1/supervised-team/customer/bookings/{$booking->id}";
     Sanctum::actingAs($supervisor);
     $this->postJson("$supervisorUrl/start")->assertStatus(409);
-    $code = $this->postJson("$supervisorUrl/verification-requests")->assertOk()->json('data.code');
+    $this->postJson("$supervisorUrl/verification-requests")->assertOk()->assertJsonMissingPath('data.code');
     Sanctum::actingAs($customer);
-    $this->postJson("$customerUrl/verification/confirm", ['code' => '000000'])->assertUnprocessable();
+    $code = $this->getJson("$customerUrl/verification-code")->assertOk()->json('data.code');
+    Sanctum::actingAs($supervisor);
+    $this->postJson("$supervisorUrl/verification/confirm", ['code' => '000000'])->assertUnprocessable();
     $this->postJson("$customerUrl/verification/confirm", ['code' => $code])->assertOk()
         ->assertJsonPath('data.status', 'verified');
     Sanctum::actingAs($supervisor);
@@ -186,9 +191,11 @@ it('rolls back supervisor report completion if mandatory team commission inserti
     $customerUrl = "/api/v1/supervised-team/customer/bookings/{$booking->id}";
 
     Sanctum::actingAs($supervisor);
-    $code = $this->postJson("$supervisorUrl/verification-requests")->assertOk()->json('data.code');
+    $this->postJson("$supervisorUrl/verification-requests")->assertOk()->assertJsonMissingPath('data.code');
     Sanctum::actingAs($customer);
-    $this->postJson("$customerUrl/verification/confirm", ['code' => $code])->assertOk();
+    $code = $this->getJson("$customerUrl/verification-code")->assertOk()->json('data.code');
+    Sanctum::actingAs($supervisor);
+    $this->postJson("$supervisorUrl/verification/confirm", ['code' => $code])->assertOk();
     Sanctum::actingAs($supervisor);
     $this->postJson("$supervisorUrl/start")->assertOk();
     $this->postJson("$supervisorUrl/handover-requests")->assertCreated();
@@ -223,9 +230,11 @@ it('settles one commission per supervised worker and does not debit again on rep
     $customerUrl = "/api/v1/supervised-team/customer/bookings/{$booking->id}";
 
     Sanctum::actingAs($supervisor);
-    $code = $this->postJson("$supervisorUrl/verification-requests")->assertOk()->json('data.code');
+    $this->postJson("$supervisorUrl/verification-requests")->assertOk()->assertJsonMissingPath('data.code');
     Sanctum::actingAs($customer);
-    $this->postJson("$customerUrl/verification/confirm", ['code' => $code])->assertOk();
+    $code = $this->getJson("$customerUrl/verification-code")->assertOk()->json('data.code');
+    Sanctum::actingAs($supervisor);
+    $this->postJson("$supervisorUrl/verification/confirm", ['code' => $code])->assertOk();
     Sanctum::actingAs($supervisor);
     $this->postJson("$supervisorUrl/start")->assertOk();
     $this->postJson("$supervisorUrl/handover-requests")->assertCreated();
@@ -317,9 +326,11 @@ it('restricts handover decisions to booking customer and retains disputes', func
     $prefix = "/api/v1/supervisor/bookings/{$booking->id}";
     $customerUrl = "/api/v1/supervised-team/customer/bookings/{$booking->id}";
     Sanctum::actingAs($supervisor);
-    $code = $this->postJson("$prefix/verification-requests")->assertOk()->json('data.code');
+    $this->postJson("$prefix/verification-requests")->assertOk()->assertJsonMissingPath('data.code');
     Sanctum::actingAs($customer);
-    $this->postJson("$customerUrl/verification/confirm", ['code' => $code])->assertOk();
+    $code = $this->getJson("$customerUrl/verification-code")->assertOk()->json('data.code');
+    Sanctum::actingAs($supervisor);
+    $this->postJson("$prefix/verification/confirm", ['code' => $code])->assertOk();
     Sanctum::actingAs($supervisor);
     $this->postJson("$prefix/start")->assertOk();
     $this->postJson("$prefix/handover-requests")->assertCreated();
@@ -369,13 +380,11 @@ it('lets only the booking customer discover pending team decisions without expos
     $this->getJson($customerUrl)->assertNotFound();
     Sanctum::actingAs($customer);
     $this->getJson($customerUrl)->assertOk()
-        ->assertJsonPath('data.allowedActions', ['confirm_supervisor_arrival'])
+        ->assertJsonPath('data.allowedActions', ['view_verification_code'])
         ->assertJsonMissingPath('data.code')->assertDontSee('code_hash')->assertDontSee('customer_code_ciphertext');
-    $this->getJson("$customerUrl/verification-code")->assertNotFound();
+    $code = $this->getJson("$customerUrl/verification-code")->assertOk()->json('data.code');
     Sanctum::actingAs($supervisor);
-    $code = $this->postJson("$supervisorUrl/verification-requests")->assertOk()->json('data.code');
-    Sanctum::actingAs($customer);
-    $this->postJson("$customerUrl/verification/confirm", ['code' => $code])->assertOk();
+    $this->postJson("$supervisorUrl/verification/confirm", ['code' => $code])->assertOk();
     Sanctum::actingAs($supervisor);
     $this->postJson("$supervisorUrl/start")->assertOk();
     $extension = $this->postJson("$supervisorUrl/extension-requests", [
@@ -400,12 +409,14 @@ it('never revives a cancelled booking with a previously issued verification code
     $supervisorUrl = "/api/v1/supervisor/bookings/{$booking->id}";
     $customerUrl = "/api/v1/supervised-team/customer/bookings/{$booking->id}";
     Sanctum::actingAs($supervisor);
-    $code = $this->postJson("$supervisorUrl/verification-requests")->assertOk()->json('data.code');
+    $this->postJson("$supervisorUrl/verification-requests")->assertOk()->assertJsonMissingPath('data.code');
     Sanctum::actingAs($customer);
+    $code = $this->getJson("$customerUrl/verification-code")->assertOk()->json('data.code');
     $booking->forceFill(['status' => CleaningBookingStatus::Cancelled])->save();
     $this->getJson("$customerUrl/verification-code")->assertNotFound();
     $this->getJson($customerUrl)->assertOk()->assertJsonPath('data.allowedActions', []);
-    $this->postJson("$customerUrl/verification/confirm", ['code' => $code])->assertConflict();
+    Sanctum::actingAs($supervisor);
+    $this->postJson("$supervisorUrl/verification/confirm", ['code' => $code])->assertConflict();
     $this->assertDatabaseHas('cleaning_bookings', ['id' => $booking->id, 'status' => 'cancelled']);
     $this->assertDatabaseHas('cleaning_supervisor_verifications', ['cleaning_booking_id' => $booking->id, 'status' => 'pending']);
 });
@@ -415,11 +426,13 @@ it('rejects expired or exhausted verification challenges without starting the te
     $supervisorUrl = "/api/v1/supervisor/bookings/{$booking->id}";
     $customerUrl = "/api/v1/supervised-team/customer/bookings/{$booking->id}";
     Sanctum::actingAs($supervisor);
-    $code = $this->postJson("$supervisorUrl/verification-requests")->assertOk()->json('data.code');
+    $this->postJson("$supervisorUrl/verification-requests")->assertOk()->assertJsonMissingPath('data.code');
     Sanctum::actingAs($customer);
+    $code = $this->getJson("$customerUrl/verification-code")->assertOk()->json('data.code');
+    Sanctum::actingAs($supervisor);
     if ($exhaustAttempts) {
         for ($attempt = 0; $attempt < 5; $attempt++) {
-            $this->postJson("$customerUrl/verification/confirm", ['code' => '000000'])->assertUnprocessable();
+            $this->postJson("$supervisorUrl/verification/confirm", ['code' => '000000'])->assertUnprocessable();
         }
         $this->assertDatabaseHas('cleaning_supervisor_verifications', ['cleaning_booking_id' => $booking->id, 'attempts' => 5]);
     } else {
@@ -428,7 +441,8 @@ it('rejects expired or exhausted verification challenges without starting the te
         $this->getJson("$supervisorUrl/verification/status")->assertOk()->assertJsonPath('data.status', 'expired');
         Sanctum::actingAs($customer);
     }
-    $this->postJson("$customerUrl/verification/confirm", ['code' => $code])->assertUnprocessable();
+    Sanctum::actingAs($supervisor);
+    $this->postJson("$supervisorUrl/verification/confirm", ['code' => $code])->assertUnprocessable();
     Sanctum::actingAs($supervisor);
     $this->postJson("$supervisorUrl/start")->assertConflict();
     Sanctum::actingAs($customer);
