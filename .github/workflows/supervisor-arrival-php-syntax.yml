@@ -1,0 +1,28 @@
+name: Supervisor Arrival PHP Syntax
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [dev]
+    paths:
+      - 'Modules/Cleaning/app/Http/Controllers/API/SupervisorWorkflowController.php'
+      - 'Modules/Cleaning/app/Services/SupervisedTeamService.php'
+      - 'Modules/Cleaning/routes/api.php'
+      - 'tests/Feature/Cleaning/SupervisorWorkflowTest.php'
+      - '.github/workflows/supervisor-arrival-php-syntax.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  php-syntax:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint modified PHP flow and tests without Composer dependencies
+        run: |
+          php -l Modules/Cleaning/app/Http/Controllers/API/SupervisorWorkflowController.php
+          php -l Modules/Cleaning/app/Services/SupervisedTeamService.php
+          php -l Modules/Cleaning/routes/api.php
+          php -l tests/Feature/Cleaning/SupervisorWorkflowTest.php
