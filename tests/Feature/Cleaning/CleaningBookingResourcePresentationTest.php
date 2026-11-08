@@ -12,6 +12,7 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingRoom;
 use Modules\Cleaning\Models\CleaningBookingSession;
+use Modules\Cleaning\Models\CleaningSpecialService;
 use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 
 it('returns worker avatar and Arabic cleaning labels in booking payloads', function (): void {
@@ -62,6 +63,45 @@ it('returns worker avatar and Arabic cleaning labels in booking payloads', funct
         ->assertJsonPath('data.roomTasks.0.roomTypeLabel', 'غرفة نوم')
         ->assertJsonPath('data.roomTasks.0.roomSizeLabel', 'كبيرة')
         ->assertJsonPath('data.openTime', null);
+});
+
+it('shows selected carpet washing and room cleaning requirements to a worker before acceptance', function (): void {
+    $workerUser = User::factory()->create();
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'status' => CleaningBookingStatus::WorkerAssigned,
+        'property_details' => [
+            'bedrooms' => 2,
+            'bathrooms' => 1,
+            'cleaning_mode' => 'regular',
+            'room_cleaning_modes' => ['bedroom.1' => 'deep', 'bedroom.2' => 'regular'],
+        ],
+    ]);
+    $service = CleaningSpecialService::query()->create([
+        'name' => 'غسيل سجاد',
+        'slug' => 'carpet-wash-test-'.$booking->id,
+        'pricing_unit' => 'piece',
+        'base_unit_price' => 100,
+    ]);
+    $booking->specialServices()->create([
+        'cleaning_special_service_id' => $service->id,
+        'service_name' => 'غسيل سجاد',
+        'pricing_unit' => 'piece',
+        'dirtiness_level' => 'medium',
+        'quantity' => 2,
+        'base_unit_price' => 100,
+        'price_multiplier' => 1,
+        'total_price' => 200,
+    ]);
+
+    Sanctum::actingAs($workerUser);
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")
+        ->assertOk()
+        ->assertJsonPath('data.specialServices.0.name', 'غسيل سجاد')
+        ->assertJsonPath('data.specialServices.0.quantity', 2)
+        ->assertJsonPath('data.propertyDetails.bedrooms', 2)
+        ->assertJsonPath('data.propertyDetails.deep_room_count', 1);
 });
 
 it('exposes the active booking supervisor only to a worker who accepted the standard group booking', function (): void {

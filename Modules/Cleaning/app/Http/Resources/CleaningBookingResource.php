@@ -321,6 +321,24 @@ final class CleaningBookingResource extends JsonResource
             'myAssignment' => $myAssignment,
             'worker_assignment' => $myAssignment,
             'addons' => $this->whenLoaded('addons'),
+            'specialServices' => $this->whenLoaded('specialServices', fn () => $this->specialServices->map(static fn ($service): array => [
+                'id' => $service->id,
+                'name' => $service->service_name,
+                'quantity' => (float) $service->quantity,
+                'pricingUnit' => $service->pricing_unit,
+                'dirtinessLevel' => $service->dirtiness_level,
+                'equipment' => $service->equipment_snapshot ?? [],
+                'notes' => $service->notes,
+                'executionStatus' => $service->execution_status,
+                'assignedWorkerId' => $service->assigned_worker_id,
+                'items' => $service->items->toArray(),
+            ])->values()->all()),
+            'materials' => $this->whenLoaded('materials', fn () => $this->materials->map(static fn ($material): array => [
+                'id' => $material->id,
+                'name' => $material->material?->name ?? $material->materialType?->name,
+                'quantity' => (float) $material->quantity,
+                'unit' => $material->unit?->name,
+            ])->values()->all()),
             'billingPolicy' => $this->whenLoaded('billingPolicy'),
             // Keep the historical snake_case fields for older clients, while
             // exposing the same priced warning contract as the standalone
@@ -563,6 +581,15 @@ final class CleaningBookingResource extends JsonResource
 
     private function servicesPayload(): array
     {
+        if ($this->relationLoaded('services') && $this->services->isNotEmpty()) {
+            return $this->services->map(static fn ($service): array => [
+                'id' => $service->id,
+                'name' => $service->name,
+                'quantity' => (float) ($service->pivot?->quantity ?? 1),
+                'unitPrice' => $service->pivot?->unit_price,
+                'totalPrice' => $service->pivot?->total_price,
+            ])->values()->all();
+        }
         $services = $this->normalizedCleaningServices() ?? [];
 
         return array_values(array_map(static fn (string $service, int $index): array => ['id' => null, 'name' => $service, 'quantity' => 1, 'unitPrice' => null, 'unit_price' => null, 'totalPrice' => null, 'total_price' => null, 'sort' => $index], $services, array_keys($services)));
