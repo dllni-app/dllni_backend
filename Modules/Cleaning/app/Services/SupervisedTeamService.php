@@ -78,8 +78,14 @@ final class SupervisedTeamService
         );
 
         return [
+            'bookingId' => (int) $booking->id,
+            'bookingNumber' => (string) $booking->booking_number,
             'requiredWorkers' => $required,
             'acceptedWorkers' => $accepted->count(),
+            // Physical arrival is not the same as supervisor-verified attendance.
+            // Keep both counts so a worker who has just arrived remains visible
+            // even before the supervisor enters their six-digit code.
+            'physicallyArrivedWorkers' => $arrived->count(),
             'arrivedWorkers' => $verifiedArrivals->count(),
             'teamReady' => $verifiedArrivals->count() >= $required,
             'pendingAttendanceWorkers' => $arrived->count() - $verifiedArrivals->count(),
@@ -160,6 +166,7 @@ final class SupervisedTeamService
             'durationMinutes' => $minutes,
             'requiredWorkers' => $attendance['requiredWorkers'],
             'acceptedWorkers' => $attendance['acceptedWorkers'],
+            'physicallyArrivedWorkers' => $attendance['physicallyArrivedWorkers'],
             'arrivedWorkers' => $attendance['arrivedWorkers'],
             'teamReady' => $attendance['teamReady'],
             'pendingAttendanceWorkers' => $attendance['pendingAttendanceWorkers'],
