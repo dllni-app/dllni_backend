@@ -73,6 +73,8 @@ Route::prefix('v1')->group(function () {
             Route::post('bookings/{booking}/replacement-requests', [SupervisorAppController::class, 'replacementRequest'])->whereNumber('booking');
             Route::post('bookings/{booking}/verification-requests', [SupervisorWorkflowController::class, 'verificationRequest']);
             Route::get('bookings/{booking}/verification/status', [SupervisorWorkflowController::class, 'verificationStatus']);
+            Route::post('bookings/{booking}/verification/confirm', [SupervisorWorkflowController::class, 'verificationConfirm'])
+                ->whereNumber('booking')->middleware('throttle:6,1');
             Route::post('bookings/{booking}/worker-attendance/{assignment}/confirm', [BookingWorkerAttendanceCodeController::class, 'confirm'])
                 ->whereNumber('booking')->whereNumber('assignment')->middleware('throttle:12,1');
             Route::post('bookings/{booking}/start', [SupervisorWorkflowController::class, 'start']);
@@ -92,8 +94,6 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:sanctum')->prefix('supervised-team/customer/bookings')->group(function (): void {
         Route::get('{booking}', [SupervisorWorkflowController::class, 'customerShow'])->whereNumber('booking');
         Route::get('{booking}/verification-code', [SupervisorWorkflowController::class, 'customerVerificationCode']);
-        Route::post('{booking}/verification/confirm', [SupervisorWorkflowController::class, 'verificationConfirm'])
-            ->whereNumber('booking')->middleware('throttle:6,1');
         Route::post('{booking}/extensions/{extension}/decision', [SupervisorWorkflowController::class, 'extensionDecision']);
         Route::post('{booking}/handover-decision', [SupervisorWorkflowController::class, 'handoverDecision']);
     });
