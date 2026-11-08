@@ -7,7 +7,6 @@ use App\Models\CleaningFinancialSetting;
 use App\Models\CleaningWorkerDeposit;
 use App\Models\User;
 use App\Models\Worker;
-use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Models\CleaningBookingSpecialService;
 use Modules\Cleaning\Models\CleaningSpecialService;
 use Modules\Cleaning\Models\CleaningSpecialServiceEquipment;
@@ -186,7 +185,7 @@ it('refuses legacy parent acceptance for a signed single-visit V2 booking', func
         ->and($session->workerAssignments()->count())->toBe(0);
 });
 
-it('reserves specialist equipment during the session acceptance transaction', function (): void {
+it('reserves equipment during session acceptance without worker specialist qualifications', function (): void {
     $worker = makeSessionWorker();
     $booking = makeSessionBooking();
     $session = makeExecutionSession($booking, 1, now()->addDay()->toDateString(), '10:00', 2.0);
@@ -220,27 +219,9 @@ it('reserves specialist equipment during the session acceptance transaction', fu
     ]);
 
     $acceptance = app(CleaningBookingSessionAcceptanceService::class);
-    $denied = $acceptance->acceptSelectedSessions($booking, $worker, [$session->id]);
-    expect(collect($denied['rejected'])->pluck('reasonCode'))->toContain('special_service_skill_missing')
-        ->and($session->workerAssignments()->count())->toBe(0);
-
-    $stamp = now();
-    DB::table('cleaning_worker_special_service_skills')->insert([
-        'worker_id' => $worker->id, 'cleaning_special_service_id' => $service->id,
-        'is_active' => true, 'approved_at' => $stamp,
-        'created_at' => $stamp, 'updated_at' => $stamp,
-    ]);
-    $denied = $acceptance->acceptSelectedSessions($booking, $worker, [$session->id]);
-    expect(collect($denied['rejected'])->pluck('reasonCode'))->toContain('special_equipment_authorization_missing')
-        ->and($session->workerAssignments()->count())->toBe(0);
-
-    DB::table('cleaning_worker_equipment_authorizations')->insert([
-        'worker_id' => $worker->id, 'cleaning_special_service_equipment_id' => $equipment->id,
-        'is_active' => true, 'approved_at' => $stamp,
-        'created_at' => $stamp, 'updated_at' => $stamp,
-    ]);
     $accepted = $acceptance->acceptSelectedSessions($booking, $worker, [$session->id]);
     expect($accepted['acceptedSessionIds'])->toBe([$session->id])
+        ->and($accepted['rejected'])->toBe([])
         ->and($line->fresh()->assigned_worker_id)->toBe($worker->id)
         ->and(CleaningEquipmentReservation::query()->where('cleaning_booking_session_id', $session->id)->count())->toBe(1);
 });
@@ -269,16 +250,6 @@ it('retains separate equipment windows for special services covering multiple se
         'price_multiplier' => 1, 'total_price' => 100,
     ]);
     $line->sessions()->sync([$first->id, $second->id]);
-    $stamp = now();
-    DB::table('cleaning_worker_special_service_skills')->insert([
-        'worker_id' => $worker->id, 'cleaning_special_service_id' => $service->id,
-        'is_active' => true, 'approved_at' => $stamp, 'created_at' => $stamp, 'updated_at' => $stamp,
-    ]);
-    DB::table('cleaning_worker_equipment_authorizations')->insert([
-        'worker_id' => $worker->id, 'cleaning_special_service_equipment_id' => $equipment->id,
-        'is_active' => true, 'approved_at' => $stamp, 'created_at' => $stamp, 'updated_at' => $stamp,
-    ]);
-
     $result = app(CleaningBookingSessionAcceptanceService::class)->acceptAllAvailableSessions($booking, $worker);
 
     expect($result['allAccepted'])->toBeTrue()

@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use App\Models\Worker;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
@@ -14,16 +13,9 @@ use Modules\Cleaning\Models\CleaningSpecialService;
 use Modules\Cleaning\Models\CleaningSpecialServiceEquipment;
 use Modules\Cleaning\Services\CleaningSpecialistEquipmentReservationService;
 
-it('requires explicit approved specialist and independent equipment permissions', function (): void {
+it('allows any assigned worker to reserve and use equipment without individual permissions', function (): void {
     [$worker, $booking, $service, $equipment, $line] = phaseTwoBooking();
     $reservations = app(CleaningSpecialistEquipmentReservationService::class);
-
-    expect(fn () => $reservations->confirmForBooking($booking, $worker))
-        ->toThrow(ValidationException::class);
-    phaseTwoAuthorize($worker, $service, null);
-    expect(fn () => $reservations->confirmForBooking($booking, $worker))
-        ->toThrow(ValidationException::class);
-    phaseTwoAuthorize($worker, null, $equipment);
 
     $reservations->confirmForBooking($booking, $worker);
     expect($line->fresh()->assigned_worker_id)->toBe($worker->id)
@@ -32,20 +24,16 @@ it('requires explicit approved specialist and independent equipment permissions'
     $reservations->confirmForBooking($booking, $worker);
     expect(CleaningEquipmentReservation::query()->count())->toBe(1);
 
-    DB::table('cleaning_worker_equipment_authorizations')
-        ->where('worker_id', $worker->id)->update(['is_active' => false]);
     Sanctum::actingAs($worker->user);
     $this->postJson("/api/v1/cleaning-booking-special-services/{$line->id}/start")
-        ->assertUnprocessable()->assertJsonValidationErrors('equipment');
-    expect($line->fresh()->execution_status)->toBe('pending');
+        ->assertOk()->assertJsonPath('data.specialService.execution_status', 'in_progress');
+    expect($line->fresh()->execution_status)->toBe('in_progress');
 });
 
 it('rejects overlapping reservations with buffers even for different bookings', function (): void {
     [$workerA, $bookingA, $service, $equipment, $lineA] = phaseTwoBooking('10:00');
     [$workerB, $bookingB, $unusedService, $unusedEquipment, $lineB] = phaseTwoBooking('11:00', $service, $equipment);
     $equipment->forceFill(['buffer_before_minutes' => 15, 'buffer_after_minutes' => 15])->save();
-    phaseTwoAuthorize($workerA, $service, $equipment);
-    phaseTwoAuthorize($workerB, $service, $equipment);
     $reservations = app(CleaningSpecialistEquipmentReservationService::class);
 
     $reservations->confirmForBooking($bookingA, $workerA);
@@ -64,7 +52,6 @@ it('rejects overlapping reservations with buffers even for different bookings', 
 
 it('never allocates equipment only when work is started', function (): void {
     [$worker, $booking, $service, $equipment, $line] = phaseTwoBooking();
-    phaseTwoAuthorize($worker, $service, $equipment);
     Sanctum::actingAs($worker->user);
 
     $this->postJson("/api/v1/cleaning-booking-special-services/{$line->id}/start")
@@ -77,11 +64,9 @@ it('never allocates equipment only when work is started', function (): void {
         ->assertOk()->assertJsonPath('data.specialService.execution_status', 'in_progress');
 });
 
-it('can reassign a released reservation to another authorized worker', function (): void {
+it('can reassign a released reservation to another worker without qualification checks', function (): void {
     [$workerA, $booking, $service, $equipment, $line] = phaseTwoBooking();
     $workerB = Worker::factory()->financiallyEligible()->create();
-    phaseTwoAuthorize($workerA, $service, $equipment);
-    phaseTwoAuthorize($workerB, $service, $equipment);
 
     $reservations = app(CleaningSpecialistEquipmentReservationService::class);
     $reservations->confirmForBooking($booking, $workerA);
@@ -98,7 +83,6 @@ it('can reassign a released reservation to another authorized worker', function 
 
 it('releases only one visit equipment slot while preserving sibling visits', function (): void {
     [$worker, $booking, $service, $equipment, $line] = phaseTwoBooking();
-    phaseTwoAuthorize($worker, $service, $equipment);
     $sessions = [];
     foreach ([1, 2] as $sequence) {
         $sessions[] = \Modules\Cleaning\Models\CleaningBookingSession::query()->create([
@@ -134,27 +118,6 @@ it('releases only one visit equipment slot while preserving sibling visits', fun
         ->and(CleaningEquipmentReservation::query()->where('cleaning_booking_session_id', $sessions[0]->id)->first()->status)->toBe('released')
         ->and(CleaningEquipmentReservation::query()->where('cleaning_booking_session_id', $sessions[1]->id)->first()->status)->toBe('reserved');
 });
-
-function phaseTwoAuthorize(
-    Worker $worker,
-    ?CleaningSpecialService $service,
-    ?CleaningSpecialServiceEquipment $equipment,
-): void {
-    if ($service !== null) {
-        DB::table('cleaning_worker_special_service_skills')->insert([
-            'worker_id' => $worker->id, 'cleaning_special_service_id' => $service->id,
-            'is_active' => true, 'approved_at' => now(),
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
-    }
-    if ($equipment !== null) {
-        DB::table('cleaning_worker_equipment_authorizations')->insert([
-            'worker_id' => $worker->id, 'cleaning_special_service_equipment_id' => $equipment->id,
-            'is_active' => true, 'approved_at' => now(),
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
-    }
-}
 
 /** @return array{Worker,CleaningBooking,CleaningSpecialService,CleaningSpecialServiceEquipment,CleaningBookingSpecialService} */
 function phaseTwoBooking(

@@ -19,7 +19,6 @@ return [
         'base_unit_price' => 'سعر الوحدة الأساسي',
         'supports_dirtiness' => 'يدعم تحديد مستوى الاتساخ',
         'dirtiness_levels' => 'مستويات الاتساخ المسموح بها',
-        'gender_constraint' => 'جنس العامل المطلوب',
         'duration' => 'المدة التقديرية',
         'worker_pay_mode' => 'طريقة احتساب أجرة العامل',
         'worker_pay_value' => 'قيمة أجرة العامل',
@@ -48,10 +47,6 @@ return [
         'decimal' => 'قياس عشري',
         'area' => 'المساحة',
         'length' => 'الطول',
-    ],
-    'gender_constraints' => [
-        'male' => 'عامل',
-        'female' => 'عاملة',
     ],
     'pay_modes' => [
         'flat' => 'مبلغ ثابت',

@@ -117,7 +117,6 @@ return [
             'performance' => 'Performance Stats',
             'preferred_zones' => 'Preferred Work Zones',
             'availability' => 'Availability Schedule',
-            'special_qualifications' => 'Special-service qualifications',
         ],
         'fields' => [
             'name' => 'Name',
@@ -126,7 +125,6 @@ return [
             'user' => 'User',
             'gender' => 'Gender',
             'birthday' => 'Birthday',
-            'preferred_work_type' => 'Preferred work type',
             'bio' => 'Bio',
             'home_address' => 'Home address',
             'home_latitude' => 'Home latitude',
@@ -168,9 +166,6 @@ return [
             'suspended' => 'Suspended',
             'id' => 'ID',
             'customer' => 'Customer',
-            'approved_special_services' => 'Approved special services',
-            'authorized_equipment' => 'Authorized equipment',
-            'special_qualifications_help' => 'Only workers approved here can receive special services or controlled equipment.',
         ],
         'deposit_status_options' => [
             'active' => 'Active',
@@ -184,11 +179,6 @@ return [
         'gender_options' => [
             'male' => 'Male',
             'female' => 'Female',
-        ],
-        'preferred_work_type_options' => [
-            'cleaning' => 'Cleaning',
-            'events' => 'Events',
-            'hourly' => 'Hourly worker',
         ],
         'reviews' => 'Customer Reviews',
         'customer_ratings' => 'Worker Ratings of Customers',

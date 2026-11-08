@@ -27,7 +27,7 @@ final class SmModifier extends Model
     protected function casts(): array
     {
         return [
-            'price' => 'integer',
+            'price' => 'decimal:2',
             'sort_order' => 'integer',
             'is_available' => 'boolean',
         ];

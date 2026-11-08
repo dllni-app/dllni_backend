@@ -44,8 +44,8 @@ final class SmOrderItem extends Model
     protected function casts(): array
     {
         return [
-            'unit_price' => 'integer',
-            'total_price' => 'integer',
+            'unit_price' => 'decimal:2',
+            'total_price' => 'decimal:2',
             'modifier_snapshot' => 'array',
             'substitute_product_id' => 'integer',
         ];

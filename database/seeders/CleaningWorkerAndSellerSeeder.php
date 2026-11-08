@@ -7,7 +7,6 @@ namespace Database\Seeders;
 use App\Enums\AvailabilityType;
 use App\Enums\GenderPreference;
 use App\Enums\UserModuleType;
-use App\Enums\WorkerPreferredWorkType;
 use App\Models\CleaningDepositSetting;
 use App\Models\CleaningWorkerDeposit;
 use App\Models\User;
@@ -144,9 +143,6 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
             $workerUpdates['birthday'] = '1992-06-18';
         }
 
-        if (Schema::hasColumn('workers', 'preferred_work_type')) {
-            $workerUpdates['preferred_work_type'] = WorkerPreferredWorkType::Both->value;
-        }
 
         $worker->forceFill($workerUpdates)->save();
 

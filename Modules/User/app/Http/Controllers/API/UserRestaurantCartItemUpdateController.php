@@ -28,6 +28,7 @@ final class UserRestaurantCartItemUpdateController
             note: $request->input('specialInstructions') ?? $request->input('note'),
             replaceSubstituteProduct: $request->has('substituteProductId'),
             replaceNote: $hasNote,
+            expectedRevision: $request->has('expectedRevision') ? $request->integer('expectedRevision') : null,
         );
 
         return response()->json([

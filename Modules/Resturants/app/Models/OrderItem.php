@@ -16,6 +16,8 @@ final class OrderItem extends Model
         'quantity',
         'unit_price',
         'total_price',
+        'product_name',
+        'modifier_snapshot',
         'special_instructions',
     ];
 
@@ -40,6 +42,7 @@ final class OrderItem extends Model
             'quantity' => 'integer',
             'unit_price' => 'decimal:2',
             'total_price' => 'decimal:2',
+            'modifier_snapshot' => 'array',
         ];
     }
 }

@@ -113,7 +113,6 @@ return [
             'performance' => 'إحصاءات الأداء',
             'preferred_zones' => 'مناطق العمل المفضلة',
             'availability' => 'جدول التوفر',
-            'special_qualifications' => 'مؤهلات الخدمات الخاصة',
         ],
         'fields' => [
             'name' => 'الاسم',
@@ -122,7 +121,6 @@ return [
             'user' => 'المستخدم',
             'gender' => 'الجنس',
             'birthday' => 'تاريخ الميلاد',
-            'preferred_work_type' => 'نوع العمل المفضل',
             'bio' => 'نبذة',
             'home_address' => 'عنوان المنزل',
             'home_latitude' => 'خط العرض',
@@ -158,9 +156,6 @@ return [
             'suspended' => 'موقوف',
             'id' => 'المعرف',
             'customer' => 'العميل',
-            'approved_special_services' => 'الخدمات الخاصة المعتمدة',
-            'authorized_equipment' => 'المعدات المصرح بها',
-            'special_qualifications_help' => 'لا يستقبل العامل الخدمات الخاصة أو المعدات المقيدة إلا إذا كانت معتمدة هنا.',
         ],        'deposit_status_options' => [
             'active' => 'نشط',
             'insufficient_balance' => 'رصيد غير كافٍ',
@@ -169,11 +164,6 @@ return [
         'gender_options' => [
             'male' => 'ذكر',
             'female' => 'أنثى',
-        ],
-        'preferred_work_type_options' => [
-            'cleaning' => 'تنظيف',
-            'events' => 'مناسبات',
-            'hourly' => 'عامل بالساعة',
         ],
         'reviews' => 'تقييمات العملاء',
         'reviews_fields' => [

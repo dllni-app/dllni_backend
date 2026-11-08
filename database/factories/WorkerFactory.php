@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Enums\WorkerPreferredWorkType;
 use App\Models\CleaningWorkerDeposit;
 use App\Models\User;
 use App\Models\Worker;
@@ -23,7 +22,6 @@ final class WorkerFactory extends Factory
             'user_id' => User::factory(),
             'first_name' => fake()->firstName(),
             'birthday' => fake()->optional()->date(),
-            'preferred_work_type' => WorkerPreferredWorkType::Both,
             'bio' => fake()->optional()->paragraph(),
             'average_rating' => fake()->randomFloat(2, 3, 5),
             'total_completed_jobs' => fake()->numberBetween(0, 200),

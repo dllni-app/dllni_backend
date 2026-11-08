@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Workers\Schemas;
 
-use App\Enums\WorkerPreferredWorkType;
 use App\Models\Worker;
 use BackedEnum;
 use Filament\Infolists\Components\ImageEntry;
@@ -135,12 +134,6 @@ final class WorkerInfolist
                                 TextEntry::make('birthday')
                                     ->label(__('cleaning_admin.workers.fields.birthday'))
                                     ->date('Y-m-d')
-                                    ->placeholder('-'),
-                                TextEntry::make('preferred_work_types')
-                                    ->label(__('cleaning_admin.workers.fields.preferred_work_type'))
-                                    ->state(fn (Worker $record): string => collect($record->preferredWorkTypes())
-                                        ->map(fn (string $value): string => WorkerPreferredWorkType::options()[$value] ?? $value)
-                                        ->implode('، '))
                                     ->placeholder('-'),
                                 TextEntry::make('bio')
                                     ->label(__('cleaning_admin.workers.fields.bio'))

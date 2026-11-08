@@ -50,7 +50,7 @@ final class CleaningWorkerResource extends Resource
 
     public static function form(Schema $schema): Schema
     {
-        return WorkerForm::configure($schema, includeCleaningQualifications: true);
+        return WorkerForm::configure($schema);
     }
 
     public static function infolist(Schema $schema): Schema

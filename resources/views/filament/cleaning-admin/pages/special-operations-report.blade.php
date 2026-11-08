@@ -12,7 +12,7 @@
                 ['label' => 'قيمة الخدمات الخاصة المسجلة', 'value' => number_format((float) ($financial['recordedSpecialServiceCharges'] ?? 0), 2) . ' SYP'],
                 ['label' => 'قيمة الخدمات المكتملة', 'value' => number_format((float) ($financial['recordedCompletedServiceCharges'] ?? 0), 2) . ' SYP'],
                 ['label' => 'فرق مطابقة عناصر الفواتير', 'value' => number_format((float) ($financial['lineItemReconciliationDifference'] ?? 0), 2) . ' SYP'],
-                ['label' => 'المتخصصون المؤهلون', 'value' => (int) ($workers['eligibleSpecialistsWithApprovedSkill'] ?? 0)],
+                ['label' => 'العمال النشطون', 'value' => (int) ($workers['availableWorkers'] ?? 0)],
                 ['label' => 'حجوزات المعدات', 'value' => (int) ($equipment['reservationCount'] ?? 0)],
                 ['label' => 'معدات تحتاج صيانة أو معطلة', 'value' => (int) ($equipment['maintenanceOrBrokenAssets'] ?? 0)],
                 ['label' => 'إرجاعات بانتظار الإدارة', 'value' => (int) ($equipment['pendingAdministrativeReturns'] ?? 0)],
@@ -54,9 +54,9 @@
             </div>
         </section>
         <section class="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-900">
-            <h3 class="mb-2 font-bold text-gray-950 dark:text-white">عدالة فرص المتخصصين</h3>
+            <h3 class="mb-2 font-bold text-gray-950 dark:text-white">توزيع فرص العمال في الخدمات الإضافية</h3>
             <p class="mb-3 text-xs text-gray-500">
-                الإشعارات التي وصلت إلى العمال للطلبات المتخصصة والتخصيصات المقبولة خلال آخر {{ $workers['lookbackDays'] ?? 30 }} يومًا. يظهر كل مؤشر مستقلاً.
+                لا تُشترط تخصصات فردية لقبول خدمات التنظيف، مع استمرار شروط الحساب والجدولة والضوابط المالية. هذه إحصاءات الإشعارات والتخصيصات المقبولة خلال آخر {{ $workers['lookbackDays'] ?? 30 }} يومًا.
             </p>
             <div class="overflow-x-auto">
                 <table class="w-full text-right text-sm">
@@ -65,10 +65,10 @@
                         <th class="px-3 py-2">آخر قبول</th>
                     </tr></thead>
                     <tbody>
-                    @forelse (array_slice($workers['recentAcceptedWorkBySpecialist'] ?? [], 0, 50) as $worker)
+                    @forelse (array_slice($workers['recentSpecialServiceWorkByWorker'] ?? [], 0, 50) as $worker)
                         <tr class="border-b dark:border-gray-800">
                             <td class="px-3 py-2">{{ $worker['name'] }}</td>
-                            <td class="px-3 py-2">{{ $worker['recordedSpecialistOffers'] }}</td>
+                            <td class="px-3 py-2">{{ $worker['recordedSpecialServiceOffers'] }}</td>
                             <td class="px-3 py-2">{{ $worker['recentAcceptedSlots'] }}</td>
                             <td class="px-3 py-2">{{ $worker['latestAcceptance'] ?: 'لا يوجد' }}</td>
                         </tr>

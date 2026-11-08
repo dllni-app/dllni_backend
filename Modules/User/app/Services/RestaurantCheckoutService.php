@@ -7,19 +7,26 @@ namespace Modules\User\Services;
 use App\Models\PlatformCoupon;
 use App\Services\Coupons\PlatformCouponRedemptionService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Modules\Resturants\Enums\DiscountType;
 use Modules\Resturants\Enums\OrderStatus;
+use Modules\Resturants\Enums\OrderType;
 use Modules\Resturants\Enums\RestaurantPickupMode;
 use Modules\Resturants\Models\Cart;
 use Modules\Resturants\Models\Order;
 use Modules\Resturants\Models\OrderItem;
 use Modules\Resturants\Models\PromoCode;
+use Modules\Delivery\Services\DeliveryPricingService;
+use Modules\User\Models\UserAddress;
 
 final class RestaurantCheckoutService
 {
-    public function __construct(private readonly PlatformCouponRedemptionService $platformCoupons) {}
+    public function __construct(
+        private readonly PlatformCouponRedemptionService $platformCoupons,
+        private readonly DeliveryPricingService $deliveryPricing,
+    ) {}
 
     public function checkoutCart(
         int $userId,
@@ -36,7 +43,7 @@ final class RestaurantCheckoutService
                 ->whereKey($cartId)
                 ->where('user_id', $userId)
                 ->whereNotNull('restaurant_id')
-                ->with(['items.product', 'items.modifiers'])
+                ->with(['restaurant', 'items.product', 'items.modifiers.modifierGroup'])
                 ->lockForUpdate()
                 ->firstOrFail();
 
@@ -64,7 +71,23 @@ final class RestaurantCheckoutService
 
             $taxAmount = 0.0;
             $serviceFee = 0.0;
-            $totalAmount = max(0.0, $subtotal - $discountAmount) + $taxAmount + $serviceFee;
+            $deliveryFee = 0.0;
+            if ($orderType === OrderType::Delivery->value) {
+                $address = UserAddress::query()->whereKey($userAddressId)->where('user_id', $userId)->first();
+                if (! $address instanceof UserAddress || $cart->restaurant === null ||
+                    ! is_numeric($cart->restaurant->latitude) || ! is_numeric($cart->restaurant->longitude) ||
+                    ! is_numeric($address->latitude) || ! is_numeric($address->longitude)) {
+                    throw ValidationException::withMessages(['delivery' => ['تعذر احتساب أجرة التوصيل.']]);
+                }
+                $deliveryFee = (float) $this->deliveryPricing->calculate(
+                    pickupLatitude: (float) $cart->restaurant->latitude,
+                    pickupLongitude: (float) $cart->restaurant->longitude,
+                    dropoffLatitude: (float) $address->latitude,
+                    dropoffLongitude: (float) $address->longitude,
+                    currency: 'SYP',
+                )['deliveryFee'];
+            }
+            $totalAmount = max(0.0, $subtotal - $discountAmount) + $taxAmount + $serviceFee + $deliveryFee;
 
             $order = Order::create([
                 'user_id' => $userId,
@@ -84,8 +107,10 @@ final class RestaurantCheckoutService
                 'special_instructions' => $specialInstructions,
             ]);
 
+            $hasProductSnapshot = Schema::hasColumn('order_items', 'product_name');
+            $hasModifierSnapshot = Schema::hasColumn('order_items', 'modifier_snapshot');
             foreach ($cart->items as $cartItem) {
-                $orderItem = OrderItem::create([
+                $orderItemAttributes = [
                     'order_id' => $order->id,
                     'product_id' => $cartItem->product_id,
                     'substitute_product_id' => $cartItem->substitute_product_id,
@@ -93,7 +118,20 @@ final class RestaurantCheckoutService
                     'unit_price' => $cartItem->unit_price,
                     'total_price' => $cartItem->total_price,
                     'special_instructions' => $cartItem->special_instructions,
-                ]);
+                ];
+                if ($hasProductSnapshot) {
+                    $orderItemAttributes['product_name'] = $cartItem->product?->name;
+                }
+                if ($hasModifierSnapshot) {
+                    $orderItemAttributes['modifier_snapshot'] = $cartItem->modifiers->map(fn ($modifier): array => [
+                        'id' => (int) $modifier->id,
+                        'modifierGroupId' => (int) $modifier->modifier_group_id,
+                        'groupName' => $modifier->modifierGroup?->name,
+                        'name' => $modifier->name,
+                        'price' => (float) ($modifier->pivot?->price ?? $modifier->price ?? 0),
+                    ])->values()->all();
+                }
+                $orderItem = OrderItem::create($orderItemAttributes);
 
                 $modifierRows = DB::table('cart_item_modifier')
                     ->where('cart_item_id', $cartItem->id)

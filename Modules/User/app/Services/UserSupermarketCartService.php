@@ -12,6 +12,7 @@ use Modules\Supermarket\Models\SmCartItem;
 use Modules\Supermarket\Models\SmProduct;
 use Modules\Supermarket\Models\SmModifier;
 use Modules\Supermarket\Models\SmStore;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 final class UserSupermarketCartService
 {
@@ -78,9 +79,9 @@ final class UserSupermarketCartService
     /**
      * @return array<string, mixed>
      */
-    public function deleteCart(int $userId, int $cartId): array
+    public function deleteCart(int $userId, int $cartId, ?int $expectedRevision = null): array
     {
-        return DB::transaction(function () use ($userId, $cartId): array {
+        return DB::transaction(function () use ($userId, $cartId, $expectedRevision): array {
             $cart = SmCart::query()
                 ->whereKey($cartId)
                 ->where('user_id', $userId)
@@ -88,6 +89,7 @@ final class UserSupermarketCartService
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            $this->assertExpectedRevision($cart, $expectedRevision);
             $store = $cart->store;
             $cart->delete();
 
@@ -105,8 +107,9 @@ final class UserSupermarketCartService
         array $modifierIds = [],
         ?int $substituteProductId = null,
         ?string $note = null,
+        ?int $expectedRevision = null,
     ): array {
-        return DB::transaction(function () use ($userId, $productId, $quantity, $modifierIds, $substituteProductId, $note): array {
+        return DB::transaction(function () use ($userId, $productId, $quantity, $modifierIds, $substituteProductId, $note, $expectedRevision): array {
             $product = SmProduct::query()->with(['modifierGroups.modifiers'])->findOrFail($productId);
 
             if (! $product->store_id) {
@@ -128,6 +131,7 @@ final class UserSupermarketCartService
             $this->validateSubstituteProduct($product, $substituteProductId);
 
             $cart = $this->normalizeCart($this->resolveStoreCart($userId, (int) $product->store_id));
+            $this->assertExpectedRevision($cart, $expectedRevision);
             $unitPrice = (float) ($product->discounted_price ?? $product->price ?? 0) + $modifierTotal;
 
             $productItems = SmCartItem::query()
@@ -250,9 +254,11 @@ final class UserSupermarketCartService
     /**
      * @return array<string, mixed>
      */
-    public function updateItem(int $userId, int $cartId, int $itemId, int $quantity): array
+    public function updateItem(int $userId, int $cartId, int $itemId, int $quantity, ?int $expectedRevision = null): array
     {
-        return DB::transaction(function () use ($userId, $cartId, $itemId, $quantity): array {
+        return DB::transaction(function () use ($userId, $cartId, $itemId, $quantity, $expectedRevision): array {
+            $lockedCart = SmCart::query()->whereKey($cartId)->where('user_id', $userId)->lockForUpdate()->firstOrFail();
+            $this->assertExpectedRevision($lockedCart, $expectedRevision);
             $item = SmCartItem::query()
                 ->whereKey($itemId)
                 ->where('cart_id', $cartId)
@@ -297,9 +303,11 @@ final class UserSupermarketCartService
     /**
      * @return array<string, mixed>
      */
-    public function deleteItem(int $userId, int $cartId, int $itemId): array
+    public function deleteItem(int $userId, int $cartId, int $itemId, ?int $expectedRevision = null): array
     {
-        return DB::transaction(function () use ($userId, $cartId, $itemId): array {
+        return DB::transaction(function () use ($userId, $cartId, $itemId, $expectedRevision): array {
+            $lockedCart = SmCart::query()->whereKey($cartId)->where('user_id', $userId)->lockForUpdate()->firstOrFail();
+            $this->assertExpectedRevision($lockedCart, $expectedRevision);
             $item = SmCartItem::query()
                 ->whereKey($itemId)
                 ->where('cart_id', $cartId)
@@ -322,6 +330,16 @@ final class UserSupermarketCartService
 
             return $this->toPayload($freshCart);
         });
+    }
+
+    private function assertExpectedRevision(SmCart $cart, ?int $expectedRevision): void
+    {
+        if ($expectedRevision !== null && ! array_key_exists('revision', $cart->getAttributes())) {
+            throw new ConflictHttpException('CART_REVISION_UNAVAILABLE');
+        }
+        if ($expectedRevision !== null && (int) $cart->revision !== $expectedRevision) {
+            throw new ConflictHttpException('CART_CONFLICT');
+        }
     }
 
     private function resolveStoreCart(int $userId, int $storeId): SmCart
@@ -481,6 +499,7 @@ final class UserSupermarketCartService
 
         return [
             'id' => null,
+            'revision' => null,
             'storeId' => $store?->id,
             'merchantId' => $store?->id,
             'merchant' => $merchant,
@@ -529,6 +548,7 @@ final class UserSupermarketCartService
 
         return [
             'id' => $cart->id,
+            'revision' => array_key_exists('revision', $cart->getAttributes()) ? (int) $cart->revision : null,
             'storeId' => $storeId,
             'merchantId' => $storeId,
             'merchant' => $merchant,

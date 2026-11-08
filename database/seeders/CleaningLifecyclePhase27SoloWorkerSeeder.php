@@ -43,7 +43,6 @@ final class CleaningLifecyclePhase27SoloWorkerSeeder extends Seeder
             'first_name' => 'عامل اختبار فردي',
             'gender' => 'male',
             'bio' => 'حساب اختبارات محلية مستقل لتنفيذ رحلة الطلب الفردي.',
-            'preferred_work_type' => 'both',
             'is_active' => true,
             'is_suspended' => false,
             'is_verified' => true,

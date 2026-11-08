@@ -191,7 +191,7 @@ final class CleaningBookingSessionAcceptanceService
                     $rejected[] = $this->rejection(
                         $sessionId,
                         'specialist_assignment_unavailable',
-                        'Required specialist permission or equipment reservation is unavailable.',
+                        'Required equipment reservation is unavailable.',
                     );
                 } catch (Throwable $exception) {
                     report($exception);

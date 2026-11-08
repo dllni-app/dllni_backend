@@ -16,6 +16,8 @@ final class SmCart extends Model
 
     protected $table = 'sm_carts';
 
+    protected $casts = ['revision' => 'integer'];
+
     protected $fillable = [
         'user_id',
         'store_id',

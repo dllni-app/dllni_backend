@@ -160,38 +160,6 @@ final class CleaningOperationalScenarioSeeder extends Seeder
         $this->mapEventServices('large_gathering', ['sofa-steam', 'carpet-wash', 'window-cleaning']);
         $this->mapEventServices('funeral', ['sofa-steam', 'carpet-wash']);
 
-        $workerIds = [(int) $refs['worker1']->id, (int) $refs['worker2']->id];
-        $serviceIds = DB::table('cleaning_special_services')->orderBy('id')->pluck('id')->take(4)->all();
-        foreach ($workerIds as $workerId) {
-            foreach ($serviceIds as $serviceId) {
-                DB::table('cleaning_worker_special_service_skills')->updateOrInsert(
-                    ['worker_id' => $workerId, 'cleaning_special_service_id' => $serviceId],
-                    [
-                        'is_active' => true,
-                        'approved_by_id' => $refs['admin']->id,
-                        'approved_at' => now()->subDays(30),
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ],
-                );
-            }
-        }
-
-        $equipmentIds = DB::table('cleaning_special_service_equipment')->orderBy('id')->pluck('id')->all();
-        foreach ($workerIds as $index => $workerId) {
-            foreach (array_slice($equipmentIds, $index, 2) as $equipmentId) {
-                DB::table('cleaning_worker_equipment_authorizations')->updateOrInsert(
-                    ['worker_id' => $workerId, 'cleaning_special_service_equipment_id' => $equipmentId],
-                    [
-                        'is_active' => true,
-                        'approved_by_id' => $refs['admin']->id,
-                        'approved_at' => now()->subDays(21),
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ],
-                );
-            }
-        }
     }
 
     private function mapEquipment(string $serviceSlug, array $assetCodes): void

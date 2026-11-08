@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Workers\Tables;
 
-use App\Enums\WorkerPreferredWorkType;
 use App\Filament\Resources\SystemUsers\Support\ResetAccountPasswordAction;
 use App\Filament\Resources\Workers\Support\WorkerSuspensionActions;
 use Filament\Actions\EditAction;
@@ -46,12 +45,6 @@ final class WorkersTable
                         default => (string) ($state ?? '-'),
                     })
                     ->searchable(),
-                TextColumn::make('preferred_work_types')
-                    ->label(__('cleaning_admin.workers.fields.preferred_work_type'))
-                    ->state(fn ($record): string => collect($record->preferredWorkTypes())
-                        ->map(fn (string $value): string => WorkerPreferredWorkType::options()[$value] ?? $value)
-                        ->implode('، '))
-                    ->badge(),
                 TextColumn::make('user.phone')
                     ->label(self::headerLabel(
                         __('cleaning_admin.workers.fields.phone'),

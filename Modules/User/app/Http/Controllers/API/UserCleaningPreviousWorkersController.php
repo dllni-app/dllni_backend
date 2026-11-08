@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Modules\User\Http\Controllers\API;
 
-use App\Enums\WorkerPreferredWorkType;
 use App\Models\Worker;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -17,7 +16,6 @@ use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\DepositService;
 use Modules\Cleaning\Services\WorkerBookingScheduleConflictService;
 use Modules\User\Http\Requests\UserCleaningPreviousWorkersRequest;
-use Modules\User\Services\UserCleaningOrderEstimationService;
 use Throwable;
 
 final class UserCleaningPreviousWorkersController
@@ -31,14 +29,10 @@ final class UserCleaningPreviousWorkersController
     {
         $userId = Auth::id();
         $validated = $request->validated();
-        $propertyType = $validated['propertyType'] ?? null;
         $genderPreference = $validated['genderPreference'] ?? null;
         $scheduleDefinitions = $this->scheduleDefinitions($validated['schedule']['sessions'] ?? null);
-        // Older clients may send an unsupported property type; ignore only the
-        // filter, not the request or its schedule/availability constraints.
-        if (! is_string($propertyType) || ! in_array($propertyType, UserCleaningOrderEstimationService::PROPERTY_TYPES, true)) {
-            $propertyType = null;
-        }
+        // The legacy propertyType parameter remains harmless for old clients.
+        // No worker is excluded by a personal work-type specialization.
         $scheduledAt = $this->scheduledAt(
             $validated['scheduledDate'] ?? null,
             $validated['scheduledTime'] ?? null,
@@ -102,24 +96,10 @@ final class UserCleaningPreviousWorkersController
             ->whereHas('user', function ($query): void {
                 $query->where('is_active', true);
             })
-            ->when(is_string($propertyType), function ($query) use ($propertyType): void {
-                $supportedPreferences = $propertyType === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE
-                    ? [WorkerPreferredWorkType::Events->value, WorkerPreferredWorkType::Both->value]
-                    : [WorkerPreferredWorkType::Cleaning->value, WorkerPreferredWorkType::Both->value];
-
-                $query->whereIn('preferred_work_type', $supportedPreferences);
-            })
             ->when(
                 is_string($genderPreference) && $genderPreference !== 'any',
                 fn ($query) => $query->where('gender', $genderPreference),
             )
-            ->when(is_string($propertyType) && $propertyType !== '', function ($query) use ($propertyType): void {
-                $preferredTypes = $propertyType === 'event_assistance'
-                    ? [WorkerPreferredWorkType::Events->value, WorkerPreferredWorkType::Both->value]
-                    : [WorkerPreferredWorkType::Cleaning->value, WorkerPreferredWorkType::Both->value];
-
-                $query->whereIn('preferred_work_type', $preferredTypes);
-            })
             ->get()
             ->filter(fn (Worker $worker): bool => $this->isWorkerEligible(
                 $worker,

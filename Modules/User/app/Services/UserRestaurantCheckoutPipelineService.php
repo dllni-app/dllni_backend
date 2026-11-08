@@ -6,8 +6,10 @@ namespace Modules\User\Services;
 
 use App\Models\PlatformCoupon;
 use App\Services\Coupons\PlatformCouponRedemptionService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Modules\Delivery\Services\DeliveryOrderCreationService;
+use Modules\Delivery\Services\DeliveryPricingService;
 use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Enums\OrderType;
 use Modules\Resturants\Enums\RestaurantPickupMode;
@@ -24,12 +26,17 @@ final class UserRestaurantCheckoutPipelineService
         private readonly RestaurantCheckoutService $checkoutService,
         private readonly RestaurantOrderNotificationService $notifications,
         private readonly DeliveryOrderCreationService $deliveryOrders,
+        private readonly DeliveryPricingService $deliveryPricing,
         private readonly PlatformCouponRedemptionService $platformCoupons,
+        private readonly CommerceCheckoutReceiptService $receipts,
+        private readonly CommerceCheckoutQuoteService $quotes,
     ) {}
 
     public function preview(int $userId, int $cartId, string $fulfillmentType, string $receiveMode, ?string $scheduledAt, ?string $couponCode, ?string $note, ?int $addressId = null): array
     {
+        $this->assertSupportedSchedule($fulfillmentType, $receiveMode);
         $cart = Cart::query()->whereKey($cartId)->where('user_id', $userId)->whereNotNull('restaurant_id')->with(['restaurant', 'items.product'])->firstOrFail();
+        $this->assertPickupWindow($cart, $fulfillmentType, $receiveMode, $scheduledAt);
         if ($cart->items->isEmpty()) {
             throw ValidationException::withMessages(['cart' => ['Cart is empty.']]);
         }
@@ -47,19 +54,77 @@ final class UserRestaurantCheckoutPipelineService
         $discount = $this->computeDiscount($userId, (int) $cart->restaurant_id, $couponCode, $subtotal);
         $serviceFee = 0.0;
         $tax = 0.0;
-        $total = max(0.0, $subtotal - $discount) + $serviceFee + $tax;
+        $deliveryFee = $fulfillmentType === OrderType::Delivery->value
+            ? (float) $this->deliveryPricing->calculate(
+                pickupLatitude: (float) $cart->restaurant->latitude,
+                pickupLongitude: (float) $cart->restaurant->longitude,
+                dropoffLatitude: (float) $address->latitude,
+                dropoffLongitude: (float) $address->longitude,
+                currency: 'SYP',
+            )['deliveryFee']
+            : 0.0;
+        $total = max(0.0, $subtotal - $discount) + $serviceFee + $tax + $deliveryFee;
 
         return [
             'cartId' => $cart->id,
             'merchant' => ['id' => $cart->restaurant?->id, 'name' => $cart->restaurant?->name],
             'fulfillment' => ['type' => $fulfillmentType, 'receiveMode' => $receiveMode, 'scheduledAt' => $scheduledAt, 'address' => $address ? $this->addressPayload($address) : null],
-            'amounts' => ['subtotal' => round($subtotal, 2), 'discount' => round($discount, 2), 'serviceFee' => round($serviceFee, 2), 'tax' => round($tax, 2), 'total' => round($total, 2)],
+            'amounts' => ['subtotal' => round($subtotal, 2), 'discount' => round($discount, 2), 'serviceFee' => round($serviceFee, 2), 'deliveryFee' => round($deliveryFee, 2), 'tax' => round($tax, 2), 'total' => round($total, 2)],
             'note' => $note,
         ];
     }
 
-    public function place(int $userId, int $cartId, string $fulfillmentType, string $receiveMode, ?string $scheduledAt, ?string $couponCode, ?string $note, ?int $addressId = null): Order
+    public function place(int $userId, int $cartId, string $fulfillmentType, string $receiveMode, ?string $scheduledAt, ?string $couponCode, ?string $note, ?int $addressId = null, ?string $idempotencyKey = null, ?string $quoteId = null): Order
     {
+        $receiptPayload = compact('fulfillmentType', 'receiveMode', 'scheduledAt', 'couponCode', 'note', 'addressId', 'quoteId');
+        $placeNew = fn (): Order => $this->placeWithOptionalQuote($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $addressId, $quoteId);
+
+        if ($idempotencyKey !== null) {
+            [$order, $created] = DB::transaction(fn (): array => $this->receipts->execute(
+                userId: $userId,
+                section: 'restaurant',
+                cartId: $cartId,
+                idempotencyKey: $idempotencyKey,
+                payload: $receiptPayload,
+                place: $placeNew,
+            ));
+        } else {
+            $order = $placeNew();
+            $created = true;
+        }
+
+        $order = $order->fresh(['restaurant', 'userAddress', 'orderItems.product', 'orderStatusLogs', 'deliveryOrder.driver.user', 'deliveryOrder.driver.latestLocation', 'deliveryOrder.events']);
+        if ($created) {
+            $this->notifications->notifyCreated($order);
+        }
+
+        return $order;
+    }
+
+    private function placeWithOptionalQuote(int $userId, int $cartId, string $fulfillmentType, string $receiveMode, ?string $scheduledAt, ?string $couponCode, ?string $note, ?int $addressId, ?string $quoteId): Order
+    {
+        $selection = compact('fulfillmentType', 'receiveMode', 'scheduledAt', 'couponCode', 'note', 'addressId');
+
+        return DB::transaction(function () use ($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $addressId, $quoteId, $selection): Order {
+            if ($quoteId !== null) {
+                $this->quotes->assertCurrent($userId, 'restaurant', $cartId, $quoteId, $selection);
+            }
+
+            $order = $this->placeNew($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $addressId);
+
+            if ($quoteId !== null) {
+                $this->quotes->consume($userId, 'restaurant', $quoteId, $order);
+            }
+
+            return $order;
+        });
+    }
+
+    private function placeNew(int $userId, int $cartId, string $fulfillmentType, string $receiveMode, ?string $scheduledAt, ?string $couponCode, ?string $note, ?int $addressId): Order
+    {
+        $this->assertSupportedSchedule($fulfillmentType, $receiveMode);
+        $cartForSchedule = Cart::query()->whereKey($cartId)->where('user_id', $userId)->with('restaurant.operatingHours')->firstOrFail();
+        $this->assertPickupWindow($cartForSchedule, $fulfillmentType, $receiveMode, $scheduledAt);
         if ($fulfillmentType === OrderType::Delivery->value && $addressId === null) {
             throw ValidationException::withMessages(['addressId' => ['يرجى اختيار عنوان توصيل صالح.']]);
         }
@@ -77,6 +142,15 @@ final class UserRestaurantCheckoutPipelineService
             $this->assertDeliveryCoordinates($cart, $address);
         }
 
+        $order = DB::transaction(function () use ($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $address): Order {
+            return $this->placeWithDeliveryTransaction($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $address);
+        });
+
+        return $order;
+    }
+
+    private function placeWithDeliveryTransaction(int $userId, int $cartId, string $fulfillmentType, string $receiveMode, ?string $scheduledAt, ?string $couponCode, ?string $note, ?UserAddress $address): Order
+    {
         $order = $this->checkoutService->checkoutCart(
             userId: $userId,
             cartId: $cartId,
@@ -98,10 +172,25 @@ final class UserRestaurantCheckoutPipelineService
             $this->deliveryOrders->createForRestaurantOrder($order);
         }
 
-        $order = $order->fresh(['restaurant', 'userAddress', 'orderItems.product', 'orderStatusLogs', 'deliveryOrder.driver.user', 'deliveryOrder.driver.latestLocation', 'deliveryOrder.events']);
-        $this->notifications->notifyCreated($order);
-
         return $order;
+    }
+
+    private function assertSupportedSchedule(string $fulfillmentType, string $receiveMode): void
+    {
+        if ($fulfillmentType === OrderType::Delivery->value && $receiveMode === 'scheduled') {
+            throw ValidationException::withMessages(['receiveMode' => ['التوصيل متاح في أقرب وقت. يمكنك تحديد موعد للاستلام من المطعم.']]);
+        }
+    }
+
+    private function assertPickupWindow(Cart $cart, string $fulfillmentType, string $receiveMode, ?string $scheduledAt): void
+    {
+        if ($fulfillmentType !== OrderType::Pickup->value || $receiveMode !== 'scheduled') {
+            return;
+        }
+        if ($scheduledAt === null) {
+            throw ValidationException::withMessages(['scheduledAt' => 'PICKUP_TIME_REQUIRED']);
+        }
+        app(RestaurantPickupWindowPolicy::class)->assertScheduled($cart->restaurant, $scheduledAt);
     }
 
     private function computeDiscount(int $userId, int $restaurantId, ?string $couponCode, float $subtotal): float

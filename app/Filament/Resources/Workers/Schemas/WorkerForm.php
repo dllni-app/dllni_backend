@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Workers\Schemas;
 
-use App\Enums\WorkerPreferredWorkType;
 use App\Models\User;
 use App\Models\Worker;
 use Closure;
@@ -19,7 +18,7 @@ use Filament\Schemas\Schema;
 
 final class WorkerForm
 {
-    public static function configure(Schema $schema, bool $includeCleaningQualifications = false): Schema
+    public static function configure(Schema $schema): Schema
     {
         return $schema
             ->components([
@@ -37,13 +36,6 @@ final class WorkerForm
                                 'female' => __('cleaning_admin.workers.gender_options.female'),
                             ])
                             ->nullable(),
-                        Select::make('preferred_work_types')
-                            ->label(__('cleaning_admin.workers.fields.preferred_work_type'))
-                            ->options(WorkerPreferredWorkType::options())
-                            ->multiple()
-                            ->default([WorkerPreferredWorkType::Cleaning->value])
-                            ->validationMessages(['required' => __('validation.required')])
-                            ->required(),
                         FileUpload::make('avatar_upload')
                             ->label(app()->isLocale('ar') ? 'صورة الملف الشخصي' : 'Profile image')
                             ->helperText(app()->isLocale('ar')
@@ -181,24 +173,6 @@ final class WorkerForm
                             ->minLength(8)
                             ->dehydrated(false),
                     ]),
-                ...($includeCleaningQualifications ? [Section::make(__('cleaning_admin.workers.sections.special_qualifications'))
-                    ->description(__('cleaning_admin.workers.fields.special_qualifications_help'))
-                    ->columns(2)
-                    ->visible(fn (string $operation): bool => $operation === 'edit')
-                    ->schema([
-                        Select::make('cleaningSpecialServiceSkills')
-                            ->relationship('cleaningSpecialServiceSkills', 'name')
-                            ->multiple()
-                            ->searchable()
-                            ->preload()
-                            ->label(__('cleaning_admin.workers.fields.approved_special_services')),
-                        Select::make('cleaningEquipmentAuthorizations')
-                            ->relationship('cleaningEquipmentAuthorizations', 'name')
-                            ->multiple()
-                            ->searchable()
-                            ->preload()
-                            ->label(__('cleaning_admin.workers.fields.authorized_equipment')),
-                    ])] : []),
             ]);
     }
 

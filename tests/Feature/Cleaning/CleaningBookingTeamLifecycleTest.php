@@ -10,6 +10,10 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingSpecialService;
+use Modules\Cleaning\Models\CleaningEquipmentReservation;
+use Modules\Cleaning\Models\CleaningSpecialService;
+use Modules\Cleaning\Models\CleaningSpecialServiceEquipment;
 
 beforeEach(function () {
     $this->billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
@@ -19,6 +23,65 @@ beforeEach(function () {
         'is_active' => true,
         'is_default' => true,
     ]);
+});
+
+it('accepts a two-worker cleaning booking with a special service without per-worker qualifications', function (): void {
+    [$firstUser, $firstWorker] = createCleaningWorker('no-skill-group-first@example.com');
+    [$secondUser, $secondWorker] = createCleaningWorker('no-skill-group-second@example.com');
+    $firstWorker->forceFill(['gender' => 'male', 'trust_score' => 100])->save();
+    $secondWorker->forceFill(['gender' => 'male', 'trust_score' => 100])->save();
+
+    $booking = CleaningBooking::factory()->create([
+        'status' => CleaningBookingStatus::Pending,
+        'assignment_mode' => 'open_count',
+        'number_of_workers' => 2,
+        'gender_preference' => 'any',
+        'address_latitude' => 33.6,
+        'address_longitude' => 36.3,
+        'scheduled_date' => now()->addDays(2)->toDateString(),
+        'scheduled_time' => '10:00',
+    ]);
+    $service = CleaningSpecialService::query()->create([
+        'name' => 'Group service without skill gate',
+        'slug' => 'no-skill-group-'.fake()->unique()->numerify('######'),
+        'pricing_unit' => 'piece',
+        'base_unit_price' => 200,
+        'estimated_duration_minutes' => 60,
+        'is_active' => true,
+    ]);
+    $equipment = CleaningSpecialServiceEquipment::query()->create([
+        'name' => 'Group shared equipment',
+        'status' => 'available',
+        'is_active' => true,
+    ]);
+    $service->equipment()->attach($equipment->id);
+    $line = CleaningBookingSpecialService::query()->create([
+        'cleaning_booking_id' => $booking->id,
+        'cleaning_special_service_id' => $service->id,
+        'service_name' => $service->name,
+        'pricing_unit' => 'piece',
+        'dirtiness_level' => 'normal',
+        'quantity' => 1,
+        'base_unit_price' => 200,
+        'price_multiplier' => 1,
+        'total_price' => 200,
+        'execution_status' => 'pending',
+    ]);
+
+    Sanctum::actingAs($firstUser);
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/accept")
+        ->assertOk();
+    expect($booking->fresh()->status)->toBe(CleaningBookingStatus::Pending)
+        ->and($line->fresh()->assigned_worker_id)->toBe($firstWorker->id)
+        ->and(CleaningEquipmentReservation::query()->count())->toBe(1);
+
+    Sanctum::actingAs($secondUser);
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/accept")
+        ->assertOk();
+
+    expect($booking->fresh()->status)->toBe(CleaningBookingStatus::WorkerAssigned)
+        ->and($booking->workerAssignments()->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())->count())->toBe(2)
+        ->and(CleaningEquipmentReservation::query()->count())->toBe(1);
 });
 
 it('keeps team booking waiting until every worker starts their own assignment', function (): void {

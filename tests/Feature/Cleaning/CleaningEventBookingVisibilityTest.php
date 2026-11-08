@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use App\Enums\WorkerPreferredWorkType;
 use App\Models\User;
 use App\Models\Worker;
 use Laravel\Sanctum\Sanctum;
@@ -28,7 +27,6 @@ it('returns pending event assistance bookings without neighborhood to event work
         'home_address' => 'QA worker home, Aleppo',
         'home_latitude' => 36.2000,
         'home_longitude' => 37.1500,
-        'preferred_work_type' => WorkerPreferredWorkType::Events,
         'is_active' => true,
         'is_suspended' => false,
     ]);
@@ -64,7 +62,6 @@ it('returns pending cleaning bookings without neighborhood to cleaning workers',
         'home_address' => 'QA worker home, Aleppo',
         'home_latitude' => 36.2000,
         'home_longitude' => 37.1500,
-        'preferred_work_type' => WorkerPreferredWorkType::Cleaning,
         'is_active' => true,
         'is_suspended' => false,
     ]);
@@ -100,7 +97,6 @@ it('counts pending event assistance bookings without neighborhood on worker home
         'home_address' => 'QA worker home, Aleppo',
         'home_latitude' => 36.2000,
         'home_longitude' => 37.1500,
-        'preferred_work_type' => WorkerPreferredWorkType::Events,
         'is_active' => true,
         'is_suspended' => false,
     ]);
@@ -134,7 +130,6 @@ it('counts pending cleaning bookings without neighborhood on worker homepage', f
         'home_address' => 'QA worker home, Aleppo',
         'home_latitude' => 36.2000,
         'home_longitude' => 37.1500,
-        'preferred_work_type' => WorkerPreferredWorkType::Cleaning,
         'is_active' => true,
         'is_suspended' => false,
     ]);
@@ -162,15 +157,13 @@ it('counts pending cleaning bookings without neighborhood on worker homepage', f
 });
 
 
-it('returns hourly bookings only to workers that selected hourly work', function (): void {
+it('returns hourly bookings without worker specialization selections', function (): void {
     $workerUser = User::factory()->create(['email' => 'hourly-visibility-worker@example.com']);
     Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'home_address' => 'QA worker home, Aleppo',
         'home_latitude' => 36.2000,
         'home_longitude' => 37.1500,
-        'preferred_work_type' => WorkerPreferredWorkType::Cleaning,
-        'preferred_work_types' => ['hourly'],
         'is_active' => true,
         'is_suspended' => false,
     ]);
@@ -191,7 +184,7 @@ it('returns hourly bookings only to workers that selected hourly work', function
         'neighborhood_name' => null,
         'scheduled_date' => now()->addDay()->format('Y-m-d'),
     ]);
-    CleaningBooking::factory()->create([
+    $standardBooking = CleaningBooking::factory()->create([
         'worker_id' => null,
         'preferred_worker_id' => null,
         'billing_policy_id' => $billingPolicy->id,
@@ -211,19 +204,17 @@ it('returns hourly bookings only to workers that selected hourly work', function
     $response->assertOk();
     $ids = collect($response->json('data'))->pluck('id')->all();
     expect($ids)->toContain($hourlyBooking->id);
-    expect($response->json('data.0.type'))->toBe('hourly_worker');
-    expect($response->json('data.0.bookingKind'))->toBe('open_time');
+    expect($ids)->toContain($standardBooking->id);
+    expect(collect($response->json('data'))->firstWhere('id', $hourlyBooking->id)['type'])->toBe('hourly_worker');
 });
 
-it('supports multiple worker specialties when counting new orders', function (): void {
+it('counts cleaning hourly and event orders without worker specialization settings', function (): void {
     $workerUser = User::factory()->create(['email' => 'multi-specialty-worker@example.com']);
     Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'home_address' => 'QA worker home, Aleppo',
         'home_latitude' => 36.2000,
         'home_longitude' => 37.1500,
-        'preferred_work_type' => WorkerPreferredWorkType::Cleaning,
-        'preferred_work_types' => ['cleaning', 'hourly'],
         'is_active' => true,
         'is_suspended' => false,
     ]);
@@ -254,5 +245,5 @@ it('supports multiple worker specialties when counting new orders', function ():
     $response = $this->getJson('/api/v1/cleaning/worker/homepage');
 
     $response->assertOk();
-    expect($response->json('newOrdersCount'))->toBe(2);
+    expect($response->json('newOrdersCount'))->toBe(3);
 });

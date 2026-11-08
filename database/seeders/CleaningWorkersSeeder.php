@@ -7,7 +7,6 @@ namespace Database\Seeders;
 use App\Enums\AvailabilityType;
 use App\Enums\GenderPreference;
 use App\Enums\UserModuleType;
-use App\Enums\WorkerPreferredWorkType;
 use App\Models\CleaningDepositSetting;
 use App\Models\CleaningWorkerDeposit;
 use App\Models\User;
@@ -40,7 +39,6 @@ final class CleaningWorkersSeeder extends Seeder
             'home_latitude' => 36.1795,
             'home_longitude' => 37.1082,
             'birthday' => '1992-06-18',
-            'preferred_work_type' => WorkerPreferredWorkType::Both->value,
             'average_rating' => 4.5,
             'total_completed_jobs' => 100,
             'trust_score' => 90,
@@ -69,7 +67,6 @@ final class CleaningWorkersSeeder extends Seeder
             'home_latitude' => 36.2308,
             'home_longitude' => 37.1279,
             'birthday' => '1994-03-11',
-            'preferred_work_type' => WorkerPreferredWorkType::Cleaning->value,
             'average_rating' => 4.7,
             'total_completed_jobs' => 82,
             'trust_score' => 88,
@@ -98,7 +95,6 @@ final class CleaningWorkersSeeder extends Seeder
             'home_latitude' => 36.2168,
             'home_longitude' => 37.1317,
             'birthday' => '1990-09-03',
-            'preferred_work_type' => WorkerPreferredWorkType::Events->value,
             'average_rating' => 4.6,
             'total_completed_jobs' => 64,
             'trust_score' => 86,
@@ -212,9 +208,6 @@ final class CleaningWorkersSeeder extends Seeder
             $updates['birthday'] = $workerData['birthday'];
         }
 
-        if (Schema::hasColumn('workers', 'preferred_work_type')) {
-            $updates['preferred_work_type'] = $workerData['preferred_work_type'];
-        }
 
         $worker->forceFill($updates)->save();
 

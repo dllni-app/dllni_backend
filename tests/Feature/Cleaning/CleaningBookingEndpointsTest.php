@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use App\Enums\WorkerPreferredWorkType;
 use App\Models\CleaningFinancialSetting;
 use App\Models\CleaningWorkerDeposit;
 use App\Models\User;
@@ -315,11 +314,10 @@ it('returns pending unassigned bookings for worker when forCurrentWorker and sta
     expect($response->json('data'))->toBeArray()->toHaveCount(2);
 });
 
-it('returns only cleaning available bookings for cleaning preferred workers', function () {
+it('returns cleaning and event bookings without requiring work-type preferences', function () {
     $workerUser = User::factory()->create(['email' => 'worker-cleaning-preference@example.com']);
     $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
-        'preferred_work_type' => WorkerPreferredWorkType::Cleaning,
     ]);
     enableEligibleCleaningOfferWorker($worker);
     Sanctum::actingAs($workerUser);
@@ -360,16 +358,14 @@ it('returns only cleaning available bookings for cleaning preferred workers', fu
     $response = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
 
     $response->assertOk();
-    expect($response->json('data'))->toHaveCount(1);
-    expect($response->json('data.0.propertyType'))->toBe('apartment');
-    expect($response->json('data.0.type'))->toBe('cleaning');
+    expect($response->json('data'))->toHaveCount(2);
+    expect(collect($response->json('data'))->pluck('type')->sort()->values()->all())->toBe(['cleaning', 'events']);
 });
 
-it('returns only event available bookings for events preferred workers', function () {
+it('does not filter pending offers by former event-work preferences', function () {
     $workerUser = User::factory()->create(['email' => 'worker-events-preference@example.com']);
     $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
-        'preferred_work_type' => WorkerPreferredWorkType::Events,
     ]);
     enableEligibleCleaningOfferWorker($worker);
     Sanctum::actingAs($workerUser);
@@ -410,16 +406,14 @@ it('returns only event available bookings for events preferred workers', functio
     $response = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
 
     $response->assertOk();
-    expect($response->json('data'))->toHaveCount(1);
-    expect($response->json('data.0.propertyType'))->toBe('event_assistance');
-    expect($response->json('data.0.type'))->toBe('events');
+    expect($response->json('data'))->toHaveCount(2);
+    expect(collect($response->json('data'))->pluck('type')->sort()->values()->all())->toBe(['cleaning', 'events']);
 });
 
-it('returns cleaning and event available bookings for both preferred workers', function () {
+it('returns every available booking category without a worker specialization', function () {
     $workerUser = User::factory()->create(['email' => 'worker-both-preference@example.com']);
     $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
-        'preferred_work_type' => WorkerPreferredWorkType::Both,
     ]);
     enableEligibleCleaningOfferWorker($worker);
     Sanctum::actingAs($workerUser);
@@ -586,13 +580,13 @@ it('returns worker profile when user has worker', function () {
     $response->assertOk();
     expect($response->json('data.id'))->toBe($worker->id);
     expect($response->json('data.firstName'))->toBe('Ahmed');
-    expect($response->json('data.preferred_work_type'))->toBe('cleaning');
-    expect($response->json('data.preferredWorkTypes'))->toBe(['cleaning', 'events']);
+    expect($response->json('data'))->not->toHaveKey('preferred_work_type')
+        ->not->toHaveKey('preferredWorkTypes');
     expect($response->json('data.user.id'))->toBe($workerUser->id);
     expect($response->json('data.user.phone'))->toBe('+963991234567');
 });
 
-it('defaults existing style worker records to both preferred work type', function () {
+it('does not expose deleted worker work-type preferences for new records', function () {
     $workerUser = User::factory()->create(['email' => 'profile-worker-default-preference@example.com']);
     $worker = Worker::query()->create([
         'user_id' => $workerUser->id,
@@ -603,9 +597,9 @@ it('defaults existing style worker records to both preferred work type', functio
     $response = $this->getJson('/api/v1/cleaning/worker/profile');
 
     $response->assertOk();
-    expect($worker->fresh()->preferred_work_type)->toBe(WorkerPreferredWorkType::Both);
-    expect($response->json('data.preferred_work_type'))->toBe('cleaning');
-    expect($response->json('data.preferredWorkTypes'))->toBe(['cleaning', 'events']);
+    expect($response->json('data.id'))->toBe($worker->id);
+    expect($response->json('data'))->not->toHaveKey('preferred_work_type')
+        ->not->toHaveKey('preferredWorkTypes');
 });
 
 it('returns 403 for worker profile when user has no worker', function () {
@@ -666,11 +660,10 @@ it('updates worker birthday from worker profile and returns it in the response',
         ->exists())->toBeTrue();
 });
 
-it('updates worker preferred work type from worker profile', function () {
+it('ignores old single-value work preference updates without storing them', function () {
     $workerUser = User::factory()->create(['email' => 'worker-profile-preference-update@example.com']);
     Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
-        'preferred_work_type' => WorkerPreferredWorkType::Both,
         'is_active' => true,
         'home_address' => 'Worker Home',
         'home_latitude' => 33.4,
@@ -683,14 +676,13 @@ it('updates worker preferred work type from worker profile', function () {
     ]);
 
     $response->assertOk();
-    expect($response->json('data.preferred_work_type'))->toBe('cleaning');
+    expect($response->json('data'))->not->toHaveKey('preferred_work_type');
 });
 
-it('updates multiple worker work types from worker profile', function () {
+it('ignores old multi-value work preference updates without storing them', function () {
     $workerUser = User::factory()->create(['email' => 'worker-profile-multi-preference@example.com']);
     $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
-        'preferred_work_type' => WorkerPreferredWorkType::Cleaning,
         'is_active' => true,
         'home_address' => 'Worker Home',
         'home_latitude' => 33.4,
@@ -703,13 +695,11 @@ it('updates multiple worker work types from worker profile', function () {
     ]);
 
     $response->assertOk();
-    expect($response->json('data.preferredWorkTypes'))->toBe(['cleaning', 'hourly']);
-
-    $worker->refresh();
-    expect($worker->preferredWorkTypes())->toBe(['cleaning', 'hourly']);
+    expect($response->json('data.id'))->toBe($worker->id);
+    expect($response->json('data'))->not->toHaveKey('preferredWorkTypes');
 });
 
-it('rejects invalid worker preferred work type from worker profile', function () {
+it('ignores obsolete work preference payloads even if they are invalid', function () {
     $workerUser = User::factory()->create(['email' => 'worker-profile-preference-invalid@example.com']);
     Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
@@ -724,8 +714,8 @@ it('rejects invalid worker preferred work type from worker profile', function ()
         'preferred_work_type' => 'restaurants',
     ]);
 
-    $response->assertUnprocessable();
-    $response->assertJsonValidationErrors('preferred_work_type');
+    $response->assertOk();
+    expect($response->json('data'))->not->toHaveKey('preferred_work_type');
 });
 
 it('finalizes provisional pricing when worker accepts booking', function () {

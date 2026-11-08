@@ -111,6 +111,8 @@ use Modules\User\Http\Controllers\API\UserRestaurantHomeNearestRestaurantsContro
 use Modules\User\Http\Controllers\API\UserRestaurantHomeReorderLatestOrderProductsController;
 use Modules\User\Http\Controllers\API\UserRestaurantHomeSuggestedProductsController;
 use Modules\User\Http\Controllers\API\UserRestaurantMenuSectionsController;
+use Modules\User\Http\Controllers\API\UserCommerceCheckoutQuoteStoreController;
+use Modules\User\Http\Controllers\API\UserCommerceSubmissionShowController;
 use Modules\User\Http\Controllers\API\UserRestaurantOrderStoreController;
 use Modules\User\Http\Controllers\API\UserRestaurantProductsByCategoryController;
 use Modules\User\Http\Controllers\API\UserRestaurantProductsSearchController;
@@ -283,6 +285,9 @@ Route::prefix('v1/user')->group(function (): void {
         Route::post('orders/{section}/{orderId}/cancel', UserOrderCancelController::class);
         Route::post('orders/{section}/{orderId}/reorder', UserOrderReorderController::class);
         Route::patch('orders/{section}/{orderId}/schedule', UserOrderScheduleController::class);
+
+        Route::get('commerce/submissions/{idempotencyKey}', UserCommerceSubmissionShowController::class);
+        Route::post('commerce/checkout/quotes', UserCommerceCheckoutQuoteStoreController::class);
 
         Route::get('restaurants/carts', UserRestaurantCartShowController::class);
         Route::get('restaurants/carts/{cartId}', UserRestaurantCartShowController::class)->whereNumber('cartId');

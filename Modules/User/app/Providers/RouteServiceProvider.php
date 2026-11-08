@@ -55,6 +55,11 @@ final class RouteServiceProvider extends ServiceProvider
             RequireSessionScopedCleaningLifecycle::class,
         ])->prefix('api')->name('api.')->group(module_path($this->name, '/routes/api.php'));
 
+        Route::middleware('api')
+            ->prefix('api/v2/user/restaurants')
+            ->name('api.v2.user.restaurants.')
+            ->group(module_path($this->name, '/routes/restaurant_v2.php'));
+
         Route::middleware([
             'api',
             'auth:sanctum',

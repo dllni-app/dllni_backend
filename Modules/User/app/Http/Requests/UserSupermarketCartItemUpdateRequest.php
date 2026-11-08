@@ -16,6 +16,7 @@ final class UserSupermarketCartItemUpdateRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'expectedRevision' => ['sometimes', 'integer', 'min:0'],
             'quantity' => ['required', 'integer', 'min:1', 'max:200'],
             'modifierIds' => ['sometimes', 'array'],
             'substituteProductId' => ['sometimes', 'nullable', 'integer'],

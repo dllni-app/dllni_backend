@@ -30,7 +30,6 @@ function genericBookingWorker(): Worker
         'user_id' => $user->id,
         'is_active' => true,
         'is_suspended' => false,
-        'preferred_work_type' => 'cleaning',
     ]);
 }
 

@@ -82,6 +82,12 @@ it('restaurant delivery checkout creates a linked delivery order', function (): 
 
     Sanctum::actingAs($user);
 
+    $preview = $this->postJson('/api/v1/user/restaurants/carts/'.$cart->id.'/checkout/preview', [
+        'fulfillmentType' => 'delivery',
+        'receiveMode' => 'immediate',
+        'addressId' => $address->id,
+    ])->assertOk();
+
     $this->postJson('/api/v1/user/restaurants/carts/'.$cart->id.'/orders', [
         'fulfillmentType' => 'delivery',
         'receiveMode' => 'immediate',
@@ -93,6 +99,12 @@ it('restaurant delivery checkout creates a linked delivery order', function (): 
         ->and($order->deliveryOrder->source_type)->toBe(DeliveryOrderCreationService::SOURCE_RESTAURANT_ORDER)
         ->and($order->deliveryOrder->status)->toBe(DeliveryOrderStatus::WaitingMerchantReady->value)
         ->and((int) $order->deliveryOrder->created_by_user_id)->toBe((int) $user->id);
+
+    $deliveryFee = (float) $order->deliveryOrder->delivery_fee;
+    expect($deliveryFee)->toBeGreaterThan(0.0)
+        ->and((float) $preview->json('data.amounts.deliveryFee'))->toBe($deliveryFee)
+        ->and((float) $preview->json('data.amounts.total'))->toBe((float) $order->total_amount)
+        ->and((float) $order->total_amount)->toBe((float) $order->subtotal + $deliveryFee);
 
     Queue::assertNotPushed(DispatchDeliveryOrderJob::class);
 });
@@ -130,6 +142,10 @@ it('restaurant pickup checkout does not create a delivery order', function (): v
     $cart = linkedRestaurantCart($user);
 
     Sanctum::actingAs($user);
+    $this->postJson('/api/v1/user/restaurants/carts/'.$cart->id.'/checkout/preview', [
+        'fulfillmentType' => 'pickup',
+        'receiveMode' => 'immediate',
+    ])->assertOk()->assertJsonPath('data.amounts.deliveryFee', 0);
 
     $this->postJson('/api/v1/user/restaurants/carts/'.$cart->id.'/orders', [
         'fulfillmentType' => 'pickup',
@@ -138,6 +154,7 @@ it('restaurant pickup checkout does not create a delivery order', function (): v
 
     $order = Order::query()->where('user_id', $user->id)->firstOrFail();
     expect($order->deliveryOrder)->toBeNull();
+    expect((float) $order->total_amount)->toBe((float) $order->subtotal);
 });
 
 it('supermarket delivery checkout creates a linked delivery order and uses the selected address', function (): void {
@@ -229,4 +246,114 @@ it('prefers the nearest delivery company when multiple dispatch-capable companie
 
     $order = Order::query()->where('user_id', $user->id)->firstOrFail();
     expect((int) $order->deliveryOrder?->company_id)->toBe((int) $nearCompany->id);
+});
+
+it('rolls back the restaurant order and retains its cart when no delivery company can be linked', function (): void {
+    Queue::fake();
+    $user = User::factory()->create();
+    $address = linkedDeliveryAddress($user);
+    $cart = linkedRestaurantCart($user);
+    Sanctum::actingAs($user);
+
+    $this->postJson('/api/v1/user/restaurants/carts/'.$cart->id.'/orders', [
+        'fulfillmentType' => 'delivery',
+        'receiveMode' => 'immediate',
+        'addressId' => $address->id,
+    ])->assertStatus(422)->assertJsonValidationErrors(['delivery']);
+
+    expect(Order::query()->where('user_id', $user->id)->exists())->toBeFalse()
+        ->and(DeliveryOrder::query()->exists())->toBeFalse()
+        ->and(Cart::query()->whereKey($cart->id)->exists())->toBeTrue();
+});
+
+it('rolls back the supermarket stock and cart when no delivery company can be linked', function (): void {
+    Queue::fake();
+    $user = User::factory()->create();
+    $address = linkedDeliveryAddress($user);
+    $cart = linkedSupermarketCart($user);
+    $product = $cart->items->first()->product;
+    $initialStock = $product->stock_quantity;
+    Sanctum::actingAs($user);
+
+    $this->postJson('/api/v1/user/supermarket/carts/'.$cart->id.'/orders', [
+        'fulfillmentType' => 'delivery',
+        'receiveMode' => 'immediate',
+        'addressId' => $address->id,
+    ])->assertStatus(422)->assertJsonValidationErrors(['delivery']);
+
+    expect(SmOrder::query()->where('customer_id', $user->id)->exists())->toBeFalse()
+        ->and(DeliveryOrder::query()->exists())->toBeFalse()
+        ->and(SmCart::query()->whereKey($cart->id)->exists())->toBeTrue()
+        ->and($product->fresh()->stock_quantity)->toBe($initialStock);
+});
+
+it('returns the original restaurant order for the same idempotency key after cart deletion', function (): void {
+    Queue::fake();
+    $user = User::factory()->create();
+    $cart = linkedRestaurantCart($user);
+    Sanctum::actingAs($user);
+    $key = 'restaurant-idempotent-20261105-01';
+    $url = '/api/v1/user/restaurants/carts/'.$cart->id.'/orders';
+    $payload = ['fulfillmentType' => 'pickup', 'receiveMode' => 'immediate'];
+
+    $first = $this->withHeader('Idempotency-Key', $key)->postJson($url, $payload)->assertCreated();
+    $second = $this->withHeader('Idempotency-Key', $key)->postJson($url, $payload)->assertCreated();
+    $this->assertSame($first->json('data.id'), $second->json('data.id'));
+    $this->assertDatabaseCount('orders', 1);
+    $this->assertDatabaseCount('commerce_checkout_receipts', 1);
+    $this->assertDatabaseMissing('carts', ['id' => $cart->id]);
+
+    $this->getJson('/api/v1/user/commerce/submissions/'.$key.'?section=restaurant')
+        ->assertOk()
+        ->assertJsonPath('data.status', 'completed')
+        ->assertJsonPath('data.orderId', $first->json('data.id'));
+
+    $this->withHeader('Idempotency-Key', $key)->postJson($url, $payload + ['note' => 'altered'])
+        ->assertStatus(409);
+    $this->assertDatabaseCount('orders', 1);
+});
+
+it('deduplicates supermarket placement and applies stock decrement only once', function (): void {
+    Queue::fake();
+    $user = User::factory()->create();
+    $cart = linkedSupermarketCart($user);
+    $product = $cart->items->first()->product;
+    $stock = $product->stock_quantity;
+    Sanctum::actingAs($user);
+    $key = 'supermarket-idempotent-20261105-01';
+    $url = '/api/v1/user/supermarket/carts/'.$cart->id.'/orders';
+    $payload = ['fulfillmentType' => 'pickup', 'receiveMode' => 'immediate'];
+
+    $first = $this->withHeader('Idempotency-Key', $key)->postJson($url, $payload)->assertCreated();
+    $second = $this->withHeader('Idempotency-Key', $key)->postJson($url, $payload)->assertCreated();
+    $this->assertSame($first->json('data.id'), $second->json('data.id'));
+    $this->assertDatabaseCount('sm_orders', 1);
+    $this->assertDatabaseCount('commerce_checkout_receipts', 1);
+    if ($stock !== null) {
+        $this->assertSame((int) $stock - 2, (int) $product->fresh()->stock_quantity);
+    }
+
+    $this->getJson('/api/v1/user/commerce/submissions/'.$key.'?section=supermarket')
+        ->assertOk()
+        ->assertJsonPath('data.status', 'completed')
+        ->assertJsonPath('data.orderId', $first->json('data.id'));
+});
+
+it('scopes submission receipt lookup to the authenticated customer', function (): void {
+    Queue::fake();
+    $owner = User::factory()->create();
+    $other = User::factory()->create();
+    $cart = linkedRestaurantCart($owner);
+    $key = 'customer-scoped-20261105-01';
+    Sanctum::actingAs($owner);
+    $this->withHeader('Idempotency-Key', $key)
+        ->postJson('/api/v1/user/restaurants/carts/'.$cart->id.'/orders', [
+            'fulfillmentType' => 'pickup', 'receiveMode' => 'immediate',
+        ])->assertCreated();
+
+    Sanctum::actingAs($other);
+    $this->getJson('/api/v1/user/commerce/submissions/'.$key.'?section=restaurant')
+        ->assertOk()
+        ->assertJsonPath('data.status', 'not_found')
+        ->assertJsonPath('data.orderId', null);
 });

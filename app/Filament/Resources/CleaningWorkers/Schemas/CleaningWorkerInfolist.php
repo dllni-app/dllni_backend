@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Filament\Resources\CleaningWorkers\Schemas;
 
 use App\Enums\WorkerCustomerRatingType;
-use App\Enums\WorkerPreferredWorkType;
 use App\Models\Worker;
 use App\Models\WorkerCustomerRating;
 use App\Models\WorkerZone;
@@ -61,11 +60,6 @@ final class CleaningWorkerInfolist
                                                 ->label('البريد الإلكتروني')
                                                 ->placeholder('-')
                                                 ->copyable(),
-                                            TextEntry::make('preferred_work_type_display')
-                                                ->label('نوع العمل المفضل')
-                                                ->state(fn (Worker $record): string => self::preferredWorkTypeLabel($record))
-                                                ->badge()
-                                                ->color('info'),
                                             TextEntry::make('home_address')
                                                 ->label('موقع بدء المهمة')
                                                 ->placeholder('-'),
@@ -239,13 +233,6 @@ final class CleaningWorkerInfolist
             'موقوف' => 'danger',
             default => 'gray',
         };
-    }
-
-    private static function preferredWorkTypeLabel(Worker $worker): string
-    {
-        return collect($worker->preferredWorkTypes())
-            ->map(fn (string $value): string => WorkerPreferredWorkType::options()[$value] ?? $value)
-            ->implode('، ');
     }
 
     /**

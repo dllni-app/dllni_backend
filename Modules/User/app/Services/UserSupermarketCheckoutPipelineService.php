@@ -31,6 +31,8 @@ final class UserSupermarketCheckoutPipelineService
         private readonly DeliveryOrderCreationService $deliveryOrders,
         private readonly DeliveryPricingService $deliveryPricing,
         private readonly PlatformCouponRedemptionService $platformCoupons,
+        private readonly CommerceCheckoutReceiptService $receipts,
+        private readonly CommerceCheckoutQuoteService $quotes,
     ) {}
 
     public function preview(int $userId, int $cartId, string $fulfillmentType, string $receiveMode, ?string $scheduledAt, ?string $couponCode, ?string $note, ?int $addressId = null): array
@@ -64,7 +66,53 @@ final class UserSupermarketCheckoutPipelineService
         ];
     }
 
-    public function place(int $userId, int $cartId, string $fulfillmentType, string $receiveMode, ?string $scheduledAt, ?string $couponCode, ?string $note, ?int $addressId = null): SmOrder
+    public function place(int $userId, int $cartId, string $fulfillmentType, string $receiveMode, ?string $scheduledAt, ?string $couponCode, ?string $note, ?int $addressId = null, ?string $idempotencyKey = null, ?string $quoteId = null): SmOrder
+    {
+        $receiptPayload = compact('fulfillmentType', 'receiveMode', 'scheduledAt', 'couponCode', 'note', 'addressId', 'quoteId');
+        $placeNew = fn (): SmOrder => $this->placeWithOptionalQuote($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $addressId, $quoteId);
+
+        if ($idempotencyKey !== null) {
+            [$order, $created] = DB::transaction(fn (): array => $this->receipts->execute(
+                userId: $userId,
+                section: 'supermarket',
+                cartId: $cartId,
+                idempotencyKey: $idempotencyKey,
+                payload: $receiptPayload,
+                place: $placeNew,
+            ));
+        } else {
+            $order = $placeNew();
+            $created = true;
+        }
+
+        $order = $order->fresh(['customer', 'store', 'items.product', 'statusLogs', 'deliveryOrder.driver.user', 'deliveryOrder.driver.latestLocation', 'deliveryOrder.events']);
+        if ($created) {
+            $this->notifications->notifyCreated($order);
+        }
+
+        return $order;
+    }
+
+    private function placeWithOptionalQuote(int $userId, int $cartId, string $fulfillmentType, string $receiveMode, ?string $scheduledAt, ?string $couponCode, ?string $note, ?int $addressId, ?string $quoteId): SmOrder
+    {
+        $selection = compact('fulfillmentType', 'receiveMode', 'scheduledAt', 'couponCode', 'note', 'addressId');
+
+        return DB::transaction(function () use ($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $addressId, $quoteId, $selection): SmOrder {
+            if ($quoteId !== null) {
+                $this->quotes->assertCurrent($userId, 'supermarket', $cartId, $quoteId, $selection);
+            }
+
+            $order = $this->placeNew($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $addressId);
+
+            if ($quoteId !== null) {
+                $this->quotes->consume($userId, 'supermarket', $quoteId, $order);
+            }
+
+            return $order;
+        });
+    }
+
+    private function placeNew(int $userId, int $cartId, string $fulfillmentType, string $receiveMode, ?string $scheduledAt, ?string $couponCode, ?string $note, ?int $addressId): SmOrder
     {
         if ($fulfillmentType === 'delivery' && $addressId === null) {
             throw ValidationException::withMessages(['addressId' => ['يرجى اختيار عنوان توصيل صالح.']]);
@@ -76,6 +124,15 @@ final class UserSupermarketCheckoutPipelineService
             $this->assertDeliveryCoordinates($cartForValidation, $address);
         }
 
+        $order = DB::transaction(function () use ($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $address): SmOrder {
+            return $this->placeWithDeliveryTransaction($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $address);
+        });
+
+        return $order;
+    }
+
+    private function placeWithDeliveryTransaction(int $userId, int $cartId, string $fulfillmentType, string $receiveMode, ?string $scheduledAt, ?string $couponCode, ?string $note, ?UserAddress $address): SmOrder
+    {
         $order = DB::transaction(function () use ($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $address): SmOrder {
             $cart = SmCart::query()->whereKey($cartId)->where('user_id', $userId)->with(['store', 'items.product.store'])->lockForUpdate()->firstOrFail();
             if ($cart->items->isEmpty()) throw ValidationException::withMessages(['cart' => ['Cart is empty.']]);
@@ -150,9 +207,9 @@ final class UserSupermarketCheckoutPipelineService
             return $order->fresh(['customer', 'store', 'items.product', 'statusLogs']);
         });
 
-        if ($fulfillmentType === 'delivery' && $address instanceof UserAddress) $this->deliveryOrders->createForSupermarketOrder($order, $address);
-        $order = $order->fresh(['customer', 'store', 'items.product', 'statusLogs', 'deliveryOrder.driver.user', 'deliveryOrder.driver.latestLocation', 'deliveryOrder.events']);
-        $this->notifications->notifyCreated($order);
+        if ($fulfillmentType === 'delivery' && $address instanceof UserAddress) {
+            $this->deliveryOrders->createForSupermarketOrder($order, $address);
+        }
 
         return $order;
     }

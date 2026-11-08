@@ -13,7 +13,6 @@ it('redacts sibling worker identities and session ids from session acceptance co
         'user_id' => User::factory()->create(['is_active' => true])->id,
         'is_active' => true,
         'is_suspended' => false,
-        'preferred_work_type' => 'cleaning',
     ]);
     $otherWorker = Worker::factory()->create();
     $booking = CleaningBooking::factory()->create([

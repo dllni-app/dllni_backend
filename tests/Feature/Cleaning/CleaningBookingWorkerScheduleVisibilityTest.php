@@ -479,7 +479,7 @@ function makeVisibilityAssignment(
 it('lets an eligible worker view a pending ordinary booking schedule before accepting when no child sessions exist', function (): void {
     $customer = User::factory()->create(['is_active' => true]);
     $worker = makeVisibilityWorker();
-    $worker->forceFill(['gender' => 'female', 'preferred_work_type' => 'cleaning'])->save();
+    $worker->forceFill(['gender' => 'female'])->save();
     $booking = makeVisibilityBooking(
         $customer,
         CleaningBookingStatus::Pending,
@@ -501,7 +501,7 @@ it('lets an eligible worker view a pending ordinary booking schedule before acce
 it('does not expose a pending ordinary booking schedule to a gender-ineligible worker', function (): void {
     $customer = User::factory()->create(['is_active' => true]);
     $worker = makeVisibilityWorker();
-    $worker->forceFill(['gender' => 'male', 'preferred_work_type' => 'cleaning'])->save();
+    $worker->forceFill(['gender' => 'male'])->save();
     $booking = makeVisibilityBooking(
         $customer,
         CleaningBookingStatus::Pending,

@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use App\Enums\UserModuleType;
-use App\Enums\WorkerPreferredWorkType;
 use App\Filament\Resources\CleaningWorkers\Pages\CreateCleaningWorker;
 use App\Filament\Resources\CleaningWorkers\Pages\EditCleaningWorker;
 use App\Filament\Resources\CleaningWorkers\Pages\ListCleaningWorkers;
@@ -36,10 +35,6 @@ it('creates a cleaning worker with an individual debt limit and syncs the linked
     Livewire::test(CreateCleaningWorker::class)
         ->fillForm([
             'first_name' => 'Maher',
-            'preferred_work_types' => [
-                WorkerPreferredWorkType::Cleaning->value,
-                WorkerPreferredWorkType::Events->value,
-            ],
             'worker_debt_limit' => 750,
             'user_phone' => '+963911111111',
             'user_password' => 'password',
@@ -74,10 +69,6 @@ it('rejects cleaning worker account phones outside the Syrian +963 mobile format
     Livewire::test(CreateCleaningWorker::class)
         ->fillForm([
             'first_name' => 'Maher',
-            'preferred_work_types' => [
-                WorkerPreferredWorkType::Cleaning->value,
-                WorkerPreferredWorkType::Events->value,
-            ],
             'worker_debt_limit' => 1,
             'user_phone' => '0911111111',
             'user_password' => 'password',
@@ -100,10 +91,6 @@ it('rejects creating a second cleaning worker for an existing worker account pho
     Livewire::test(CreateCleaningWorker::class)
         ->fillForm([
             'first_name' => 'Sara Duplicate',
-            'preferred_work_types' => [
-                WorkerPreferredWorkType::Cleaning->value,
-                WorkerPreferredWorkType::Events->value,
-            ],
             'worker_debt_limit' => 1,
             'user_phone' => '+963933333333',
             'user_password' => 'password',

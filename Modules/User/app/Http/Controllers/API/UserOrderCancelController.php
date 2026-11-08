@@ -38,7 +38,12 @@ final class UserOrderCancelController
             reason: $request->input('reason'),
         );
 
-        $this->notifyCancellation($userId, $section, $orderId, $previousStatus);
+        $cancelledNow = (bool) ($payload['_cancelledNow'] ?? true);
+        unset($payload['_cancelledNow']);
+
+        if ($cancelledNow) {
+            $this->notifyCancellation($userId, $section, $orderId, $previousStatus);
+        }
 
         return response()->json([
             'data' => $payload,

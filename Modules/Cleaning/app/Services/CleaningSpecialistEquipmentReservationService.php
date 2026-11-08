@@ -18,10 +18,6 @@ final class CleaningSpecialistEquipmentReservationService
 {
     private const BLOCKING_STATUSES = ['reserved', 'handed_over', 'acknowledged'];
 
-    public function __construct(
-        private readonly CleaningSpecialistAuthorizationService $authorizations,
-    ) {}
-
     public function confirmForSession(CleaningBooking $booking, CleaningBookingSession $session, Worker $worker): void
     {
         DB::transaction(function () use ($booking, $session, $worker): void {
@@ -67,7 +63,6 @@ final class CleaningSpecialistEquipmentReservationService
         }
 
         $service = $line->specialService()->with('equipment')->firstOrFail();
-        $this->authorizations->assertAllowed($worker, $service);
 
         $start = $session?->startsAt()
             ?? $line->session?->startsAt()
@@ -83,10 +78,6 @@ final class CleaningSpecialistEquipmentReservationService
             if (! $equipment->is_active || $equipment->status !== 'available') {
                 throw ValidationException::withMessages(['equipment' => ['Required equipment is unavailable.']]);
             }
-            if (! $this->authorizations->authorizedForEquipment($worker, $equipment)) {
-                throw ValidationException::withMessages(['equipment' => ['Equipment authorization is missing or inactive.']]);
-            }
-
             $from = $start->copy()->subMinutes((int) $equipment->buffer_before_minutes);
             $until = $start->copy()->addMinutes(
                 max(15, (int) $service->estimated_duration_minutes) + (int) $equipment->buffer_after_minutes
@@ -147,7 +138,6 @@ final class CleaningSpecialistEquipmentReservationService
     public function assertReservedForExecution(CleaningBookingSpecialService $line, Worker $worker): void
     {
         $service = $line->specialService()->with('equipment')->firstOrFail();
-        $this->authorizations->assertAllowed($worker, $service);
         foreach ($service->equipment as $equipment) {
             $reservation = CleaningEquipmentReservation::query()
                 ->where('cleaning_booking_special_service_id', $line->id)

@@ -101,10 +101,6 @@ final class CleaningSpecialServiceResource extends Resource
                 ->searchable()
                 ->preload()
                 ->label(__('cleaning_special_services.fields.dirtiness_levels')),
-            Select::make('gender_constraint')->label(__('cleaning_special_services.fields.gender_constraint'))->options([
-                'male' => __('cleaning_special_services.gender_constraints.male'),
-                'female' => __('cleaning_special_services.gender_constraints.female'),
-            ])->nullable(),
             TextInput::make('estimated_duration_minutes')->label(__('cleaning_special_services.fields.duration'))->numeric()->minValue(1)->required()->default(60)->suffix(__('cleaning_special_services.fields.duration_short')),
             Select::make('worker_pay_mode')->label(__('cleaning_special_services.fields.worker_pay_mode'))->required()->options([
                 'flat' => __('cleaning_special_services.pay_modes.flat'),

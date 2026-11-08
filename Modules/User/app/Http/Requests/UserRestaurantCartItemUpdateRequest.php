@@ -16,6 +16,7 @@ final class UserRestaurantCartItemUpdateRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'expectedRevision' => ['sometimes', 'integer', 'min:0'],
             'quantity' => ['required', 'integer', 'min:1', 'max:50'],
             'modifierIds' => ['sometimes', 'array', 'max:30'],
             'modifierIds.*' => ['integer', 'exists:modifiers,id'],

@@ -289,7 +289,7 @@ it('does not dispatch a multi-day event when the worker conflicts on only one ev
 });
 
 
-it('dispatches hourly worker bookings only to workers that selected hourly work', function (): void {
+it('dispatches hourly worker bookings regardless of former work-type settings', function (): void {
     Notification::fake();
     Event::fake([CleaningBookingCreated::class]);
 
@@ -307,14 +307,13 @@ it('dispatches hourly worker bookings only to workers that selected hourly work'
     $dayKey = mb_strtolower($scheduledAt->format('l'));
     $neighborhood = CleaningNeighborhood::factory()->create();
 
-    $makeWorker = function (string $email, array $types) use ($dayKey, $neighborhood): array {
+    $makeWorker = function (string $email) use ($dayKey, $neighborhood): array {
         $user = User::factory()->create(['email' => $email, 'is_active' => true]);
         $worker = Worker::factory()->create([
             'user_id' => $user->id,
             'trust_score' => 100,
             'is_active' => true,
             'is_suspended' => false,
-            'preferred_work_types' => $types,
             'home_address' => (string) $neighborhood->name_ar,
             'home_latitude' => 36.2000,
             'home_longitude' => 37.1500,
@@ -342,8 +341,8 @@ it('dispatches hourly worker bookings only to workers that selected hourly work'
         return [$user, $worker];
     };
 
-    [$hourlyUser] = $makeWorker('hourly-dispatch-worker@example.com', ['hourly']);
-    [$cleaningUser] = $makeWorker('cleaning-dispatch-worker@example.com', ['cleaning']);
+    [$hourlyUser] = $makeWorker('hourly-dispatch-worker@example.com');
+    [$cleaningUser] = $makeWorker('cleaning-dispatch-worker@example.com');
 
     $booking = CleaningBooking::factory()->create([
         'worker_id' => null,
@@ -367,7 +366,7 @@ it('dispatches hourly worker bookings only to workers that selected hourly work'
     (new NotifyEligibleWorkersNewOrderJob((int) $booking->id))->handle();
 
     Notification::assertSentTo($hourlyUser, NewOrderRequestNotification::class);
-    Notification::assertNotSentTo($cleaningUser, NewOrderRequestNotification::class);
+    Notification::assertSentTo($cleaningUser, NewOrderRequestNotification::class);
 });
 
 

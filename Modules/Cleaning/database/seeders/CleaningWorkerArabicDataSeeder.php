@@ -6,7 +6,6 @@ namespace Modules\Cleaning\Database\Seeders;
 
 use App\Enums\DisputeCategory;
 use App\Enums\DisputeStatus;
-use App\Enums\WorkerPreferredWorkType;
 use App\Models\CancellationPolicy;
 use App\Models\CleaningDepositSetting;
 use App\Models\CleaningWorkerDeposit;
@@ -122,9 +121,6 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
             $workerUpdates['birthday'] = '1994-02-14';
         }
 
-        if (Schema::hasColumn('workers', 'preferred_work_type')) {
-            $workerUpdates['preferred_work_type'] = WorkerPreferredWorkType::Both->value;
-        }
 
         $worker->forceFill($workerUpdates)->save();
         $worker->user->update(['name' => 'رنا أحمد']);

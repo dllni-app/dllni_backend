@@ -20,7 +20,6 @@ use Modules\Cleaning\Models\CleaningTimeWarning;
 use Modules\Cleaning\Services\DepositService;
 use Modules\Cleaning\Services\WorkerBookingScheduleConflictService;
 use Modules\Cleaning\Services\WorkerOrderSolvencyService;
-use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class WorkerHomepageController
 {
@@ -286,36 +285,10 @@ final class WorkerHomepageController
 
     private function newOrdersCandidateQuery(object $worker, Carbon $today): Builder
     {
-        $preferredWorkTypes = $worker->preferredWorkTypes();
-
         return CleaningBooking::query()
             ->where('status', CleaningBookingStatus::Pending)
             ->whereDate('scheduled_date', '>=', $today)
             ->where(fn ($q) => $q->whereNull('worker_id')->orWhere('worker_id', $worker->id))
-            ->where(function (Builder $typeQuery) use ($preferredWorkTypes): void {
-                $hasType = false;
-                if (in_array('cleaning', $preferredWorkTypes, true)) {
-                    $hasType = true;
-                    $typeQuery->orWhere(function (Builder $cleaning): void {
-                        $cleaning->where('booking_kind', '!=', 'open_time')
-                            ->where('property_type', '!=', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE);
-                    });
-                }
-                if (in_array('events', $preferredWorkTypes, true)) {
-                    $hasType = true;
-                    $typeQuery->orWhere(function (Builder $events): void {
-                        $events->where('booking_kind', '!=', 'open_time')
-                            ->where('property_type', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE);
-                    });
-                }
-                if (in_array('hourly', $preferredWorkTypes, true)) {
-                    $hasType = true;
-                    $typeQuery->orWhere('booking_kind', 'open_time');
-                }
-                if (! $hasType) {
-                    $typeQuery->where('id', -1);
-                }
-            })
             ->whereDoesntHave('workerAssignments', fn (Builder $assignments) => $assignments
                 ->where('worker_id', $worker->id)
                 ->whereIn('status', self::ACCEPTED_ASSIGNMENT_STATUSES))

@@ -12,7 +12,6 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Services\DepositService;
-use Modules\User\Services\UserCleaningOrderEstimationService;
 use Spatie\QueryBuilder\AllowedFilter;
 use Spatie\QueryBuilder\AllowedSort;
 use Spatie\QueryBuilder\QueryBuilder;
@@ -101,7 +100,6 @@ trait CleaningBookingFilterQuery
         $worker->loadMissing('deposit');
         $canReceiveNewRequests = app(DepositService::class)->isWorkerEligibleForNewRequests($worker);
 
-        $preferredWorkTypes = $worker->preferredWorkTypes();
         $discoverableBookingIds = app(\Modules\Cleaning\Services\CleaningGeographicDispatchService::class)
             ->discoverableBookingIds($worker);
 
@@ -110,7 +108,7 @@ trait CleaningBookingFilterQuery
         // assignment/history branches, so it cannot reappear after refresh.
         return $query
             ->whereDoesntHave('rejections', fn (Builder $rejections) => $rejections->where('worker_id', $worker->id))
-            ->where(function (Builder $q) use ($worker, $preferredWorkTypes, $canReceiveNewRequests, $discoverableBookingIds): void {
+            ->where(function (Builder $q) use ($worker, $canReceiveNewRequests, $discoverableBookingIds): void {
             $q->where('worker_id', $worker->id)
                 ->orWhereHas('workerAssignments', function (Builder $assignments) use ($worker): void {
                     $assignments
@@ -134,7 +132,7 @@ trait CleaningBookingFilterQuery
                         ->where('preferred_worker_id', $worker->id)
                         ->whereDoesntHave('rejections', fn (Builder $rejections) => $rejections->where('worker_id', $worker->id));
                 })
-                ->orWhere(function (Builder $pending) use ($worker, $preferredWorkTypes, $canReceiveNewRequests, $discoverableBookingIds): void {
+                ->orWhere(function (Builder $pending) use ($worker, $canReceiveNewRequests, $discoverableBookingIds): void {
                     if (! $canReceiveNewRequests) {
                         $pending->where('id', -1);
 
@@ -149,30 +147,6 @@ trait CleaningBookingFilterQuery
                             $scope->whereNull('worker_scope')
                                 ->orWhere('worker_scope', '!=', CleaningBooking::WORKER_SCOPE_SPECIFIC)
                                 ->orWhereJsonContains('specific_worker_ids', [(int) $worker->id]);
-                        })
-                        ->where(function (Builder $typeQuery) use ($preferredWorkTypes): void {
-                            $hasType = false;
-                            if (in_array('cleaning', $preferredWorkTypes, true)) {
-                                $hasType = true;
-                                $typeQuery->orWhere(function (Builder $cleaning): void {
-                                    $cleaning->where('booking_kind', '!=', 'open_time')
-                                        ->where('property_type', '!=', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE);
-                                });
-                            }
-                            if (in_array('events', $preferredWorkTypes, true)) {
-                                $hasType = true;
-                                $typeQuery->orWhere(function (Builder $events): void {
-                                    $events->where('booking_kind', '!=', 'open_time')
-                                        ->where('property_type', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE);
-                                });
-                            }
-                            if (in_array('hourly', $preferredWorkTypes, true)) {
-                                $hasType = true;
-                                $typeQuery->orWhere('booking_kind', 'open_time');
-                            }
-                            if (! $hasType) {
-                                $typeQuery->where('id', -1);
-                            }
                         })
                         ->where(function (Builder $genderQuery) use ($worker): void {
                             $genderQuery

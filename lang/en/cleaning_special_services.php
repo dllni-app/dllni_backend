@@ -19,7 +19,6 @@ return [
         'base_unit_price' => 'Base unit price',
         'supports_dirtiness' => 'Supports dirtiness levels',
         'dirtiness_levels' => 'Allowed dirtiness levels',
-        'gender_constraint' => 'Required worker gender',
         'duration' => 'Estimated duration',
         'worker_pay_mode' => 'Worker pay calculation',
         'worker_pay_value' => 'Worker pay value',
@@ -48,10 +47,6 @@ return [
         'decimal' => 'Decimal measurement',
         'area' => 'Area',
         'length' => 'Length',
-    ],
-    'gender_constraints' => [
-        'male' => 'Male worker',
-        'female' => 'Female worker',
     ],
     'pay_modes' => [
         'flat' => 'Flat',

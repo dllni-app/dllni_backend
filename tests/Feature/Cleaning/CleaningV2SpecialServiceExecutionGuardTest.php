@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use App\Models\Worker;
-use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -36,14 +35,6 @@ function b1SpecialServiceLine(int $workerCount): array
         'base_unit_price' => 25,
         'estimated_duration_minutes' => 30,
         'is_active' => true,
-    ]);
-    DB::table('cleaning_worker_special_service_skills')->insert([
-        'worker_id' => $worker->id,
-        'cleaning_special_service_id' => $service->id,
-        'is_active' => true,
-        'approved_at' => now(),
-        'created_at' => now(),
-        'updated_at' => now(),
     ]);
     $line = CleaningBookingSpecialService::query()->create([
         'cleaning_booking_id' => $booking->id,

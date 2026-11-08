@@ -17,6 +17,7 @@ final class UserSupermarketCartItemStoreRequest extends FormRequest
     {
         return [
             'productId' => ['required', 'integer', 'exists:sm_products,id'],
+            'expectedRevision' => ['sometimes', 'integer', 'min:0'],
             'quantity' => ['required', 'integer', 'min:1', 'max:200'],
             'modifierIds' => ['sometimes', 'array'],
             'substituteProductId' => ['sometimes', 'nullable', 'integer'],

@@ -29,7 +29,6 @@ final class CleaningSpecialServiceCatalogResource extends JsonResource
             'unitCode' => $this->unit_code,
             'baseUnitPrice' => (float) $this->base_unit_price,
             'supportsDirtiness' => (bool) $this->supports_dirtiness,
-            'genderConstraint' => $this->gender_constraint,
             'estimatedDurationMinutes' => (int) $this->estimated_duration_minutes,
             'requiresBeforeImage' => (bool) $this->requires_before_image,
             'requiresAfterImage' => (bool) $this->requires_after_image,

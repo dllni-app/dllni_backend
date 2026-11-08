@@ -7,7 +7,6 @@ namespace Database\Seeders;
 use App\Enums\AvailabilityType;
 use App\Enums\GenderPreference;
 use App\Enums\UserModuleType;
-use App\Enums\WorkerPreferredWorkType;
 use App\Models\CleaningDepositSetting;
 use App\Models\CleaningDepositTransaction;
 use App\Models\CleaningWorkerDeposit;
@@ -110,9 +109,6 @@ final class WorkerSeeder extends Seeder
             if (Schema::hasColumn('workers', 'birthday')) {
                 $workerUpdates['birthday'] = $data['birthday'];
             }
-            if (Schema::hasColumn('workers', 'preferred_work_type')) {
-                $workerUpdates['preferred_work_type'] = $data['preferred_work_type'];
-            }
             $worker->forceFill($workerUpdates)->save();
 
             CleaningDepositTransaction::query()
@@ -189,7 +185,7 @@ final class WorkerSeeder extends Seeder
                 'gender' => GenderPreference::Female->value, 'first_name' => 'رنا',
                 'bio' => 'عاملة تنظيف محترفة بخبرة أكثر من 5 سنوات، متخصصة في التنظيف العميق واستخدام المنتجات الصديقة للبيئة.',
                 'address' => 'حلب - الجميلية - شارع فيصل', 'lat' => 36.2127, 'lng' => 37.1456,
-                'birthday' => '1993-04-12', 'preferred_work_type' => WorkerPreferredWorkType::Cleaning->value,
+                'birthday' => '1993-04-12',
                 'average_rating' => 4.9, 'total_completed_jobs' => 18, 'trust_score' => 96,
                 'acceptance_rate' => 94.5, 'cancellation_rate' => 1.2,
                 'deposit_balance' => 800000, 'debt_balance' => 0,
@@ -202,7 +198,7 @@ final class WorkerSeeder extends Seeder
                 'email' => 'worker2@dllni.sy', 'gender' => GenderPreference::Male->value, 'first_name' => 'أحمد',
                 'bio' => 'عامل موثوق ومنضبط، لديه خبرة في مساعدة المناسبات والتجمعات الكبيرة.',
                 'address' => 'حلب - الحمدانية - شارع القدس', 'lat' => 36.1795, 'lng' => 37.1082,
-                'birthday' => '1990-09-03', 'preferred_work_type' => WorkerPreferredWorkType::Events->value,
+                'birthday' => '1990-09-03',
                 'average_rating' => 4.7, 'total_completed_jobs' => 11, 'trust_score' => 91,
                 'acceptance_rate' => 90.0, 'cancellation_rate' => 2.5,
                 'deposit_balance' => 600000, 'debt_balance' => 0,
@@ -215,7 +211,7 @@ final class WorkerSeeder extends Seeder
                 'email' => 'worker3@dllni.sy', 'gender' => GenderPreference::Female->value, 'first_name' => 'ليلى',
                 'bio' => 'عاملة تنظيف تهتم بالتفاصيل، متاحة للتنظيف الدوري والتنظيف لمرة واحدة.',
                 'address' => 'حلب - السريان الجديدة - شارع تشرين', 'lat' => 36.2168, 'lng' => 37.1317,
-                'birthday' => '1996-01-25', 'preferred_work_type' => WorkerPreferredWorkType::Both->value,
+                'birthday' => '1996-01-25',
                 'average_rating' => 4.8, 'total_completed_jobs' => 15, 'trust_score' => 94,
                 'acceptance_rate' => 93.0, 'cancellation_rate' => 1.8,
                 'deposit_balance' => 0, 'debt_balance' => 0,

@@ -11,6 +11,7 @@ use Modules\Resturants\Models\Cart;
 use Modules\Resturants\Models\CartItem;
 use Modules\Resturants\Models\Modifier;
 use Modules\Resturants\Models\Product;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 final class UserRestaurantCartService
 {
@@ -60,8 +61,9 @@ final class UserRestaurantCartService
         ?int $substituteProductId = null,
         ?string $note = null,
         string $quantityMode = 'increment',
+        ?int $expectedRevision = null,
     ): array {
-        return DB::transaction(function () use ($userId, $productId, $quantity, $modifierIds, $substituteProductId, $note, $quantityMode): array {
+        return DB::transaction(function () use ($userId, $productId, $quantity, $modifierIds, $substituteProductId, $note, $quantityMode, $expectedRevision): array {
             $product = Product::query()
                 ->with(['offers', 'modifierGroups.modifiers'])
                 ->findOrFail($productId);
@@ -74,6 +76,7 @@ final class UserRestaurantCartService
 
             $cart = $this->resolveActiveCart($userId, (int) $product->restaurant_id);
             $cart = $this->normalizeCart($cart);
+            $this->assertExpectedRevision($cart, $expectedRevision);
             $modifierIds = $this->normalizeModifierIds($modifierIds);
             $modifiers = $this->validatedModifiers($product, $modifierIds);
             $normalizedNote = $this->normalizeNote($note);
@@ -145,8 +148,11 @@ final class UserRestaurantCartService
         ?string $note = null,
         bool $replaceSubstituteProduct = true,
         bool $replaceNote = true,
+        ?int $expectedRevision = null,
     ): array {
-        return DB::transaction(function () use ($userId, $cartId, $itemId, $quantity, $modifierIds, $substituteProductId, $note, $replaceSubstituteProduct, $replaceNote): array {
+        return DB::transaction(function () use ($userId, $cartId, $itemId, $quantity, $modifierIds, $substituteProductId, $note, $replaceSubstituteProduct, $replaceNote, $expectedRevision): array {
+            $lockedCart = Cart::query()->whereKey($cartId)->where('user_id', $userId)->lockForUpdate()->firstOrFail();
+            $this->assertExpectedRevision($lockedCart, $expectedRevision);
             $item = CartItem::query()
                 ->whereKey($itemId)
                 ->where('cart_id', $cartId)
@@ -232,9 +238,11 @@ final class UserRestaurantCartService
         });
     }
 
-    public function deleteItem(int $userId, int $cartId, int $itemId): array
+    public function deleteItem(int $userId, int $cartId, int $itemId, ?int $expectedRevision = null): array
     {
-        return DB::transaction(function () use ($userId, $cartId, $itemId): array {
+        return DB::transaction(function () use ($userId, $cartId, $itemId, $expectedRevision): array {
+            $lockedCart = Cart::query()->whereKey($cartId)->where('user_id', $userId)->lockForUpdate()->firstOrFail();
+            $this->assertExpectedRevision($lockedCart, $expectedRevision);
             $item = CartItem::query()
                 ->whereKey($itemId)
                 ->where('cart_id', $cartId)
@@ -256,6 +264,16 @@ final class UserRestaurantCartService
 
             return $this->toPayload($freshCart);
         });
+    }
+
+    private function assertExpectedRevision(Cart $cart, ?int $expectedRevision): void
+    {
+        if ($expectedRevision !== null && ! array_key_exists('revision', $cart->getAttributes())) {
+            throw new ConflictHttpException('CART_REVISION_UNAVAILABLE');
+        }
+        if ($expectedRevision !== null && (int) $cart->revision !== $expectedRevision) {
+            throw new ConflictHttpException('CART_CONFLICT');
+        }
     }
 
     private function resolveActiveCart(int $userId, int $restaurantId): Cart
@@ -469,6 +487,7 @@ final class UserRestaurantCartService
     {
         return [
             'id' => null,
+            'revision' => null,
             'merchant' => null,
             'items' => [],
             'productsCount' => 0,
@@ -544,6 +563,7 @@ final class UserRestaurantCartService
 
         return [
             'id' => $cart->id,
+            'revision' => array_key_exists('revision', $cart->getAttributes()) ? (int) $cart->revision : null,
             'merchant' => [
                 'id' => $restaurant?->id,
                 'name' => $restaurant?->name,

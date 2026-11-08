@@ -25,7 +25,6 @@ final class CleaningSpecialService extends Model
         'unit_code',
         'base_unit_price',
         'supports_dirtiness',
-        'gender_constraint',
         'estimated_duration_minutes',
         'worker_pay_mode',
         'worker_pay_value',

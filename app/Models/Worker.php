@@ -6,7 +6,6 @@ namespace App\Models;
 
 use App\Enums\DayOfWeek;
 use App\Enums\UserModuleType;
-use App\Enums\WorkerPreferredWorkType;
 use App\Traits\FilterQueries\WorkerFilterQuery;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
@@ -14,12 +13,9 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningNeighborhood;
-use Modules\Cleaning\Models\CleaningSpecialService;
-use Modules\Cleaning\Models\CleaningSpecialServiceEquipment;
 use Modules\Cleaning\Support\CleaningNeighborhoodNameNormalizer;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
@@ -41,8 +37,6 @@ final class Worker extends Model implements HasMedia
         'first_name',
         'gender',
         'birthday',
-        'preferred_work_type',
-        'preferred_work_types',
         'bio',
         'average_rating',
         'total_completed_jobs',
@@ -147,22 +141,6 @@ final class Worker extends Model implements HasMedia
         return $this->hasMany(CleaningBooking::class);
     }
 
-    public function cleaningSpecialServiceSkills(): BelongsToMany
-    {
-        return $this->belongsToMany(
-            CleaningSpecialService::class,
-            'cleaning_worker_special_service_skills',
-        )->withPivot(['is_active', 'approved_by_id', 'approved_at'])->withTimestamps();
-    }
-
-    public function cleaningEquipmentAuthorizations(): BelongsToMany
-    {
-        return $this->belongsToMany(
-            CleaningSpecialServiceEquipment::class,
-            'cleaning_worker_equipment_authorizations',
-        )->withPivot(['is_active', 'approved_by_id', 'approved_at'])->withTimestamps();
-    }
-
     public function customerRatings(): HasMany
     {
         return $this->hasMany(WorkerCustomerRating::class);
@@ -185,8 +163,6 @@ final class Worker extends Model implements HasMedia
             'acceptance_rate' => 'decimal:2',
             'cancellation_rate' => 'decimal:2',
             'birthday' => 'date',
-            'preferred_work_type' => WorkerPreferredWorkType::class,
-            'preferred_work_types' => 'array',
             'home_latitude' => 'decimal:8',
             'home_longitude' => 'decimal:8',
             'is_active' => 'boolean',
@@ -198,33 +174,6 @@ final class Worker extends Model implements HasMedia
             'default_working_hours' => 'array',
             'security_deposit_status' => 'string',
         ];
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    public function preferredWorkTypes(): array
-    {
-        $stored = is_array($this->preferred_work_types) ? $this->preferred_work_types : [];
-        $stored = array_values(array_unique(array_filter(
-            array_map(static fn (mixed $value): string => mb_strtolower(mb_trim((string) $value)), $stored),
-            static fn (string $value): bool => in_array($value, WorkerPreferredWorkType::selectableValues(), true),
-        )));
-
-        if ($stored !== []) {
-            return $stored;
-        }
-
-        $legacy = $this->preferred_work_type instanceof WorkerPreferredWorkType
-            ? $this->preferred_work_type
-            : WorkerPreferredWorkType::tryFrom((string) ($this->preferred_work_type ?? WorkerPreferredWorkType::Cleaning->value));
-
-        return match ($legacy) {
-            WorkerPreferredWorkType::Events => [WorkerPreferredWorkType::Events->value],
-            WorkerPreferredWorkType::Hourly => [WorkerPreferredWorkType::Hourly->value],
-            WorkerPreferredWorkType::Both => [WorkerPreferredWorkType::Cleaning->value, WorkerPreferredWorkType::Events->value],
-            default => [WorkerPreferredWorkType::Cleaning->value],
-        };
     }
 
     /**

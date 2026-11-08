@@ -23,6 +23,7 @@ final class UserSupermarketOrderStoreRequest extends FormRequest
             'addressId' => ['sometimes', 'nullable', 'integer', 'exists:user_addresses,id'],
             'couponCode' => ['sometimes', 'nullable', 'string', 'max:50'],
             'note' => ['sometimes', 'nullable', 'string', 'max:1000'],
+            'quoteId' => ['sometimes', 'nullable', 'uuid'],
         ];
     }
 }

@@ -12,8 +12,8 @@ use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 final class CleaningSpecialistFairnessRankingService
 {
     /**
-     * Fair ranking is only applied AFTER full eligibility and customer scope checks.
-     * It cannot bypass a specialist skill/equipment permission or worker availability.
+     * Fair ranking is applied after booking access and scheduling checks.
+     * Workers are not required to hold per-service or per-equipment credentials.
      *
      * @param Collection<int, Worker> $eligibleWorkers
      * @return Collection<int, Worker>

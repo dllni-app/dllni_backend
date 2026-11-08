@@ -47,7 +47,6 @@ function makeRecurringScopeEligibleWorker(string $email): array
         'is_active' => true,
         'is_suspended' => false,
         'trust_score' => 100,
-        'preferred_work_type' => 'both',
         'home_address' => 'Scope test worker home',
         'home_latitude' => 36.2000,
         'home_longitude' => 37.1500,

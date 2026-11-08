@@ -26,6 +26,8 @@ final class UserSupermarketOrderStoreController
             couponCode: $request->input('couponCode'),
             note: $request->input('note'),
             addressId: $request->integer('addressId') ?: null,
+            idempotencyKey: $request->header('Idempotency-Key') ?: null,
+            quoteId: $request->input('quoteId'),
         );
 
         return response()->json([

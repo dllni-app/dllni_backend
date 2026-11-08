@@ -103,11 +103,6 @@ it('reconciles specialized service line prices with item snapshots and reports m
         'quantity' => 3, 'base_unit_price' => 100, 'price_multiplier' => 1,
         'total_price' => 300, 'dirtiness_level' => 'normal',
     ]);
-    DB::table('cleaning_worker_special_service_skills')->insert([
-        'worker_id' => $worker->id,
-        'cleaning_special_service_id' => $service->id,
-        'is_active' => true, 'approved_at' => now(), 'created_at' => now(), 'updated_at' => now(),
-    ]);
     CleaningBookingWorkerAssignment::query()->create([
         'cleaning_booking_id' => $booking->id, 'worker_id' => $worker->id,
         'status' => CleaningBookingWorkerAssignmentStatus::Accepted->value, 'accepted_at' => now(),
@@ -139,7 +134,7 @@ it('reconciles specialized service line prices with item snapshots and reports m
         ->and($report['financial']['lineItemReconciliationDifference'])->toBe(0.0)
         ->and($report['equipment']['maintenanceOrBrokenAssets'])->toBe(1)
         ->and($report['equipment']['pendingAdministrativeReturns'])->toBe(1)
-        ->and($report['workerOpportunities']['recentAcceptedWorkBySpecialist'][0]['recentAcceptedSlots'])->toBe(1)
-        ->and($report['workerOpportunities']['recentAcceptedWorkBySpecialist'][0]['recordedSpecialistOffers'])->toBe(1)
+        ->and($report['workerOpportunities']['recentSpecialServiceWorkByWorker'][0]['recentAcceptedSlots'])->toBe(1)
+        ->and($report['workerOpportunities']['recentSpecialServiceWorkByWorker'][0]['recordedSpecialServiceOffers'])->toBe(1)
         ->and($report['equipment']['maintenanceAssets'][0]['name'])->toBe('Needs repair');
 });

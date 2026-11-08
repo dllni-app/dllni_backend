@@ -49,7 +49,6 @@ final class CleaningSuiteConfigController
             'unitCode' => $service->unit_code,
             'baseUnitPrice' => (float) $service->base_unit_price,
             'supportsDirtiness' => (bool) $service->supports_dirtiness,
-            'genderConstraint' => $service->gender_constraint,
             'estimatedDurationMinutes' => (int) $service->estimated_duration_minutes,
             'requiresBeforeImage' => (bool) $service->requires_before_image,
             'requiresAfterImage' => (bool) $service->requires_after_image,

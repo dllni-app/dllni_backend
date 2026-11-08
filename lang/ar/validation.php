@@ -155,7 +155,6 @@ return [
         'password' => 'كلمة المرور',
         'email' => 'البريد الإلكتروني',
         'name' => 'الاسم',
-        'preferred_work_type' => 'نوع العمل المفضل',
         'gender' => 'الجنس',
         'ticket_number' => 'رقم التذكرة',
         'booking_id' => 'رقم الحجز',

@@ -7,6 +7,8 @@ namespace Modules\Resturants\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 final class CartItem extends Model
 {
@@ -42,5 +44,17 @@ final class CartItem extends Model
         return $this->belongsToMany(Modifier::class, 'cart_item_modifier')
             ->withPivot(['price'])
             ->withTimestamps();
+    }
+
+    protected static function booted(): void
+    {
+        $bump = static function (self $item): void {
+            if (Schema::hasColumn('carts', 'revision')) {
+                DB::table('carts')->where('id', $item->cart_id)->increment('revision');
+            }
+        };
+        self::created($bump);
+        self::updated($bump);
+        self::deleted($bump);
     }
 }

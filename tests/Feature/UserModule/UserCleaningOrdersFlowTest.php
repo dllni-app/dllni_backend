@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use App\Enums\WorkerCustomerRatingType;
-use App\Enums\WorkerPreferredWorkType;
 use App\Models\CancellationPolicy;
 use App\Models\CleaningFinancialSetting;
 use App\Models\CleaningWorkerDeposit;
@@ -585,16 +584,12 @@ it('returns previously worked cleaning workers for current user', function (): v
     expect((int) $response->json('workers.0.workerId'))->toBe($worker->id);
 });
 
-it('filters previous workers by booking type so cleaning-only workers do not appear for event assistance', function (): void {
+it('shows previously hired workers for event bookings regardless of former work-type preferences', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
-    $cleaningWorker = Worker::factory()->financiallyEligible()->create([
-        'preferred_work_type' => WorkerPreferredWorkType::Cleaning,
-    ]);
-    $eventWorker = Worker::factory()->financiallyEligible()->create([
-        'preferred_work_type' => WorkerPreferredWorkType::Events,
-    ]);
+    $cleaningWorker = Worker::factory()->financiallyEligible()->create();
+    $eventWorker = Worker::factory()->financiallyEligible()->create();
     fundPreviouslyWorkedCleaningWorker($cleaningWorker);
     fundPreviouslyWorkedCleaningWorker($eventWorker);
 
@@ -612,19 +607,16 @@ it('filters previous workers by booking type so cleaning-only workers do not app
     $response = getJson('/api/v1/user/cleaning/orders/previous-workers?propertyType=event_assistance');
 
     $response->assertOk();
-    expect(collect($response->json('workers'))->pluck('workerId')->all())->toBe([$eventWorker->id]);
+    expect(collect($response->json('workers'))->pluck('workerId')->sort()->values()->all())
+        ->toBe(collect([$cleaningWorker->id, $eventWorker->id])->sort()->values()->all());
 });
 
-it('filters previous workers by regular cleaning type so event-only workers do not appear', function (): void {
+it('shows previously hired workers for regular cleaning regardless of former work-type preferences', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
-    $cleaningWorker = Worker::factory()->financiallyEligible()->create([
-        'preferred_work_type' => WorkerPreferredWorkType::Cleaning,
-    ]);
-    $eventWorker = Worker::factory()->financiallyEligible()->create([
-        'preferred_work_type' => WorkerPreferredWorkType::Events,
-    ]);
+    $cleaningWorker = Worker::factory()->financiallyEligible()->create();
+    $eventWorker = Worker::factory()->financiallyEligible()->create();
     fundPreviouslyWorkedCleaningWorker($cleaningWorker);
     fundPreviouslyWorkedCleaningWorker($eventWorker);
 
@@ -642,24 +634,22 @@ it('filters previous workers by regular cleaning type so event-only workers do n
     $response = getJson('/api/v1/user/cleaning/orders/previous-workers?propertyType=apartment');
 
     $response->assertOk();
-    expect(collect($response->json('workers'))->pluck('workerId')->all())->toBe([$cleaningWorker->id]);
+    expect(collect($response->json('workers'))->pluck('workerId')->sort()->values()->all())
+        ->toBe(collect([$cleaningWorker->id, $eventWorker->id])->sort()->values()->all());
 });
 
-it('keeps both-specialty workers selectable while excluding unfunded or other-customer history', function (): void {
+it('keeps previously hired workers selectable while excluding unfunded or other-customer history', function (): void {
     $customer = User::factory()->create();
     Sanctum::actingAs($customer);
 
     $bothWorker = Worker::factory()->create([
-        'preferred_work_type' => WorkerPreferredWorkType::Both,
         'trust_score' => 100,
     ]);
     fundPreviouslyWorkedCleaningWorker($bothWorker);
     $unfundedWorker = Worker::factory()->create([
-        'preferred_work_type' => WorkerPreferredWorkType::Both,
         'trust_score' => 100,
     ]);
     $otherCustomersWorker = Worker::factory()->create([
-        'preferred_work_type' => WorkerPreferredWorkType::Both,
         'trust_score' => 100,
     ]);
     fundPreviouslyWorkedCleaningWorker($otherCustomersWorker);

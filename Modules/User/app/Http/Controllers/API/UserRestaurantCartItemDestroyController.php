@@ -17,7 +17,11 @@ final class UserRestaurantCartItemDestroyController
 
     public function __invoke(Request $request, int $cartId, int $itemId): JsonResponse
     {
-        $cart = $this->carts->deleteItem((int) $request->user()->id, $cartId, $itemId);
+        $request->validate(['expectedRevision' => ['sometimes', 'integer', 'min:0']]);
+        $cart = $this->carts->deleteItem(
+            (int) $request->user()->id, $cartId, $itemId,
+            $request->has('expectedRevision') ? $request->integer('expectedRevision') : null,
+        );
 
         return response()->json([
             'data' => UserRestaurantCartPayload::normalize($cart),

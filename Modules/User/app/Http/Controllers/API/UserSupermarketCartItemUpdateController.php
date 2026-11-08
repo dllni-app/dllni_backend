@@ -22,6 +22,7 @@ final class UserSupermarketCartItemUpdateController
                 cartId: $cartId,
                 itemId: $itemId,
                 quantity: (int) $request->integer('quantity'),
+                expectedRevision: $request->has('expectedRevision') ? $request->integer('expectedRevision') : null,
             ),
         ]);
     }

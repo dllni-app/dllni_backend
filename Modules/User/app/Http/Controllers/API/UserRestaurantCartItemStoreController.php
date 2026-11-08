@@ -25,6 +25,7 @@ final class UserRestaurantCartItemStoreController
             substituteProductId: $request->input('substituteProductId'),
             note: $request->input('specialInstructions') ?? $request->input('note'),
             quantityMode: $request->input('quantityMode', 'increment'),
+            expectedRevision: $request->has('expectedRevision') ? $request->integer('expectedRevision') : null,
         );
 
         return response()->json([

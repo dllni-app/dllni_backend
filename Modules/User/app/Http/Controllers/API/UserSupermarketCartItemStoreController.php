@@ -24,6 +24,7 @@ final class UserSupermarketCartItemStoreController
                 modifierIds: array_values(array_map('intval', $request->input('modifierIds', []))),
                 substituteProductId: $request->integer('substituteProductId') ?: null,
                 note: $request->input('note'),
+                expectedRevision: $request->has('expectedRevision') ? $request->integer('expectedRevision') : null,
             ),
         ], 201);
     }
