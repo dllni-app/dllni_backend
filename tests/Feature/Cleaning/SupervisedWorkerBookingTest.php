@@ -155,3 +155,52 @@ it('does not confuse legacy open count bookings with supervisor managed service'
     $this->getJson('/api/v1/cleaning/supervised-worker/bookings/'.$booking->id)
         ->assertNotFound();
 });
+
+it('lets a supervised standard team worker show a personal attendance code and updates confirmation state', function (): void {
+    \Spatie\Permission\Models\Role::findOrCreate('Cleaning Supervisor', 'web');
+    $supervisor = \App\Models\User::factory()->create(['is_active' => true]);
+    $supervisor->assignRole('Cleaning Supervisor');
+    $booking = CleaningBooking::factory()->create([
+        'booking_kind' => 'standard',
+        'number_of_workers' => 2,
+        'status' => CleaningBookingStatus::WorkerAssigned,
+    ]);
+    $member = Worker::factory()->create();
+    $assignment = $booking->workerAssignments()->create([
+        'worker_id' => $member->id, 'status' => 'accepted', 'accepted_at' => now(),
+    ]);
+    DB::table('cleaning_supervisor_assignments')->insert([
+        'cleaning_booking_id' => $booking->id,
+        'supervisor_user_id' => $supervisor->id,
+        'active_slot' => 1,
+        'assigned_at' => now(),
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    $details = "/api/v1/cleaning/supervised-worker/bookings/{$booking->id}";
+    Sanctum::actingAs($member->user);
+    $this->getJson($details)->assertOk()
+        ->assertJsonPath('data.serviceType', 'supervised_team')
+        ->assertJsonPath('data.myAttendance.canIssueAttendanceCode', false);
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/start-travel")->assertOk();
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/arrive")->assertOk();
+    $this->getJson($details)->assertOk()
+        ->assertJsonPath('data.myAttendance.attendanceConfirmed', false)
+        ->assertJsonPath('data.myAttendance.canIssueAttendanceCode', true);
+
+    $code = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/worker-attendance/code")
+        ->assertOk()->json('data.code');
+    expect($code)->toMatch('/^\\d{6}$/');
+
+    Sanctum::actingAs($supervisor);
+    $this->postJson("/api/v1/supervisor/bookings/{$booking->id}/worker-attendance/{$assignment->id}/confirm", [
+        'code' => $code,
+    ])->assertOk()->assertJsonPath('data.status', 'confirmed');
+
+    Sanctum::actingAs($member->user);
+    $this->getJson($details)->assertOk()
+        ->assertJsonPath('data.myAttendance.attendanceConfirmed', true)
+        ->assertJsonPath('data.myAttendance.canIssueAttendanceCode', false);
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/start-work")->assertForbidden();
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/security-code")->assertForbidden();
+});
