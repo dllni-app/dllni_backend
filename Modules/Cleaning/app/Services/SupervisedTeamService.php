@@ -89,17 +89,21 @@ final class SupervisedTeamService
             'arrivedWorkers' => $verifiedArrivals->count(),
             'teamReady' => $verifiedArrivals->count() >= $required,
             'pendingAttendanceWorkers' => $arrived->count() - $verifiedArrivals->count(),
-            'workers' => $assignments->map(fn ($assignment): array => [
+            // Only disclose workers who have accepted this booking to its
+            // currently assigned supervisor. Pending candidates must not leak
+            // contact information or appear as accepted team members.
+            'workers' => $accepted->map(fn ($assignment): array => [
                 'assignmentId' => $assignment->id,
                 'workerId' => $assignment->worker_id,
                 'name' => $assignment->worker?->user?->name,
+                'phone' => $assignment->worker?->user?->phone,
                 'status' => $assignment->status?->value ?? (string) $assignment->status,
                 'acceptedAt' => $assignment->accepted_at?->toIso8601String(),
                 'startedTravelAt' => $assignment->started_travel_at?->toIso8601String(),
                 'arrivedAt' => $assignment->arrived_at?->toIso8601String(),
                 'attendanceConfirmed' => $confirmedIds === null ? $assignment->arrived_at !== null
                     : in_array($assignment->id, $confirmedIds, true),
-            ])->all(),
+            ])->values()->all(),
         ];
     }
 
