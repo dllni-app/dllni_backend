@@ -375,7 +375,7 @@ it('shows an early-arriving worker and their pending code to the assigned superv
     $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/arrive")->assertOk();
     $code = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/worker-attendance/code")
         ->assertOk()->json('data.code');
-    expect($code)->toMatch('/^\\d{6}$/');
+    expect($code)->toMatch('/^\d{6}$/');
 
     Sanctum::actingAs($supervisor);
     $this->getJson("$base")->assertOk()
