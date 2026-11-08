@@ -345,6 +345,40 @@ it('requires authorization and a reason to replace the current supervisor', func
     $this->getJson("/api/v1/supervisor/bookings/{$booking->id}")->assertOk();
 });
 
+it('shows only accepted workers with contact details before travel or arrival', function (): void {
+    $supervisor = supervisorUser();
+    $booking = supervisorBooking($supervisor, [
+        'number_of_workers' => 2,
+        'status' => CleaningBookingStatus::WorkerAssigned,
+    ]);
+    $acceptedWorker = Worker::factory()->create();
+    $acceptedWorker->user->forceFill(['phone' => '+963944780001'])->save();
+    $acceptedAssignment = $booking->workerAssignments()->create([
+        'worker_id' => $acceptedWorker->id,
+        'status' => 'accepted',
+        'accepted_at' => now(),
+    ]);
+    $pendingWorker = Worker::factory()->create();
+    $pendingWorker->user->forceFill(['phone' => '+963944780002'])->save();
+    $booking->workerAssignments()->create([
+        'worker_id' => $pendingWorker->id,
+        'status' => 'pending',
+    ]);
+
+    Sanctum::actingAs($supervisor);
+    $response = $this->getJson("/api/v1/supervisor/bookings/{$booking->id}/attendance")
+        ->assertOk()
+        ->assertJsonPath('data.acceptedWorkers', 1)
+        ->assertJsonPath('data.physicallyArrivedWorkers', 0)
+        ->assertJsonPath('data.arrivedWorkers', 0)
+        ->assertJsonPath('data.workers.0.assignmentId', $acceptedAssignment->id)
+        ->assertJsonPath('data.workers.0.phone', '+963944780001')
+        ->assertJsonPath('data.workers.0.status', 'accepted')
+        ->assertJsonCount(1, 'data.workers');
+    expect($response->json('data.workers.0.acceptedAt'))->toBeString();
+    expect(json_encode($response->json()))->not->toContain('+963944780002');
+});
+
 it('shows an early-arriving worker and their pending code to the assigned supervisor before the rest of the team accepts', function (): void {
     $supervisor = supervisorUser();
     $booking = supervisorBooking($supervisor, [
