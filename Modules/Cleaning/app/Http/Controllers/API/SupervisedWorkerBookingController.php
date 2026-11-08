@@ -49,7 +49,8 @@ final class SupervisedWorkerBookingController
             ->where('cleaning_booking_id', $booking->id)
             ->where('worker_assignment_id', $assignment->id)
             ->whereNotNull('confirmed_at')->exists();
-        $canIssueAttendanceCode = $arrived && ! $attendanceConfirmed
+        $canIssueAttendanceCode = (int) $booking->number_of_workers > 1
+            && $arrived && ! $attendanceConfirmed
             && in_array($status, ['worker_assigned', 'awaiting_start_verification'], true);
 
         $booking->load([
