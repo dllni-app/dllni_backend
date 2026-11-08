@@ -190,7 +190,7 @@ it('lets a supervised standard team worker show a personal attendance code and u
 
     $code = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/worker-attendance/code")
         ->assertOk()->json('data.code');
-    expect($code)->toMatch('/^\\d{6}$/');
+    expect($code)->toMatch('/^\d{6}$/');
 
     Sanctum::actingAs($supervisor);
     $this->postJson("/api/v1/supervisor/bookings/{$booking->id}/worker-attendance/{$assignment->id}/confirm", [
