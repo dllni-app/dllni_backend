@@ -9,6 +9,7 @@ on:
       - 'Modules/Cleaning/app/Services/SupervisedTeamService.php'
       - 'Modules/Cleaning/app/Http/Controllers/API/SupervisedWorkerBookingController.php'
       - 'tests/Feature/Cleaning/SupervisedWorkerBookingTest.php'
+      - 'tests/Feature/Cleaning/SupervisorApiTest.php'
       - 'Modules/Cleaning/routes/api.php'
       - 'tests/Feature/Cleaning/SupervisorWorkflowTest.php'
       - '.github/workflows/supervisor-arrival-php-syntax.yml'
@@ -28,5 +29,6 @@ jobs:
           php -l Modules/Cleaning/app/Services/SupervisedTeamService.php
           php -l Modules/Cleaning/app/Http/Controllers/API/SupervisedWorkerBookingController.php
           php -l tests/Feature/Cleaning/SupervisedWorkerBookingTest.php
+          php -l tests/Feature/Cleaning/SupervisorApiTest.php
           php -l Modules/Cleaning/routes/api.php
           php -l tests/Feature/Cleaning/SupervisorWorkflowTest.php
