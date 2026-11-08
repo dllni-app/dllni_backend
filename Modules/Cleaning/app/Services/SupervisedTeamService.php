@@ -82,6 +82,7 @@ final class SupervisedTeamService
             'acceptedWorkers' => $accepted->count(),
             'arrivedWorkers' => $verifiedArrivals->count(),
             'teamReady' => $verifiedArrivals->count() >= $required,
+            'pendingAttendanceWorkers' => $arrived->count() - $verifiedArrivals->count(),
             'workers' => $assignments->map(fn ($assignment): array => [
                 'assignmentId' => $assignment->id,
                 'workerId' => $assignment->worker_id,
@@ -113,6 +114,7 @@ final class SupervisedTeamService
                 ], true)) {
                 $actions[] = 'request_verification';
                 if ($state === 'verification_pending') {
+                    $actions[] = 'confirm_verification';
                 }
             }
             if ($state === 'verified') {
@@ -160,6 +162,7 @@ final class SupervisedTeamService
             'acceptedWorkers' => $attendance['acceptedWorkers'],
             'arrivedWorkers' => $attendance['arrivedWorkers'],
             'teamReady' => $attendance['teamReady'],
+            'pendingAttendanceWorkers' => $attendance['pendingAttendanceWorkers'],
             'serverNow' => now()->toIso8601String(),
             'timezone' => config('app.timezone'),
             'allowedActions' => array_values(array_unique($actions)),
