@@ -96,6 +96,16 @@ final class SupervisedWorkerBookingController
             'scheduledDate' => $booking->scheduled_date?->format('Y-m-d'),
             'scheduledTime' => $booking->scheduled_time,
             'neighborhoodName' => $booking->neighborhood_name,
+            // An accepted worker may navigate to the customer only after their
+            // own start-travel action. Never disclose coordinates in advance.
+            'destination' => $travelStarted && $booking->address_latitude !== null
+                && $booking->address_longitude !== null ? [
+                    'latitude' => (float) $booking->address_latitude,
+                    'longitude' => (float) $booking->address_longitude,
+                    'label' => data_get($booking->property_details, 'full_address')
+                        ?: data_get($booking->property_details, 'address')
+                        ?: $booking->neighborhood_name,
+                ] : null,
             'propertyType' => $booking->property_type,
             'propertyDetails' => [
                 'customService' => data_get($booking->property_details, 'custom_service'),
