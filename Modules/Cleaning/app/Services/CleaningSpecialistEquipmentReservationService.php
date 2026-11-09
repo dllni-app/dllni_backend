@@ -107,6 +107,17 @@ final class CleaningSpecialistEquipmentReservationService
                 ->when($existing, fn ($query) => $query->whereKeyNot($existing->id))
                 ->where('reserved_from', '<', $until)
                 ->where('reserved_until', '>', $from)
+                // A booking uses its equipment across all of its special-service
+                // lines. A reservation made by a sibling line must not block the
+                // same booking, but overlapping reservations of other bookings
+                // (including legacy booking-level checkouts) still must block.
+                // Older line reservations have no cleaning_booking_id, so check
+                // the owning special-service relation as well as the booking ID.
+                ->whereDoesntHave('bookingSpecialService', fn ($query) => $query
+                    ->where('cleaning_booking_id', $booking->id))
+                ->where(fn ($query) => $query
+                    ->whereNull('cleaning_booking_id')
+                    ->orWhere('cleaning_booking_id', '!=', $booking->id))
                 ->exists();
             if ($overlap) {
                 throw ValidationException::withMessages(['equipment' => ['Required equipment is already reserved for this time window.']]);
