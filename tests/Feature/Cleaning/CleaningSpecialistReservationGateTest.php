@@ -172,7 +172,7 @@ it('keeps overlapping sessions separate even when they belong to one booking', f
     [$worker, $booking, $service, $equipment, $line] = phaseTwoBooking();
     $sessions = [];
     foreach ([1, 2] as $sequence) {
-        $sessions[] = \\Modules\\Cleaning\\Models\\CleaningBookingSession::query()->create([
+        $sessions[] = \Modules\Cleaning\Models\CleaningBookingSession::query()->create([
             'cleaning_booking_id' => $booking->id,
             'sequence' => $sequence,
             'session_type' => 'recurring_cleaning',
