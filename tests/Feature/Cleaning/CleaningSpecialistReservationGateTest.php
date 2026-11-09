@@ -168,6 +168,40 @@ it('releases only one visit equipment slot while preserving sibling visits', fun
         ->and(CleaningEquipmentReservation::query()->where('cleaning_booking_session_id', $sessions[1]->id)->first()->status)->toBe('reserved');
 });
 
+it('keeps overlapping sessions separate even when they belong to one booking', function (): void {
+    [$worker, $booking, $service, $equipment, $line] = phaseTwoBooking();
+    $sessions = [];
+    foreach ([1, 2] as $sequence) {
+        $sessions[] = \\Modules\\Cleaning\\Models\\CleaningBookingSession::query()->create([
+            'cleaning_booking_id' => $booking->id,
+            'sequence' => $sequence,
+            'session_type' => 'recurring_cleaning',
+            'calculation_mode' => 'estimated_hours',
+            'scheduled_date' => now()->addDays(5)->toDateString(),
+            'scheduled_time' => '10:00',
+            'duration_hours' => 2,
+            'required_workers' => 1,
+            'coverage_status' => 'fully_covered',
+            'status' => 'worker_assigned',
+            'base_price' => 100,
+            'addons_total' => 0,
+            'materials_total' => 0,
+            'special_services_total' => 100,
+            'travel_fee' => 0,
+            'admin_margin_amount' => 0,
+            'extension_fee_total' => 0,
+            'cancellation_fee' => 0,
+            'total_price' => 200,
+        ]);
+    }
+    $line->sessions()->sync([$sessions[0]->id, $sessions[1]->id]);
+    $reservations = app(CleaningSpecialistEquipmentReservationService::class);
+    $reservations->confirmForSession($booking, $sessions[0], $worker);
+    expect(fn () => $reservations->confirmForSession($booking, $sessions[1], $worker))
+        ->toThrow(ValidationException::class);
+    expect(CleaningEquipmentReservation::query()->where('status', 'reserved')->count())->toBe(1);
+});
+
 /** @return array{Worker,CleaningBooking,CleaningSpecialService,CleaningSpecialServiceEquipment,CleaningBookingSpecialService} */
 function phaseTwoBooking(
     string $time = '10:00',
