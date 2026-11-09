@@ -50,6 +50,55 @@ it('rejects overlapping reservations with buffers even for different bookings', 
         ->and(CleaningEquipmentReservation::query()->where('status', 'reserved')->count())->toBe(1);
 });
 
+it('shares required equipment across services of the same booking without allowing another booking to double-book it', function (): void {
+    [$worker, $booking, $service, $equipment, $firstLine] = phaseTwoBooking();
+    // Reproduce a team order with two special services requiring the same
+    // physical asset. The calendar date is deliberately years in the future.
+    $booking->forceFill(['scheduled_date' => now()->addYears(3)->toDateString()])->save();
+    $secondService = CleaningSpecialService::query()->create([
+        'name' => 'Additional carpet cleaning',
+        'slug' => 'second-phase-two-'.fake()->unique()->numerify('########'),
+        'pricing_unit' => 'piece',
+        'base_unit_price' => 100,
+        'estimated_duration_minutes' => 45,
+        'is_active' => true,
+    ]);
+    $secondService->equipment()->attach($equipment->id);
+    $secondLine = CleaningBookingSpecialService::query()->create([
+        'cleaning_booking_id' => $booking->id,
+        'cleaning_special_service_id' => $secondService->id,
+        'service_name' => $secondService->name,
+        'pricing_unit' => 'piece',
+        'dirtiness_level' => 'normal',
+        'quantity' => 1,
+        'base_unit_price' => 100,
+        'price_multiplier' => 1,
+        'total_price' => 100,
+        'execution_status' => 'pending',
+    ]);
+
+    $reservations = app(CleaningSpecialistEquipmentReservationService::class);
+    $reservations->confirmForBooking($booking->fresh(), $worker);
+    expect($firstLine->fresh()->assigned_worker_id)->toBe($worker->id)
+        ->and($secondLine->fresh()->assigned_worker_id)->toBe($worker->id)
+        ->and(CleaningEquipmentReservation::query()->where('status', 'reserved')->count())->toBe(2);
+
+    // A second teammate does not create another physical allocation, nor
+    // should retrying acceptance multiply the line reservations.
+    $secondWorker = Worker::factory()->financiallyEligible()->create();
+    $reservations->confirmForBooking($booking->fresh(), $secondWorker);
+    $reservations->confirmForBooking($booking->fresh(), $worker);
+    expect(CleaningEquipmentReservation::query()->count())->toBe(2);
+
+    // A different booking still cannot claim the same asset at the same time.
+    [$otherWorker, $otherBooking, $unusedService, $unusedEquipment, $otherLine] = phaseTwoBooking('10:00', $service, $equipment);
+    $otherBooking->forceFill(['scheduled_date' => $booking->scheduled_date])->save();
+    expect(fn () => $reservations->confirmForBooking($otherBooking->fresh(), $otherWorker))
+        ->toThrow(ValidationException::class);
+    expect($otherLine->fresh()->assigned_worker_id)->toBeNull()
+        ->and(CleaningEquipmentReservation::query()->count())->toBe(2);
+});
+
 it('never allocates equipment only when work is started', function (): void {
     [$worker, $booking, $service, $equipment, $line] = phaseTwoBooking();
     Sanctum::actingAs($worker->user);
