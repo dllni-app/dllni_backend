@@ -107,17 +107,29 @@ final class CleaningSpecialistEquipmentReservationService
                 ->when($existing, fn ($query) => $query->whereKeyNot($existing->id))
                 ->where('reserved_from', '<', $until)
                 ->where('reserved_until', '>', $from)
-                // A booking uses its equipment across all of its special-service
-                // lines. A reservation made by a sibling line must not block the
-                // same booking, but overlapping reservations of other bookings
-                // (including legacy booking-level checkouts) still must block.
-                // Older line reservations have no cleaning_booking_id, so check
-                // the owning special-service relation as well as the booking ID.
-                ->whereDoesntHave('bookingSpecialService', fn ($query) => $query
-                    ->where('cleaning_booking_id', $booking->id))
-                ->where(fn ($query) => $query
-                    ->whereNull('cleaning_booking_id')
-                    ->orWhere('cleaning_booking_id', '!=', $booking->id))
+                // Sibling services within one booking and one execution slot
+                // share the booking's physical equipment. Never make one service
+                // line block another within that same slot. Different bookings
+                // or overlapping sessions remain independent allocations.
+                // Older line reservations have no cleaning_booking_id, so also
+                // resolve the owning booking through bookingSpecialService.
+                ->where(function ($query) use ($booking, $session): void {
+                    $query->where(function ($otherSession) use ($session): void {
+                        if ($session === null) {
+                            $otherSession->whereNotNull('cleaning_booking_session_id');
+                        } else {
+                            $otherSession->where(fn ($different) => $different
+                                ->whereNull('cleaning_booking_session_id')
+                                ->orWhere('cleaning_booking_session_id', '!=', $session->id));
+                        }
+                    })->orWhere(function ($otherBooking) use ($booking): void {
+                        $otherBooking->whereDoesntHave('bookingSpecialService', fn ($service) => $service
+                            ->where('cleaning_booking_id', $booking->id))
+                            ->where(fn ($bookings) => $bookings
+                                ->whereNull('cleaning_booking_id')
+                                ->orWhere('cleaning_booking_id', '!=', $booking->id));
+                    });
+                })
                 ->exists();
             if ($overlap) {
                 throw ValidationException::withMessages(['equipment' => ['Required equipment is already reserved for this time window.']]);
