@@ -120,6 +120,8 @@ final class SupervisorWorkflowController
         $extensions = DB::table('cleaning_supervisor_extensions')->where('cleaning_booking_id', $booking)
             ->orderByDesc('id')->get(['id', 'requested_minutes as additionalMinutes', 'reason', 'status']);
         $handover = DB::table('cleaning_supervisor_handovers')->where('cleaning_booking_id', $booking)->first();
+        $assignedSupervisor = $order->supervisorAssignments()
+            ->with('supervisor')->where('active_slot', 1)->whereNull('released_at')->first();
         $actions = [];
         if ($order->status === CleaningBookingStatus::AwaitingStartVerification && $verification
             && $verification->status === 'pending' && $verification->attempts < 5
@@ -134,7 +136,13 @@ final class SupervisorWorkflowController
         }
 
         return $this->response([
-            'booking' => array_replace($this->teams->summary($order), ['allowedActions' => $actions]),
+            'booking' => array_replace($this->teams->summary($order), [
+                'allowedActions' => $actions,
+                'supervisor' => $assignedSupervisor ? [
+                    'name' => $assignedSupervisor->supervisor?->name,
+                    'phone' => $assignedSupervisor->supervisor?->phone,
+                ] : null,
+            ]),
             'extensions' => $extensions->toArray(),
             'handover' => ['status' => $handover?->status ?? 'not_requested',
                 'customerNote' => $handover?->customer_note, 'respondedAt' => $handover?->responded_at],
