@@ -29,7 +29,7 @@ final class UserAddressStoreRequest extends FormRequest
                 'integer',
                 Rule::exists('cleaning_neighborhoods', 'id')->where('is_active', true),
             ],
-            'neighborhood' => ['required_without:neighborhoodId', 'nullable', 'string', 'max:255'],
+            'neighborhood' => ['nullable', 'string', 'max:255'],
             'street' => ['nullable', 'string', 'max:255'],
             'building' => ['nullable', 'string', 'max:255'],
             'floor' => ['nullable', 'string', 'max:50'],
@@ -47,7 +47,6 @@ final class UserAddressStoreRequest extends FormRequest
     {
         return [
             'city.required' => 'يرجى إدخال المدينة.',
-            'neighborhood.required_without' => 'يرجى اختيار الحي.',
             'directions.required' => 'يرجى إدخال تفاصيل العنوان الأخرى.',
         ];
     }
