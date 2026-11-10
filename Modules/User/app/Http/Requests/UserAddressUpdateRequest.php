@@ -47,7 +47,6 @@ final class UserAddressUpdateRequest extends FormRequest
     {
         return [
             'city.required' => 'يرجى إدخال المدينة.',
-            'neighborhood.required_without' => 'يرجى اختيار الحي.',
             'directions.required' => 'يرجى إدخال تفاصيل العنوان الأخرى.',
         ];
     }
