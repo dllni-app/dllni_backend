@@ -24,6 +24,8 @@ final class WorkerResource extends JsonResource
             'firstName' => $this->first_name,
             'gender' => $this->gender,
             'birthday' => $this->birthday?->toDateString(),
+            'preferredWorkTypes' => $this->resource->preferredWorkTypes(),
+            'preferred_work_types' => $this->resource->preferredWorkTypes(),
             'avatar' => $this->when(
                 $this->relationLoaded('media') && $this->getFirstMedia('avatar'),
                 fn () => MediaResource::make($this->getFirstMedia('avatar'))

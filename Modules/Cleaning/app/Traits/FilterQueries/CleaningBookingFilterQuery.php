@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Traits\FilterQueries;
 
 use App\Enums\GenderPreference;
+use App\Models\Worker;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use App\Notifications\Cleaning\NewOrderRequestNotification;
@@ -148,6 +149,7 @@ trait CleaningBookingFilterQuery
                                 ->orWhere('worker_scope', '!=', CleaningBooking::WORKER_SCOPE_SPECIFIC)
                                 ->orWhereJsonContains('specific_worker_ids', [(int) $worker->id]);
                         })
+                        ->matchesWorkTypePreferences($worker)
                         ->where(function (Builder $genderQuery) use ($worker): void {
                             $genderQuery
                                 ->whereNull('gender_preference')
@@ -231,6 +233,7 @@ trait CleaningBookingFilterQuery
         $workerId = (int) $worker->id;
 
         return $query->where('status', CleaningBookingStatus::Pending->value)
+            ->matchesWorkTypePreferences($worker)
             ->where(function (Builder $bookings) use ($workerId): void {
                 $bookings->whereNull('worker_id')->orWhere('worker_id', '!=', $workerId);
             })
@@ -242,6 +245,32 @@ trait CleaningBookingFilterQuery
                 $assignments->where('worker_id', $workerId)
                     ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
             });
+    }
+
+    /**
+     * Filter discoverable offers; accepted and historical bookings remain visible.
+     */
+    public function scopeMatchesWorkTypePreferences(Builder $query, Worker $worker): Builder
+    {
+        $types = $worker->preferredWorkTypes();
+
+        return $query->where(function (Builder $typeQuery) use ($types): void {
+            if (in_array('cleaning', $types, true)) {
+                $typeQuery->orWhere(function (Builder $cleaning): void {
+                    $cleaning->where('booking_kind', '!=', 'open_time')
+                        ->where('property_type', '!=', 'event_assistance');
+                });
+            }
+            if (in_array('events', $types, true)) {
+                $typeQuery->orWhere(function (Builder $events): void {
+                    $events->where('booking_kind', '!=', 'open_time')
+                        ->where('property_type', 'event_assistance');
+                });
+            }
+            if (in_array('hourly', $types, true)) {
+                $typeQuery->orWhere('booking_kind', 'open_time');
+            }
+        });
     }
 
     public function scopeHasDispute(Builder $query, mixed $value): Builder

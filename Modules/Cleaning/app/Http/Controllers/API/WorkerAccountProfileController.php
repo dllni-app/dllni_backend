@@ -75,6 +75,9 @@ final class WorkerAccountProfileController
         if (array_key_exists('birthday', $validated)) {
             $workerUpdates['birthday'] = $validated['birthday'];
         }
+        if (array_key_exists('preferred_work_types', $validated)) {
+            $workerUpdates['preferred_work_types'] = array_values($validated['preferred_work_types']);
+        }
         if (array_key_exists('isActive', $validated)) {
             $workerUpdates['is_active'] = (bool) $validated['isActive'];
         }

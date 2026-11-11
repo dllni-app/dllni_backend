@@ -24,6 +24,8 @@ final class WorkerAccountProfileUpdateRequest extends FormRequest
             'phone' => ['nullable', 'string', 'max:255', Rule::unique('users', 'phone')->ignore($userId)],
             'bio' => ['nullable', 'string'],
             'birthday' => ['nullable', 'date'],
+            'preferred_work_types' => ['sometimes', 'required', 'array', 'min:1', 'max:3'],
+            'preferred_work_types.*' => ['required', 'string', 'distinct', Rule::in(['cleaning', 'events', 'hourly'])],
             'avatar' => ['nullable', 'file', 'mimes:jpeg,png,jpg,gif,svg,webp', 'max:2048'],
             'isActive' => ['nullable', 'boolean'],
             'homeAddress' => ['nullable', 'string', 'max:255'],

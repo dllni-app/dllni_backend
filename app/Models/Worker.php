@@ -37,6 +37,7 @@ final class Worker extends Model implements HasMedia
         'first_name',
         'gender',
         'birthday',
+        'preferred_work_types',
         'bio',
         'average_rating',
         'total_completed_jobs',
@@ -163,6 +164,7 @@ final class Worker extends Model implements HasMedia
             'acceptance_rate' => 'decimal:2',
             'cancellation_rate' => 'decimal:2',
             'birthday' => 'date',
+            'preferred_work_types' => 'array',
             'home_latitude' => 'decimal:8',
             'home_longitude' => 'decimal:8',
             'is_active' => 'boolean',
@@ -174,6 +176,42 @@ final class Worker extends Model implements HasMedia
             'default_working_hours' => 'array',
             'security_deposit_status' => 'string',
         ];
+    }
+
+    /**
+     * Preferences removed in November 2026 cannot be reconstructed, so
+     * existing workers receive all categories until they save a selection.
+     *
+     * @return array<int, string>
+     */
+    public function preferredWorkTypes(): array
+    {
+        $allowed = ['cleaning', 'events', 'hourly'];
+        if (! is_array($this->preferred_work_types)) {
+            return $allowed;
+        }
+
+        $types = [];
+        foreach ($this->preferred_work_types as $value) {
+            if (! is_string($value)) {
+                continue;
+            }
+            $type = mb_strtolower(mb_trim($value));
+            if (in_array($type, $allowed, true) && ! in_array($type, $types, true)) {
+                $types[] = $type;
+            }
+        }
+
+        return $types !== [] ? $types : $allowed;
+    }
+
+    public function acceptsBookingType(CleaningBooking $booking): bool
+    {
+        $type = (string) ($booking->booking_kind ?? 'standard') === 'open_time'
+            ? 'hourly'
+            : ((string) $booking->property_type === 'event_assistance' ? 'events' : 'cleaning');
+
+        return in_array($type, $this->preferredWorkTypes(), true);
     }
 
     /**

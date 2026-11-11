@@ -294,6 +294,10 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             return false;
         }
 
+        if (! $worker->acceptsBookingType($booking)) {
+            return false;
+        }
+
         if (
             $worker->user === null
             || ! (bool) $worker->user->is_active
