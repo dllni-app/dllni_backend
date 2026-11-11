@@ -10,14 +10,12 @@ use Illuminate\Http\Response;
 use Modules\Cleaning\Http\Requests\WorkerAccountStatusRequest;
 use Modules\Cleaning\Services\DepositService;
 use Modules\Cleaning\Services\WorkerDispatchEligibilityService;
-use Modules\Cleaning\Services\WorkerHomeActivationGuard;
 
 final class WorkerAccountStatusController
 {
     public function __construct(
         private readonly DepositService $depositService,
         private readonly WorkerDispatchEligibilityService $dispatchEligibility,
-        private readonly WorkerHomeActivationGuard $homeActivationGuard,
     ) {}
 
     public function show(): JsonResponse
@@ -52,10 +50,6 @@ final class WorkerAccountStatusController
         }
 
         $isActivating = (bool) $request->validated()['isActive'];
-        if ($isActivating) {
-            $this->homeActivationGuard->assertCanActivate($worker);
-        }
-
         $worker->update([
             'is_active' => $isActivating,
         ]);

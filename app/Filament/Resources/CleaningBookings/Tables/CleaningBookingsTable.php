@@ -991,14 +991,6 @@ final class CleaningBookingsTable
             $issues[] = 'حساب المستخدم غير نشط';
         }
 
-        if ($worker->home_address === null || mb_trim((string) $worker->home_address) === '') {
-            $issues[] = 'عنوان نقطة الانطلاق غير مكتمل';
-        }
-
-        if ($worker->home_latitude === null || $worker->home_longitude === null) {
-            $issues[] = 'إحداثيات نقطة الانطلاق غير مكتملة';
-        }
-
         if (in_array($genderPreference, ['male', 'female'], true) && $worker->gender !== $genderPreference) {
             $issues[] = 'الجنس لا يطابق متطلبات الحجز';
         }
@@ -1066,7 +1058,6 @@ final class CleaningBookingsTable
     {
         return match ($message) {
             'Booking gender preference does not match worker profile.' => 'جنس العامل لا يطابق تفضيل الحجز. اختر عاملاً من الجنس المطلوب.',
-            'Worker home location is required before accepting bookings.' => 'عنوان منزل العامل وإحداثياته غير مكتملة. حدّث بيانات موقع العامل ثم أعد المحاولة.',
             'Customer location coordinates are required before accepting bookings.' => 'إحداثيات موقع العميل غير مكتملة في الحجز. حدّث موقع الحجز ثم أعد المحاولة.',
             'Worker is not eligible to accept new requests.' => 'العامل غير مؤهل لاستقبال طلبات جديدة بسبب حالة الحساب أو التأمين.',
             'Worker user account is inactive.' => 'حساب المستخدم المرتبط بالعامل غير نشط.',

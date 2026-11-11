@@ -54,15 +54,6 @@ final class WorkersTable
                     ->label(__('cleaning_admin.workers.fields.bio'))
                     ->limit(35)
                     ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('home_address')
-                    ->label(__('cleaning_admin.workers.fields.home_address'))
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('home_latitude')
-                    ->label(__('cleaning_admin.workers.fields.home_latitude'))
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('home_longitude')
-                    ->label(__('cleaning_admin.workers.fields.home_longitude'))
-                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('trust_score')
                     ->label(self::headerLabel(
                         __('cleaning_admin.workers.fields.trust_score'),

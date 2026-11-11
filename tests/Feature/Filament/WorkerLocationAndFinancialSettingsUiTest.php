@@ -22,57 +22,34 @@ beforeEach(function (): void {
     $this->actingAs($admin);
 });
 
-it('shows the worker on OpenStreetMap and uses the same normalized hours as the worker API', function (): void {
+it('omits retired mission-start and working-hours settings from worker details and profile', function (): void {
     $workerUser = User::factory()->create([
         'module_type' => UserModuleType::CleaningWorker->value,
     ]);
-
     $worker = Worker::factory()->create([
         'user_id' => $workerUser->id,
-        'home_address' => 'حلب - الأشرفية - شارع الحديقة',
-        'home_latitude' => 36.23080000,
-        'home_longitude' => 37.12790000,
+        'home_address' => 'Old location',
+        'home_latitude' => 36.2308,
+        'home_longitude' => 37.1279,
         'default_working_hours' => [
-            'sunday' => [
-                'available' => true,
-                'data' => [
-                    ['08:00' => '17:00'],
-                    ['18:00' => '20:00'],
-                ],
-            ],
-            'monday' => [
-                'available' => false,
-                'data' => [],
-            ],
+            'sunday' => ['available' => true, 'data' => [['08:00' => '17:00']]],
         ],
     ]);
 
     $this->get(WorkerResource::getUrl('view', ['record' => $worker], isAbsolute: false))
         ->assertSuccessful()
-        ->assertSee('OpenStreetMap')
-        ->assertSee('www.openstreetmap.org/export/embed.html', false)
-        ->assertSee('36.23080000')
-        ->assertSee('37.12790000')
-        ->assertSee('08:00 ص — 05:00 م')
-        ->assertSee('06:00 م — 08:00 م')
-        ->assertSee('الإثنين')
-        ->assertSee('غير متاح');
+        ->assertDontSee('موقع بدء المهمة')
+        ->assertDontSee('الموقع وأوقات العمل')
+        ->assertDontSee('www.openstreetmap.org/export/embed.html', false);
 
     Sanctum::actingAs($workerUser);
 
     $this->getJson('/api/v1/cleaning/worker/profile')
         ->assertSuccessful()
-        ->assertJsonPath('data.homeLatitude', 36.2308)
-        ->assertJsonPath('data.homeLongitude', 37.1279)
-        ->assertJsonPath('data.defaultWorkingHours.sunday.available', true)
-        ->assertJsonPath('data.defaultWorkingHours.sunday.data.0.08:00', '17:00')
-        ->assertJsonPath('data.defaultWorkingHours.monday.available', false);
-
-    $this->getJson('/api/v1/cleaning/worker/working-hours')
-        ->assertSuccessful()
-        ->assertJsonPath('data.defaultWorkingHours.sunday.available', true)
-        ->assertJsonPath('data.defaultWorkingHours.sunday.data.1.18:00', '20:00')
-        ->assertJsonPath('data.defaultWorkingHours.monday.available', false);
+        ->assertJsonMissingPath('data.homeLatitude')
+        ->assertJsonMissingPath('data.homeLongitude')
+        ->assertJsonMissingPath('data.defaultWorkingHours');
+    $this->getJson('/api/v1/cleaning/worker/working-hours')->assertNotFound();
 });
 
 it('removes the command-center button and explains every worker-finance field', function (): void {

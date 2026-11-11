@@ -370,7 +370,7 @@ it('dispatches hourly worker bookings regardless of former work-type settings', 
 });
 
 
-it('sends urgent same-day bookings to every eligible worker regardless of radius while excluding invalid locations', function (): void {
+it('sends urgent same-day bookings to active workers even without a mission-start location', function (): void {
     Notification::fake();
     Event::fake([CleaningBookingCreated::class]);
 
@@ -440,7 +440,7 @@ it('sends urgent same-day bookings to every eligible worker regardless of radius
         Notification::assertSentTo($user, NewOrderRequestNotification::class);
     }
     Notification::assertNotSentTo($suspendedUser, NewOrderRequestNotification::class);
-    Notification::assertNotSentTo($noGpsUser, NewOrderRequestNotification::class);
+    Notification::assertSentTo($noGpsUser, NewOrderRequestNotification::class);
 
     foreach ([$nearWorker, $farWorker] as $worker) {
         Event::assertDispatched(CleaningBookingCreated::class, fn (CleaningBookingCreated $event): bool =>
@@ -450,5 +450,5 @@ it('sends urgent same-day bookings to every eligible worker regardless of radius
 
     $dispatch = app(\Modules\Cleaning\Services\CleaningGeographicDispatchService::class);
     expect($dispatch->discoverableBookingIds($farWorker))->toContain((int) $booking->id)
-        ->and($dispatch->discoverableBookingIds($noGpsWorker))->not->toContain((int) $booking->id);
+        ->and($dispatch->discoverableBookingIds($noGpsWorker))->toContain((int) $booking->id);
 });

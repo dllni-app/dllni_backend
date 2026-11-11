@@ -28,9 +28,6 @@ final class WorkerAccountProfileUpdateRequest extends FormRequest
             'preferred_work_types.*' => ['required', 'string', 'distinct', Rule::in(['cleaning', 'events', 'hourly'])],
             'avatar' => ['nullable', 'file', 'mimes:jpeg,png,jpg,gif,svg,webp', 'max:2048'],
             'isActive' => ['nullable', 'boolean'],
-            'homeAddress' => ['nullable', 'string', 'max:255'],
-            'homeLatitude' => ['nullable', 'numeric', 'between:-90,90'],
-            'homeLongitude' => ['nullable', 'numeric', 'between:-180,180'],
         ];
     }
 }

@@ -44,7 +44,6 @@ use Modules\Cleaning\Http\Controllers\API\WorkerReviewController;
 use Modules\Cleaning\Http\Controllers\API\WorkerStatisticsController;
 use Modules\Cleaning\Http\Controllers\API\WorkerTransactionsController;
 use Modules\Cleaning\Http\Controllers\API\WorkerWorkAreasController;
-use Modules\Cleaning\Http\Controllers\API\WorkerWorkingHoursController;
 use Modules\Cleaning\Http\Middleware\EnsureCleaningDepositAdmin;
 use Modules\Cleaning\Http\Middleware\EnsureSupervisor;
 use Modules\Cleaning\Http\Middleware\RejectSupervisedWorkerLifecycle;
@@ -115,17 +114,13 @@ Route::prefix('v1')->group(function () {
         Route::get('cleaning/worker/reviews', [WorkerReviewController::class, 'index']);
         Route::get('worker/{worker}', WorkerDetailsController::class);
         Route::get('cleaning/worker/profile', Modules\Cleaning\Http\Controllers\API\WorkerProfileController::class);
-        Route::get('cleaning/worker/working-hours', [WorkerWorkingHoursController::class, 'show']);
-        Route::put('cleaning/worker/working-hours', [WorkerWorkingHoursController::class, 'update']);
-        Route::prefix('cleaning/worker/account')->group(function (): void {
+                Route::prefix('cleaning/worker/account')->group(function (): void {
             Route::get('profile', Modules\Cleaning\Http\Controllers\API\WorkerProfileController::class);
             Route::put('profile', [WorkerAccountProfileController::class, 'update']);
             Route::put("pass\x77ord", [WorkerAccountProfileController::class, 'updatePassword']);
             Route::get('work-areas', [WorkerWorkAreasController::class, 'show']);
             Route::put('work-areas', [WorkerWorkAreasController::class, 'update']);
-            Route::get('working-hours', [WorkerWorkingHoursController::class, 'show']);
-            Route::put('working-hours', [WorkerWorkingHoursController::class, 'update']);
-            Route::get('notifications', [UserNotificationController::class, 'index']);
+                            Route::get('notifications', [UserNotificationController::class, 'index']);
             Route::patch('notifications/read-all', [UserNotificationController::class, 'markAllAsRead']);
             Route::delete('notifications/all', [UserNotificationController::class, 'destroyAll']);
             Route::delete('notifications/{id}', [UserNotificationController::class, 'destroy']);

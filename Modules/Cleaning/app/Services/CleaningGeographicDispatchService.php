@@ -64,8 +64,9 @@ final class CleaningGeographicDispatchService
             }
         }
 
-        $latitude = $position?->latitude ?? $worker->home_latitude;
-        $longitude = $position?->longitude ?? $worker->home_longitude;
+        // Never derive dispatch distance from the removed mission-start address.
+        $latitude = $position?->latitude;
+        $longitude = $position?->longitude;
 
         if ($latitude === null || $longitude === null) {
             return null;
@@ -122,10 +123,9 @@ final class CleaningGeographicDispatchService
 
     public function hasRequiredLocations(Worker $worker, CleaningBooking $booking): bool
     {
-        return filled($worker->home_address)
-            && $worker->home_latitude !== null
-            && $worker->home_longitude !== null
-            && $booking->address_latitude !== null
+        // The customer's coordinates are required for navigation; no static
+        // worker start address is required to discover or accept an order.
+        return $booking->address_latitude !== null
             && $booking->address_longitude !== null;
     }
 
@@ -142,6 +142,8 @@ final class CleaningGeographicDispatchService
 
         $distance = $this->workerDistanceKm($worker, $booking);
 
-        return $distance !== null && $distance <= $this->radiusKm($booking);
+        // Workers without a fresh GPS position are still eligible. The old
+        // mission-start location must not silently block their offers.
+        return $distance === null || $distance <= $this->radiusKm($booking);
     }
 }

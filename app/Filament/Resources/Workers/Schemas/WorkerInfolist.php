@@ -205,18 +205,8 @@ final class WorkerInfolist
                             ])
                             ->columns(2)
                             ->columnSpan(6),
-                        Section::make(__('cleaning_admin.workers.sections.location'))
+                        Section::make(app()->isLocale('ar') ? 'حالة العامل' : 'Worker status')
                             ->schema([
-                                TextEntry::make('home_address')
-                                    ->label(__('cleaning_admin.workers.fields.home_address'))
-                                    ->placeholder('-')
-                                    ->columnSpanFull(),
-                                TextEntry::make('home_latitude')
-                                    ->label(__('cleaning_admin.workers.fields.home_latitude'))
-                                    ->placeholder('-'),
-                                TextEntry::make('home_longitude')
-                                    ->label(__('cleaning_admin.workers.fields.home_longitude'))
-                                    ->placeholder('-'),
                                 TextEntry::make('featured_until')
                                     ->label(__('cleaning_admin.workers.fields.featured_until'))
                                     ->dateTime('Y-m-d H:i')
@@ -224,12 +214,6 @@ final class WorkerInfolist
                                 TextEntry::make('suspended_until')
                                     ->label(__('cleaning_admin.workers.fields.suspended_until'))
                                     ->dateTime('Y-m-d H:i')
-                                    ->placeholder('-'),
-                                TextEntry::make('default_working_hours')
-                                    ->label(__('cleaning_admin.workers.fields.default_working_hours'))
-                                    ->state(fn (Worker $record): array => self::formatWorkingHours($record->default_working_hours))
-                                    ->listWithLineBreaks()
-                                    ->columnSpanFull()
                                     ->placeholder('-'),
                             ])
                             ->columns(2)
@@ -282,76 +266,6 @@ final class WorkerInfolist
         }
 
         return __('cleaning_admin.workers.gender_options.'.$value) ?: $value;
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    private static function formatWorkingHours(mixed $state): array
-    {
-        if (! is_array($state) || $state === []) {
-            return [];
-        }
-
-        $dayLabels = [
-            'sunday' => 'الأحد',
-            'monday' => 'الإثنين',
-            'tuesday' => 'الثلاثاء',
-            'wednesday' => 'الأربعاء',
-            'thursday' => 'الخميس',
-            'friday' => 'الجمعة',
-            'saturday' => 'السبت',
-        ];
-
-        $lines = [];
-        foreach ($dayLabels as $day => $label) {
-            $dayHours = $state[$day] ?? null;
-            $ranges = self::workingHourRanges($dayHours);
-
-            $lines[] = $label.': '.($ranges === [] ? 'غير متاح' : implode('، ', $ranges));
-        }
-
-        return $lines;
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    private static function workingHourRanges(mixed $dayHours): array
-    {
-        if (! is_array($dayHours)) {
-            return [];
-        }
-
-        if (isset($dayHours['available']) && ! (bool) $dayHours['available']) {
-            return [];
-        }
-
-        $periods = isset($dayHours['data']) && is_array($dayHours['data'])
-            ? $dayHours['data']
-            : [$dayHours];
-
-        $ranges = [];
-        foreach ($periods as $period) {
-            if (! is_array($period)) {
-                continue;
-            }
-
-            if (isset($period['from'], $period['to'])) {
-                $ranges[] = $period['from'].' - '.$period['to'];
-
-                continue;
-            }
-
-            $from = array_key_first($period);
-            $to = is_string($from) ? ($period[$from] ?? null) : null;
-
-            if (is_string($from) && is_string($to)) {
-                $ranges[] = $from.' - '.$to;
-            }
-        }
-
-        return $ranges;
     }
 
     /**

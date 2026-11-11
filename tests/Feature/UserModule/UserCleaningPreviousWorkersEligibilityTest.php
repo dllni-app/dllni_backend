@@ -275,7 +275,7 @@ it('returns a worker after the customer confirms that worker while the team book
         ->toContain($worker->id);
 });
 
-it('accepts a valid property type and ignores neighborhood while applying the optional schedule filter', function (): void {
+it('ignores retired working hours for previous workers while retaining schedule conflict filtering', function (): void {
     seedPreviousWorkerEligibilitySettings();
 
     $customer = User::factory()->create();
@@ -315,7 +315,7 @@ it('accepts a valid property type and ignores neighborhood while applying the op
     $workerIds = collect($response->json('workers'))->pluck('workerId')->all();
 
     expect($workerIds)->toContain($availableWorker->id)
-        ->not->toContain($unavailableWorker->id);
+        ->toContain($unavailableWorker->id);
 });
 
 it('excludes a previous worker whose accepted booking overlaps the requested interval', function (): void {

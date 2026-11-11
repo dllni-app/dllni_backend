@@ -288,8 +288,9 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
         DepositService $depositService,
         WorkerBookingScheduleConflictService $scheduleConflictService,
     ): bool {
-        // An offer must be actionable: acceptance requires both parties' coordinates
-        // and the worker's registered home address, even for urgent orders.
+        // Only the customer's destination coordinates are required.
+        // Configured worker hours and the retired mission-start location do
+        // not determine whether an order can reach the worker.
         if (! app(CleaningGeographicDispatchService::class)->hasRequiredLocations($worker, $booking)) {
             return false;
         }
@@ -306,29 +307,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             return false;
         }
 
-        if ((string) $booking->property_type !== 'event_assistance') {
-            return $bookingDateTime !== null && $worker->isAvailableAt($bookingDateTime);
-        }
-
-        $sessions = CleaningBookingSession::query()
-            ->where('cleaning_booking_id', $booking->id)
-            ->whereNotIn('status', CleaningBookingSessionStatus::terminalValues())
-            ->orderBy('sequence')
-            ->get();
-
-        if ($sessions->isEmpty()) {
-            return $bookingDateTime !== null && $worker->isAvailableAt($bookingDateTime);
-        }
-
-        foreach ($sessions as $session) {
-            $startsAt = $session->startsAt();
-            if ($startsAt === null || ! $worker->isAvailableAt($startsAt)) {
-                return false;
-            }
-        }
-
-        $scheduleConflictService->forgetWorker($worker);
-
+        // Preserve protection against collisions with already accepted work.
         return ! $scheduleConflictService->hasConflict($worker, $booking);
     }
 
