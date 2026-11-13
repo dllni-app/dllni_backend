@@ -18,6 +18,8 @@ use Modules\Resturants\Models\Order;
 use Modules\Resturants\Models\OrderStatusLog;
 use Modules\Resturants\Models\PromoCode;
 use Modules\Resturants\Services\RestaurantOrderNotificationService;
+use Modules\Resturants\Services\Promotions\PromotionPricingResult;
+use Modules\Resturants\Services\Promotions\RestaurantCartPricingService;
 use Modules\User\Models\UserAddress;
 
 final class UserRestaurantCheckoutPipelineService
@@ -30,6 +32,7 @@ final class UserRestaurantCheckoutPipelineService
         private readonly PlatformCouponRedemptionService $platformCoupons,
         private readonly CommerceCheckoutReceiptService $receipts,
         private readonly CommerceCheckoutQuoteService $quotes,
+        private readonly RestaurantCartPricingService $pricing,
     ) {}
 
     public function preview(int $userId, int $cartId, string $fulfillmentType, string $receiveMode, ?string $scheduledAt, ?string $couponCode, ?string $note, ?int $addressId = null): array
@@ -50,7 +53,10 @@ final class UserRestaurantCheckoutPipelineService
             $this->assertDeliveryCoordinates($cart, $address);
         }
 
-        $subtotal = (float) $cart->items->sum(fn ($item): float => (float) ($item->total_price ?? 0));
+        $pricing = $this->pricing->price($cart);
+        $this->pricing->assertPreviewable($cart, $pricing);
+        $this->pricing->rememberAdvancedPricing($cart, $pricing);
+        $subtotal = PromotionPricingResult::money($pricing->netSubtotal);
         $discount = $this->computeDiscount($userId, (int) $cart->restaurant_id, $couponCode, $subtotal);
         $serviceFee = 0.0;
         $tax = 0.0;
@@ -69,7 +75,9 @@ final class UserRestaurantCheckoutPipelineService
             'cartId' => $cart->id,
             'merchant' => ['id' => $cart->restaurant?->id, 'name' => $cart->restaurant?->name],
             'fulfillment' => ['type' => $fulfillmentType, 'receiveMode' => $receiveMode, 'scheduledAt' => $scheduledAt, 'address' => $address ? $this->addressPayload($address) : null],
-            'amounts' => ['subtotal' => round($subtotal, 2), 'discount' => round($discount, 2), 'serviceFee' => round($serviceFee, 2), 'deliveryFee' => round($deliveryFee, 2), 'tax' => round($tax, 2), 'total' => round($total, 2)],
+            'pricingFingerprint' => $pricing->fingerprint,
+            'appliedPromotions' => $pricing->promotionsPayload(),
+            'amounts' => [...$pricing->amounts(), 'subtotal' => round($subtotal, 2), 'discount' => round($discount, 2), 'serviceFee' => round($serviceFee, 2), 'deliveryFee' => round($deliveryFee, 2), 'tax' => round($tax, 2), 'total' => round($total, 2)],
             'note' => $note,
         ];
     }
@@ -77,7 +85,7 @@ final class UserRestaurantCheckoutPipelineService
     public function place(int $userId, int $cartId, string $fulfillmentType, string $receiveMode, ?string $scheduledAt, ?string $couponCode, ?string $note, ?int $addressId = null, ?string $idempotencyKey = null, ?string $quoteId = null): Order
     {
         $receiptPayload = compact('fulfillmentType', 'receiveMode', 'scheduledAt', 'couponCode', 'note', 'addressId', 'quoteId');
-        $placeNew = fn (): Order => $this->placeWithOptionalQuote($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $addressId, $quoteId);
+        $placeNew = fn (): Order => $this->placeWithOptionalQuote($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $addressId, $quoteId, $idempotencyKey !== null);
 
         if ($idempotencyKey !== null) {
             [$order, $created] = DB::transaction(fn (): array => $this->receipts->execute(
@@ -101,16 +109,14 @@ final class UserRestaurantCheckoutPipelineService
         return $order;
     }
 
-    private function placeWithOptionalQuote(int $userId, int $cartId, string $fulfillmentType, string $receiveMode, ?string $scheduledAt, ?string $couponCode, ?string $note, ?int $addressId, ?string $quoteId): Order
+    private function placeWithOptionalQuote(int $userId, int $cartId, string $fulfillmentType, string $receiveMode, ?string $scheduledAt, ?string $couponCode, ?string $note, ?int $addressId, ?string $quoteId, bool $hasIdempotencyKey): Order
     {
         $selection = compact('fulfillmentType', 'receiveMode', 'scheduledAt', 'couponCode', 'note', 'addressId');
 
-        return DB::transaction(function () use ($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $addressId, $quoteId, $selection): Order {
-            if ($quoteId !== null) {
-                $this->quotes->assertCurrent($userId, 'restaurant', $cartId, $quoteId, $selection);
-            }
+        return DB::transaction(function () use ($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $addressId, $quoteId, $selection, $hasIdempotencyKey): Order {
+            $confirmedPricing = $quoteId === null ? null : $this->quotes->assertCurrent($userId, 'restaurant', $cartId, $quoteId, $selection);
 
-            $order = $this->placeNew($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $addressId);
+            $order = $this->placeNew($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $addressId, $confirmedPricing, $quoteId !== null && $hasIdempotencyKey);
 
             if ($quoteId !== null) {
                 $this->quotes->consume($userId, 'restaurant', $quoteId, $order);
@@ -120,7 +126,7 @@ final class UserRestaurantCheckoutPipelineService
         });
     }
 
-    private function placeNew(int $userId, int $cartId, string $fulfillmentType, string $receiveMode, ?string $scheduledAt, ?string $couponCode, ?string $note, ?int $addressId): Order
+    private function placeNew(int $userId, int $cartId, string $fulfillmentType, string $receiveMode, ?string $scheduledAt, ?string $couponCode, ?string $note, ?int $addressId, ?PromotionPricingResult $confirmedPricing, bool $promotionConfirmed): Order
     {
         $this->assertSupportedSchedule($fulfillmentType, $receiveMode);
         $cartForSchedule = Cart::query()->whereKey($cartId)->where('user_id', $userId)->with('restaurant.operatingHours')->firstOrFail();
@@ -142,14 +148,14 @@ final class UserRestaurantCheckoutPipelineService
             $this->assertDeliveryCoordinates($cart, $address);
         }
 
-        $order = DB::transaction(function () use ($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $address): Order {
-            return $this->placeWithDeliveryTransaction($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $address);
+        $order = DB::transaction(function () use ($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $address, $confirmedPricing, $promotionConfirmed): Order {
+            return $this->placeWithDeliveryTransaction($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $address, $confirmedPricing, $promotionConfirmed);
         });
 
         return $order;
     }
 
-    private function placeWithDeliveryTransaction(int $userId, int $cartId, string $fulfillmentType, string $receiveMode, ?string $scheduledAt, ?string $couponCode, ?string $note, ?UserAddress $address): Order
+    private function placeWithDeliveryTransaction(int $userId, int $cartId, string $fulfillmentType, string $receiveMode, ?string $scheduledAt, ?string $couponCode, ?string $note, ?UserAddress $address, ?PromotionPricingResult $confirmedPricing, bool $promotionConfirmed): Order
     {
         $order = $this->checkoutService->checkoutCart(
             userId: $userId,
@@ -160,6 +166,8 @@ final class UserRestaurantCheckoutPipelineService
             promoCode: $couponCode,
             specialInstructions: $note,
             userAddressId: $address?->id,
+            confirmedPricing: $confirmedPricing,
+            promotionConfirmed: $promotionConfirmed,
         );
 
         OrderStatusLog::query()->firstOrCreate(

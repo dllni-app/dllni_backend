@@ -14,15 +14,13 @@ final class RestaurantCartProductsCountController
     {
         $userId = (int) $request->user()->id;
 
-        // The cart badge represents the number of cart line items/products,
-        // not the sum of their quantities. For example, 2 burgers + 3 drinks
-        // should show 2 items in the badge, not 5.
+        // The customer badge counts actual units across restaurant carts.
         $productsCount = CartItem::query()
             ->whereHas('cart', fn ($query) => $query->where('user_id', $userId))
-            ->count();
+            ->sum('quantity');
 
         return response()->json([
-            'productsCount' => $productsCount,
+            'productsCount' => (int) $productsCount,
         ]);
     }
 }

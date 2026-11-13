@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Modules\Resturants\Models;
 
+use Carbon\CarbonInterface;
 use Database\Factories\ProductFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -26,9 +28,16 @@ final class Product extends Model implements HasMedia
         'restaurant_id',
         'category_id',
         'item_type',
+        'product_kind',
+        'catalog_role',
+        'classification_status',
+        'primary_food_category_id',
+        'classified_at',
         'name',
         'description',
         'search_tags',
+        'servings',
+        'ingredient_exclusions',
         'price',
         'discounted_price',
         'is_available',
@@ -40,6 +49,15 @@ final class Product extends Model implements HasMedia
         'is_featured',
     ];
 
+    public function setIngredientExclusionsAttribute(?array $values): void
+    {
+        $terms = array_values(array_unique(array_filter(array_map(
+            fn ($term) => \Modules\User\Services\RestaurantFoodSearchNormalizer::normalize((string) $term),
+            $values ?? [],
+        ))));
+        $this->attributes['ingredient_exclusions'] = $values === null ? null : json_encode($terms, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+    }
+
     public function restaurant(): BelongsTo
     {
         return $this->belongsTo(Restaurant::class);
@@ -48,6 +66,28 @@ final class Product extends Model implements HasMedia
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    public function foodCategory(): BelongsTo
+    {
+        return $this->belongsTo(FoodDiscoveryCategory::class, 'primary_food_category_id');
+    }
+
+    public function scopeIndependentlyOrderable(Builder $query): Builder
+    {
+        return $query->where('catalog_role', 'independent');
+    }
+
+    public function scopeCuratedMeals(Builder $query): Builder
+    {
+        return $query->independentlyOrderable()
+            ->where('classification_status', 'reviewed')
+            ->whereIn('product_kind', ['main_dish', 'combo_meal']);
+    }
+
+    public function isIndependentlyOrderable(): bool
+    {
+        return ($this->catalog_role ?? 'independent') === 'independent';
     }
 
     public function modifierGroups(): BelongsToMany
@@ -86,7 +126,7 @@ final class Product extends Model implements HasMedia
      * currently active offers attached to the product. Percentage offers are
      * capped at 100% and fixed discounts never make the price negative.
      */
-    public function effectivePrice(): float
+    public function effectivePrice(?CarbonInterface $at = null): float
     {
         $originalPrice = max(0.0, (float) ($this->price ?? 0));
         $bestPrice = $originalPrice;
@@ -95,7 +135,10 @@ final class Product extends Model implements HasMedia
             $bestPrice = min($bestPrice, max(0.0, (float) $this->discounted_price));
         }
 
-        foreach ($this->activeOffersNow() as $offer) {
+        foreach ($this->activeOffersNow($at) as $offer) {
+            if (! $offer->isProductDiscount()) {
+                continue;
+            }
             $discountValue = max(0.0, (float) $offer->discount_value);
             $candidate = match ($offer->discount_type) {
                 DiscountType::Percentage => $originalPrice * (1 - min(100.0, $discountValue) / 100),
@@ -117,18 +160,19 @@ final class Product extends Model implements HasMedia
     }
 
     /** @return Collection<int, Offer> */
-    public function activeOffersNow(): Collection
+    public function activeOffersNow(?CarbonInterface $at = null): Collection
     {
         $offers = $this->relationLoaded('offers')
             ? $this->offers
             : $this->offers()->get();
 
-        $now = now();
+        $now = $at ?? now();
 
         return $offers
+            ->filter(static fn (Offer $offer): bool => $offer->isProductDiscount())
             ->filter(static fn (Offer $offer): bool => (bool) $offer->is_active)
             ->filter(static fn (Offer $offer): bool => $offer->starts_at === null || $offer->starts_at->lessThanOrEqualTo($now))
-            ->filter(static fn (Offer $offer): bool => $offer->ends_at === null || $offer->ends_at->greaterThanOrEqualTo($now))
+            ->filter(static fn (Offer $offer): bool => $offer->ends_at === null || $offer->ends_at->greaterThan($now))
             ->values();
     }
 
@@ -178,7 +222,15 @@ final class Product extends Model implements HasMedia
     {
         return [
             'item_type' => 'string',
+            'product_kind' => 'string',
+            'catalog_role' => 'string',
+            'classification_status' => 'string',
+            'primary_food_category_id' => 'integer',
+            'classified_at' => 'datetime',
             'search_tags' => 'array',
+            'servings' => 'integer',
+            'ingredient_exclusions' => 'array',
+            'complementary_product_ids' => 'array',
             'price' => 'decimal:2',
             'discounted_price' => 'decimal:2',
             'is_available' => 'boolean',
@@ -190,4 +242,10 @@ final class Product extends Model implements HasMedia
             'is_featured' => 'boolean',
         ];
     }
+
+    public function registerMediaConversions(?\Spatie\MediaLibrary\MediaCollections\Models\Media $media = null): void
+    {
+        \App\Support\ImageVariants::register($this, $media);
+    }
+
 }

@@ -29,6 +29,7 @@ final class UserRestaurantCartItemUpdateController
             replaceSubstituteProduct: $request->has('substituteProductId'),
             replaceNote: $hasNote,
             expectedRevision: $request->has('expectedRevision') ? $request->integer('expectedRevision') : null,
+            convertRewardToOrdinary: $request->boolean('convertRewardToOrdinary'),
         );
 
         return response()->json([

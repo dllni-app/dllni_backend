@@ -430,6 +430,15 @@ final class SupervisorWorkflowController
         abort_if(in_array($order->status, [CleaningBookingStatus::Completed, CleaningBookingStatus::Cancelled], true), 409);
         $file = $data['photo'];
         $path = $file->store('private/supervisor-media/'.$booking, 'local');
+        if ($path === false) {
+            throw new \RuntimeException('Could not store evidence.');
+        }
+        try {
+            \App\Support\DirectImageVariants::generate($file, 'local', $path);
+        } catch (\Throwable $error) {
+            Storage::disk('local')->delete($path);
+            throw $error;
+        }
         $id = DB::table('cleaning_supervisor_media')->insertGetId([
             'cleaning_booking_id' => $booking, 'supervisor_user_id' => $request->user()->id,
             'purpose' => $data['purpose'], 'disk' => 'local', 'path' => $path,
@@ -452,8 +461,19 @@ final class SupervisorWorkflowController
         abort_unless($entry, 404);
         abort_unless(Storage::disk($entry->disk)->exists($entry->path), 404);
 
-        return Storage::disk($entry->disk)->response($entry->path, 'evidence-'.$media, [
-            'Content-Type' => $entry->mime_type,
+        $variant = $request->query('variant');
+        $path = $entry->path;
+        $mime = $entry->mime_type;
+        if (in_array($variant, ['thumb', 'webp'], true)) {
+            $candidate = \App\Support\DirectImageVariants::path($path, $variant);
+            if (Storage::disk($entry->disk)->exists($candidate)) {
+                $path = $candidate;
+                $mime = 'image/webp';
+            }
+        }
+
+        return Storage::disk($entry->disk)->response($path, 'evidence-'.$media, [
+            'Content-Type' => $mime,
             'Cache-Control' => 'private, no-store',
             'X-Content-Type-Options' => 'nosniff',
         ]);

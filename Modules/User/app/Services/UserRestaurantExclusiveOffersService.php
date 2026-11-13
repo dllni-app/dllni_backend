@@ -31,8 +31,9 @@ final class UserRestaurantExclusiveOffersService
             ->join('restaurants', 'restaurants.id', '=', 'offers.restaurant_id')
             ->where('restaurants.is_active', true)
             ->where('offers.is_active', true)
+            ->where('offers.offer_type', 'product_discount')
             ->where(fn ($q) => $q->whereNull('offers.starts_at')->orWhere('offers.starts_at', '<=', $now))
-            ->where(fn ($q) => $q->whereNull('offers.ends_at')->orWhere('offers.ends_at', '>=', $now))
+            ->where(fn ($q) => $q->whereNull('offers.ends_at')->orWhere('offers.ends_at', '>', $now))
             ->with(['restaurant.media']);
 
         if ($canUseHaversine) {

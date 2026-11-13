@@ -11,6 +11,7 @@ final class RestaurantV2HomeRequest extends RestaurantV2BrowseRequest
     {
         $rules = $this->baseRules();
         $rules['perPage'] = ['sometimes', 'integer', 'min:1', 'max:20'];
+        $rules['includeUpcoming'] = ['sometimes', 'boolean'];
         unset($rules['limit']);
 
         return $rules;

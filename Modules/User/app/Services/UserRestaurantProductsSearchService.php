@@ -154,6 +154,7 @@ final class UserRestaurantProductsSearchService
                         });
                 },
                 'restaurant' => fn($restaurantQuery) => $restaurantQuery->select(['id', 'name', 'city', 'district']),
+                'restaurant.media',
                 'category' => fn($categoryQuery) => $categoryQuery->select(['id', 'name']),
                 'media',
             ]);

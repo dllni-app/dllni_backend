@@ -50,6 +50,7 @@ use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerPermi
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerProductAvailabilityController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerPromoCodesController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerTopSellingProductsController;
+use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerFoodCategoryController;
 use Modules\Resturants\Http\Controllers\API\RestaurantPenaltyController;
 use Modules\Resturants\Http\Controllers\API\RestaurantRecurringOrderController;
 use Modules\Resturants\Http\Controllers\API\RestaurantReputationLogController;
@@ -150,6 +151,13 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () use (
         Route::apiResource('products', ProductController::class)
             ->middleware($menuPermission)
             ->names('restaurant-owner.products');
+        Route::get('products/{product}/complements', [\Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerProductComplementsController::class, 'show'])
+            ->middleware($menuPermission)->name('restaurant-owner.products.complements.show');
+        Route::put('products/{product}/complements', [\Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerProductComplementsController::class, 'update'])
+            ->middleware($menuPermission)->name('restaurant-owner.products.complements.update');
+        Route::get('food-categories', RestaurantOwnerFoodCategoryController::class)
+            ->middleware($menuPermission)
+            ->name('restaurant-owner.food-categories');
 
         Route::get('restaurant', [RestaurantController::class, 'show'])
             ->middleware($storePermission);

@@ -18,6 +18,9 @@ use Modules\Resturants\Models\Cart;
 use Modules\Resturants\Models\Order;
 use Modules\Resturants\Models\OrderItem;
 use Modules\Resturants\Models\PromoCode;
+use Modules\Resturants\Services\Promotions\PromotionPricingResult;
+use Modules\Resturants\Services\Promotions\RestaurantCartPricingService;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Modules\Delivery\Services\DeliveryPricingService;
 use Modules\User\Models\UserAddress;
 
@@ -26,6 +29,7 @@ final class RestaurantCheckoutService
     public function __construct(
         private readonly PlatformCouponRedemptionService $platformCoupons,
         private readonly DeliveryPricingService $deliveryPricing,
+        private readonly RestaurantCartPricingService $pricing,
     ) {}
 
     public function checkoutCart(
@@ -37,8 +41,10 @@ final class RestaurantCheckoutService
         ?string $promoCode = null,
         ?string $specialInstructions = null,
         ?int $userAddressId = null,
+        ?PromotionPricingResult $confirmedPricing = null,
+        bool $promotionConfirmed = false,
     ): Order {
-        return DB::transaction(function () use ($userId, $cartId, $orderType, $pickupMode, $pickupScheduledFor, $promoCode, $specialInstructions, $userAddressId): Order {
+        return DB::transaction(function () use ($userId, $cartId, $orderType, $pickupMode, $pickupScheduledFor, $promoCode, $specialInstructions, $userAddressId, $confirmedPricing, $promotionConfirmed): Order {
             $cart = Cart::query()
                 ->whereKey($cartId)
                 ->where('user_id', $userId)
@@ -52,7 +58,12 @@ final class RestaurantCheckoutService
             }
 
             $this->assertCartItemsBelongToRestaurant($cart);
-            $subtotal = (float) $cart->items->sum(fn ($item): float => (float) ($item->total_price ?? 0));
+            $pricing = $this->pricing->price($cart, true);
+            if ($confirmedPricing !== null && ! hash_equals($confirmedPricing->fingerprint, $pricing->fingerprint)) {
+                throw new ConflictHttpException('QUOTE_CHANGED');
+            }
+            $this->pricing->assertPlaceable($cart, $pricing, $promotionConfirmed);
+            $subtotal = PromotionPricingResult::money($pricing->netSubtotal);
             $restaurantId = (int) $cart->restaurant_id;
 
             $platformQuote = $this->platformCoupons->quoteForPlacement(
@@ -100,6 +111,9 @@ final class RestaurantCheckoutService
                 'pickup_mode' => $pickupMode ?? RestaurantPickupMode::ImmediatePickup->value,
                 'pickup_scheduled_for' => $pickupScheduledFor,
                 'subtotal' => $subtotal,
+                'original_items_subtotal' => PromotionPricingResult::money($pricing->originalSubtotal),
+                'promotion_discount_amount' => PromotionPricingResult::money($pricing->promotionDiscount),
+                'promotion_snapshot' => ['fingerprint' => $pricing->fingerprint, 'appliedPromotions' => $pricing->promotionsPayload(), 'ordinaryDiscount' => PromotionPricingResult::money($pricing->ordinaryDiscount), 'boundedFallback' => $pricing->boundedFallback],
                 'discount_amount' => $discountAmount,
                 'tax_amount' => $taxAmount,
                 'service_fee' => $serviceFee,
@@ -110,43 +124,71 @@ final class RestaurantCheckoutService
             $hasProductSnapshot = Schema::hasColumn('order_items', 'product_name');
             $hasModifierSnapshot = Schema::hasColumn('order_items', 'modifier_snapshot');
             foreach ($cart->items as $cartItem) {
-                $orderItemAttributes = [
-                    'order_id' => $order->id,
-                    'product_id' => $cartItem->product_id,
-                    'substitute_product_id' => $cartItem->substitute_product_id,
-                    'quantity' => $cartItem->quantity,
-                    'unit_price' => $cartItem->unit_price,
-                    'total_price' => $cartItem->total_price,
-                    'special_instructions' => $cartItem->special_instructions,
-                ];
-                if ($hasProductSnapshot) {
-                    $orderItemAttributes['product_name'] = $cartItem->product?->name;
-                }
-                if ($hasModifierSnapshot) {
-                    $orderItemAttributes['modifier_snapshot'] = $cartItem->modifiers->map(fn ($modifier): array => [
-                        'id' => (int) $modifier->id,
-                        'modifierGroupId' => (int) $modifier->modifier_group_id,
-                        'groupName' => $modifier->modifierGroup?->name,
-                        'name' => $modifier->name,
-                        'price' => (float) ($modifier->pivot?->price ?? $modifier->price ?? 0),
-                    ])->values()->all();
-                }
-                $orderItem = OrderItem::create($orderItemAttributes);
-
-                $modifierRows = DB::table('cart_item_modifier')
-                    ->where('cart_item_id', $cartItem->id)
-                    ->get(['modifier_id', 'price'])
-                    ->map(fn ($row): array => [
+                foreach ($pricing->lines[(int) $cartItem->id]['allocations'] as $segment) {
+                    $quantity = $segment['quantity'];
+                    $orderItemAttributes = [
+                        'order_id' => $order->id,
+                        'product_id' => $cartItem->product_id,
+                        'substitute_product_id' => $cartItem->substitute_product_id,
+                        'quantity' => $quantity,
+                        'unit_price' => PromotionPricingResult::money($segment['netUnit']),
+                        'total_price' => PromotionPricingResult::money($segment['netUnit'] * $quantity),
+                        'original_unit_price' => PromotionPricingResult::money($segment['originalUnit']),
+                        'original_total_price' => PromotionPricingResult::money($segment['originalUnit'] * $quantity),
+                        'promotion_discount_amount' => PromotionPricingResult::money($segment['promotionDiscount'] * $quantity),
+                        'reward_quantity' => $segment['role'] === 'reward' ? $quantity : 0,
+                        'promotion_snapshot' => $segment['offerId'] === null ? null : [
+                            'offerId' => $segment['offerId'],
+                            'role' => $segment['role'],
+                            'freeQuantity' => $segment['free'] ? $quantity : 0,
+                            'sourceCartItemId' => $cartItem->id,
+                        ],
+                        'special_instructions' => $cartItem->special_instructions,
+                    ];
+                    if ($hasProductSnapshot) {
+                        $orderItemAttributes['product_name'] = $cartItem->product?->name;
+                    }
+                    if ($hasModifierSnapshot) {
+                        $orderItemAttributes['modifier_snapshot'] = $cartItem->modifiers->map(fn ($modifier): array => [
+                            'id' => (int) $modifier->id,
+                            'modifierGroupId' => (int) $modifier->modifier_group_id,
+                            'groupName' => $modifier->modifierGroup?->name,
+                            'name' => $modifier->name,
+                            'price' => (float) ($modifier->price ?? 0),
+                        ])->values()->all();
+                    }
+                    $orderItem = OrderItem::create($orderItemAttributes);
+                    $modifierRows = $cartItem->modifiers->map(fn ($modifier): array => [
                         'order_item_id' => $orderItem->id,
-                        'modifier_id' => (int) $row->modifier_id,
-                        'price' => (float) $row->price,
+                        'modifier_id' => (int) $modifier->id,
+                        'price' => (float) ($modifier->price ?? 0),
                         'created_at' => now(),
                         'updated_at' => now(),
                     ])->all();
-
-                if ($modifierRows !== []) {
-                    DB::table('order_item_modifier')->insert($modifierRows);
+                    if ($modifierRows !== []) {
+                        DB::table('order_item_modifier')->insert($modifierRows);
+                    }
                 }
+            }
+
+            foreach ($pricing->appliedPromotions as $application) {
+                $rule = $application['rule'];
+                $order->promotionApplications()->create([
+                    'offer_id' => $rule['offerId'],
+                    'original_offer_id' => $rule['offerId'],
+                    'restaurant_id' => $restaurantId,
+                    'mechanism' => $rule['offerType'],
+                    'rule_version' => $rule['ruleVersion'],
+                    'application_count' => $application['applications'],
+                    'reward_quantity' => $application['rewardQuantity'],
+                    'free_quantity' => $application['freeQuantity'],
+                    'discount_amount' => PromotionPricingResult::money($application['discount']),
+                    'net_eligible_revenue' => PromotionPricingResult::money($application['netRevenue']),
+                    'currency' => 'SYP',
+                    'rule_snapshot' => $rule,
+                    'status' => 'applied',
+                    'applied_at' => now(),
+                ]);
             }
 
             if ($platformQuote) {

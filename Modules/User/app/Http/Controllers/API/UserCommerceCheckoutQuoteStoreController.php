@@ -51,6 +51,7 @@ final class UserCommerceCheckoutQuoteStoreController
                 cartId: $cartId,
                 selection: $selection,
                 amounts: $preview['amounts'],
+                expectedPricingFingerprint: $preview['pricingFingerprint'] ?? null,
             )),
         ], 201);
     }

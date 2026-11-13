@@ -34,11 +34,12 @@ final class UserRestaurantLatestOrderedProductResource extends JsonResource
             'isFavorite' => (bool) ($product->getAttribute('isFavoritedByUser') ?? false),
             'restaurantId' => $restaurant->id,
             'restaurantName' => $restaurant->name,
+            'restaurantImageUrl' => \App\Support\ImageVariants::url($restaurant, 'primary-image', true),
             'displayPrice' => $displayPrice,
             'originalPrice' => $hasDiscount ? $price : null,
             'lastOrderedLineUnitPrice' => $line->unit_price !== null ? (float) $line->unit_price : null,
             'currency' => config('app.currency', 'IQD'),
-            'primaryImageUrl' => $product->getFirstMediaUrl('primary-image') ?: null,
+            'primaryImageUrl' => \App\Support\ImageVariants::url($product, 'primary-image', true),
             'lastOrderId' => $line->order_id,
             'lastOrderedAt' => $orderedAt->toDateTimeString(),
         ];

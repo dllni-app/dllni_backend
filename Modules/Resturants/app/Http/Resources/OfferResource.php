@@ -21,20 +21,24 @@ final class OfferResource extends JsonResource
         }
 
         return [
+            ...$this->resource->promotionAttributes(),
             'id' => $this->id,
             'restaurantId' => $this->restaurant_id,
             'name' => $this->name,
             'discountType' => $this->discount_type?->value ?? $this->discount_type,
-            'discountValue' => $this->discount_value ? (float) $this->discount_value : null,
+            'discountValue' => $this->discount_value === null ? null : (float) $this->discount_value,
             'imageUrl' => $imageUrl,
-            'startsAt' => $this->starts_at?->toDateTimeString(),
-            'endsAt' => $this->ends_at?->toDateTimeString(),
+            'startsAt' => $this->resource->isProductDiscount() ? $this->starts_at?->toDateTimeString() : $this->starts_at?->toIso8601String(),
+            'endsAt' => $this->resource->isProductDiscount() ? $this->ends_at?->toDateTimeString() : $this->ends_at?->toIso8601String(),
             'isActive' => $this->is_active,
+            'startsAtIso' => $this->starts_at?->toIso8601String(),
+            'endsAtIso' => $this->ends_at?->toIso8601String(),
             'restaurant' => $this->whenLoaded('restaurant', fn () => [
                 'id' => $this->restaurant->id,
                 'name' => $this->restaurant->name,
             ]),
             'products' => $this->whenLoaded('products'),
+            'rewardProducts' => $this->whenLoaded('rewardProducts'),
             'createdAt' => $this->created_at->toDateTimeString(),
             'updatedAt' => $this->updated_at->toDateTimeString(),
         ];

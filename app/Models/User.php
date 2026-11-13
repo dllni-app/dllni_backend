@@ -250,4 +250,10 @@ final class User extends Authenticatable implements FilamentUser, HasMedia
             ])->saveQuietly();
         });
     }
+
+    public function registerMediaConversions(?\Spatie\MediaLibrary\MediaCollections\Models\Media $media = null): void
+    {
+        \App\Support\ImageVariants::register($this, $media);
+    }
+
 }

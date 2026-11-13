@@ -14,6 +14,7 @@ use Modules\Resturants\Http\Resources\OfferResource;
 use Modules\Resturants\Models\Offer;
 use Modules\Resturants\Services\OfferService;
 use Modules\Resturants\Support\RestaurantOwnerContext;
+use Modules\Resturants\Support\RestaurantPromotionCapability;
 use Throwable;
 
 final class RestaurantOwnerOffersController
@@ -28,8 +29,9 @@ final class RestaurantOwnerOffersController
         $restaurant = $ownerContext->restaurant();
 
         $offers = Offer::getQuery()
-            ->with(['restaurant', 'products'])
+            ->with(['restaurant', 'products', 'rewardProducts'])
             ->where('restaurant_id', $restaurant->id)
+            ->when(! RestaurantPromotionCapability::supported(), fn ($q) => $q->where('offer_type', 'product_discount'))
             ->paginate($request->get('perPage', 10));
 
         return OfferResource::collection($offers);
@@ -45,15 +47,16 @@ final class RestaurantOwnerOffersController
             OfferData::from($request->validated())
         );
 
-        return OfferResource::make($offer->load(['restaurant', 'products']));
+        return OfferResource::make($offer->load(['restaurant', 'products', 'rewardProducts']));
     }
 
     public function show(Offer $offer, RestaurantOwnerContext $ownerContext): OfferResource
     {
         $restaurant = $ownerContext->restaurant();
         abort_unless($ownerContext->modelBelongsToRestaurant($offer, (int) $restaurant->id), Response::HTTP_NOT_FOUND);
+        abort_unless($offer->isProductDiscount() || RestaurantPromotionCapability::supported(), Response::HTTP_NOT_FOUND);
 
-        $offer->load(['restaurant', 'products']);
+        $offer->load(['restaurant', 'products', 'rewardProducts']);
 
         return OfferResource::make($offer);
     }
@@ -63,6 +66,7 @@ final class RestaurantOwnerOffersController
     {
         $restaurant = $ownerContext->restaurant();
         abort_unless($ownerContext->modelBelongsToRestaurant($offer, (int) $restaurant->id), Response::HTTP_NOT_FOUND);
+        abort_unless($offer->isProductDiscount() || RestaurantPromotionCapability::supported(), Response::HTTP_NOT_FOUND);
         $request->merge(['restaurantId' => $restaurant->id]);
 
         $updated = $this->offerService->update(
@@ -70,13 +74,14 @@ final class RestaurantOwnerOffersController
             $offer
         );
 
-        return OfferResource::make($updated->load(['restaurant', 'products']));
+        return OfferResource::make($updated->load(['restaurant', 'products', 'rewardProducts']));
     }
 
     public function destroy(Offer $offer, RestaurantOwnerContext $ownerContext): Response
     {
         $restaurant = $ownerContext->restaurant();
         abort_unless($ownerContext->modelBelongsToRestaurant($offer, (int) $restaurant->id), Response::HTTP_NOT_FOUND);
+        abort_unless($offer->isProductDiscount() || RestaurantPromotionCapability::supported(), Response::HTTP_NOT_FOUND);
 
         $offerName = $offer->name;
         $restaurantId = (int) $offer->restaurant_id;

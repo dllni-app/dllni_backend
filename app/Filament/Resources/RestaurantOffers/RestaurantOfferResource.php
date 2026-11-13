@@ -60,21 +60,22 @@ final class RestaurantOfferResource extends Resource
             ->columns([
                 TextColumn::make('name')->label('العرض')->searchable()->sortable(),
                 TextColumn::make('restaurant.name')->label('المطعم')->searchable()->sortable(),
-                TextColumn::make('discount_type')->label('نوع الخصم')->badge()
-                    ->formatStateUsing(fn ($state): string => self::discountTypeLabel($state)),
-                TextColumn::make('discount_value')->label('قيمة الخصم')->sortable(),
+                TextColumn::make('offer_type')->label('نوع العرض')->badge()->formatStateUsing(fn ($state): string => $state?->value === 'buy_x_get_y' ? 'اشترِ واحصل' : 'خصم منتج'),
+                TextColumn::make('rule')->label('شروط العرض')->state(fn (Offer $record): string => $record->isProductDiscount() ? self::discountTypeLabel($record->discount_type).' — '.$record->discount_value : ($record->listingBadgeText() ?? '—')),
+                TextColumn::make('promotion_applications_count')->label('الطلبات المسجلة')->state(fn (Offer $record): string => $record->isProductDiscount() ? 'غير متاح' : (string) $record->promotion_applications_count),
                 TextColumn::make('products_count')->counts('products')->label('منتجات مشمولة')->sortable(),
                 TextColumn::make('starts_at')->label('يبدأ')->dateTime('Y-m-d H:i')->placeholder('—')->sortable(),
                 TextColumn::make('ends_at')->label('ينتهي')->dateTime('Y-m-d H:i')->placeholder('—')->sortable(),
                 TextColumn::make('urgency')->label('الحالة الزمنية')
-                    ->state(fn (Offer $record): string => $record->ends_at?->isPast() ? 'منتهي' : ($record->listingUrgencyTag()?->value ?? 'نشط'))
+                    ->state(fn (Offer $record): string => match ($record->effectiveStatus()) { 'paused' => 'متوقف', 'expired' => 'منتهي', 'scheduled' => 'مجدول', default => 'نشط' })
                     ->badge(),
                 IconColumn::make('is_active')->label('فعال')->boolean(),
             ])
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('restaurant')->withCount('products'))
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('restaurant')->withCount(['products', 'promotionApplications' => fn ($q) => $q->where('status', 'applied')]))
             ->filters([
                 SelectFilter::make('restaurant_id')->label('المطعم')->relationship('restaurant', 'name')->searchable()->preload(),
                 SelectFilter::make('is_active')->label('فعال')->options([1 => 'نعم', 0 => 'لا']),
+                SelectFilter::make('offer_type')->label('نوع العرض')->options(['product_discount' => 'خصم منتج', 'buy_x_get_y' => 'اشترِ واحصل']),
                 Filter::make('active_now')->label('فعال الآن')->query(fn (Builder $query): Builder => $query
                     ->where('is_active', true)
                     ->where(fn (Builder $q): Builder => $q->whereNull('starts_at')->orWhere('starts_at', '<=', now()))
@@ -92,13 +93,31 @@ final class RestaurantOfferResource extends Resource
             Section::make('بيانات العرض')->schema([
                 TextEntry::make('name')->label('الاسم'),
                 TextEntry::make('restaurant.name')->label('المطعم'),
-                TextEntry::make('discount_type')->label('نوع الخصم')->formatStateUsing(fn ($state): string => self::discountTypeLabel($state))->badge(),
-                TextEntry::make('discount_value')->label('قيمة الخصم'),
+                TextEntry::make('discount_type')->label('نوع الخصم')->formatStateUsing(fn ($state): string => self::discountTypeLabel($state))->badge()->visible(fn (Offer $record) => $record->isProductDiscount()),
+                TextEntry::make('discount_value')->label('قيمة الخصم')->visible(fn (Offer $record) => $record->isProductDiscount()),
                 IconEntry::make('is_active')->label('فعال')->boolean(),
                 TextEntry::make('starts_at')->label('يبدأ')->dateTime('Y-m-d H:i')->placeholder('—'),
                 TextEntry::make('ends_at')->label('ينتهي')->dateTime('Y-m-d H:i')->placeholder('—'),
                 TextEntry::make('description')->label('الوصف')->placeholder('—')->columnSpanFull(),
             ])->columns(3),
+            Section::make('شروط العرض المركب')->schema([
+                TextEntry::make('buy_quantity')->label('الكمية المطلوبة'),
+                TextEntry::make('reward_quantity')->label('كمية المكافأة'),
+                TextEntry::make('reward_type')->label('نوع المكافأة')->formatStateUsing(fn ($state): string => match ($state?->value) { 'same_product' => 'نفس المنتج', 'cheapest_eligible' => 'الأرخص المؤهل', 'specific_products' => 'منتجات محددة', default => '—' }),
+                TextEntry::make('reward_discount_percent')->label('نسبة خصم المكافأة')->suffix('%'),
+                IconEntry::make('is_repeatable')->label('قابل للتكرار')->boolean(),
+                TextEntry::make('max_applications_per_order')->label('الحد لكل طلب')->placeholder('غير محدد'),
+                TextEntry::make('rule_version')->label('إصدار القاعدة'),
+                TextEntry::make('rewardProducts.name')->label('منتجات المكافأة')->badge()->placeholder('حسب القاعدة'),
+            ])->columns(3)->visible(fn (Offer $record): bool => ! $record->isProductDiscount()),
+            Section::make('سجل الاستردادات')->schema([
+                TextEntry::make('recorded_orders')->label('الطلبات المستفيدة')->state(fn (Offer $record) => $record->promotionApplications()->where('status', 'applied')->distinct()->count('order_id')),
+                TextEntry::make('recorded_savings')->label('إجمالي التوفير')->state(fn (Offer $record) => $record->promotionApplications()->where('status', 'applied')->sum('discount_amount'))->money(config('app.currency', 'SYP')),
+                TextEntry::make('recorded_rewards')->label('القطع المجانية')->state(fn (Offer $record) => $record->promotionApplications()->where('status', 'applied')->sum('free_quantity')),
+                RepeatableEntry::make('recent_redemptions')->label('آخر 50 عملية')->state(fn (Offer $record) => $record->promotionApplications()->latest('applied_at')->limit(50)->get())->schema([
+                    TextEntry::make('order_id')->label('الطلب'), TextEntry::make('status')->label('الحالة'), TextEntry::make('discount_amount')->label('التوفير'), TextEntry::make('applied_at')->label('التاريخ')->dateTime('Y-m-d H:i'), TextEntry::make('rule_version')->label('الإصدار'),
+                ])->columns(5)->columnSpanFull(),
+            ])->columns(3)->visible(fn (Offer $record): bool => ! $record->isProductDiscount()),
             Section::make('المنتجات المشمولة')->schema([
                 RepeatableEntry::make('products')->label('')
                     ->schema([
@@ -113,7 +132,7 @@ final class RestaurantOfferResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['restaurant', 'products']);
+        return parent::getEloquentQuery()->with(['restaurant', 'products', 'rewardProducts']);
     }
 
     public static function canViewAny(): bool

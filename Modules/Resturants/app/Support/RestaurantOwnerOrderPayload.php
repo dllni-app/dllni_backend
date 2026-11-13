@@ -14,7 +14,7 @@ final class RestaurantOwnerOrderPayload
     public function build(Order $order): array
     {
         $status = $order->status?->value ?? $order->status;
-        $canEditItems = in_array($status, [OrderStatus::Pending->value, OrderStatus::Accepted->value], true);
+        $canEditItems = $this->canEdit($order);
         $address = $this->resolveAddress($order);
         $deliveryFee = 0.0;
         $subtotal = (float) ($order->subtotal ?? 0);
@@ -47,11 +47,15 @@ final class RestaurantOwnerOrderPayload
                 'id' => $item->id,
                 'orderId' => $item->order_id,
                 'productId' => $item->product_id,
-                'name' => $item->product?->name,
+                'name' => $item->product_name ?? $item->product?->name,
                 'imageUrl' => $item->product?->getFirstMediaUrl('primary-image') ?: null,
                 'quantity' => (int) $item->quantity,
                 'unitPrice' => (float) ($item->unit_price ?? 0),
                 'totalPrice' => (float) ($item->total_price ?? 0),
+                'rewardQuantity' => (int) ($item->reward_quantity ?? 0),
+                'promotionDiscountAmount' => (float) ($item->promotion_discount_amount ?? 0),
+                'originalTotalPrice' => $item->original_total_price === null ? null : (float) $item->original_total_price,
+                'promotion' => $item->promotion_snapshot,
                 'specialInstructions' => $item->special_instructions,
             ])->values()->all() : [],
             'amounts' => [
@@ -87,7 +91,7 @@ final class RestaurantOwnerOrderPayload
     {
         $status = $order->status?->value ?? $order->status;
 
-        return in_array($status, [OrderStatus::Pending->value, OrderStatus::Accepted->value], true);
+        return empty($order->promotion_snapshot['appliedPromotions']) && in_array($status, [OrderStatus::Pending->value, OrderStatus::Accepted->value], true);
     }
 
     private function resolveAddress(Order $order): ?UserAddress

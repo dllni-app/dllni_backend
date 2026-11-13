@@ -16,6 +16,11 @@ final class OrderItem extends Model
         'quantity',
         'unit_price',
         'total_price',
+        'original_unit_price',
+        'original_total_price',
+        'promotion_discount_amount',
+        'reward_quantity',
+        'promotion_snapshot',
         'product_name',
         'modifier_snapshot',
         'special_instructions',
@@ -42,6 +47,11 @@ final class OrderItem extends Model
             'quantity' => 'integer',
             'unit_price' => 'decimal:2',
             'total_price' => 'decimal:2',
+            'original_unit_price' => 'decimal:2',
+            'original_total_price' => 'decimal:2',
+            'promotion_discount_amount' => 'decimal:2',
+            'reward_quantity' => 'integer',
+            'promotion_snapshot' => 'array',
             'modifier_snapshot' => 'array',
         ];
     }

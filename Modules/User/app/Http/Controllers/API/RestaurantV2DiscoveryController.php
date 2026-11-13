@@ -17,6 +17,7 @@ final class RestaurantV2DiscoveryController
         $filters = [
             'cuisineId' => $request->validated('cuisineId'),
             'categoryId' => $request->validated('categoryId'),
+            'foodCategoryId' => $request->validated('foodCategoryId'),
             'openNow' => $request->boolean('filter.openNow'),
             'hasOffers' => $request->boolean('filter.hasOffers'),
             'sort' => $request->validated('sort', 'rating'),

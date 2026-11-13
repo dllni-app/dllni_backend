@@ -89,4 +89,10 @@ final class Dispute extends Model implements HasMedia
             'financial_penalty_applied_at' => 'datetime',
         ];
     }
+
+    public function registerMediaConversions(?\Spatie\MediaLibrary\MediaCollections\Models\Media $media = null): void
+    {
+        \App\Support\ImageVariants::register($this, $media);
+    }
+
 }

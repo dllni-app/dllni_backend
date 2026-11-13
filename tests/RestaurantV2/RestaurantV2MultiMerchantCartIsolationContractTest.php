@@ -89,6 +89,33 @@ final class RestaurantV2MultiMerchantCartIsolationContractTest extends TestCase
         $this->postJson('/api/v1/user/commerce/checkout/quotes', ['section' => 'restaurant', 'cartId' => $cartA, 'fulfillmentType' => 'pickup', 'receiveMode' => 'immediate'])->assertNotFound();
     }
 
+    public function test_absolute_quantity_and_global_unit_badge_preserve_other_configurations(): void
+    {
+        $path = '/api/v1/user/restaurants/cart/items';
+        $countPath = '/api/v1/user/restaurants/cart/products-count';
+        $payload = ['productId' => $this->productA->id, 'quantityMode' => 'set', 'note' => 'plain'];
+        $first = $this->postJson($path, [...$payload, 'quantity' => 2])->assertCreated();
+        $cartId = (int) $first->json('cartId');
+        $itemId = (int) $first->json('itemId');
+        $revision = (int) $first->json('data.revision');
+        $this->getJson($countPath)->assertOk()->assertJsonPath('productsCount', 2);
+        $second = $this->postJson($path, [...$payload, 'quantity' => 4, 'expectedRevision' => $revision])->assertOk();
+        $second->assertJsonPath('itemId', $itemId)->assertJsonPath('quantity', 4);
+        $this->getJson($countPath)->assertOk()->assertJsonPath('productsCount', 4);
+        $this->postJson($path, [...$payload, 'quantity' => 9, 'expectedRevision' => $revision])->assertConflict();
+        $third = $this->postJson($path, [...$payload, 'quantity' => 3, 'expectedRevision' => (int) $second->json('data.revision')])->assertOk();
+        $third->assertJsonPath('itemId', $itemId)->assertJsonPath('quantity', 3);
+        $this->getJson($countPath)->assertOk()->assertJsonPath('productsCount', 3);
+        $this->postJson($path, [...$payload, 'quantity' => 1, 'note' => 'another configuration'])->assertCreated();
+        $this->postJson($path, ['productId' => $this->productB->id, 'quantity' => 2])->assertCreated();
+        $this->getJson($countPath)->assertOk()->assertJsonPath('productsCount', 6);
+        $this->getJson('/api/v1/user/restaurants/carts/'.$cartId)->assertOk()->assertJsonCount(2, 'data.items');
+        $this->deleteJson('/api/v1/user/restaurants/carts/'.$cartId.'/items/'.$itemId)->assertOk();
+        $this->getJson($countPath)->assertOk()->assertJsonPath('productsCount', 3);
+        Sanctum::actingAs($this->otherBuyer);
+        $this->getJson($countPath)->assertOk()->assertJsonPath('productsCount', 0);
+    }
+
     public function test_checkout_of_selected_cart_consumes_only_its_merchant_and_owned_order(): void
     {
         [$cartA, , $cartB] = $this->twoCarts();

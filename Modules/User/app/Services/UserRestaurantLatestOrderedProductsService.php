@@ -29,7 +29,7 @@ final class UserRestaurantLatestOrderedProductsService
             ->where('status', '!=', OrderStatus::Cancelled->value)
             ->with([
                 'orderItems.product.media',
-                'orderItems.product.restaurant',
+                'orderItems.product.restaurant.media',
                 'orderItems.order',
             ])
             ->orderByDesc('created_at')

@@ -12,6 +12,7 @@ final class ResturantsDatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call([
+            FoodDiscoveryCategorySeeder::class,
             RestaurantSeeder::class,
             SyrianPoundSeedPriceNormalizer::class,
         ]);

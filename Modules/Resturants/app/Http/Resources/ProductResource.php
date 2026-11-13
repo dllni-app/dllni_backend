@@ -24,9 +24,15 @@ final class ProductResource extends JsonResource
             'restaurantId' => $this->restaurant_id,
             'categoryId' => $this->category_id,
             'itemType' => $this->item_type,
+            'productKind' => $this->product_kind,
+            'catalogRole' => $this->catalog_role,
+            'classificationStatus' => $this->classification_status,
+            'primaryFoodCategoryId' => $this->primary_food_category_id,
             'name' => $this->name,
             'description' => $this->description,
             'searchTags' => $this->search_tags ?? [],
+            'servings' => $this->servings,
+            'ingredientExclusions' => $this->ingredient_exclusions ?? [],
             'price' => $originalPrice,
             'discountedPrice' => $effectiveDiscountedPrice,
             'displayPrice' => $originalPrice !== null ? $this->effectivePrice() : null,
@@ -45,6 +51,9 @@ final class ProductResource extends JsonResource
             'restaurant' => $this->whenLoaded('restaurant', fn () => [
                 'id' => $this->restaurant->id,
                 'name' => $this->restaurant->name,
+                'imageUrl' => $this->restaurant->relationLoaded('media')
+                    ? ($this->restaurant->getFirstMediaUrl('primary-image') ?: null)
+                    : null,
                 'preparationTimeMin' => $this->restaurant->estimated_preparation_time_min,
                 'preparationTimeMax' => $this->restaurant->estimated_preparation_time_max ?? $this->restaurant->estimated_preparation_time,
                 'averageRating' => (float) ($this->restaurant->average_rating ?? 0),

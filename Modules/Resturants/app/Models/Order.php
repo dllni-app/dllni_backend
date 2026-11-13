@@ -46,6 +46,9 @@ final class Order extends Model
         'picked_up_at',
         'customer_pickup_confirmed_at',
         'subtotal',
+        'original_items_subtotal',
+        'promotion_discount_amount',
+        'promotion_snapshot',
         'discount_amount',
         'tax_amount',
         'service_fee',
@@ -124,6 +127,11 @@ final class Order extends Model
         return $this->hasMany(OrderItem::class);
     }
 
+    public function promotionApplications(): HasMany
+    {
+        return $this->hasMany(RestaurantOrderPromotionApplication::class);
+    }
+
     public function orderStatusLogs(): HasMany
     {
         return $this->hasMany(OrderStatusLog::class)->orderBy('created_at')->orderBy('id');
@@ -182,6 +190,9 @@ final class Order extends Model
             'picked_up_at' => 'datetime',
             'customer_pickup_confirmed_at' => 'datetime',
             'subtotal' => 'decimal:2',
+            'original_items_subtotal' => 'decimal:2',
+            'promotion_discount_amount' => 'decimal:2',
+            'promotion_snapshot' => 'array',
             'discount_amount' => 'decimal:2',
             'tax_amount' => 'decimal:2',
             'service_fee' => 'decimal:2',

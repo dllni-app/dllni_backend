@@ -19,6 +19,7 @@ final class RestaurantOwnerOrderItemService
         ?string $specialInstructions = null
     ): Order {
         return DB::transaction(function () use ($order, $product, $quantity, $substituteProductId, $specialInstructions) {
+            $this->assertPromotionOrderNotEditable($order);
             // Match customer cart pricing: best of direct markdown and active offer.
             $unitPrice = $product->effectivePrice();
 
@@ -54,6 +55,7 @@ final class RestaurantOwnerOrderItemService
             $specialInstructions,
             $setSpecialInstructions
         ) {
+            $this->assertPromotionOrderNotEditable($order);
             $updates = [];
 
             if ($quantity !== null) {
@@ -80,10 +82,17 @@ final class RestaurantOwnerOrderItemService
     public function removeItem(Order $order, OrderItem $item): Order
     {
         return DB::transaction(function () use ($order, $item) {
+            $this->assertPromotionOrderNotEditable($order);
             $item->delete();
 
             return $this->recalculateTotals($order);
         });
+    }
+
+    private function assertPromotionOrderNotEditable(Order $order): void
+    {
+        $locked = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
+        abort_if(! empty($locked->promotion_snapshot['appliedPromotions']), 409, 'PROMOTION_ORDER_ITEMS_LOCKED');
     }
 
     public function recalculateTotals(Order $order): Order

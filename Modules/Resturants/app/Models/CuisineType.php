@@ -14,6 +14,15 @@ final class CuisineType extends Model
         'slug',
     ];
 
+    /** Stable public artwork, independent of any restaurant's cover photo. */
+    public function iconUrl(): string
+    {
+        $slug = in_array($this->slug, ['italian', 'asian', 'american', 'mediterranean'], true)
+            ? $this->slug : 'default';
+
+        return asset('images/cuisines/'.$slug.'.svg');
+    }
+
     public function restaurants(): BelongsToMany
     {
         return $this->belongsToMany(Restaurant::class, 'cuisine_type_restaurant')

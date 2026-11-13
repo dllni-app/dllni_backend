@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\RestaurantV2;
 
+use App\Enums\UserModuleType;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
@@ -79,7 +80,13 @@ final class RestaurantOrderActionContractTest extends TestCase
     public function test_linked_cancellation_closes_assignment_releases_driver_and_syncs_source_once(): void
     {
         $order = $this->fixtureOrder('preparing', 'delivery');
-        $driver = DeliveryDriver::factory()->busy()->create();
+        // Keep this local QA fixture isolated from deterministic seeded driver emails.
+        $driver = DeliveryDriver::factory()->busy()->create([
+            'user_id' => User::factory()->create([
+                'module_type' => UserModuleType::DeliveryDriver->value,
+                'email' => 'v2-driver-'.Str::uuid().'@example.test',
+            ])->id,
+        ]);
         $delivery = DeliveryOrder::factory()->create([
             'company_id' => $driver->company_id,
             'driver_id' => $driver->id,

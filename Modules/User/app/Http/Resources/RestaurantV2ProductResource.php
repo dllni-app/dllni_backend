@@ -15,11 +15,15 @@ final class RestaurantV2ProductResource extends JsonResource
     {
         /** @var Product $product */
         $product = $this->resource;
+        $thumbnail = (bool) $request->attributes->get('restaurant_home_thumbnail', false);
         $price = $product->price !== null ? (float) $product->price : null;
         $displayPrice = $price !== null ? $product->effectivePrice() : null;
         $discounted = $price !== null && $displayPrice !== null && $displayPrice < $price;
         $restaurant = $product->getRelationValue('restaurant');
         $category = $product->getRelationValue('category');
+        $foodCategory = $product->relationLoaded('foodCategory')
+            ? $product->getRelation('foodCategory')
+            : null;
 
         return [
             'id' => (int) $product->id,
@@ -27,20 +31,29 @@ final class RestaurantV2ProductResource extends JsonResource
             'restaurant' => $restaurant !== null ? [
                 'id' => (int) $restaurant->id,
                 'name' => $restaurant->name,
-                'imageUrl' => ($restaurantImage = $restaurant->getFirstMediaUrl('primary-image')) !== '' ? $restaurantImage : null,
+                'imageUrl' => \App\Support\ImageVariants::url($restaurant, 'primary-image', true),
             ] : null,
             'categoryId' => $product->category_id !== null ? (int) $product->category_id : null,
             'category' => $category !== null ? ['id' => (int) $category->id, 'name' => $category->name] : null,
+            'productKind' => $product->product_kind,
+            'servings' => $product->servings,
+            'isIndependentlyOrderable' => $product->isIndependentlyOrderable(),
+            'foodCategory' => $foodCategory !== null ? [
+                'id' => (int) $foodCategory->id,
+                'slug' => $foodCategory->slug,
+                'name' => $foodCategory->localizedName((string) app()->getLocale()),
+            ] : null,
             'name' => $product->name,
             'description' => $product->description,
-            'imageUrl' => ($image = $product->getFirstMediaUrl('primary-image')) !== '' ? $image : null,
-            'images' => $product->getMedia('images')->map(fn ($media): string => $media->getUrl())->values()->all(),
+            'imageUrl' => \App\Support\ImageVariants::url($product, 'primary-image', $thumbnail),
+            'images' => $product->getMedia('images')->map(fn ($media): string => \App\Support\ImageVariants::mediaUrl($media, $thumbnail))->values()->all(),
             'price' => $displayPrice !== null ? number_format($displayPrice, 2, '.', '') : null,
             'originalPrice' => $discounted ? number_format($price, 2, '.', '') : null,
             'currency' => config('app.currency', 'SYP'),
             'distanceKm' => array_key_exists('distanceKm', $product->getAttributes()) && $product->distanceKm !== null
                 ? round((float) $product->distanceKm, 2)
                 : null,
+            'promotions' => \Modules\User\Services\RestaurantPromotionCatalog::forProduct($product),
             'isAvailable' => (bool) $product->isAvailableNow(),
             'availabilityMode' => $product->availabilityMode(),
             'unavailableUntil' => $product->unavailable_until?->toIso8601String(),

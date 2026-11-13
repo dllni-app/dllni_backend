@@ -67,6 +67,7 @@ final class CleaningSpecialServiceResource extends Resource
                 ->label(__('cleaning_special_services.fields.image'))
                 ->disk('public')
                 ->directory('cleaning-special-services')
+                    ->saveUploadedFileUsing(static fn (\Filament\Forms\Components\BaseFileUpload $component, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile $file): string => \App\Support\DirectImageVariants::store($file, $component->getDiskName(), $component->getDirectory() ?? 'images'))
                 ->image()
                 ->imageEditor()
                 ->maxSize(5120)

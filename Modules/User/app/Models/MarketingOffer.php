@@ -114,4 +114,10 @@ final class MarketingOffer extends Model implements HasMedia
     {
         return MarketingOfferFactory::new();
     }
+
+    public function registerMediaConversions(?\Spatie\MediaLibrary\MediaCollections\Models\Media $media = null): void
+    {
+        \App\Support\ImageVariants::register($this, $media);
+    }
+
 }

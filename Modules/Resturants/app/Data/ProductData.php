@@ -35,5 +35,9 @@ final class ProductData extends Data
         public ?bool $isFeatured,
         public ?UploadedFile $primaryImage = null,
         public ?array $images = null,
+        public ?string $productKind = null,
+        public ?int $primaryFoodCategoryId = null,
+        public ?int $servings = null,
+        public ?array $ingredientExclusions = null,
     ) {}
 }

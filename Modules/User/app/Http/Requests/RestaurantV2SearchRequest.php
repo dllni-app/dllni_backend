@@ -12,8 +12,11 @@ final class RestaurantV2SearchRequest extends RestaurantV2BrowseRequest
     public function rules(): array
     {
         return array_merge($this->baseRules(), [
-            'q' => ['required', 'string', 'min:2', 'max:100'],
+            'q' => $this->isMethod('post') ? ['required', 'string', 'min:2', 'max:500'] : ['sometimes', 'nullable', 'string', 'min:2', 'max:100'],
             'scope' => ['sometimes', 'string', 'in:all,restaurants,dishes'],
+            'minPrice' => ['sometimes', 'numeric', 'min:0'],
+            'maxPrice' => ['sometimes', 'numeric', 'min:0', \Illuminate\Validation\Rule::when($this->has('minPrice'), ['gte:minPrice'])],
+            'area' => ['sometimes', 'string', 'max:100'],
             'restaurantId' => ['sometimes', 'integer', 'min:1', Rule::prohibitedIf(fn (): bool => $this->input('scope', 'all') !== 'dishes')],
         ]);
     }

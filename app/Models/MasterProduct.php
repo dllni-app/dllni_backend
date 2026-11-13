@@ -47,6 +47,7 @@ final class MasterProduct extends Model implements HasMedia
 
     public function registerMediaConversions(?Media $media = null): void
     {
+        \App\Support\ImageVariants::register($this, $media);
         $this->addMediaConversion('thumb')->width(300)->height(300)->sharpen(10);
     }
 

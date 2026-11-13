@@ -16,7 +16,7 @@ final class OwnerOffersIndexRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'status' => 'sometimes|string|in:active,scheduled,expired,all',
+            'status' => 'sometimes|string|in:active,scheduled,expired,paused,all',
             'search' => 'sometimes|string|max:255',
             'dateFrom' => 'sometimes|date',
             'dateTo' => 'sometimes|date|after_or_equal:dateFrom',

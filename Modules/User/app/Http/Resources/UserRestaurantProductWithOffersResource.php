@@ -45,6 +45,7 @@ final class UserRestaurantProductWithOffersResource extends JsonResource
             'restaurant' => $product->relationLoaded('restaurant') && $product->restaurant !== null ? [
                 'id' => $product->restaurant->id,
                 'name' => $product->restaurant->name,
+                'imageUrl' => \App\Support\ImageVariants::url($product->restaurant, 'primary-image', true),
                 'city' => $product->restaurant->city,
                 'district' => $product->restaurant->district,
             ] : null,

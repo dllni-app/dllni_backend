@@ -11,7 +11,7 @@ use Throwable;
 
 final class SeederMedia
 {
-    private const string PlaceholderPngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAtMB9dZYkEYAAAAASUVORK5CYII=';
+    private const string PlaceholderPngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAAZElEQVRoge3PMQ0AIQDAQMC/QgZWbLwIhssnPQXtvGePP1s64FUDWgNaA1oDWgNaA1oDWgNaA1oDWgNaA1oDWgNaA1oDWgNaA1oDWgNaA1oDWgNaA1oDWgNaA1oDWgNaA1oD2ge65QMfyvFT6QAAAABJRU5ErkJggg==';
 
     /**
      * @param  Model&HasMedia  $model

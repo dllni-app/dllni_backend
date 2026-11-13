@@ -224,6 +224,7 @@ final class AppServiceProvider extends ServiceProvider
             'dispute' => Dispute::class,
             'master_product' => MasterProduct::class,
             'category' => Category::class,
+            'restaurant_food_category' => \Modules\Resturants\Models\FoodDiscoveryCategory::class,
             'offer' => Offer::class,
             'product' => Product::class,
             'restaurant' => Restaurant::class,

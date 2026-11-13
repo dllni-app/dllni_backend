@@ -24,5 +24,15 @@ final class OfferData extends Data
         public ?string $endsAt,
         public ?bool $isActive,
         public ?array $productIds = null,
+        public ?string $description = null,
+        public string $offerType = 'product_discount',
+        public ?int $buyQuantity = null,
+        public ?int $rewardQuantity = null,
+        public ?string $rewardType = null,
+        public ?float $rewardDiscountPercent = null,
+        public ?bool $isRepeatable = null,
+        public ?int $maxApplicationsPerOrder = null,
+        public ?array $rewardProductIds = null,
+        public ?bool $showUpcoming = null,
     ) {}
 }

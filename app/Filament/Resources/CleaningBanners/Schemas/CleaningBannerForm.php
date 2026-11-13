@@ -66,6 +66,7 @@ final class CleaningBannerForm
                             : 'Recommended dimensions: 1200×520 px. Maximum image size: 1 MB. Supported formats: JPG, PNG, and WebP.')
                         ->disk('public')
                         ->directory('cleaning-banners')
+                    ->saveUploadedFileUsing(static fn (\Filament\Forms\Components\BaseFileUpload $component, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile $file): string => \App\Support\DirectImageVariants::store($file, $component->getDiskName(), $component->getDirectory() ?? 'images'))
                         ->image()
                         ->imageEditor()
                         ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])

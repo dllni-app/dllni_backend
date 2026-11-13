@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 final class Cart extends Model
 {
-    protected $casts = ['revision' => 'integer'];
+    protected $casts = ['revision' => 'integer', 'promotion_pricing_required' => 'boolean'];
 
     protected $fillable = [
         'user_id',

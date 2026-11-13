@@ -40,9 +40,24 @@ final class RestaurantV2CatalogController
         return response()->json($this->catalog->categories());
     }
 
+    public function foodCategories(): JsonResponse
+    {
+        return response()->json($this->catalog->foodCategories());
+    }
+
     public function offers(RestaurantV2CatalogRequest $request): JsonResponse
     {
-        return response()->json($this->catalog->offers($request->pageSize(), $request->pageNumber()));
+        $request->validate(['status' => 'sometimes|in:active,upcoming', 'includeSchedule' => 'sometimes|boolean']);
+        $result = $this->catalog->offers($request->pageSize(), $request->pageNumber(), upcoming: $request->input('status') === 'upcoming');
+        if ($request->boolean('includeSchedule')) {
+            $result['meta']['nextRefreshAt'] = $this->catalog->nextOfferTransition();
+        }
+        return response()->json($result);
+    }
+
+    public function offer(Request $request, int $offer): JsonResponse
+    {
+        return response()->json(['data' => $this->catalog->offerDetail($offer, $request->boolean('includeUpcoming'))]);
     }
 
     public function restaurant(RestaurantV2CatalogRequest $request, int $restaurant): JsonResponse

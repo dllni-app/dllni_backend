@@ -37,6 +37,12 @@ final class OrderObserver
             return;
         }
 
+        $order->promotionApplications()->where('status', 'applied')->update([
+            'status' => 'reversed',
+            'reversed_at' => now(),
+            'reversal_reason' => (string) ($order->cancellation_reason ?? 'Restaurant order cancelled'),
+        ]);
+
         // Restore recorded ingredient consumption once for any cancellation path.
         app(RestaurantInventoryConsumptionService::class)->restore($order);
 

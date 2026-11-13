@@ -84,6 +84,7 @@ final class CleaningHomeTypeForm
                             ->label('رفع صورة')
                             ->disk('public')
                             ->directory('cleaning-home-types')
+                    ->saveUploadedFileUsing(static fn (\Filament\Forms\Components\BaseFileUpload $component, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile $file): string => \App\Support\DirectImageVariants::store($file, $component->getDiskName(), $component->getDirectory() ?? 'images'))
                             ->image()
                             ->imageEditor()
                             ->maxSize(5120)

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Providers\Filament;
 
 use App\Support\Filament\AlnadhaTheme;
+use App\Support\Filament\RestaurantHomePanelBootstrap;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
@@ -21,6 +22,15 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 final class CompanyPanelProvider extends PanelProvider
 {
+    public function register(): void
+    {
+        if (RestaurantHomePanelBootstrap::shouldSkip($this->app)) {
+            return;
+        }
+
+        parent::register();
+    }
+
     public function panel(Panel $panel): Panel
     {
         $vite = app(Vite::class);

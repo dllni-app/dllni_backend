@@ -53,7 +53,7 @@ it('returns total cart item count across all merchants in the user restaurant ca
     $response = $this->getJson('/api/v1/user/restaurants/cart/products-count');
 
     $response->assertSuccessful()->assertJson([
-        'productsCount' => 2,
+        'productsCount' => 5,
     ]);
 });
 

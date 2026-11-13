@@ -11,6 +11,7 @@ use Modules\Resturants\Http\Resources\ProductResource;
 use Modules\Resturants\Models\CartItem;
 use Modules\Resturants\Models\Favorite;
 use Modules\Resturants\Models\Product;
+use Modules\User\Services\RestaurantMealComplements;
 
 final class UserProductDetailsController
 {
@@ -25,7 +26,9 @@ final class UserProductDetailsController
     public function __invoke(Request $request, int $product): JsonResponse
     {
         $model = Product::query()
-            ->where('is_available', true)
+            ->where(fn ($query) => $query->where('is_available', true)
+                ->orWhere(fn ($expired) => $expired->where('is_available', false)
+                    ->whereNotNull('unavailable_until')->where('unavailable_until', '<', now())))
             ->with([
                 'media',
                 'restaurant.media',
@@ -57,6 +60,7 @@ final class UserProductDetailsController
 
         return response()->json([
             'product' => ProductResource::make($model),
+            'complementaryProducts' => app(RestaurantMealComplements::class)->forProduct($model),
             'shareUrl' => $this->deepLinkGenerator->product((int) $model->id),
             'modifierGroups' => $model->modifierGroups
                 ->sortBy('id')

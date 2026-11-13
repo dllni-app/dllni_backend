@@ -41,6 +41,7 @@ final class UserRestaurantProductsByCategoryService
                         });
                 },
                 'restaurant' => fn ($q) => $q->select(['id', 'name', 'city', 'district']),
+                'restaurant.media',
                 'category' => fn ($q) => $q->select(['id', 'name']),
                 'media',
             ]);

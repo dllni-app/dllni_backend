@@ -120,4 +120,10 @@ final class SupportCase extends Model implements HasMedia
             'context' => 'array',
         ];
     }
+
+    public function registerMediaConversions(?\Spatie\MediaLibrary\MediaCollections\Models\Media $media = null): void
+    {
+        \App\Support\ImageVariants::register($this, $media);
+    }
+
 }

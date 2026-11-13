@@ -66,6 +66,7 @@ final class CleaningMaterialResource extends Resource
                 ->label(__('cleaning_catalog.materials.fields.image'))
                 ->disk('public')
                 ->directory('cleaning-materials')
+                    ->saveUploadedFileUsing(static fn (\Filament\Forms\Components\BaseFileUpload $component, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile $file): string => \App\Support\DirectImageVariants::store($file, $component->getDiskName(), $component->getDirectory() ?? 'images'))
                 ->image()
                 ->imageEditor()
                 ->maxSize(5120),

@@ -306,3 +306,7 @@ Artisan::command(
         return 0;
     }
 )->purpose('Import Syrian OpenFoodFacts products into the master catalog');
+
+if (app()->environment('local') && config('telescope.enabled') && class_exists(\Laravel\Telescope\Telescope::class)) {
+    Schedule::command('telescope:prune --hours=48')->daily();
+}

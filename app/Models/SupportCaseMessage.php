@@ -42,4 +42,10 @@ final class SupportCaseMessage extends Model implements HasMedia
             'sender_role' => SupportCaseReporterRole::class,
         ];
     }
+
+    public function registerMediaConversions(?\Spatie\MediaLibrary\MediaCollections\Models\Media $media = null): void
+    {
+        \App\Support\ImageVariants::register($this, $media);
+    }
+
 }

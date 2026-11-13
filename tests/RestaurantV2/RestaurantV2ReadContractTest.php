@@ -176,7 +176,10 @@ final class RestaurantV2ReadContractTest extends TestCase
 
         try {
             $buyer = User::factory()->create(['email' => 'v2-quote-'.\Illuminate\Support\Str::uuid().'@example.test']);
-            app(\Modules\User\Services\UserRestaurantCartService::class)->addItem((int) $buyer->id, 13, 1, [1, 4]);
+            // The catalog seed may change modifier IDs. Use the product's current groups.
+            $product = \Modules\Resturants\Models\Product::query()->with('modifierGroups.modifiers')->findOrFail(13);
+            $modifierIds = $product->modifierGroups->flatMap(fn ($group) => $group->modifiers->take(max((int) $group->min_selections, $group->is_required ? 1 : 0))->pluck('id'))->unique()->values()->all();
+            app(\Modules\User\Services\UserRestaurantCartService::class)->addItem((int) $buyer->id, (int) $product->id, 1, $modifierIds);
             $cart = Cart::query()->where('user_id', $buyer->id)->firstOrFail();
             $preview = app(\Modules\User\Services\UserRestaurantCheckoutPipelineService::class)->preview((int) $buyer->id, (int) $cart->id, 'pickup', 'immediate', null, null, $selection['note']);
             $issued = $quotes->issue((int) $cart->user_id, 'restaurant', (int) $cart->id, $selection, $preview['amounts']);

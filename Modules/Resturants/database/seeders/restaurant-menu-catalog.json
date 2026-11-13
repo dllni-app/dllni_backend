@@ -1,0 +1,2764 @@
+{
+  "images": {
+    "margherita": "https://www.themealdb.com/images/media/meals/x0lk931587671540.jpg",
+    "pizza": "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&q=80&fit=crop",
+    "pepperoni": "https://images.unsplash.com/photo-1628840042765-356cda07504e?w=800&q=80&fit=crop",
+    "vegpizza": "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=800&q=80&fit=crop",
+    "lasagna": "https://www.themealdb.com/images/media/meals/wtsvxx1511296896.jpg",
+    "alfredo": "https://www.themealdb.com/images/media/meals/syqypv1486981727.jpg",
+    "arrabiata": "https://www.themealdb.com/images/media/meals/ustsqw1468250014.jpg",
+    "bolognese": "https://www.themealdb.com/images/media/meals/sutysw1468247559.jpg",
+    "carbonara": "https://www.themealdb.com/images/media/meals/llcbn01574260722.jpg",
+    "pastasalad": "https://www.themealdb.com/images/media/meals/wvqpwt1468339226.jpg",
+    "ricotta": "https://www.themealdb.com/images/media/meals/1549542877.jpg",
+    "cake": "https://www.themealdb.com/images/media/meals/tqtywx1468317395.jpg",
+    "cheesecake": "https://www.themealdb.com/images/media/meals/swttys1511385853.jpg",
+    "icecream": "https://images.unsplash.com/photo-1563805042-7684c019e1cb?w=800&q=80&fit=crop",
+    "tiramisu": "https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?w=800&q=80&fit=crop",
+    "sushi": "https://www.themealdb.com/images/media/meals/g046bb1663960946.jpg",
+    "friedrice": "https://www.themealdb.com/images/media/meals/wuyd2h1765655837.jpg",
+    "ramen": "https://www.themealdb.com/images/media/meals/ip5xtp1769779958.jpg",
+    "kungpao": "https://www.themealdb.com/images/media/meals/1525872624.jpg",
+    "teriyaki": "https://www.themealdb.com/images/media/meals/xxyupu1468262513.jpg",
+    "udon": "https://www.themealdb.com/images/media/meals/wrustq1511475474.jpg",
+    "wonton": "https://www.themealdb.com/images/media/meals/1525876468.jpg",
+    "eggroll": "https://www.themealdb.com/images/media/meals/grhn401765687086.jpg",
+    "hot_soup": "https://www.themealdb.com/images/media/meals/1529445893.jpg",
+    "cucumber": "https://www.themealdb.com/images/media/meals/93iok31766436070.jpg",
+    "orangechicken": "https://www.themealdb.com/images/media/meals/s73ytv1765567838.jpg",
+    "prawns": "https://www.themealdb.com/images/media/meals/1525873040.jpg",
+    "karaage": "https://www.themealdb.com/images/media/meals/tyywsw1505930373.jpg",
+    "katsu": "https://www.themealdb.com/images/media/meals/vwrpps1503068729.jpg",
+    "burger": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&q=80&fit=crop",
+    "cheeseburger": "https://images.unsplash.com/photo-1550547660-d9450f859349?w=800&q=80&fit=crop",
+    "doubleburger": "https://www.themealdb.com/images/media/meals/44bzep1761848278.jpg",
+    "chickenburger": "https://www.themealdb.com/images/media/meals/vdwloy1713225718.jpg",
+    "koftaburger": "https://www.themealdb.com/images/media/meals/lgmnff1763789847.jpg",
+    "fries": "https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=800&q=80&fit=crop",
+    "wings": "https://www.themealdb.com/images/media/meals/feh9k21784665694.jpg",
+    "brownies": "https://www.themealdb.com/images/media/meals/yypvst1511386427.jpg",
+    "combo": "https://images.unsplash.com/photo-1561758033-d89a9ad46330?w=800&q=80&fit=crop",
+    "kebab": "https://www.themealdb.com/images/media/meals/04axct1763793018.jpg",
+    "skewers": "https://www.themealdb.com/images/media/meals/3um6il1763794322.jpg",
+    "lambchops": "https://www.themealdb.com/images/media/meals/8xuvhj1763794991.jpg",
+    "grill": "https://images.unsplash.com/photo-1558030006-450675393462?w=800&q=80&fit=crop",
+    "shawarma": "https://www.themealdb.com/images/media/meals/hcg6l91763596970.jpg",
+    "beefwrap": "https://www.themealdb.com/images/media/meals/swo87v1763595282.jpg",
+    "hummus": "https://www.themealdb.com/images/media/meals/gpon5u1763801180.jpg",
+    "aubergine": "https://www.themealdb.com/images/media/meals/8c8m4q1763791156.jpg",
+    "yogurt": "https://www.themealdb.com/images/media/meals/16zbeu1763789342.jpg",
+    "rice": "https://www.themealdb.com/images/media/meals/xw1ruy1763786501.jpg",
+    "baklava": "https://www.themealdb.com/images/media/meals/ytme8t1764111401.jpg",
+    "knafeh": "https://www.themealdb.com/images/media/meals/76nffj1763593933.jpg",
+    "chicken": "https://www.themealdb.com/images/media/meals/ro8mzj1763800655.jpg",
+    "steak": "https://www.themealdb.com/images/media/meals/vussxq1511882648.jpg",
+    "falafel": "https://www.themealdb.com/images/media/meals/u5e9qq1763795441.jpg",
+    "ful": "https://www.themealdb.com/images/media/meals/lvn2d51598732465.jpg",
+    "fatteh": "https://www.themealdb.com/images/media/meals/rlwcc51598734603.jpg",
+    "shakshuka": "https://www.themealdb.com/images/media/meals/g373701551450225.jpg",
+    "flatbread": "https://www.themealdb.com/images/media/meals/8825lo1763815264.jpg",
+    "feteer": "https://www.themealdb.com/images/media/meals/9f4z6v1598734293.jpg",
+    "omelette": "https://www.themealdb.com/images/media/meals/hqaejl1695738653.jpg",
+    "pancake": "https://www.themealdb.com/images/media/meals/rwuyqx1511383174.jpg",
+    "mamoul": "https://www.themealdb.com/images/media/meals/35kejr1763599712.jpg",
+    "datecake": "https://www.themealdb.com/images/media/meals/towo9c1763814590.jpg",
+    "salad": "https://images.unsplash.com/photo-1546793665-c74683f339c1?w=800&q=80&fit=crop",
+    "soup": "https://www.themealdb.com/images/media/meals/xrrwpx1487347049.jpg",
+    "bread": "https://www.themealdb.com/images/media/meals/8825lo1763815264.jpg",
+    "calamari": "https://www.themealdb.com/images/media/meals/yhi46r1763330279.jpg",
+    "juice": "https://images.unsplash.com/photo-1600271886742-f049cd451bba?w=800&q=80&fit=crop",
+    "lemonade": "https://images.unsplash.com/photo-1621263764928-df1444c5e859?w=800&q=80&fit=crop",
+    "tea": "https://images.unsplash.com/photo-1544787219-7f47ccb76574?w=800&q=80&fit=crop",
+    "coffee": "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=800&q=80&fit=crop",
+    "water": "https://images.unsplash.com/photo-1548839140-29a749e1cf4d?w=800&q=80&fit=crop",
+    "cola": "https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=800&q=80&fit=crop",
+    "milkshake": "https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=800&q=80&fit=crop",
+    "smoothie": "https://www.themealdb.com/images/media/meals/pjbaq11784731571.jpg",
+    "restaurant": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&q=80&fit=crop"
+  },
+  "menus": {
+    "la-piazza-italian": {
+      "pizza": [
+        "بيتزا",
+        [
+          [
+            "بيتزا مارغريتا",
+            "صلصة طماطم إيطالية وموزاريلا وريحان طازج على عجينة مخمرة.",
+            100,
+            "margherita",
+            "pizza",
+            [
+              "pizza-size",
+              "pizza-extras"
+            ],
+            50
+          ],
+          [
+            "بيتزا بيبروني",
+            "شرائح بيبروني بقري وموزاريلا وصلصة طماطم.",
+            200,
+            "pepperoni",
+            "pizza",
+            [
+              "pizza-size",
+              "pizza-extras"
+            ]
+          ],
+          [
+            "بيتزا خضار",
+            "فليفلة وفطر وزيتون وبندورة وموزاريلا.",
+            100,
+            "vegpizza",
+            "pizza",
+            [
+              "pizza-size",
+              "pizza-extras"
+            ]
+          ],
+          [
+            "بيتزا مشكلة عائلية",
+            "بيتزا كبيرة بالجبنة والفطر والفليفلة وشرائح اللحم.",
+            500,
+            "pizza",
+            "family_meal",
+            [
+              "pizza-extras"
+            ]
+          ],
+          [
+            "بيتزا خضار مشوية",
+            "فلفل رومي وكوسا وفطر وزيتون أسود مع موزاريلا وصلصة طماطم.",
+            100,
+            "vegpizza",
+            "pizza",
+            [
+              "pizza-size",
+              "pizza-extras"
+            ]
+          ],
+          [
+            "بيتزا مارغريتا عائلية",
+            "بيتزا مارغريتا كبيرة تكفي ثلاثة أشخاص بجبنة موزاريلا وريحان طازج.",
+            200,
+            "margherita",
+            "family_meal",
+            [
+              "pizza-size",
+              "pizza-extras"
+            ]
+          ],
+          [
+            "بيتزا بيبروني عائلية",
+            "بيتزا كبيرة بشرائح بيبروني بقري وجبنة موزاريلا تكفي ثلاثة أشخاص.",
+            500,
+            "pepperoni",
+            "family_meal",
+            [
+              "pizza-extras"
+            ]
+          ]
+        ]
+      ],
+      "pasta": [
+        "باستا",
+        [
+          [
+            "باستا كاربونارا",
+            "سباغيتي بصلصة كريمية وبيض وبارميزان وقطع لحم بقري مدخن.",
+            100,
+            "carbonara",
+            "meal",
+            [
+              "pasta-extras"
+            ]
+          ],
+          [
+            "باستا دجاج ألفريدو",
+            "باستا بصلصة الكريمة والدجاج والخضار.",
+            200,
+            "alfredo",
+            "meal",
+            [
+              "pasta-extras"
+            ]
+          ],
+          [
+            "باستا أرابياتا",
+            "بيني بصلصة الطماطم والثوم والفلفل الحار.",
+            100,
+            "arrabiata",
+            "meal",
+            [
+              "pasta-extras"
+            ]
+          ],
+          [
+            "لازانيا باللحم",
+            "طبقات معكرونة ولحم بقري وبشاميل وموزاريلا.",
+            200,
+            "lasagna",
+            "meal",
+            [
+              "pasta-extras"
+            ]
+          ],
+          [
+            "سباغيتي بولونيز",
+            "سباغيتي بصلصة الطماطم واللحم المفروم.",
+            100,
+            "bolognese",
+            "meal",
+            [
+              "pasta-extras"
+            ]
+          ],
+          [
+            "لازانيا عائلية",
+            "طبقات معكرونة ولازانيا باللحم والبشاميل تكفي ثلاثة أشخاص.",
+            500,
+            "lasagna",
+            "family_meal",
+            [
+              "pasta-extras"
+            ]
+          ],
+          [
+            "بيني أرابياتا حارة",
+            "معكرونة بيني بصلصة الطماطم والفلفل الحار والثوم.",
+            100,
+            "arrabiata",
+            "meal",
+            [
+              "pasta-extras"
+            ]
+          ]
+        ]
+      ],
+      "sides": [
+        "مقبلات وسلطات",
+        [
+          [
+            "سلطة باستا متوسطية",
+            "باستا باردة مع خضار وزيتون وتتبيلة متوسطية.",
+            50,
+            "pastasalad",
+            "salad",
+            []
+          ],
+          [
+            "سلطة سيزر",
+            "خس وقطع خبز محمص وبارميزان وصلصة سيزر.",
+            50,
+            "salad",
+            "salad",
+            [
+              "salad-extras"
+            ]
+          ],
+          [
+            "خبز بالثوم",
+            "خبز محمص بزبدة الثوم والأعشاب.",
+            25,
+            "bread",
+            "appetizer",
+            []
+          ]
+        ]
+      ],
+      "desserts": [
+        "حلويات",
+        [
+          [
+            "بودينو ريكوتا",
+            "حلوى إيطالية مخبوزة بجبنة الريكوتا.",
+            50,
+            "ricotta",
+            "dessert",
+            []
+          ],
+          [
+            "تيراميسو",
+            "طبقات بسكويت بالقهوة وكريمة ماسكاربوني وكاكاو.",
+            100,
+            "tiramisu",
+            "dessert",
+            []
+          ],
+          [
+            "كيك شوكولاتة",
+            "كيك شوكولاتة غني بطبقات كريمة.",
+            50,
+            "cake",
+            "dessert",
+            []
+          ]
+        ]
+      ],
+      "drinks": [
+        "مشروبات",
+        [
+          [
+            "عصير برتقال طازج",
+            "عصير برتقال معصور عند الطلب، 300 مل.",
+            25,
+            "juice",
+            "drink",
+            [
+              "drink-size"
+            ]
+          ],
+          [
+            "ليمون ونعناع",
+            "عصير ليمون ونعناع طازج، 300 مل.",
+            25,
+            "lemonade",
+            "drink",
+            [
+              "drink-size",
+              "ice"
+            ]
+          ],
+          [
+            "مشروب غازي",
+            "مشروب غازي بارد، 330 مل.",
+            10,
+            "cola",
+            "drink",
+            []
+          ],
+          [
+            "ماء معدني",
+            "عبوة ماء معدني 500 مل.",
+            10,
+            "water",
+            "drink",
+            []
+          ],
+          [
+            "شاي",
+            "كوب شاي أسود ساخن.",
+            10,
+            "tea",
+            "drink",
+            [
+              "sugar"
+            ]
+          ],
+          [
+            "قهوة",
+            "فنجان قهوة ساخنة.",
+            25,
+            "coffee",
+            "drink",
+            [
+              "sugar"
+            ]
+          ]
+        ]
+      ]
+    },
+    "golden-dragon-asian": {
+      "asian_rice": [
+        "أرز وأطباق الووك",
+        [
+          [
+            "أرز مقلي بالدجاج",
+            "أرز وبيض ودجاج وخضار بصوص الصويا.",
+            100,
+            "friedrice",
+            "meal",
+            [
+              "spice",
+              "asian-protein"
+            ]
+          ],
+          [
+            "دجاج كونغ باو",
+            "دجاج مع فول سوداني وفليفلة وصوص حار.",
+            200,
+            "kungpao",
+            "meal",
+            [
+              "spice",
+              "asian-protein"
+            ]
+          ],
+          [
+            "دجاج بصوص البرتقال",
+            "قطع دجاج مقرمشة بصوص البرتقال الحلو الحامض.",
+            200,
+            "orangechicken",
+            "meal",
+            [
+              "spice"
+            ]
+          ],
+          [
+            "روبيان كونغ باو",
+            "روبيان مع فلفل ومكسرات وصوص الووك.",
+            200,
+            "prawns",
+            "meal",
+            [
+              "spice"
+            ]
+          ],
+          [
+            "سلمون ترياكي",
+            "سلمون مشوي بتتبيلة ترياكي وعسل.",
+            500,
+            "teriyaki",
+            "meal",
+            []
+          ],
+          [
+            "أرز مقلي بالروبيان",
+            "أرز وبيض وخضار مع روبيان مقلي في صلصة الصويا.",
+            200,
+            "friedrice",
+            "meal",
+            [
+              "spice"
+            ]
+          ],
+          [
+            "سلمون ترياكي عائلي",
+            "سلمون بصلصة الترياكي مع الأرز والخضار، حصة لشخصين.",
+            500,
+            "teriyaki",
+            "family_meal",
+            [
+              "spice"
+            ]
+          ],
+          [
+            "كاري دجاج كاتسو",
+            "دجاج مقرمش مع أرز وصوص الكاري الياباني.",
+            200,
+            "katsu",
+            "meal",
+            [
+              "spice"
+            ]
+          ]
+        ]
+      ],
+      "noodles": [
+        "نودلز ورامن",
+        [
+          [
+            "رامن بالبيض",
+            "نودلز بمرق غني وبيض مسلوق وخضار.",
+            100,
+            "ramen",
+            "meal",
+            [
+              "spice",
+              "asian-protein"
+            ]
+          ],
+          [
+            "ياكي أودون",
+            "نودلز أودون سميكة مع خضار وصوص الصويا.",
+            100,
+            "udon",
+            "meal",
+            [
+              "spice",
+              "asian-protein"
+            ]
+          ],
+          [
+            "نودلز أودون بالخضار",
+            "نودلز أودون سميكة مع خضار موسمية وصلصة الصويا.",
+            100,
+            "udon",
+            "meal",
+            [
+              "spice"
+            ]
+          ],
+          [
+            "رامن دجاج",
+            "مرق رامن ساخن مع نودلز ودجاج وبيض وبصل أخضر.",
+            200,
+            "ramen",
+            "meal",
+            [
+              "spice"
+            ]
+          ]
+        ]
+      ],
+      "sushi": [
+        "سوشي",
+        [
+          [
+            "تشكيلة سوشي 8 قطع",
+            "لفائف أرز وأعشاب بحرية وخضار مع صويا وزنجبيل.",
+            200,
+            "sushi",
+            "meal",
+            [
+              "sushi-size"
+            ]
+          ],
+          [
+            "تشكيلة سوشي عائلية",
+            "24 قطعة متنوعة مع صوص الصويا والواسابي.",
+            500,
+            "sushi",
+            "family_meal",
+            []
+          ]
+        ]
+      ],
+      "sides": [
+        "مقبلات آسيوية",
+        [
+          [
+            "وانتون",
+            "قطع عجين محشوة ومقدمة مع صوص الغمس.",
+            50,
+            "wonton",
+            "appetizer",
+            []
+          ],
+          [
+            "سبرينغ رول",
+            "لفائف خضار مقرمشة.",
+            50,
+            "eggroll",
+            "appetizer",
+            []
+          ],
+          [
+            "شوربة حارة وحامضة",
+            "مرق آسيوي بالخضار والفطر.",
+            50,
+            "hot_soup",
+            "appetizer",
+            [
+              "spice"
+            ]
+          ],
+          [
+            "سلطة الخيار بالسمسم",
+            "خيار طازج مع صويا وسمسم.",
+            25,
+            "cucumber",
+            "salad",
+            []
+          ]
+        ]
+      ],
+      "desserts": [
+        "حلويات",
+        [
+          [
+            "كيك شوكولاتة",
+            "قطعة كيك شوكولاتة مع كريمة.",
+            50,
+            "cake",
+            "dessert",
+            []
+          ],
+          [
+            "آيس كريم",
+            "كرتان من الآيس كريم.",
+            50,
+            "icecream",
+            "dessert",
+            [
+              "ice-flavor"
+            ]
+          ]
+        ]
+      ],
+      "drinks": [
+        "مشروبات",
+        [
+          [
+            "عصير برتقال طازج",
+            "عصير برتقال معصور عند الطلب، 300 مل.",
+            25,
+            "juice",
+            "drink",
+            [
+              "drink-size"
+            ]
+          ],
+          [
+            "ليمون ونعناع",
+            "عصير ليمون ونعناع طازج، 300 مل.",
+            25,
+            "lemonade",
+            "drink",
+            [
+              "drink-size",
+              "ice"
+            ]
+          ],
+          [
+            "مشروب غازي",
+            "مشروب غازي بارد، 330 مل.",
+            10,
+            "cola",
+            "drink",
+            []
+          ],
+          [
+            "ماء معدني",
+            "عبوة ماء معدني 500 مل.",
+            10,
+            "water",
+            "drink",
+            []
+          ],
+          [
+            "سموذي مانجو",
+            "مانجو مخفوقة مع الحليب.",
+            50,
+            "smoothie",
+            "drink",
+            [
+              "ice"
+            ]
+          ]
+        ]
+      ],
+      "fried_chicken": [
+        "دجاج مقرمش",
+        [
+          [
+            "دجاج كاراغي",
+            "قطع دجاج يابانية مقلية ومقرمشة.",
+            100,
+            "karaage",
+            "side",
+            []
+          ]
+        ]
+      ]
+    },
+    "burger-haven": {
+      "burger": [
+        "برغر",
+        [
+          [
+            "برغر لحم",
+            "قطعة لحم بقري مشوية وخس وطماطم ومخلل وصوص المنزل.",
+            100,
+            "burger",
+            "burger",
+            [
+              "burger-size",
+              "burger-extras",
+              "sauce"
+            ]
+          ],
+          [
+            "تشيز برغر",
+            "لحم بقري وشيدر ذائب ومخلل وصوص خاص.",
+            100,
+            "cheeseburger",
+            "burger",
+            [
+              "burger-size",
+              "burger-extras",
+              "sauce"
+            ]
+          ],
+          [
+            "دبل تشيز برغر",
+            "قطعتا لحم بقري مع جبنتين وخبز بريوش.",
+            200,
+            "doubleburger",
+            "burger",
+            [
+              "burger-extras",
+              "sauce"
+            ]
+          ],
+          [
+            "برغر دجاج وهالومي",
+            "صدر دجاج مشوي مع جبنة حلوم وخضار.",
+            100,
+            "chickenburger",
+            "burger",
+            [
+              "burger-extras",
+              "sauce"
+            ]
+          ],
+          [
+            "برغر كفتة",
+            "لحم كفتة متبل مع بصل وخضار.",
+            100,
+            "koftaburger",
+            "burger",
+            [
+              "burger-extras",
+              "sauce"
+            ]
+          ],
+          [
+            "برغر شيدر حار",
+            "لحم بقري مشوي وجبنة شيدر وهالبينو ومخلل وصلصة حارة.",
+            100,
+            "cheeseburger",
+            "sandwich",
+            [
+              "burger-size",
+              "burger-extras"
+            ]
+          ],
+          [
+            "دبل برغر بالبصل المكرمل",
+            "قطعتا لحم بقري مشويتان مع جبنة وبصل مكرمل وصلصة خاصة.",
+            200,
+            "doubleburger",
+            "sandwich",
+            [
+              "burger-size",
+              "burger-extras"
+            ]
+          ],
+          [
+            "برغر الدجاج المقرمش",
+            "صدر دجاج مقرمش وخس ومايونيز في خبز برغر محمص.",
+            100,
+            "chickenburger",
+            "sandwich",
+            [
+              "burger-size",
+              "burger-extras"
+            ]
+          ],
+          [
+            "برغر كفتة حار",
+            "قطعة كفتة بقري مع بصل مشوي وطحينة وفلفل حار.",
+            100,
+            "koftaburger",
+            "sandwich",
+            [
+              "burger-size",
+              "burger-extras"
+            ]
+          ]
+        ]
+      ],
+      "combos": [
+        "وجبات كومبو",
+        [
+          [
+            "وجبة برغر كلاسيك",
+            "برغر لحم مع بطاطا مقلية ومشروب.",
+            200,
+            "combo",
+            "combo",
+            [
+              "combo-drink",
+              "fries-size",
+              "sauce"
+            ],
+            100
+          ],
+          [
+            "وجبة دبل برغر",
+            "دبل تشيز برغر مع بطاطا ومشروب.",
+            200,
+            "combo",
+            "combo",
+            [
+              "combo-drink",
+              "fries-size",
+              "sauce"
+            ]
+          ],
+          [
+            "وجبة برغر الجبنة والبطاطا",
+            "برغر شيدر مع بطاطا مقلية ومشروب من اختيارك.",
+            200,
+            "combo",
+            "combo",
+            [
+              "burger-extras",
+              "combo-drink"
+            ]
+          ]
+        ]
+      ],
+      "sides": [
+        "بطاطا ومقبلات",
+        [
+          [
+            "بطاطا مقلية",
+            "بطاطا ذهبية مقرمشة.",
+            25,
+            "fries",
+            "side",
+            [
+              "fries-size",
+              "sauce"
+            ]
+          ],
+          [
+            "سلطة سيزر",
+            "خس وخبز محمص وجبنة وصلصة سيزر.",
+            50,
+            "salad",
+            "salad",
+            [
+              "salad-extras"
+            ]
+          ]
+        ]
+      ],
+      "desserts": [
+        "حلويات",
+        [
+          [
+            "براونيز شوكولاتة",
+            "قطعة براونيز غنية بالشوكولاتة.",
+            50,
+            "brownies",
+            "dessert",
+            []
+          ],
+          [
+            "تشيز كيك نيويورك",
+            "تشيز كيك كريمي بقاعدة بسكويت.",
+            50,
+            "cheesecake",
+            "dessert",
+            []
+          ],
+          [
+            "آيس كريم",
+            "كرتان من الآيس كريم.",
+            50,
+            "icecream",
+            "dessert",
+            [
+              "ice-flavor"
+            ]
+          ]
+        ]
+      ],
+      "drinks": [
+        "مشروبات",
+        [
+          [
+            "عصير برتقال طازج",
+            "عصير برتقال معصور عند الطلب، 300 مل.",
+            25,
+            "juice",
+            "drink",
+            [
+              "drink-size"
+            ]
+          ],
+          [
+            "ليمون ونعناع",
+            "عصير ليمون ونعناع طازج، 300 مل.",
+            25,
+            "lemonade",
+            "drink",
+            [
+              "drink-size",
+              "ice"
+            ]
+          ],
+          [
+            "مشروب غازي",
+            "مشروب غازي بارد، 330 مل.",
+            10,
+            "cola",
+            "drink",
+            []
+          ],
+          [
+            "ماء معدني",
+            "عبوة ماء معدني 500 مل.",
+            10,
+            "water",
+            "drink",
+            []
+          ],
+          [
+            "ميلك شيك فانيلا",
+            "ميلك شيك بالحليب والفانيلا، 350 مل.",
+            50,
+            "milkshake",
+            "drink",
+            [
+              "drink-size"
+            ]
+          ]
+        ]
+      ],
+      "fried_chicken": [
+        "دجاج مقرمش",
+        [
+          [
+            "وجبة أجنحة دجاج",
+            "6 أجنحة مقرمشة مع بطاطا وصوص.",
+            200,
+            "wings",
+            "combo",
+            [
+              "sauce",
+              "fries-size"
+            ]
+          ],
+          [
+            "أجنحة دجاج مقرمشة",
+            "6 قطع أجنحة مع صوص اختياري.",
+            100,
+            "wings",
+            "side",
+            [
+              "sauce"
+            ]
+          ]
+        ]
+      ]
+    },
+    "beit-al-sham-grill": {
+      "grill": [
+        "مشاوي على الفحم",
+        [
+          [
+            "كباب حلبي",
+            "أسياخ لحم مفروم متبل مع بقدونس وبصل وخبز مشوي.",
+            200,
+            "kebab",
+            "meal",
+            [
+              "grill-size",
+              "grill-extras"
+            ]
+          ],
+          [
+            "شيش طاووق",
+            "قطع دجاج متبلة ومشوية على الفحم مع ثومية.",
+            100,
+            "skewers",
+            "meal",
+            [
+              "grill-size",
+              "grill-extras"
+            ]
+          ],
+          [
+            "ريش غنم مشوية",
+            "ريش غنم بتتبيلة الليمون والتوابل.",
+            200,
+            "lambchops",
+            "meal",
+            [
+              "grill-size",
+              "grill-extras"
+            ]
+          ],
+          [
+            "مشاوي مشكلة عائلية",
+            "تشكيلة كباب وشيش وريش مع مقبلات وخبز.",
+            500,
+            "grill",
+            "family_meal",
+            [
+              "grill-extras"
+            ],
+            200
+          ],
+          [
+            "دجاج مشوي",
+            "دجاج متبل ومشوي مع صلصة الجوز والأعشاب.",
+            200,
+            "chicken",
+            "meal",
+            [
+              "grill-extras"
+            ]
+          ],
+          [
+            "وجبة شيش طاووق مع الأرز",
+            "أسياخ دجاج متبلة ومشوية مع أرز وسلطة.",
+            200,
+            "skewers",
+            "meal",
+            [
+              "grill-size",
+              "grill-extras"
+            ]
+          ],
+          [
+            "كباب حلبي بالكرز",
+            "كباب لحم غنم مشوي يقدم مع صلصة الكرز والخبز.",
+            200,
+            "kebab",
+            "meal",
+            [
+              "grill-size",
+              "grill-extras"
+            ]
+          ],
+          [
+            "ريش غنم عائلية",
+            "تشكيلة ريش غنم مشوية على الفحم مع خضار مشوية تكفي ثلاثة أشخاص.",
+            500,
+            "lambchops",
+            "family_meal",
+            [
+              "grill-size",
+              "grill-extras"
+            ]
+          ]
+        ]
+      ],
+      "shawarma": [
+        "شاورما",
+        [
+          [
+            "سندويش شاورما دجاج",
+            "دجاج متبل مع ثومية ومخلل بخبز ملفوف.",
+            50,
+            "shawarma",
+            "sandwich",
+            [
+              "shawarma-size",
+              "shawarma-extras"
+            ]
+          ],
+          [
+            "سندويش شاورما لحم",
+            "لحم بقري متبل مع طحينة وخضار.",
+            100,
+            "beefwrap",
+            "sandwich",
+            [
+              "shawarma-size",
+              "shawarma-extras"
+            ]
+          ],
+          [
+            "وجبة شاورما دجاج عربي",
+            "شاورما مقطعة مع بطاطا وثومية ومخلل.",
+            100,
+            "shawarma",
+            "combo",
+            [
+              "shawarma-extras",
+              "combo-drink"
+            ]
+          ],
+          [
+            "شاورما دجاج بالخبز العربي",
+            "شرائح دجاج شاورما مع كريم الثوم ومخلل بداخل خبز عربي.",
+            50,
+            "shawarma",
+            "sandwich",
+            [
+              "shawarma-size",
+              "shawarma-extras"
+            ]
+          ],
+          [
+            "صحن شاورما لحم",
+            "شرائح شاورما لحم مع طحينة وبقدونس وبصل وخبز.",
+            200,
+            "beefwrap",
+            "meal",
+            [
+              "shawarma-extras"
+            ]
+          ]
+        ]
+      ],
+      "sides": [
+        "مقبلات شامية",
+        [
+          [
+            "حمص بالطحينة",
+            "حمص مهروس وطحينة وليمون وزيت زيتون.",
+            50,
+            "hummus",
+            "appetizer",
+            [
+              "mezze-extras"
+            ]
+          ],
+          [
+            "متبل باذنجان",
+            "باذنجان مشوي مهروس مع طحينة.",
+            50,
+            "aubergine",
+            "appetizer",
+            [
+              "mezze-extras"
+            ]
+          ],
+          [
+            "لبن بالخيار",
+            "لبن زبادي وخيار ونعناع.",
+            25,
+            "yogurt",
+            "side",
+            []
+          ],
+          [
+            "أرز بالشعيرية",
+            "أرز مطهو مع شعيرية محمصة.",
+            25,
+            "rice",
+            "side",
+            []
+          ],
+          [
+            "بطاطا مقلية",
+            "بطاطا مقرمشة.",
+            25,
+            "fries",
+            "side",
+            [
+              "sauce"
+            ]
+          ]
+        ]
+      ],
+      "desserts": [
+        "حلويات شرقية",
+        [
+          [
+            "بقلاوة بالمكسرات",
+            "رقائق عجين محشوة بالمكسرات.",
+            50,
+            "baklava",
+            "dessert",
+            []
+          ],
+          [
+            "كنافة بالجبنة",
+            "كنافة ذهبية محشوة بالجبنة مع القطر.",
+            100,
+            "knafeh",
+            "dessert",
+            []
+          ]
+        ]
+      ],
+      "drinks": [
+        "مشروبات",
+        [
+          [
+            "عصير برتقال طازج",
+            "عصير برتقال معصور عند الطلب، 300 مل.",
+            25,
+            "juice",
+            "drink",
+            [
+              "drink-size"
+            ]
+          ],
+          [
+            "ليمون ونعناع",
+            "عصير ليمون ونعناع طازج، 300 مل.",
+            25,
+            "lemonade",
+            "drink",
+            [
+              "drink-size",
+              "ice"
+            ]
+          ],
+          [
+            "مشروب غازي",
+            "مشروب غازي بارد، 330 مل.",
+            10,
+            "cola",
+            "drink",
+            []
+          ],
+          [
+            "ماء معدني",
+            "عبوة ماء معدني 500 مل.",
+            10,
+            "water",
+            "drink",
+            []
+          ],
+          [
+            "شاي",
+            "كوب شاي أسود ساخن.",
+            10,
+            "tea",
+            "drink",
+            [
+              "sugar"
+            ]
+          ],
+          [
+            "قهوة",
+            "فنجان قهوة ساخنة.",
+            25,
+            "coffee",
+            "drink",
+            [
+              "sugar"
+            ]
+          ]
+        ]
+      ]
+    },
+    "cedar-breakfast-house": {
+      "breakfast": [
+        "فطور شامي",
+        [
+          [
+            "طبق فلافل",
+            "أقراص فلافل طازجة مع خضار ومخلل وطحينة.",
+            50,
+            "falafel",
+            "breakfast",
+            [
+              "breakfast-extras"
+            ]
+          ],
+          [
+            "فول مدمس",
+            "فول بالليمون والثوم وزيت الزيتون.",
+            50,
+            "ful",
+            "breakfast",
+            [
+              "breakfast-extras"
+            ]
+          ],
+          [
+            "فتة حمص",
+            "خبز محمص وحمص ولبن وطحينة.",
+            50,
+            "fatteh",
+            "breakfast",
+            [
+              "breakfast-extras"
+            ]
+          ],
+          [
+            "شكشوكة",
+            "بيض مطهو مع طماطم وفليفلة.",
+            50,
+            "shakshuka",
+            "breakfast",
+            [
+              "breakfast-extras"
+            ]
+          ],
+          [
+            "طبق فطور عائلي",
+            "تشكيلة فول وفلافل وحمص وخبز ومخللات.",
+            200,
+            "ful",
+            "family_meal",
+            [
+              "breakfast-extras"
+            ]
+          ],
+          [
+            "فتة حمص بالسمن",
+            "حمص ولبن وقطع خبز محمص مع سمن ومكسرات.",
+            100,
+            "fatteh",
+            "meal",
+            [
+              "breakfast-extras"
+            ]
+          ],
+          [
+            "ساندويش فلافل",
+            "فلافل ساخنة مع طحينة ومخلل وخضار بخبز عربي.",
+            25,
+            "falafel",
+            "sandwich",
+            [
+              "breakfast-extras"
+            ]
+          ],
+          [
+            "صحن فول بزيت الزيتون",
+            "فول مدمس مع ليمون وثوم وزيت زيتون وخضار.",
+            50,
+            "ful",
+            "meal",
+            [
+              "breakfast-extras"
+            ]
+          ]
+        ]
+      ],
+      "bakery": [
+        "مخبوزات",
+        [
+          [
+            "خبز صاج بالزعتر",
+            "خبز مسطح بزيت الزيتون والزعتر.",
+            25,
+            "flatbread",
+            "breakfast",
+            [
+              "bakery-extras"
+            ]
+          ],
+          [
+            "فطير بالزبدة",
+            "فطير متعدد الطبقات مخبوز حتى يصبح ذهبياً.",
+            50,
+            "feteer",
+            "breakfast",
+            [
+              "bakery-extras"
+            ]
+          ],
+          [
+            "سندويش أومليت",
+            "بيض وخبز محمص وخضار.",
+            50,
+            "omelette",
+            "sandwich",
+            [
+              "breakfast-extras"
+            ]
+          ],
+          [
+            "بان كيك بالعسل",
+            "ثلاث قطع بان كيك مع عسل.",
+            50,
+            "pancake",
+            "breakfast",
+            [
+              "pancake-extras"
+            ]
+          ]
+        ]
+      ],
+      "sides": [
+        "أطباق جانبية",
+        [
+          [
+            "حمص بالطحينة",
+            "حمص وطحينة وزيت زيتون.",
+            50,
+            "hummus",
+            "appetizer",
+            [
+              "mezze-extras"
+            ]
+          ],
+          [
+            "لبن بالخيار",
+            "لبن وخيار ونعناع.",
+            25,
+            "yogurt",
+            "side",
+            []
+          ],
+          [
+            "خبز صاج",
+            "رغيف خبز صاج طازج.",
+            10,
+            "flatbread",
+            "side",
+            []
+          ]
+        ]
+      ],
+      "desserts": [
+        "حلويات",
+        [
+          [
+            "معمول بالتمر",
+            "قطع معمول محشوة بالتمر.",
+            25,
+            "mamoul",
+            "dessert",
+            []
+          ],
+          [
+            "كيك التمر والجوز",
+            "قطعة كيك بالتمر والجوز والعسل.",
+            50,
+            "datecake",
+            "dessert",
+            []
+          ],
+          [
+            "كنافة بالجبنة",
+            "كنافة طازجة مع القطر.",
+            100,
+            "knafeh",
+            "dessert",
+            []
+          ]
+        ]
+      ],
+      "drinks": [
+        "مشروبات",
+        [
+          [
+            "عصير برتقال طازج",
+            "عصير برتقال معصور عند الطلب، 300 مل.",
+            25,
+            "juice",
+            "drink",
+            [
+              "drink-size"
+            ]
+          ],
+          [
+            "ليمون ونعناع",
+            "عصير ليمون ونعناع طازج، 300 مل.",
+            25,
+            "lemonade",
+            "drink",
+            [
+              "drink-size",
+              "ice"
+            ]
+          ],
+          [
+            "مشروب غازي",
+            "مشروب غازي بارد، 330 مل.",
+            10,
+            "cola",
+            "drink",
+            []
+          ],
+          [
+            "ماء معدني",
+            "عبوة ماء معدني 500 مل.",
+            10,
+            "water",
+            "drink",
+            []
+          ],
+          [
+            "شاي",
+            "كوب شاي أسود ساخن.",
+            10,
+            "tea",
+            "drink",
+            [
+              "sugar"
+            ]
+          ],
+          [
+            "قهوة",
+            "فنجان قهوة ساخنة.",
+            25,
+            "coffee",
+            "drink",
+            [
+              "sugar"
+            ]
+          ]
+        ]
+      ]
+    },
+    "seller-restaurant-4b227777": {
+      "shawarma": [
+        "شاورما وسندويشات",
+        [
+          [
+            "سندويش شاورما دجاج",
+            "شاورما دجاج مع ثومية ومخلل وخبز عربي.",
+            50,
+            "shawarma",
+            "sandwich",
+            [
+              "shawarma-size",
+              "shawarma-extras"
+            ]
+          ],
+          [
+            "سندويش شاورما لحم",
+            "لحم بقري متبل مع طحينة وبصل.",
+            100,
+            "beefwrap",
+            "sandwich",
+            [
+              "shawarma-size",
+              "shawarma-extras"
+            ]
+          ],
+          [
+            "وجبة شاورما دجاج عربي",
+            "ساندويشات شاورما مقطعة مع بطاطا وثومية.",
+            100,
+            "shawarma",
+            "combo",
+            [
+              "shawarma-extras",
+              "combo-drink"
+            ],
+            50
+          ],
+          [
+            "وجبة شاورما لحم عائلية",
+            "شاورما لحم مع خبز وبطاطا ومقبلات تكفي 4 أشخاص.",
+            500,
+            "beefwrap",
+            "family_meal",
+            [
+              "shawarma-extras"
+            ]
+          ],
+          [
+            "شاورما دجاج دبل",
+            "لفافتان دجاج بالصاج مع كريم الثوم والمخلل.",
+            100,
+            "shawarma",
+            "combo",
+            [
+              "shawarma-extras"
+            ]
+          ],
+          [
+            "شاورما لحم بالخبز العربي",
+            "لحم شاورما مع طحينة وبصل وبقدونس في خبز عربي.",
+            100,
+            "beefwrap",
+            "sandwich",
+            [
+              "shawarma-size",
+              "shawarma-extras"
+            ]
+          ],
+          [
+            "وجبة شاورما دجاج مع بيبسي",
+            "شاورما دجاج مقطعة مع بطاطا ومشروب غازي.",
+            200,
+            "shawarma",
+            "combo",
+            [
+              "shawarma-extras",
+              "combo-drink"
+            ]
+          ],
+          [
+            "وجبة شاورما لحم لشخصين",
+            "لفافتان من شاورما اللحم مع بطاطا وطحينة.",
+            200,
+            "beefwrap",
+            "combo",
+            [
+              "shawarma-extras",
+              "combo-drink"
+            ]
+          ]
+        ]
+      ],
+      "grill": [
+        "مشاوي وأطباق رئيسية",
+        [
+          [
+            "دجاج مشوي على الفحم",
+            "دجاج مشوي بتتبيلة شرقية مع خبز وثومية.",
+            200,
+            "chicken",
+            "meal",
+            [
+              "grill-extras"
+            ]
+          ],
+          [
+            "ستيك لحم بقري",
+            "قطعة ستيك بقري مع صوص الفطر.",
+            200,
+            "steak",
+            "meal",
+            [
+              "steak-cook",
+              "grill-extras"
+            ]
+          ],
+          [
+            "شيش طاووق",
+            "أسياخ دجاج متبلة مشوية.",
+            100,
+            "skewers",
+            "meal",
+            [
+              "grill-extras"
+            ]
+          ],
+          [
+            "كباب حلبي",
+            "لحم مفروم متبل ومشوي مع خبز وبصل.",
+            200,
+            "kebab",
+            "meal",
+            [
+              "grill-size",
+              "grill-extras"
+            ]
+          ]
+        ]
+      ],
+      "sides": [
+        "مقبلات",
+        [
+          [
+            "سلطة سيزر",
+            "خس وجبنة وخبز محمص وصلصة سيزر.",
+            50,
+            "salad",
+            "salad",
+            [
+              "salad-extras"
+            ]
+          ],
+          [
+            "خبز بالثوم",
+            "خبز محمص بالثوم والأعشاب.",
+            25,
+            "bread",
+            "side",
+            []
+          ],
+          [
+            "كاليماري مقرمش",
+            "حلقات كاليماري مقلية مع الليمون.",
+            100,
+            "calamari",
+            "appetizer",
+            [
+              "sauce"
+            ]
+          ],
+          [
+            "حمص بالطحينة",
+            "حمص وطحينة وزيت زيتون.",
+            50,
+            "hummus",
+            "appetizer",
+            [
+              "mezze-extras"
+            ]
+          ],
+          [
+            "بطاطا مقلية",
+            "بطاطا مقرمشة.",
+            25,
+            "fries",
+            "side",
+            [
+              "sauce"
+            ]
+          ]
+        ]
+      ],
+      "desserts": [
+        "حلويات",
+        [
+          [
+            "كيك شوكولاتة",
+            "كيك شوكولاتة غني.",
+            50,
+            "cake",
+            "dessert",
+            []
+          ],
+          [
+            "تيراميسو",
+            "حلوى إيطالية بطبقات القهوة والكريمة.",
+            100,
+            "tiramisu",
+            "dessert",
+            []
+          ],
+          [
+            "آيس كريم فانيلا",
+            "كرتان من آيس كريم الفانيلا.",
+            50,
+            "icecream",
+            "dessert",
+            []
+          ],
+          [
+            "كنافة بالجبنة",
+            "كنافة شرقية مع القطر.",
+            100,
+            "knafeh",
+            "dessert",
+            []
+          ]
+        ]
+      ],
+      "drinks": [
+        "مشروبات",
+        [
+          [
+            "عصير برتقال طازج",
+            "عصير برتقال معصور عند الطلب، 300 مل.",
+            25,
+            "juice",
+            "drink",
+            [
+              "drink-size"
+            ]
+          ],
+          [
+            "ليمون ونعناع",
+            "عصير ليمون ونعناع طازج، 300 مل.",
+            25,
+            "lemonade",
+            "drink",
+            [
+              "drink-size",
+              "ice"
+            ]
+          ],
+          [
+            "مشروب غازي",
+            "مشروب غازي بارد، 330 مل.",
+            10,
+            "cola",
+            "drink",
+            []
+          ],
+          [
+            "ماء معدني",
+            "عبوة ماء معدني 500 مل.",
+            10,
+            "water",
+            "drink",
+            []
+          ],
+          [
+            "شاي",
+            "كوب شاي أسود ساخن.",
+            10,
+            "tea",
+            "drink",
+            [
+              "sugar"
+            ]
+          ],
+          [
+            "قهوة",
+            "فنجان قهوة ساخنة.",
+            25,
+            "coffee",
+            "drink",
+            [
+              "sugar"
+            ]
+          ]
+        ]
+      ],
+      "pasta": [
+        "معكرونة",
+        [
+          [
+            "باستا كاربونارا",
+            "سباغيتي بصلصة كريمية وبارميزان.",
+            100,
+            "carbonara",
+            "meal",
+            [
+              "pasta-extras"
+            ]
+          ]
+        ]
+      ]
+    },
+    "shawarma-al-hara": {
+      "shawarma": [
+        "شاورما",
+        [
+          [
+            "شاورما دجاج كلاسيك",
+            "دجاج شاورما متبل مع كريم الثوم ومخلل وعيش عربي.",
+            50,
+            "shawarma",
+            "sandwich",
+            [
+              "shawarma-size",
+              "shawarma-extras"
+            ]
+          ],
+          [
+            "شاورما دجاج حارة",
+            "دجاج شاورما مع صوص حار وكريم ثوم ومخلل.",
+            50,
+            "shawarma",
+            "sandwich",
+            [
+              "shawarma-size",
+              "shawarma-extras"
+            ]
+          ],
+          [
+            "شاورما دجاج بالجبنة",
+            "شاورما دجاج مع جبنة ذائبة ومخلل بخبز محمص.",
+            100,
+            "shawarma",
+            "sandwich",
+            [
+              "shawarma-size",
+              "shawarma-extras"
+            ]
+          ],
+          [
+            "شاورما لحم كلاسيك",
+            "شرائح لحم شاورما مع طحينة وبصل وبقدونس.",
+            100,
+            "beefwrap",
+            "sandwich",
+            [
+              "shawarma-size",
+              "shawarma-extras"
+            ]
+          ],
+          [
+            "وجبة شاورما عربي دجاج",
+            "لفافة شاورما دجاج مقطعة مع بطاطا وثوم ومخلل.",
+            100,
+            "shawarma",
+            "combo",
+            [
+              "shawarma-extras",
+              "combo-drink"
+            ]
+          ],
+          [
+            "وجبة شاورما عربي لحم",
+            "لفافة لحم مقطعة مع بطاطا وطحينة ومخلل.",
+            200,
+            "beefwrap",
+            "combo",
+            [
+              "shawarma-extras",
+              "combo-drink"
+            ]
+          ],
+          [
+            "صحن شاورما دجاج",
+            "شرائح دجاج شاورما مع خبز عربي وثوم وبطاطا.",
+            200,
+            "shawarma",
+            "meal",
+            [
+              "shawarma-extras"
+            ]
+          ],
+          [
+            "وجبة شاورما عائلية",
+            "أربع لفافات شاورما دجاج مع بطاطا وثوم ومخلل.",
+            500,
+            "shawarma",
+            "family_meal",
+            [
+              "shawarma-extras"
+            ]
+          ]
+        ]
+      ],
+      "sides": [
+        "المقبلات",
+        [
+          [
+            "بطاطا مقلية",
+            "بطاطا ذهبية مقرمشة.",
+            25,
+            "fries",
+            "side",
+            [
+              "fries-size",
+              "sauce"
+            ]
+          ],
+          [
+            "حمص بالطحينة",
+            "حمص ناعم بالطحينة وزيت الزيتون.",
+            50,
+            "hummus",
+            "appetizer",
+            [
+              "mezze-extras"
+            ]
+          ],
+          [
+            "سلطة خضار طازجة",
+            "خيار وطماطم وخس مع ليمون وزيت زيتون.",
+            25,
+            "salad",
+            "salad",
+            [
+              "salad-extras"
+            ]
+          ]
+        ]
+      ],
+      "drinks": [
+        "المشروبات",
+        [
+          [
+            "بيبسي 330 مل",
+            "مشروب غازي بارد.",
+            10,
+            "cola",
+            "drink",
+            []
+          ],
+          [
+            "ليموناضة طازجة",
+            "عصير ليمون طازج بارد.",
+            25,
+            "lemonade",
+            "drink",
+            [
+              "ice"
+            ]
+          ],
+          [
+            "ماء 500 مل",
+            "عبوة مياه معدنية.",
+            10,
+            "water",
+            "drink",
+            []
+          ]
+        ]
+      ]
+    },
+    "shawarma-al-saj": {
+      "shawarma": [
+        "شاورما الصاج",
+        [
+          [
+            "شاورما دجاج عالصاج",
+            "دجاج متبل ومشوي على السيخ ملفوف بخبز الصاج.",
+            50,
+            "shawarma",
+            "sandwich",
+            [
+              "shawarma-size",
+              "shawarma-extras"
+            ]
+          ],
+          [
+            "شاورما لحم عالصاج",
+            "لحم شاورما مع طحينة وبصل وسماق بخبز الصاج.",
+            100,
+            "beefwrap",
+            "sandwich",
+            [
+              "shawarma-size",
+              "shawarma-extras"
+            ]
+          ],
+          [
+            "شاورما دجاج سوبر",
+            "لفافة صاج كبيرة بحشوة دجاج إضافية وثوم ومخلل.",
+            100,
+            "shawarma",
+            "sandwich",
+            [
+              "shawarma-size",
+              "shawarma-extras"
+            ]
+          ],
+          [
+            "شاورما لحم سوبر",
+            "لفافة صاج كبيرة بلحم إضافي وطحينة وخضار.",
+            200,
+            "beefwrap",
+            "sandwich",
+            [
+              "shawarma-size",
+              "shawarma-extras"
+            ]
+          ],
+          [
+            "وجبة صاج دجاج دبل",
+            "لفافتان شاورما دجاج مع بطاطا ومشروب.",
+            200,
+            "shawarma",
+            "combo",
+            [
+              "shawarma-extras",
+              "combo-drink"
+            ]
+          ],
+          [
+            "وجبة صاج لحم دبل",
+            "لفافتان شاورما لحم مع بطاطا ومشروب.",
+            200,
+            "beefwrap",
+            "combo",
+            [
+              "shawarma-extras",
+              "combo-drink"
+            ]
+          ],
+          [
+            "صحن شاورما مشكل",
+            "شرائح دجاج ولحم مع ثوم وطحينة وبطاطا وخبز.",
+            200,
+            "beefwrap",
+            "meal",
+            [
+              "shawarma-extras"
+            ]
+          ],
+          [
+            "بوكس شاورما عائلي",
+            "ست لفافات شاورما دجاج ولحم مع مقبلات وبطاطا.",
+            500,
+            "shawarma",
+            "family_meal",
+            [
+              "shawarma-extras"
+            ]
+          ]
+        ]
+      ],
+      "sides": [
+        "المقبلات",
+        [
+          [
+            "بطاطا مقلية عائلية",
+            "بطاطا مقلية تكفي أكثر من شخص.",
+            50,
+            "fries",
+            "side",
+            [
+              "sauce"
+            ]
+          ],
+          [
+            "متبل باذنجان",
+            "باذنجان مشوي وطحينة وليمون.",
+            50,
+            "aubergine",
+            "appetizer",
+            [
+              "mezze-extras"
+            ]
+          ],
+          [
+            "حمص بزيت الزيتون",
+            "حمص بالطحينة وزيت الزيتون.",
+            50,
+            "hummus",
+            "appetizer",
+            [
+              "mezze-extras"
+            ]
+          ]
+        ]
+      ],
+      "desserts": [
+        "حلويات",
+        [
+          [
+            "بقلاوة بالفستق",
+            "قطع بقلاوة محشوة بالفستق.",
+            50,
+            "baklava",
+            "dessert",
+            []
+          ],
+          [
+            "كنافة بالجبنة",
+            "كنافة ساخنة محشوة بالجبنة.",
+            100,
+            "knafeh",
+            "dessert",
+            []
+          ]
+        ]
+      ],
+      "drinks": [
+        "مشروبات",
+        [
+          [
+            "مشروب كولا 330 مل",
+            "عبوة مشروب غازي باردة.",
+            10,
+            "cola",
+            "drink",
+            []
+          ],
+          [
+            "عصير برتقال طازج",
+            "عصير برتقال طبيعي 300 مل.",
+            25,
+            "juice",
+            "drink",
+            [
+              "drink-size"
+            ]
+          ],
+          [
+            "مياه معدنية",
+            "عبوة مياه 500 مل.",
+            10,
+            "water",
+            "drink",
+            []
+          ]
+        ]
+      ]
+    }
+  },
+  "groups": {
+    "pizza-size": [
+      "حجم البيتزا",
+      1,
+      1,
+      [
+        [
+          "وسط 25 سم",
+          0
+        ],
+        [
+          "كبير 32 سم",
+          50
+        ],
+        [
+          "عائلي 40 سم",
+          100
+        ]
+      ]
+    ],
+    "pizza-extras": [
+      "إضافات البيتزا",
+      0,
+      3,
+      [
+        [
+          "موزاريلا إضافية",
+          25
+        ],
+        [
+          "فطر",
+          10
+        ],
+        [
+          "زيتون",
+          10
+        ],
+        [
+          "بيبروني بقري",
+          25
+        ],
+        [
+          "فليفلة",
+          10
+        ]
+      ]
+    ],
+    "pasta-extras": [
+      "إضافات الباستا",
+      0,
+      3,
+      [
+        [
+          "بارميزان إضافي",
+          25
+        ],
+        [
+          "دجاج مشوي إضافي",
+          50
+        ],
+        [
+          "فطر",
+          10
+        ]
+      ]
+    ],
+    "salad-extras": [
+      "إضافات السلطة",
+      0,
+      2,
+      [
+        [
+          "دجاج مشوي",
+          50
+        ],
+        [
+          "بارميزان",
+          25
+        ]
+      ]
+    ],
+    "spice": [
+      "درجة الحدة",
+      1,
+      1,
+      [
+        [
+          "بدون حار",
+          0
+        ],
+        [
+          "حار خفيف",
+          0
+        ],
+        [
+          "حار جداً",
+          0
+        ]
+      ]
+    ],
+    "asian-protein": [
+      "إضافات الووك",
+      0,
+      2,
+      [
+        [
+          "دجاج إضافي",
+          50
+        ],
+        [
+          "روبيان إضافي",
+          100
+        ],
+        [
+          "بيض",
+          10
+        ]
+      ]
+    ],
+    "sushi-size": [
+      "عدد قطع السوشي",
+      1,
+      1,
+      [
+        [
+          "8 قطع",
+          0
+        ],
+        [
+          "12 قطعة",
+          100
+        ],
+        [
+          "16 قطعة",
+          200
+        ]
+      ]
+    ],
+    "ice-flavor": [
+      "نكهة الآيس كريم",
+      1,
+      1,
+      [
+        [
+          "فانيلا",
+          0
+        ],
+        [
+          "شوكولاتة",
+          0
+        ],
+        [
+          "فراولة",
+          0
+        ]
+      ]
+    ],
+    "burger-size": [
+      "عدد قطع اللحم",
+      1,
+      1,
+      [
+        [
+          "قطعة واحدة",
+          0
+        ],
+        [
+          "قطعتان",
+          100
+        ]
+      ]
+    ],
+    "burger-extras": [
+      "إضافات البرغر",
+      0,
+      4,
+      [
+        [
+          "شيدر إضافي",
+          25
+        ],
+        [
+          "بصل مكرمل",
+          10
+        ],
+        [
+          "مخلل إضافي",
+          10
+        ],
+        [
+          "فطر",
+          10
+        ],
+        [
+          "هلابينو",
+          10
+        ]
+      ]
+    ],
+    "sauce": [
+      "الصوص المفضل",
+      0,
+      2,
+      [
+        [
+          "باربيكيو",
+          0
+        ],
+        [
+          "رانش",
+          0
+        ],
+        [
+          "صوص حار",
+          0
+        ],
+        [
+          "مايونيز",
+          0
+        ]
+      ]
+    ],
+    "combo-drink": [
+      "المشروب مع الوجبة",
+      1,
+      1,
+      [
+        [
+          "كولا",
+          0
+        ],
+        [
+          "ماء",
+          0
+        ],
+        [
+          "عصير برتقال",
+          25
+        ]
+      ]
+    ],
+    "fries-size": [
+      "حجم البطاطا",
+      1,
+      1,
+      [
+        [
+          "عادي",
+          0
+        ],
+        [
+          "كبير",
+          25
+        ]
+      ]
+    ],
+    "grill-size": [
+      "حجم المشاوي",
+      1,
+      1,
+      [
+        [
+          "وجبة فردية",
+          0
+        ],
+        [
+          "وجبة لشخصين",
+          100
+        ]
+      ]
+    ],
+    "grill-extras": [
+      "إضافات المشاوي",
+      0,
+      3,
+      [
+        [
+          "ثومية",
+          10
+        ],
+        [
+          "خبز إضافي",
+          10
+        ],
+        [
+          "حمص",
+          25
+        ],
+        [
+          "بطاطا مقلية",
+          25
+        ]
+      ]
+    ],
+    "shawarma-size": [
+      "حجم الساندويش",
+      1,
+      1,
+      [
+        [
+          "عادي",
+          0
+        ],
+        [
+          "دبل",
+          50
+        ]
+      ]
+    ],
+    "shawarma-extras": [
+      "إضافات الشاورما",
+      0,
+      3,
+      [
+        [
+          "ثومية إضافية",
+          10
+        ],
+        [
+          "مخلل إضافي",
+          10
+        ],
+        [
+          "بطاطا داخل الساندويش",
+          10
+        ],
+        [
+          "لحم أو دجاج إضافي",
+          50
+        ]
+      ]
+    ],
+    "mezze-extras": [
+      "إضافات المقبلات",
+      0,
+      2,
+      [
+        [
+          "زيت زيتون",
+          10
+        ],
+        [
+          "طحينة",
+          10
+        ],
+        [
+          "خبز إضافي",
+          10
+        ]
+      ]
+    ],
+    "breakfast-extras": [
+      "إضافات الفطور",
+      0,
+      3,
+      [
+        [
+          "بيضة إضافية",
+          10
+        ],
+        [
+          "زيت زيتون",
+          10
+        ],
+        [
+          "طحينة",
+          10
+        ],
+        [
+          "خبز إضافي",
+          10
+        ]
+      ]
+    ],
+    "bakery-extras": [
+      "إضافات المخبوزات",
+      0,
+      2,
+      [
+        [
+          "جبنة",
+          25
+        ],
+        [
+          "زعتر",
+          10
+        ],
+        [
+          "عسل",
+          10
+        ]
+      ]
+    ],
+    "pancake-extras": [
+      "إضافات البان كيك",
+      0,
+      2,
+      [
+        [
+          "عسل إضافي",
+          10
+        ],
+        [
+          "شوكولاتة",
+          25
+        ],
+        [
+          "موز",
+          10
+        ]
+      ]
+    ],
+    "drink-size": [
+      "حجم المشروب",
+      1,
+      1,
+      [
+        [
+          "300 مل",
+          0
+        ],
+        [
+          "500 مل",
+          25
+        ]
+      ]
+    ],
+    "ice": [
+      "الثلج",
+      1,
+      1,
+      [
+        [
+          "بدون ثلج",
+          0
+        ],
+        [
+          "ثلج عادي",
+          0
+        ],
+        [
+          "ثلج إضافي",
+          0
+        ]
+      ]
+    ],
+    "sugar": [
+      "السكر",
+      1,
+      1,
+      [
+        [
+          "بدون سكر",
+          0
+        ],
+        [
+          "سكر قليل",
+          0
+        ],
+        [
+          "سكر عادي",
+          0
+        ]
+      ]
+    ],
+    "steak-cook": [
+      "درجة استواء الستيك",
+      1,
+      1,
+      [
+        [
+          "متوسط",
+          0
+        ],
+        [
+          "متوسط النضج",
+          0
+        ],
+        [
+          "ناضج تماماً",
+          0
+        ]
+      ]
+    ]
+  },
+  "legacy": {
+    "سلطة سيزر": [
+      "salad",
+      "side_dish",
+      "sides",
+      "salad"
+    ],
+    "شوربة اليوم": [
+      "soup",
+      "side_dish",
+      "sides",
+      "appetizer"
+    ],
+    "خبز بالثوم": [
+      "bread",
+      "side_dish",
+      "sides",
+      "side"
+    ],
+    "بروشيتا": [
+      "bread",
+      "side_dish",
+      "sides",
+      "appetizer"
+    ],
+    "دجاج مشوي": [
+      "chicken",
+      "main_dish",
+      "grill",
+      "meal"
+    ],
+    "برغر لحم": [
+      "burger",
+      "main_dish",
+      "burger",
+      "burger"
+    ],
+    "باستا كاربونارا": [
+      "carbonara",
+      "main_dish",
+      "pasta",
+      "meal"
+    ],
+    "ستيك ومرافقات": [
+      "steak",
+      "main_dish",
+      "grill",
+      "meal"
+    ],
+    "كيك شوكولاتة": [
+      "cake",
+      "dessert",
+      "desserts",
+      "dessert"
+    ],
+    "آيس كريم": [
+      "icecream",
+      "dessert",
+      "desserts",
+      "dessert"
+    ],
+    "تيراميسو": [
+      "tiramisu",
+      "dessert",
+      "desserts",
+      "dessert"
+    ],
+    "عصير طازج": [
+      "juice",
+      "beverage",
+      "drinks",
+      "drink"
+    ],
+    "مشروب غازي": [
+      "cola",
+      "beverage",
+      "drinks",
+      "drink"
+    ],
+    "شاي": [
+      "tea",
+      "beverage",
+      "drinks",
+      "drink"
+    ],
+    "ماء": [
+      "water",
+      "beverage",
+      "drinks",
+      "drink"
+    ],
+    "بيتزا مارجريتا": [
+      "margherita",
+      "main_dish",
+      "pizza",
+      "pizza"
+    ],
+    "سلطة خضار": [
+      "salad",
+      "side_dish",
+      "sides",
+      "salad"
+    ],
+    "حليب بارد": [
+      "milkshake",
+      "beverage",
+      "drinks",
+      "drink"
+    ]
+  },
+  "taxonomy": {
+    "pizza": "pizza",
+    "pasta": "pasta",
+    "sides": "sides",
+    "desserts": "desserts",
+    "drinks": "drinks",
+    "asian_rice": "asian",
+    "noodles": "asian",
+    "sushi": "asian",
+    "burger": "burger",
+    "combos": "burger",
+    "grill": "grill",
+    "shawarma": "shawarma",
+    "breakfast": "breakfast",
+    "bakery": "breakfast",
+    "fried_chicken": "fried-chicken"
+  },
+  "demo_restaurants": {
+    "shawarma-al-hara": {
+      "name": "شاورما الحارة",
+      "description": "مطعم تجريبي متخصص بشاورما الدجاج واللحم والوجبات العربية.",
+      "address": "حي الجميلية، حلب",
+      "city": "حلب",
+      "district": "الجميلية",
+      "latitude": 36.2114,
+      "longitude": 37.1481,
+      "email": "shawarma.hara@dllni.sy",
+      "phone": "+963933000151",
+      "price_range": "low",
+      "minimum_order_amount": 25,
+      "estimated_preparation_time": 15,
+      "estimated_preparation_time_min": 10,
+      "estimated_preparation_time_max": 20
+    },
+    "shawarma-al-saj": {
+      "name": "شاورما عالصاج",
+      "description": "مطعم تجريبي للشاورما على الصاج والوجبات العائلية مع إضافات شامية.",
+      "address": "حي الحمدانية، حلب",
+      "city": "حلب",
+      "district": "الحمدانية",
+      "latitude": 36.1812,
+      "longitude": 37.1117,
+      "email": "shawarma.saj@dllni.sy",
+      "phone": "+963933000152",
+      "price_range": "medium",
+      "minimum_order_amount": 50,
+      "estimated_preparation_time": 22,
+      "estimated_preparation_time_min": 15,
+      "estimated_preparation_time_max": 30
+    }
+  }
+}

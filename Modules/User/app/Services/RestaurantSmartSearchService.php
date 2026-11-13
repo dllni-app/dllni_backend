@@ -174,6 +174,7 @@ final class RestaurantSmartSearchService
                 ->where(fn ($nested) => $nested->whereNull('suspension_until')->orWhere('suspension_until', '<=', now())))
             ->with([
                 'restaurant.cuisineTypes',
+                'restaurant.media',
                 'category',
                 'offers',
                 'media',

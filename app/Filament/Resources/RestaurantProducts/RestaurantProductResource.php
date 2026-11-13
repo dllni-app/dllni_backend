@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Filament\Resources\RestaurantProducts;
 
 use App\Filament\Concerns\AuthorizesPlatformAdminResource;
+use App\Filament\Resources\RestaurantProducts\Pages\EditRestaurantProductClassification;
 use App\Filament\Resources\RestaurantProducts\Pages\ListRestaurantProducts;
 use App\Filament\Resources\RestaurantProducts\Pages\ViewRestaurantProduct;
 use BackedEnum;
+use Filament\Forms\Components\Select;
 use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -38,7 +40,8 @@ final class RestaurantProductResource extends Resource
 
     protected static ?string $navigationLabel = 'منتجات المطاعم';
 
-    protected static bool $shouldRegisterNavigation = false;
+    // Available only to platform users with restaurant_catalog.view.
+    protected static bool $shouldRegisterNavigation = true;
 
     public static function getNavigationGroup(): ?string
     {
@@ -55,6 +58,41 @@ final class RestaurantProductResource extends Resource
         return __('admin_resources.restaurant_product.plural');
     }
 
+    public static function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            Section::make('تصنيف المنتج للعرض في دلّني')
+                ->description('تتم مراجعة التصنيف يدوياً. الصلصات والمكونات الإضافية لا تظهر كوجبات مستقلة.')
+                ->schema([
+                    \Filament\Forms\Components\TextInput::make('servings')->label('عدد الأشخاص الذين تكفيهم الوجبة')->integer()->minValue(1)->maxValue(50),
+                    \Filament\Forms\Components\TagsInput::make('ingredient_exclusions')
+                        ->label('مكونات أكد المطعم عدم وجودها في الوصفة')
+                        ->helperText('لا تعتمد على الوصف وحده. هذه بيانات وصفة وليست ضماناً لعدم التلوث المتبادل.')->nestedRecursiveRules(['string', 'max:80']),
+                    Select::make('catalog_role')
+                        ->label('طريقة البيع')
+                        ->options([
+                            'independent' => 'منتج مستقل يمكن طلبه',
+                            'modifier_only' => 'إضافة أو مكوّن لا يُطلب منفرداً',
+                        ])->required()->native(false),
+                    Select::make('product_kind')
+                        ->label('نوع المنتج')
+                        ->options([
+                            'main_dish' => 'وجبة رئيسية',
+                            'combo_meal' => 'وجبة كومبو',
+                            'side_dish' => 'طبق جانبي',
+                            'beverage' => 'مشروب',
+                            'dessert' => 'حلوى',
+                            'standalone_sauce' => 'صلصة تباع مستقلة',
+                            'other' => 'أخرى',
+                        ])->required()->native(false),
+                    Select::make('primary_food_category_id')
+                        ->label('التصنيف العام للطعام')
+                        ->relationship('foodCategory', 'name_ar')
+                        ->searchable()->preload()->native(false),
+                ])->columns(2),
+        ]);
+    }
+
     public static function table(Table $table): Table
     {
         return $table
@@ -64,7 +102,11 @@ final class RestaurantProductResource extends Resource
                     ->getStateUsing(fn (Product $record): ?string => $record->getFirstMediaUrl('primary-image') ?: null),
                 TextColumn::make('name')->label('المنتج')->searchable()->sortable(),
                 TextColumn::make('restaurant.name')->label('المطعم')->searchable()->sortable(),
-                TextColumn::make('category.name')->label('التصنيف')->placeholder('—')->toggleable(),
+                TextColumn::make('category.name')->label('تصنيف المطعم')->placeholder('—')->toggleable(),
+                TextColumn::make('product_kind')->label('نوع المنتج')->placeholder('غير مصنف')->toggleable(),
+                TextColumn::make('catalog_role')->label('طبيعة المنتج')->badge(),
+                TextColumn::make('classification_status')->label('مراجعة التصنيف')->badge(),
+                TextColumn::make('foodCategory.name_ar')->label('تصنيف الطعام العام')->placeholder('—')->toggleable(),
                 TextColumn::make('price')->label('السعر')->money(config('app.currency', 'SYP'))->sortable(),
                 TextColumn::make('effective_price')->label('السعر الفعلي')
                     ->state(fn (Product $record): float => $record->effectivePrice())
@@ -80,10 +122,12 @@ final class RestaurantProductResource extends Resource
                 SelectFilter::make('restaurant_id')->label('المطعم')->relationship('restaurant', 'name')->searchable()->preload(),
                 Filter::make('low_stock')->label('مخزون منخفض')
                     ->query(fn (Builder $query): Builder => $query->whereColumn('stock_quantity', '<=', 'low_stock_threshold')),
+                Filter::make('needs_review')->label('بحاجة لمراجعة')
+                    ->query(fn (Builder $query): Builder => $query->where('classification_status', 'unreviewed')),
                 Filter::make('unavailable')->label('غير متاح')
                     ->query(fn (Builder $query): Builder => $query->where('is_available', false)),
             ])
-            ->recordActions([\Filament\Actions\ViewAction::make()])
+            ->recordActions([\Filament\Actions\ViewAction::make(), \Filament\Actions\EditAction::make()->label('تصنيف')])
             ->defaultSort('updated_at', 'desc');
     }
 
@@ -96,6 +140,10 @@ final class RestaurantProductResource extends Resource
                 TextEntry::make('name')->label('الاسم'),
                 TextEntry::make('restaurant.name')->label('المطعم'),
                 TextEntry::make('category.name')->label('التصنيف')->placeholder('—'),
+                TextEntry::make('product_kind')->label('نوع المنتج')->placeholder('غير مصنف'),
+                TextEntry::make('catalog_role')->label('طريقة البيع')->placeholder('—'),
+                TextEntry::make('classification_status')->label('حالة المراجعة')->placeholder('—'),
+                TextEntry::make('foodCategory.name_ar')->label('تصنيف الطعام العام')->placeholder('—'),
                 TextEntry::make('price')->label('السعر')->money(config('app.currency', 'SYP')),
                 TextEntry::make('discounted_price')->label('سعر الخصم المباشر')->money(config('app.currency', 'SYP'))->placeholder('—'),
                 TextEntry::make('effective_price')->label('السعر الفعلي')->state(fn (Product $record): float => $record->effectivePrice())->money(config('app.currency', 'SYP')),
@@ -131,7 +179,7 @@ final class RestaurantProductResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['restaurant', 'category', 'media', 'inventoryItems', 'offers']);
+        return parent::getEloquentQuery()->with(['restaurant', 'category', 'foodCategory', 'media', 'inventoryItems', 'offers']);
     }
 
     public static function canViewAny(): bool
@@ -151,7 +199,7 @@ final class RestaurantProductResource extends Resource
 
     public static function canEdit(Model $record): bool
     {
-        return false;
+        return self::dashboardAllowed('restaurant_catalog.update');
     }
 
     public static function canDelete(Model $record): bool
@@ -161,6 +209,10 @@ final class RestaurantProductResource extends Resource
 
     public static function getPages(): array
     {
-        return ['index' => ListRestaurantProducts::route('/'), 'view' => ViewRestaurantProduct::route('/{record}')];
+        return [
+            'index' => ListRestaurantProducts::route('/'),
+            'view' => ViewRestaurantProduct::route('/{record}'),
+            'edit' => EditRestaurantProductClassification::route('/{record}/edit'),
+        ];
     }
 }

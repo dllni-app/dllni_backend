@@ -241,11 +241,9 @@ final class RestaurantSeeder extends Seeder
             $this->seedRequestedRestaurantData($restaurant);
             $this->seedOwnerAppData($restaurant, $owner);
             $this->seedReviews($restaurant);
-            $this->seedModifierGroups($restaurant);
-            $this->seedProductSubstitutions($restaurant);
-            $this->seedProductImages($restaurant);
-            $this->seedRestaurantImages($restaurant);
         }
+
+        $this->call(RestaurantMenuCatalogSeeder::class);
     }
 
     /**
@@ -1070,7 +1068,7 @@ final class RestaurantSeeder extends Seeder
         $pngPath = $tempPath.'-'.Str::slug($imageSeed, '-').'.png';
         @unlink($tempPath);
 
-        $decoded = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAtMB9dZYkEYAAAAASUVORK5CYII=', true);
+        $decoded = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAAZElEQVRoge3PMQ0AIQDAQMC/QgZWbLwIhssnPQXtvGePP1s64FUDWgNaA1oDWgNaA1oDWgNaA1oDWgNaA1oDWgNaA1oDWgNaA1oDWgNaA1oDWgNaA1oDWgNaA1oDWgNaA1oD2ge65QMfyvFT6QAAAABJRU5ErkJggg==', true);
         if (! is_string($decoded) || $decoded === '') {
             return;
         }

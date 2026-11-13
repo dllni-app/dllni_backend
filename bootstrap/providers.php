@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 return [
     App\Providers\AppServiceProvider::class,
+    App\Providers\LocalTelescopeServiceProvider::class,
     App\Providers\SupportCaseServiceProvider::class,
     App\Providers\FilamentCompatibilityServiceProvider::class,
     App\Providers\Filament\AdminPanelProvider::class,

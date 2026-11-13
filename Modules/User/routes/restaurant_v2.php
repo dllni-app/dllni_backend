@@ -19,14 +19,18 @@ Route::middleware([EnsureRestaurantV2Enabled::class, SetRestaurantV2CacheHeaders
     });
     Route::get('home', RestaurantV2HomeController::class)->name('home');
     Route::get('home/{section}', [RestaurantV2HomeController::class, 'section'])
-        ->whereIn('section', ['promotions', 'cuisines', 'restaurants', 'dishes'])
+        ->whereIn('section', ['promotions', 'cuisines', 'restaurants', 'dishes', 'food-categories', 'popular-meals'])
         ->name('home.section');
     Route::get('discovery', RestaurantV2DiscoveryController::class)->name('discovery');
     Route::get('search', RestaurantV2SearchController::class)->name('search');
+    Route::post('search/smart', RestaurantV2SearchController::class)->middleware('throttle:15,1')->name('search.smart');
+    Route::post('search/voice', \Modules\User\Http\Controllers\API\RestaurantV2VoiceSearchController::class)->middleware('throttle:6,1')->name('search.voice');
     Route::get('suggestions', [RestaurantV2CatalogController::class, 'suggestions'])->name('suggestions');
     Route::get('cuisines', [RestaurantV2CatalogController::class, 'cuisines'])->name('cuisines');
     Route::get('categories', [RestaurantV2CatalogController::class, 'categories'])->name('categories');
+    Route::get('food-categories', [RestaurantV2CatalogController::class, 'foodCategories'])->name('food-categories');
     Route::get('offers', [RestaurantV2CatalogController::class, 'offers'])->name('offers');
+    Route::get('offers/{offer}', [RestaurantV2CatalogController::class, 'offer'])->whereNumber('offer')->name('offers.show');
     Route::get('products/{product}', [RestaurantV2CatalogController::class, 'product'])->whereNumber('product')->name('products.show');
     Route::get('{restaurant}/pickup-windows', RestaurantV2PickupWindowsController::class)->whereNumber('restaurant')->name('restaurants.pickup-windows');
     Route::get('{restaurant}/menu', [RestaurantV2CatalogController::class, 'menu'])->whereNumber('restaurant')->name('restaurants.menu');

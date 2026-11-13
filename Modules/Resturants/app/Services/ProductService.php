@@ -17,7 +17,15 @@ final class ProductService
     public function store(ProductData $data): Product
     {
         return DB::transaction(function () use ($data) {
-            $product = Product::create($data->onlyModelAttributes());
+            $attributes = $data->onlyModelAttributes();
+            if ($data->productKind === null) {
+                unset($attributes['product_kind']);
+            }
+            if ($data->primaryFoodCategoryId === null) {
+                unset($attributes['primary_food_category_id']);
+            }
+            if ($data->servings !== null) $attributes['servings'] = $data->servings ?: null;
+            $product = Product::create($attributes);
             $this->attachMedia($data, $product, false);
             $this->activityLogService->logProductCreated($product, (int) $product->restaurant_id);
 
@@ -29,7 +37,32 @@ final class ProductService
     {
         return DB::transaction(function () use ($data, $product) {
             $oldAttributes = $product->getAttributes();
-            tap($product)->update($data->onlyModelAttributes());
+            $attributes = $data->onlyModelAttributes();
+            if ($data->productKind === null) {
+                unset($attributes['product_kind']);
+            } elseif ($data->productKind !== $product->product_kind) {
+                // Owner edits invalidate an earlier editorial classification approval.
+                $attributes['classification_status'] = 'unreviewed';
+                $attributes['classified_at'] = null;
+            }
+            if ($data->primaryFoodCategoryId === null) {
+                unset($attributes['primary_food_category_id']);
+            } elseif ($data->primaryFoodCategoryId !== $product->primary_food_category_id) {
+                $attributes['classification_status'] = 'unreviewed';
+                $attributes['classified_at'] = null;
+            }
+            if ($data->servings === null) {
+                unset($attributes['servings']);
+            } else {
+                $attributes['servings'] = $data->servings ?: null;
+            }
+            if ($data->ingredientExclusions === null) unset($attributes['ingredient_exclusions']);
+            // Ingredient claims must be explicitly reviewed after owner edits.
+            if ($data->ingredientExclusions !== null && $data->ingredientExclusions !== ($product->ingredient_exclusions ?? [])) {
+                $attributes['classification_status'] = 'unreviewed';
+                $attributes['classified_at'] = null;
+            }
+            tap($product)->update($attributes);
             $this->attachMedia($data, $product, true);
             $this->activityLogService->logProductUpdated($product, (int) $product->restaurant_id, $oldAttributes);
 

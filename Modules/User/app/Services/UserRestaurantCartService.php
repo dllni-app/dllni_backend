@@ -7,14 +7,22 @@ namespace Modules\User\Services;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Modules\Resturants\Enums\OfferRewardType;
+use Modules\Resturants\Enums\OfferType;
 use Modules\Resturants\Models\Cart;
 use Modules\Resturants\Models\CartItem;
 use Modules\Resturants\Models\Modifier;
 use Modules\Resturants\Models\Product;
+use Modules\Resturants\Models\Offer;
+use Modules\Resturants\Services\Promotions\PromotionPricingResult;
+use Modules\Resturants\Services\Promotions\RestaurantCartPricingService;
+use Modules\Resturants\Support\RestaurantPromotionCapability;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 final class UserRestaurantCartService
 {
+    public function __construct(private readonly RestaurantCartPricingService $pricing) {}
+
     private const CART_RELATIONS = [
         'restaurant.media',
         'items.product.category',
@@ -53,6 +61,95 @@ final class UserRestaurantCartService
         return $this->toPayload($this->normalizeCart($cart));
     }
 
+    /**
+     * Add one complete offer application, using the same pricing and modifier
+     * validation as ordinary cart writes. A failed claim rolls back both lines.
+     */
+    public function addOffer(
+        int $userId,
+        int $offerId,
+        int $productId,
+        int $quantity,
+        int $ruleVersion,
+        array $modifierIds = [],
+        ?string $note = null,
+        ?int $rewardProductId = null,
+        array $rewardModifierIds = [],
+        ?string $rewardNote = null,
+    ): array {
+        return DB::transaction(function () use ($userId, $offerId, $productId, $quantity, $ruleVersion, $modifierIds, $note, $rewardProductId, $rewardModifierIds, $rewardNote): array {
+            $offer = RestaurantPromotionCatalog::constrain(Offer::query())
+                ->whereKey($offerId)
+                ->whereHas('restaurant', fn ($q) => $q->where('is_active', true))
+                ->with(['products', 'rewardProducts'])
+                ->firstOrFail();
+
+            if ((int) ($offer->rule_version ?? 1) !== $ruleVersion) {
+                throw new ConflictHttpException('PROMOTION_RULE_CHANGED');
+            }
+            $product = $offer->products->firstWhere('id', $productId);
+            if (! $product || (int) $product->restaurant_id !== (int) $offer->restaurant_id
+                || ! $product->isAvailableNow() || ! $product->isIndependentlyOrderable()) {
+                throw ValidationException::withMessages(['productId' => 'PROMOTION_PRODUCT_UNAVAILABLE']);
+            }
+
+            $advanced = ! $offer->isProductDiscount();
+            $specific = $advanced && $offer->reward_type === OfferRewardType::SpecificProducts;
+            $requiredQuantity = $advanced
+                ? (int) $offer->buy_quantity + ($specific ? 0 : (int) $offer->reward_quantity)
+                : null;
+            if ($quantity < 1 || $quantity > 50 || ($advanced && $quantity !== $requiredQuantity)) {
+                throw ValidationException::withMessages(['quantity' => 'PROMOTION_REQUIREMENTS_NOT_MET']);
+            }
+            if ($specific !== ($rewardProductId !== null)) {
+                throw ValidationException::withMessages(['rewardProductId' => 'PROMOTION_REWARD_UNAVAILABLE']);
+            }
+            if ($specific) {
+                $reward = $offer->rewardProducts->firstWhere('id', $rewardProductId);
+                if (! $reward || (int) $reward->restaurant_id !== (int) $offer->restaurant_id
+                    || ! $reward->isAvailableNow() || ! $reward->isIndependentlyOrderable()
+                    || (int) $offer->reward_quantity > 50) {
+                    throw ValidationException::withMessages(['rewardProductId' => 'PROMOTION_REWARD_UNAVAILABLE']);
+                }
+            }
+
+            $cart = $this->normalizeCart($this->resolveActiveCart($userId, (int) $offer->restaurant_id));
+            $previous = $advanced
+                ? (int) (collect($this->pricing->price($cart, true)->promotionsPayload())->firstWhere('offerId', $offerId)['applications'] ?? 0)
+                : 0;
+            $added = $this->addItem($userId, $productId, $quantity, $modifierIds, note: $note);
+            $payload = $added['cart'];
+
+            if ($specific) {
+                $signature = $this->signatureHash($rewardProductId, $rewardModifierIds, null, $rewardNote, $offerId);
+                $existing = CartItem::query()->where('cart_id', $cart->id)
+                    ->where('signature_hash', $signature)->lockForUpdate()->first();
+                $payload = $this->claimReward(
+                    userId: $userId,
+                    cartId: (int) $cart->id,
+                    offerId: $offerId,
+                    productId: $rewardProductId,
+                    quantity: (int) ($existing?->quantity ?? 0) + (int) $offer->reward_quantity,
+                    modifierIds: $rewardModifierIds,
+                    substituteProductId: null,
+                    note: $rewardNote,
+                    expectedRevision: (int) $payload['revision'],
+                );
+            }
+
+            // Never silently add full-price units if the selected promotion
+            // lost to another rule, was capped, or no longer qualifies.
+            if ($advanced) {
+                $application = collect($payload['appliedPromotions'] ?? [])->firstWhere('offerId', $offerId);
+                if ((int) ($application['applications'] ?? 0) <= $previous) {
+                    throw ValidationException::withMessages(['promotion' => 'PROMOTION_REQUIREMENTS_NOT_MET']);
+                }
+            }
+
+            return $payload;
+        });
+    }
+
     public function addItem(
         int $userId,
         int $productId,
@@ -67,6 +164,12 @@ final class UserRestaurantCartService
             $product = Product::query()
                 ->with(['offers', 'modifierGroups.modifiers'])
                 ->findOrFail($productId);
+
+            if (! RestaurantFoodEligibility::isIndependentlyOrderable($product)) {
+                throw ValidationException::withMessages([
+                    'productId' => ['This item is an add-on and cannot be ordered independently.'],
+                ]);
+            }
 
             if (! $product->restaurant_id) {
                 throw ValidationException::withMessages([
@@ -149,8 +252,9 @@ final class UserRestaurantCartService
         bool $replaceSubstituteProduct = true,
         bool $replaceNote = true,
         ?int $expectedRevision = null,
+        bool $convertRewardToOrdinary = false,
     ): array {
-        return DB::transaction(function () use ($userId, $cartId, $itemId, $quantity, $modifierIds, $substituteProductId, $note, $replaceSubstituteProduct, $replaceNote, $expectedRevision): array {
+        return DB::transaction(function () use ($userId, $cartId, $itemId, $quantity, $modifierIds, $substituteProductId, $note, $replaceSubstituteProduct, $replaceNote, $expectedRevision, $convertRewardToOrdinary): array {
             $lockedCart = Cart::query()->whereKey($cartId)->where('user_id', $userId)->lockForUpdate()->firstOrFail();
             $this->assertExpectedRevision($lockedCart, $expectedRevision);
             $item = CartItem::query()
@@ -162,8 +266,22 @@ final class UserRestaurantCartService
                 ->firstOrFail();
 
             $product = $item->product;
+            $originalQuantity = (int) $item->quantity;
+            $originalRewardOfferId = $item->reward_offer_id;
+            if ($originalRewardOfferId !== null || $convertRewardToOrdinary) {
+                abort_unless(RestaurantPromotionCapability::clientSupports(), 409, 'PROMOTION_CLIENT_UPGRADE_REQUIRED');
+            }
+            if ($convertRewardToOrdinary && $originalRewardOfferId === null) {
+                throw ValidationException::withMessages(['convertRewardToOrdinary' => 'This item is not a claimed reward.']);
+            }
+            $nextRewardOfferId = $convertRewardToOrdinary ? null : $originalRewardOfferId;
 
             $this->assertProductBelongsToCartRestaurant($item->cart, $product);
+            if (! RestaurantFoodEligibility::isIndependentlyOrderable($product)) {
+                throw ValidationException::withMessages([
+                    'productId' => ['This item is an add-on and cannot be ordered independently.'],
+                ]);
+            }
 
             $modifiers = $modifierIds === null
                 ? $item->modifiers
@@ -190,7 +308,15 @@ final class UserRestaurantCartService
                 modifierIds: $normalizedModifierIds,
                 substituteProductId: $nextSubstituteProductId,
                 note: $nextNote,
+                rewardOfferId: $nextRewardOfferId,
             );
+
+            if ($nextRewardOfferId !== null) {
+                $substitute = $nextSubstituteProductId === null ? null : Product::query()->findOrFail($nextSubstituteProductId);
+                if (! $this->pricing->configurationIsEligible($product, $normalizedModifierIds, $substitute)) {
+                    throw ValidationException::withMessages(['productId' => 'PROMOTION_REWARD_UNAVAILABLE']);
+                }
+            }
 
             $unitPrice = $this->unitPrice($product, $modifiers);
 
@@ -212,12 +338,18 @@ final class UserRestaurantCartService
                     'total_price' => $unitPrice * $mergedQuantity,
                     'special_instructions' => $nextNote,
                     'signature_hash' => $signatureHash,
+                    'reward_offer_id' => $nextRewardOfferId,
                 ]);
                 $targetItem->save();
                 $this->syncModifiers($targetItem, $modifiers);
                 $item->delete();
 
-                return $this->toPayload($this->normalizeCart($targetItem->cart));
+                $payload = $this->toPayload($this->normalizeCart($targetItem->cart));
+                if ($nextRewardOfferId !== null) {
+                    $this->assertRewardAllocated($payload, (int) $targetItem->id);
+                }
+
+                return $payload;
             }
 
             $item->fill([
@@ -227,6 +359,7 @@ final class UserRestaurantCartService
                 'total_price' => $unitPrice * $quantity,
                 'special_instructions' => $nextNote,
                 'signature_hash' => $signatureHash,
+                'reward_offer_id' => $nextRewardOfferId,
             ]);
             $item->save();
 
@@ -234,8 +367,115 @@ final class UserRestaurantCartService
                 $this->syncModifiers($item, $modifiers);
             }
 
-            return $this->toPayload($this->normalizeCart($item->cart));
+            $payload = $this->toPayload($this->normalizeCart($item->cart));
+            if ($nextRewardOfferId !== null && $quantity >= $originalQuantity) {
+                $this->assertRewardAllocated($payload, (int) $item->id);
+            }
+
+            return $payload;
         });
+    }
+
+    /**
+     * Explicit desired-quantity claim. Repeating the same request cannot add
+     * another reward; optional conversion moves units from a normal line.
+     */
+    public function claimReward(
+        int $userId,
+        int $cartId,
+        int $offerId,
+        int $productId,
+        int $quantity,
+        array $modifierIds,
+        ?int $substituteProductId,
+        ?string $note,
+        int $expectedRevision,
+        ?int $convertItemId = null,
+    ): array {
+        abort_unless(RestaurantPromotionCapability::supported(), 404);
+        if ($quantity < 1 || $quantity > 50) {
+            throw ValidationException::withMessages(['quantity' => 'Quantity must be between 1 and 50.']);
+        }
+
+        return DB::transaction(function () use ($userId, $cartId, $offerId, $productId, $quantity, $modifierIds, $substituteProductId, $note, $expectedRevision, $convertItemId): array {
+            $cart = Cart::query()->whereKey($cartId)->where('user_id', $userId)
+                ->whereNotNull('restaurant_id')->lockForUpdate()->firstOrFail();
+            $cart = $this->normalizeCart($cart);
+            $offer = Offer::query()->whereKey($offerId)->where('restaurant_id', $cart->restaurant_id)
+                ->where('offer_type', OfferType::BuyXGetY->value)->activeAt()
+                ->with('rewardProducts')->firstOrFail();
+            if ($offer->reward_type !== OfferRewardType::SpecificProducts || ! $offer->rewardProducts->contains('id', $productId)) {
+                throw ValidationException::withMessages(['productId' => 'PROMOTION_REWARD_UNAVAILABLE']);
+            }
+            $product = Product::query()->whereKey($productId)->where('restaurant_id', $cart->restaurant_id)
+                ->with(['offers', 'modifierGroups.modifiers', 'substitutions'])->firstOrFail();
+            $modifierIds = $this->normalizeModifierIds($modifierIds);
+            $modifiers = $this->validatedModifiers($product, $modifierIds);
+            $substitute = $substituteProductId === null ? null : Product::query()->findOrFail($substituteProductId);
+            if (! $this->pricing->configurationIsEligible($product, $modifierIds, $substitute)) {
+                throw ValidationException::withMessages(['productId' => 'PROMOTION_REWARD_UNAVAILABLE']);
+            }
+            $note = $this->normalizeNote($note);
+            $signature = $this->signatureHash($productId, $modifierIds, $substituteProductId, $note, $offerId);
+            $rewardItem = CartItem::query()->where('cart_id', $cartId)->where('signature_hash', $signature)
+                ->lockForUpdate()->first();
+
+            // Retry is a read of the same desired state, even after its revision changed.
+            if ($rewardItem && (int) $rewardItem->quantity === $quantity) {
+                $fresh = $cart->fresh(self::CART_RELATIONS);
+                $payload = $this->toPayload($fresh, $this->pricing->price($fresh, true));
+                $this->assertRewardAllocated($payload, (int) $rewardItem->id);
+
+                return $payload;
+            }
+
+            $this->assertExpectedRevision($cart, $expectedRevision);
+            $delta = $quantity - (int) ($rewardItem?->quantity ?? 0);
+            if ($convertItemId !== null) {
+                if ($delta <= 0) {
+                    throw ValidationException::withMessages(['convertItemId' => 'Conversion must add a claimed reward.']);
+                }
+                $normal = CartItem::query()->whereKey($convertItemId)->where('cart_id', $cartId)
+                    ->whereNull('reward_offer_id')->lockForUpdate()->firstOrFail();
+                $normalSignature = $this->signatureHash($productId, $modifierIds, $substituteProductId, $note);
+                if ($normal->signature_hash !== $normalSignature || (int) $normal->quantity < $delta) {
+                    throw ValidationException::withMessages(['convertItemId' => 'Choose the same configuration and an available quantity.']);
+                }
+                if ((int) $normal->quantity === $delta) {
+                    $normal->delete();
+                } else {
+                    $normal->quantity -= $delta;
+                    $normal->total_price = (float) $normal->unit_price * (int) $normal->quantity;
+                    $normal->save();
+                }
+            }
+
+            $rewardItem ??= new CartItem([
+                'cart_id' => $cartId, 'product_id' => $productId, 'reward_offer_id' => $offerId,
+                'signature_hash' => $signature,
+            ]);
+            $baseline = $this->unitPrice($product, $modifiers);
+            $rewardItem->fill([
+                'quantity' => $quantity, 'unit_price' => $baseline, 'total_price' => $baseline * $quantity,
+                'substitute_product_id' => $substituteProductId, 'special_instructions' => $note,
+            ])->save();
+            $this->syncModifiers($rewardItem, $modifiers);
+
+            $fresh = $this->normalizeCart($cart);
+            $payload = $this->toPayload($fresh, $this->pricing->price($fresh, true));
+            $this->assertRewardAllocated($payload, (int) $rewardItem->id);
+
+            return $payload;
+        });
+    }
+
+    private function assertRewardAllocated(array $payload, int $itemId): void
+    {
+        $line = collect($payload['items'])->firstWhere('id', $itemId);
+        if ($line === null || ($line['invalidRewardQuantity'] ?? 0) > 0
+            || ($line['rewardQuantity'] ?? 0) !== (int) $line['quantity']) {
+            throw ValidationException::withMessages(['promotion' => 'PROMOTION_REQUIREMENTS_NOT_MET']);
+        }
     }
 
     public function deleteItem(int $userId, int $cartId, int $itemId, ?int $expectedRevision = null): array
@@ -319,6 +559,7 @@ final class UserRestaurantCartService
                     modifierIds: $modifierIds,
                     substituteProductId: $item->substitute_product_id === null ? null : (int) $item->substitute_product_id,
                     note: $this->normalizeNote($item->special_instructions),
+                    rewardOfferId: $item->reward_offer_id,
                 );
 
                 return [
@@ -426,13 +667,14 @@ final class UserRestaurantCartService
     /**
      * @param  array<int>  $modifierIds
      */
-    private function signatureHash(int $productId, array $modifierIds, ?int $substituteProductId, ?string $note): string
+    private function signatureHash(int $productId, array $modifierIds, ?int $substituteProductId, ?string $note, ?int $rewardOfferId = null): string
     {
         return hash('sha256', json_encode([
             'product_id' => $productId,
             'modifier_ids' => $this->normalizeModifierIds($modifierIds),
             'substitute_product_id' => $substituteProductId,
             'note' => $this->normalizeNote($note),
+            ...($rewardOfferId === null ? [] : ['reward_offer_id' => $rewardOfferId]),
         ], JSON_THROW_ON_ERROR));
     }
 
@@ -494,23 +736,31 @@ final class UserRestaurantCartService
             'amounts' => [
                 'subtotal' => 0.0,
                 'total' => 0.0,
+                ...(RestaurantPromotionCapability::clientSupports() ? ['originalSubtotal' => 0.0, 'ordinaryDiscount' => 0.0, 'promotionDiscount' => 0.0, 'productDiscount' => 0.0] : []),
             ],
+            ...(RestaurantPromotionCapability::clientSupports() ? ['pricingFingerprint' => null, 'appliedPromotions' => [], 'promotionProgress' => [], 'invalidRewards' => []] : []),
         ];
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function toPayload(Cart $cart): array
+    private function toPayload(Cart $cart, ?PromotionPricingResult $priceResult = null): array
     {
-        $mappedItems = $cart->items->loadMissing(['product.media', 'product.offers', 'product.modifierGroups.modifiers', 'modifiers'])->map(function (CartItem $item): array {
+        $priceResult ??= $this->pricing->price($cart);
+        $this->pricing->assertCompatible($cart, $priceResult);
+        $compatible = RestaurantPromotionCapability::clientSupports();
+        if ($compatible) {
+            $this->pricing->rememberAdvancedPricing($cart, $priceResult);
+        }
+        $mappedItems = $cart->items->loadMissing(['product.media', 'product.offers', 'product.modifierGroups.modifiers', 'modifiers'])->map(function (CartItem $item) use ($priceResult, $compatible): array {
             $selectedModifiers = $item->modifiers
                 ->values()
                 ->map(fn (Modifier $modifier): array => [
                     'id' => $modifier->id,
                     'modifierGroupId' => $modifier->modifier_group_id,
                     'name' => $modifier->name,
-                    'price' => isset($modifier->pivot?->price) ? (float) $modifier->pivot->price : (float) ($modifier->price ?? 0),
+                    'price' => (float) ($modifier->price ?? 0),
                     'sortOrder' => (int) ($modifier->sort_order ?? 0),
                     // Legacy modifier schema has no is_available field.
                     'isAvailable' => (bool) ($modifier->getAttributes()['is_available'] ?? true),
@@ -544,7 +794,7 @@ final class UserRestaurantCartService
                 'productPrice' => $effectiveProductPrice,
                 'originalProductPrice' => $hasDiscount ? $originalProductPrice : null,
                 'hasDiscount' => $hasDiscount,
-                'totalPrice' => (float) ($item->total_price ?? 0),
+                'totalPrice' => PromotionPricingResult::money($priceResult->lines[$item->id]['netTotal']),
                 'originalTotalPrice' => $hasDiscount ? round($originalUnitPrice * (int) $item->quantity, 2) : null,
                 'modifierIds' => $item->modifiers->pluck('id')->map(fn ($id) => (int) $id)->values()->all(),
                 'modifiers' => $selectedModifiers,
@@ -555,6 +805,11 @@ final class UserRestaurantCartService
                 'modifierGroups' => $availableAdditions,
                 'substituteProductId' => $item->substitute_product_id,
                 'note' => $item->special_instructions,
+                ...($compatible ? [
+                    ...$priceResult->linePayload((int) $item->id),
+                    'rewardOfferId' => $item->reward_offer_id,
+                    'hasPromotion' => $priceResult->lines[$item->id]['promotionDiscount'] > 0 || $priceResult->lines[$item->id]['rewardQuantity'] > 0,
+                ] : []),
             ];
         })->values();
 
@@ -578,7 +833,7 @@ final class UserRestaurantCartService
                     ? (float) $restaurant->longitude
                     : null,
                 'primaryImageUrl' => $restaurant !== null
-                    ? ($restaurant->getFirstMediaUrl('primary-image') ?: null)
+                    ? \App\Support\ImageVariants::url($restaurant, 'primary-image', true)
                     : null,
                 'bannerImageUrl' => $restaurant !== null
                     ? ($restaurant->getFirstMediaUrl('banner-image') ?: null)
@@ -586,10 +841,17 @@ final class UserRestaurantCartService
             ],
             'items' => $mappedItems->all(),
             'productsCount' => (int) $mappedItems->sum('quantity'),
-            'amounts' => [
+            'amounts' => $compatible ? $priceResult->amounts() : [
                 'subtotal' => round($subtotal, 2),
                 'total' => round($subtotal, 2),
             ],
+            ...($compatible ? [
+                'pricingFingerprint' => $priceResult->fingerprint,
+                'appliedPromotions' => $priceResult->promotionsPayload(),
+                'promotionProgress' => $priceResult->progress,
+                'invalidRewards' => $priceResult->invalidRewards,
+                'requiresPriceConfirmation' => $this->pricing->requiresConfirmation($cart, $priceResult),
+            ] : []),
         ];
     }
 

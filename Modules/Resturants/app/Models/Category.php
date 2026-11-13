@@ -52,4 +52,10 @@ final class Category extends Model implements HasMedia
             'sort_order' => 'integer',
         ];
     }
+
+    public function registerMediaConversions(?\Spatie\MediaLibrary\MediaCollections\Models\Media $media = null): void
+    {
+        \App\Support\ImageVariants::register($this, $media);
+    }
+
 }

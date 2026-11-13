@@ -292,9 +292,11 @@ Route::prefix('v1/user')->group(function (): void {
         Route::get('restaurants/carts', UserRestaurantCartShowController::class);
         Route::get('restaurants/carts/{cartId}', UserRestaurantCartShowController::class)->whereNumber('cartId');
         Route::post('restaurants/cart/items', UserRestaurantCartItemStoreController::class);
+        Route::post('restaurants/cart/offers/{offerId}', \Modules\User\Http\Controllers\API\UserRestaurantOfferAddController::class)->whereNumber('offerId');
         Route::patch('restaurants/carts/{cartId}/items/{itemId}', UserRestaurantCartItemUpdateController::class)->whereNumber(['cartId', 'itemId']);
         Route::delete('restaurants/carts/{cartId}/items/{itemId}', UserRestaurantCartItemDestroyController::class)->whereNumber(['cartId', 'itemId']);
         Route::get('restaurants/cart/products-count', RestaurantCartProductsCountController::class);
+        Route::post('restaurants/carts/{cartId}/promotions/{offerId}/claim', \Modules\User\Http\Controllers\API\UserRestaurantPromotionClaimController::class)->whereNumber(['cartId', 'offerId']);
         Route::post('restaurants/carts/{cartId}/checkout/preview', UserRestaurantCheckoutPreviewController::class)->whereNumber('cartId');
         Route::post('restaurants/carts/{cartId}/orders', UserRestaurantOrderStoreController::class)->whereNumber('cartId');
 

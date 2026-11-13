@@ -17,6 +17,19 @@ final class UserRestaurantCartPayload
      */
     public static function normalize(array $cart): array
     {
+        if (array_key_exists('pricingFingerprint', $cart)) {
+            $amounts = $cart['amounts'];
+            $original = (float) ($amounts['originalSubtotal'] ?? 0);
+            $savings = (float) ($amounts['productDiscount'] ?? 0);
+            $cart['amounts'] = [
+                ...$amounts,
+                'discount' => $savings,
+                'discountPercent' => $original > 0 ? round($savings / $original * 100, 2) : 0.0,
+            ];
+
+            return $cart;
+        }
+
         $items = is_array($cart['items'] ?? null) ? $cart['items'] : [];
 
         $originalSubtotal = 0.0;

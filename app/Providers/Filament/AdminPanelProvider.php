@@ -7,6 +7,7 @@ namespace App\Providers\Filament;
 use App\Filament\Pages\CleaningOverview;
 use App\Http\Middleware\SetCleaningAdminLocale;
 use App\Support\Filament\AlnadhaTheme;
+use App\Support\Filament\RestaurantHomePanelBootstrap;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
@@ -27,6 +28,15 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 final class AdminPanelProvider extends PanelProvider
 {
+    public function register(): void
+    {
+        if (RestaurantHomePanelBootstrap::shouldSkip($this->app)) {
+            return;
+        }
+
+        parent::register();
+    }
+
     public function panel(Panel $panel): Panel
     {
         // Filament's numeric() defaults to app.locale (ar) unless the table

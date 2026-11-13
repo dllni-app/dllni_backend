@@ -121,8 +121,9 @@ final class Restaurant extends Model implements HasMedia
             function ($query): void {
                 $now = now();
 
-                $query->where('is_active', true)
-                    ->where(fn ($q) => $q->whereNull('ends_at')->orWhere('ends_at', '>=', $now));
+                $query->where('is_active', true)->where('offer_type', 'product_discount')
+                    ->where(fn ($q) => $q->whereNull('starts_at')->orWhere('starts_at', '<=', $now))
+                    ->where(fn ($q) => $q->whereNull('ends_at')->orWhere('ends_at', '>', $now));
             },
         );
     }
@@ -199,7 +200,7 @@ final class Restaurant extends Model implements HasMedia
             $q
                 ->where('is_active', true)
                 ->where(fn (Builder $nested) => $nested->whereNull('starts_at')->orWhere('starts_at', '<=', $now))
-                ->where(fn (Builder $nested) => $nested->whereNull('ends_at')->orWhere('ends_at', '>=', $now));
+                ->where(fn (Builder $nested) => $nested->whereNull('ends_at')->orWhere('ends_at', '>', $now));
         });
     }
 
@@ -211,7 +212,7 @@ final class Restaurant extends Model implements HasMedia
             $q
                 ->where('is_active', true)
                 ->where(fn (Builder $nested) => $nested->whereNull('starts_at')->orWhere('starts_at', '<=', $now))
-                ->where(fn (Builder $nested) => $nested->whereNull('ends_at')->orWhere('ends_at', '>=', $now))
+                ->where(fn (Builder $nested) => $nested->whereNull('ends_at')->orWhere('ends_at', '>', $now))
                 ->where(fn (Builder $nested) => $nested->whereNull('usage_limit')->orWhereColumn('usage_count', '<', 'usage_limit'));
         });
     }
@@ -267,4 +268,10 @@ final class Restaurant extends Model implements HasMedia
             'suspension_until' => 'datetime',
         ];
     }
+
+    public function registerMediaConversions(?\Spatie\MediaLibrary\MediaCollections\Models\Media $media = null): void
+    {
+        \App\Support\ImageVariants::register($this, $media);
+    }
+
 }

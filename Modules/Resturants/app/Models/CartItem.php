@@ -21,10 +21,12 @@ final class CartItem extends Model
         'total_price',
         'special_instructions',
         'signature_hash',
+        'reward_offer_id',
     ];
 
     protected $casts = [
         'quantity' => 'integer',
+        'reward_offer_id' => 'integer',
         'unit_price' => 'decimal:2',
         'total_price' => 'decimal:2',
     ];
@@ -37,6 +39,11 @@ final class CartItem extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function substituteProduct(): BelongsTo
+    {
+        return $this->belongsTo(Product::class, 'substitute_product_id');
     }
 
     public function modifiers(): BelongsToMany

@@ -435,10 +435,10 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                 $product = Product::firstOrCreate(
                     [
                         'restaurant_id' => $restaurant->id,
-                        'category_id' => $category->id,
                         'name' => $productData['name'],
                     ],
                     [
+                        'category_id' => $category->id,
                         'description' => $productData['description'],
                         'price' => $productData['price'],
                         'discounted_price' => $productData['discounted_price'],

@@ -44,6 +44,7 @@ return [
         'products_base_url' => env('DALLELNI_PRODUCTS_SEARCH_BASE_URL', 'https://dallelni.karriya.ai/products'),
         'stores_base_url' => env('DALLELNI_SM_STORES_SEARCH_BASE_URL', 'https://dallelni.karriya.ai/sm-stores'),
         'timeout' => env('DALLELNI_SEARCH_TIMEOUT', 10),
+        'meal_index_enabled' => env('DALLELNI_MEAL_INDEX_ENABLED', false),
     ],
 
     'openfoodfacts' => [
