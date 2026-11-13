@@ -9,7 +9,6 @@ use App\Models\Worker;
 use App\Models\WorkerCustomerRating;
 use App\Models\WorkerZone;
 use BackedEnum;
-use Carbon\Carbon;
 use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
@@ -20,7 +19,6 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Collection;
-use Throwable;
 
 final class CleaningWorkerInfolist
 {
@@ -60,9 +58,6 @@ final class CleaningWorkerInfolist
                                                 ->label('البريد الإلكتروني')
                                                 ->placeholder('-')
                                                 ->copyable(),
-                                            TextEntry::make('home_address')
-                                                ->label('موقع بدء المهمة')
-                                                ->placeholder('-'),
                                         ])
                                         ->columns(3)
                                         ->columnSpan(3),
@@ -168,17 +163,6 @@ final class CleaningWorkerInfolist
                                 ->columnSpanFull(),
                         ])
                         ->columns(3)
-                        ->columnSpanFull(),
-
-                    Section::make('أوقات العمل')
-                        ->description('الأيام والفترات التي اختار العامل استقبال الطلبات خلالها داخل التطبيق.')
-                        ->schema([
-                            ViewEntry::make('worker_working_hours')
-                                ->hiddenLabel()
-                                ->getStateUsing(fn (Worker $record): array => self::workingHoursState($record))
-                                ->view('filament.resources.workers.infolists.working-hours')
-                                ->columnSpanFull(),
-                        ])
                         ->columnSpanFull(),
 
                     Section::make('مناطق العمل')
@@ -349,76 +333,6 @@ final class CleaningWorkerInfolist
     private static function enumValue(mixed $value): string
     {
         return $value instanceof BackedEnum ? (string) $value->value : (string) $value;
-    }
-
-    /**
-     * @return array<int, array{key:string,label:string,available:bool,ranges:array<int, array{from:string,to:string,label:string}>}>
-     */
-    private static function workingHoursState(Worker $worker): array
-    {
-        $normalized = $worker->getNormalizedDefaultWorkingHours();
-        $dayLabels = [
-            'sunday' => 'الأحد',
-            'monday' => 'الإثنين',
-            'tuesday' => 'الثلاثاء',
-            'wednesday' => 'الأربعاء',
-            'thursday' => 'الخميس',
-            'friday' => 'الجمعة',
-            'saturday' => 'السبت',
-        ];
-
-        $days = [];
-        foreach ($dayLabels as $day => $label) {
-            $dayData = $normalized[$day] ?? ['available' => false, 'data' => []];
-            $ranges = [];
-
-            foreach ((array) ($dayData['data'] ?? []) as $period) {
-                if (! is_array($period)) {
-                    continue;
-                }
-
-                $from = isset($period['from']) && is_string($period['from'])
-                    ? $period['from']
-                    : array_key_first($period);
-                $to = isset($period['to']) && is_string($period['to'])
-                    ? $period['to']
-                    : (is_string($from) ? ($period[$from] ?? null) : null);
-
-                if (! is_string($from) || ! is_string($to)) {
-                    continue;
-                }
-
-                $ranges[] = [
-                    'from' => $from,
-                    'to' => $to,
-                    'label' => self::formatWorkingTime($from).' — '.self::formatWorkingTime($to),
-                ];
-            }
-
-            $days[] = [
-                'key' => $day,
-                'label' => $label,
-                'available' => (bool) ($dayData['available'] ?? false) && $ranges !== [],
-                'ranges' => $ranges,
-            ];
-        }
-
-        return $days;
-    }
-
-    private static function formatWorkingTime(string $time): string
-    {
-        foreach (['H:i', 'H:i:s'] as $format) {
-            try {
-                $parsed = Carbon::createFromFormat($format, $time);
-
-                return str_replace(['AM', 'PM'], ['ص', 'م'], $parsed->format('h:i A'));
-            } catch (Throwable) {
-                continue;
-            }
-        }
-
-        return $time;
     }
 
     /**

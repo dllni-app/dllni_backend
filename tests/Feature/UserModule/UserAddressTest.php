@@ -64,6 +64,85 @@ it('rejects create without map address and coordinates', function (): void {
         ->assertJsonValidationErrors(['street', 'latitude', 'longitude']);
 });
 
+it('creates an address without neighborhood when location comes from map', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $response = $this->postJson('/api/v1/user/addresses', [
+        'label' => 'المنزل',
+        'city' => 'حلب',
+        'street' => 'شارع السرو',
+        'directions' => 'جانب الحديقة، الطابق الأول',
+        'latitude' => 36.22,
+        'longitude' => 37.16,
+    ]);
+
+    $response->assertCreated()->assertJsonMissingValidationErrors();
+    $this->assertDatabaseHas('user_addresses', [
+        'user_id' => $user->id,
+        'label' => 'المنزل',
+        'neighborhood_id' => null,
+        'neighborhood' => null,
+        'street' => 'شارع السرو',
+        'latitude' => 36.22,
+        'longitude' => 37.16,
+    ]);
+});
+
+it('creates an address with an empty neighborhood value from map', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $response = $this->postJson('/api/v1/user/addresses', [
+        'label' => 'المنزل',
+        'city' => 'حلب',
+        'neighborhood' => '',
+        'street' => 'شارع السرو',
+        'directions' => 'جانب الحديقة، الطابق الأول',
+        'latitude' => 36.22,
+        'longitude' => 37.16,
+    ]);
+
+    $response->assertCreated()->assertJsonMissingValidationErrors();
+    $this->assertDatabaseHas('user_addresses', [
+        'user_id' => $user->id,
+        'neighborhood_id' => null,
+        'neighborhood' => null,
+        'street' => 'شارع السرو',
+    ]);
+});
+
+it('updates an existing address without requiring a neighborhood', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $address = UserAddress::factory()->for($user)->create([
+        'label' => 'المنزل',
+        'city' => 'حلب',
+        'neighborhood' => 'الفرقان',
+    ]);
+
+    $response = $this->putJson("/api/v1/user/addresses/{$address->id}", [
+        'label' => 'العمل',
+        'city' => 'حلب',
+        'street' => 'شارع السرو',
+        'directions' => 'مقابل الصيدلية',
+        'latitude' => 36.20,
+        'longitude' => 37.18,
+    ]);
+
+    $response->assertOk()->assertJsonMissingValidationErrors();
+    $this->assertDatabaseHas('user_addresses', [
+        'id' => $address->id,
+        'label' => 'العمل',
+        'neighborhood_id' => null,
+        'neighborhood' => null,
+        'street' => 'شارع السرو',
+        'latitude' => 36.20,
+        'longitude' => 37.18,
+    ]);
+});
+
 it('updates an address', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);

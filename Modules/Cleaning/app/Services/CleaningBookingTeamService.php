@@ -538,14 +538,6 @@ final class CleaningBookingTeamService
             throw new InvalidArgumentException('Booking gender preference does not match worker profile.');
         }
 
-        if ($worker->home_address === null || mb_trim($worker->home_address) === '') {
-            throw new InvalidArgumentException('Worker home location is required before accepting bookings.');
-        }
-
-        if ($worker->home_latitude === null || $worker->home_longitude === null) {
-            throw new InvalidArgumentException('Worker home location is required before accepting bookings.');
-        }
-
         if ($booking->address_latitude === null || $booking->address_longitude === null) {
             throw new InvalidArgumentException('Customer location coordinates are required before accepting bookings.');
         }

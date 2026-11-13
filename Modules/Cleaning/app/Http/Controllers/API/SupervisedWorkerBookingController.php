@@ -6,6 +6,7 @@ namespace Modules\Cleaning\Http\Controllers\API;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 
@@ -14,7 +15,11 @@ final class SupervisedWorkerBookingController
     public function __invoke(Request $request, CleaningBooking $booking): JsonResponse
     {
         $worker = $request->user()?->worker;
-        if (! $worker || ! $booking->isSupervisedTeam()) {
+        $isManagedStandardTeam = (string) $booking->booking_kind === 'standard'
+            && (int) $booking->number_of_workers > 1
+            && $booking->supervisorAssignments()->where('active_slot', 1)
+                ->whereNull('released_at')->exists();
+        if (! $worker || (! $booking->isSupervisedTeam() && ! $isManagedStandardTeam)) {
             abort(404);
         }
 
@@ -40,6 +45,13 @@ final class SupervisedWorkerBookingController
         );
         $travelStarted = $assignment->started_travel_at !== null;
         $arrived = $assignment->arrived_at !== null;
+        $attendanceConfirmed = DB::table('cleaning_worker_attendance_proofs')
+            ->where('cleaning_booking_id', $booking->id)
+            ->where('worker_assignment_id', $assignment->id)
+            ->whereNotNull('confirmed_at')->exists();
+        $canIssueAttendanceCode = (int) $booking->number_of_workers > 1
+            && $arrived && ! $attendanceConfirmed
+            && in_array($status, ['worker_assigned', 'awaiting_start_verification'], true);
 
         $booking->load([
             'rooms',
@@ -84,6 +96,16 @@ final class SupervisedWorkerBookingController
             'scheduledDate' => $booking->scheduled_date?->format('Y-m-d'),
             'scheduledTime' => $booking->scheduled_time,
             'neighborhoodName' => $booking->neighborhood_name,
+            // An accepted worker may navigate to the customer only after their
+            // own start-travel action. Never disclose coordinates in advance.
+            'destination' => $travelStarted && $booking->address_latitude !== null
+                && $booking->address_longitude !== null ? [
+                    'latitude' => (float) $booking->address_latitude,
+                    'longitude' => (float) $booking->address_longitude,
+                    'label' => data_get($booking->property_details, 'full_address')
+                        ?: data_get($booking->property_details, 'address')
+                        ?: $booking->neighborhood_name,
+                ] : null,
             'propertyType' => $booking->property_type,
             'propertyDetails' => [
                 'customService' => data_get($booking->property_details, 'custom_service'),
@@ -105,6 +127,8 @@ final class SupervisedWorkerBookingController
                 'arrivedAt' => $assignment->arrived_at?->toIso8601String(),
                 'canStartTravel' => $canTravel && ! $travelStarted && ! $arrived,
                 'canArrive' => $canTravel && $travelStarted && ! $arrived,
+                'attendanceConfirmed' => $attendanceConfirmed,
+                'canIssueAttendanceCode' => $canIssueAttendanceCode,
             ],
             'scopeRooms' => $roomTasks->values(),
             'tasks' => $tasks->values(),

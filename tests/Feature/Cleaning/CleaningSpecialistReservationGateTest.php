@@ -50,6 +50,55 @@ it('rejects overlapping reservations with buffers even for different bookings', 
         ->and(CleaningEquipmentReservation::query()->where('status', 'reserved')->count())->toBe(1);
 });
 
+it('shares required equipment across services of the same booking without allowing another booking to double-book it', function (): void {
+    [$worker, $booking, $service, $equipment, $firstLine] = phaseTwoBooking();
+    // Reproduce a team order with two special services requiring the same
+    // physical asset. The calendar date is deliberately years in the future.
+    $booking->forceFill(['scheduled_date' => now()->addYears(3)->toDateString()])->save();
+    $secondService = CleaningSpecialService::query()->create([
+        'name' => 'Additional carpet cleaning',
+        'slug' => 'second-phase-two-'.fake()->unique()->numerify('########'),
+        'pricing_unit' => 'piece',
+        'base_unit_price' => 100,
+        'estimated_duration_minutes' => 45,
+        'is_active' => true,
+    ]);
+    $secondService->equipment()->attach($equipment->id);
+    $secondLine = CleaningBookingSpecialService::query()->create([
+        'cleaning_booking_id' => $booking->id,
+        'cleaning_special_service_id' => $secondService->id,
+        'service_name' => $secondService->name,
+        'pricing_unit' => 'piece',
+        'dirtiness_level' => 'normal',
+        'quantity' => 1,
+        'base_unit_price' => 100,
+        'price_multiplier' => 1,
+        'total_price' => 100,
+        'execution_status' => 'pending',
+    ]);
+
+    $reservations = app(CleaningSpecialistEquipmentReservationService::class);
+    $reservations->confirmForBooking($booking->fresh(), $worker);
+    expect($firstLine->fresh()->assigned_worker_id)->toBe($worker->id)
+        ->and($secondLine->fresh()->assigned_worker_id)->toBe($worker->id)
+        ->and(CleaningEquipmentReservation::query()->where('status', 'reserved')->count())->toBe(2);
+
+    // A second teammate does not create another physical allocation, nor
+    // should retrying acceptance multiply the line reservations.
+    $secondWorker = Worker::factory()->financiallyEligible()->create();
+    $reservations->confirmForBooking($booking->fresh(), $secondWorker);
+    $reservations->confirmForBooking($booking->fresh(), $worker);
+    expect(CleaningEquipmentReservation::query()->count())->toBe(2);
+
+    // A different booking still cannot claim the same asset at the same time.
+    [$otherWorker, $otherBooking, $unusedService, $unusedEquipment, $otherLine] = phaseTwoBooking('10:00', $service, $equipment);
+    $otherBooking->forceFill(['scheduled_date' => $booking->scheduled_date])->save();
+    expect(fn () => $reservations->confirmForBooking($otherBooking->fresh(), $otherWorker))
+        ->toThrow(ValidationException::class);
+    expect($otherLine->fresh()->assigned_worker_id)->toBeNull()
+        ->and(CleaningEquipmentReservation::query()->count())->toBe(2);
+});
+
 it('never allocates equipment only when work is started', function (): void {
     [$worker, $booking, $service, $equipment, $line] = phaseTwoBooking();
     Sanctum::actingAs($worker->user);
@@ -117,6 +166,40 @@ it('releases only one visit equipment slot while preserving sibling visits', fun
     expect(CleaningEquipmentReservation::query()->where('status', 'reserved')->count())->toBe(1)
         ->and(CleaningEquipmentReservation::query()->where('cleaning_booking_session_id', $sessions[0]->id)->first()->status)->toBe('released')
         ->and(CleaningEquipmentReservation::query()->where('cleaning_booking_session_id', $sessions[1]->id)->first()->status)->toBe('reserved');
+});
+
+it('keeps overlapping sessions separate even when they belong to one booking', function (): void {
+    [$worker, $booking, $service, $equipment, $line] = phaseTwoBooking();
+    $sessions = [];
+    foreach ([1, 2] as $sequence) {
+        $sessions[] = \Modules\Cleaning\Models\CleaningBookingSession::query()->create([
+            'cleaning_booking_id' => $booking->id,
+            'sequence' => $sequence,
+            'session_type' => 'recurring_cleaning',
+            'calculation_mode' => 'estimated_hours',
+            'scheduled_date' => now()->addDays(5)->toDateString(),
+            'scheduled_time' => '10:00',
+            'duration_hours' => 2,
+            'required_workers' => 1,
+            'coverage_status' => 'fully_covered',
+            'status' => 'worker_assigned',
+            'base_price' => 100,
+            'addons_total' => 0,
+            'materials_total' => 0,
+            'special_services_total' => 100,
+            'travel_fee' => 0,
+            'admin_margin_amount' => 0,
+            'extension_fee_total' => 0,
+            'cancellation_fee' => 0,
+            'total_price' => 200,
+        ]);
+    }
+    $line->sessions()->sync([$sessions[0]->id, $sessions[1]->id]);
+    $reservations = app(CleaningSpecialistEquipmentReservationService::class);
+    $reservations->confirmForSession($booking, $sessions[0], $worker);
+    expect(fn () => $reservations->confirmForSession($booking, $sessions[1], $worker))
+        ->toThrow(ValidationException::class);
+    expect(CleaningEquipmentReservation::query()->where('status', 'reserved')->count())->toBe(1);
 });
 
 /** @return array{Worker,CleaningBooking,CleaningSpecialService,CleaningSpecialServiceEquipment,CleaningBookingSpecialService} */

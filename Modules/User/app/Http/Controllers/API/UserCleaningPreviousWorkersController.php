@@ -153,60 +153,14 @@ final class UserCleaningPreviousWorkersController
             return false;
         }
 
-        if (
-            $scheduleDefinitions !== []
-            && (
-                ! $this->isAvailableForDefinitions($worker, $scheduleDefinitions)
-                || $this->scheduleConflictService->hasConflictForDefinitions($worker, $scheduleDefinitions)
-            )
-        ) {
+        if ($scheduleDefinitions !== []
+            && $this->scheduleConflictService->hasConflictForDefinitions($worker, $scheduleDefinitions)) {
             return false;
         }
 
-        // A configured availability schedule is authoritative for the
-        // requested start time. Workers without a saved weekly schedule keep
-        // the legacy previous-worker lookup behavior.
-        if (
-            $scheduledAt !== null
-            && is_array($worker->default_working_hours)
-            && $worker->default_working_hours !== []
-            && ! $worker->isAvailableAt($scheduledAt)
-        ) {
+        if ($scheduleDefinitions === [] && $scheduleCandidate !== null
+            && $this->scheduleConflictService->hasConflict($worker, $scheduleCandidate)) {
             return false;
-        }
-
-        if (
-            $scheduleDefinitions === []
-            && $scheduleCandidate !== null
-            && (
-                ! $worker->isAvailableForBooking($scheduleCandidate)
-                || $this->scheduleConflictService->hasConflict($worker, $scheduleCandidate)
-            )
-        ) {
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * @param  array<int, array{date:string,time:string,hours:float}>  $scheduleDefinitions
-     */
-    private function isAvailableForDefinitions(Worker $worker, array $scheduleDefinitions): bool
-    {
-        foreach ($scheduleDefinitions as $definition) {
-            try {
-                $startsAt = Carbon::parse(
-                    $definition['date'].' '.$definition['time'],
-                    config('app.timezone'),
-                );
-            } catch (Throwable) {
-                return false;
-            }
-
-            if (! $worker->isAvailableAt($startsAt)) {
-                return false;
-            }
         }
 
         return true;

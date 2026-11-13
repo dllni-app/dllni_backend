@@ -86,17 +86,6 @@ final class WorkerForm
                             ->live()
                             ->dehydrated(false),
                     ]),
-                Section::make(__('cleaning_admin.workers.sections.location'))
-                    ->description(app()->isLocale('ar')
-                        ? 'أدخل عنوان منزل العامل ضمن بيانات الملف الشخصي.'
-                        : 'Enter the worker home address as part of the profile details.')
-                    ->visible(fn (string $operation): bool => $operation === 'create')
-                    ->schema([
-                        TextInput::make('home_address')
-                            ->label(__('cleaning_admin.workers.fields.home_address'))
-                            ->maxLength(255)
-                            ->columnSpanFull(),
-                    ]),
                 Section::make(app()->isLocale('ar') ? 'المعاملة المالية الأولية' : 'Initial financial transaction')
                     ->description(app()->isLocale('ar')
                         ? 'يمكن تسجيل إيداع أولي فقط. إذا أردت السماح للعامل بالعمل دون إيداع استخدم حد السماح أعلاه.'

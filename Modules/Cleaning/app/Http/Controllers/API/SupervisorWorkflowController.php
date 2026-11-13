@@ -44,8 +44,8 @@ final class SupervisorWorkflowController
             }
             if ($existing && $existing->status === 'pending' && Carbon::parse($existing->expires_at)->isFuture()
                 && $existing->attempts < 5) {
-                return ['status' => 'pending', 'expiresAt' => $existing->expires_at,
-                    'code' => Crypt::decryptString($existing->customer_code_ciphertext)];
+                return ['status' => 'pending',
+                    'expiresAt' => Carbon::parse($existing->expires_at, 'UTC')->toIso8601String()];
             }
             $code = (string) random_int(100000, 999999);
             $attributes = [
@@ -69,7 +69,7 @@ final class SupervisorWorkflowController
                 'supervised_state' => 'verification_pending'])->save();
             $this->teams->activity($booking, $request->user()->id, 'verification_requested');
 
-            return ['status' => 'pending', 'expiresAt' => now()->addMinutes(10)->toIso8601String(), 'code' => $code];
+            return ['status' => 'pending', 'expiresAt' => now()->addMinutes(10)->toIso8601String()];
         });
 
         return $this->response($result)->header('Cache-Control', 'private, no-store');
@@ -85,14 +85,32 @@ final class SupervisorWorkflowController
                 ($session->status === 'pending' && ! Carbon::parse($session->expires_at)->isFuture() ? 'expired' : $session->status),
             'expiresAt' => $session?->expires_at, 'verifiedAt' => $session?->verified_at,
             'teamState' => $order->supervised_state ?: 'staffing',
-            'entryActor' => 'customer', 'codeRecipient' => 'supervisor',
+            'entryActor' => 'supervisor', 'codeRecipient' => 'customer',
         ]);
     }
 
     public function customerVerificationCode(Request $request, int $booking): JsonResponse
     {
-        $this->customer($request, $booking);
-        return response()->json(['code' => 'CODE_NOT_AVAILABLE', 'message' => 'يُعرض رمز التحقق للمشرف فقط.'], 404);
+        $order = $this->customer($request, $booking);
+        $session = DB::table('cleaning_supervisor_verifications')
+            ->where('cleaning_booking_id', $booking)->first();
+
+        // Only the booking customer receives the one-time code. The supervisor
+        // must ask the customer for it and submit it through a supervisor-only route.
+        abort_unless(
+            $order->status === CleaningBookingStatus::AwaitingStartVerification
+            && $order->supervised_state === 'verification_pending'
+            && $session?->status === 'pending'
+            && $session->attempts < 5
+            && Carbon::parse($session->expires_at)->isFuture(),
+            404
+        );
+
+        return $this->response([
+            'code' => Crypt::decryptString($session->customer_code_ciphertext),
+            'expiresAt' => Carbon::parse($session->expires_at, 'UTC')->toIso8601String(),
+            'purpose' => 'supervisor_arrival',
+        ])->header('Cache-Control', 'private, no-store');
     }
 
     public function customerShow(Request $request, int $booking): JsonResponse
@@ -102,11 +120,13 @@ final class SupervisorWorkflowController
         $extensions = DB::table('cleaning_supervisor_extensions')->where('cleaning_booking_id', $booking)
             ->orderByDesc('id')->get(['id', 'requested_minutes as additionalMinutes', 'reason', 'status']);
         $handover = DB::table('cleaning_supervisor_handovers')->where('cleaning_booking_id', $booking)->first();
+        $assignedSupervisor = $order->supervisorAssignments()
+            ->with('supervisor')->where('active_slot', 1)->whereNull('released_at')->first();
         $actions = [];
         if ($order->status === CleaningBookingStatus::AwaitingStartVerification && $verification
             && $verification->status === 'pending' && $verification->attempts < 5
             && Carbon::parse($verification->expires_at)->isFuture()) {
-            $actions[] = 'confirm_supervisor_arrival';
+            $actions[] = 'view_verification_code';
         }
         if ($order->status === CleaningBookingStatus::InProgress && $extensions->contains('status', 'pending')) {
             $actions[] = 'decide_extension';
@@ -116,7 +136,13 @@ final class SupervisorWorkflowController
         }
 
         return $this->response([
-            'booking' => array_replace($this->teams->summary($order), ['allowedActions' => $actions]),
+            'booking' => array_replace($this->teams->summary($order), [
+                'allowedActions' => $actions,
+                'supervisor' => $assignedSupervisor ? [
+                    'name' => $assignedSupervisor->supervisor?->name,
+                    'phone' => $assignedSupervisor->supervisor?->phone,
+                ] : null,
+            ]),
             'extensions' => $extensions->toArray(),
             'handover' => ['status' => $handover?->status ?? 'not_requested',
                 'customerNote' => $handover?->customer_note, 'respondedAt' => $handover?->responded_at],
@@ -128,7 +154,7 @@ final class SupervisorWorkflowController
     {
         $data = $request->validate(['code' => ['required', 'digits:6']]);
         $result = DB::transaction(function () use ($request, $booking, $data): array {
-            $order = $this->customer($request, $booking, true);
+            $order = $this->assigned($request, $booking, true);
             $this->failUnless($order->status === CleaningBookingStatus::AwaitingStartVerification
                 && $order->supervised_state === 'verification_pending', 'الطلب ليس في مرحلة التحقق.');
             $session = DB::table('cleaning_supervisor_verifications')

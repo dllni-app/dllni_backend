@@ -611,9 +611,9 @@ it('returns 403 for worker profile when user has no worker', function () {
     $response->assertForbidden();
 });
 
-it('updates worker profile home location fields', function () {
+it('ignores retired mission-start profile fields', function () {
     $workerUser = User::factory()->create(['email' => 'worker-profile-update@example.com']);
-    Worker::factory()->financiallyEligible()->create([
+    $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'is_active' => true,
         'home_address' => 'Old Home',
@@ -623,15 +623,15 @@ it('updates worker profile home location fields', function () {
     Sanctum::actingAs($workerUser);
 
     $response = $this->putJson('/api/v1/cleaning/worker/account/profile', [
-        'homeAddress' => 'Damascus, Al Mazzeh',
+        'homeAddress' => 'New mission start (ignored)',
         'homeLatitude' => 33.5138,
         'homeLongitude' => 36.2765,
     ]);
+    $response->assertOk()->assertJsonMissingPath('data.homeAddress')
+        ->assertJsonMissingPath('data.homeLatitude')
+        ->assertJsonMissingPath('data.homeLongitude');
 
-    $response->assertOk();
-    expect($response->json('data.homeAddress'))->toBe('Damascus, Al Mazzeh');
-    expect((float) $response->json('data.homeLatitude'))->toBe(33.5138);
-    expect((float) $response->json('data.homeLongitude'))->toBe(36.2765);
+    expect($worker->fresh()->home_address)->toBe('Old Home');
 });
 
 it('updates worker birthday from worker profile and returns it in the response', function () {
@@ -991,64 +991,15 @@ it('returns worker homepage chart and amount summary blocks for the owner dashbo
     expect((float) $response->json('amountSummary.grossInvoicesAmount'))->toBe(1000.0);
 });
 
-it('returns working hours for authenticated worker', function () {
+it('retires worker working-hours routes', function () {
     $workerUser = User::factory()->create(['email' => 'worker-hours@example.com']);
-    $worker = Worker::factory()->financiallyEligible()->create([
-        'user_id' => $workerUser->id,
-        'default_working_hours' => [
-            'sunday' => ['available' => true, 'data' => [['09:00' => '17:00']]],
-            'monday' => ['available' => false, 'data' => []],
-            'tuesday' => ['available' => true, 'data' => [['10:00' => '18:00']]],
-            'wednesday' => ['available' => false, 'data' => []],
-            'thursday' => ['available' => false, 'data' => []],
-            'friday' => ['available' => false, 'data' => []],
-            'saturday' => ['available' => false, 'data' => []],
-        ],
-    ]);
+    Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
-    $response = $this->getJson('/api/v1/cleaning/worker/working-hours');
-
-    $response->assertOk();
-    $hours = $response->json('data.defaultWorkingHours');
-    expect($hours)->toHaveKeys(['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']);
-    expect($hours['sunday'])->toEqual(['available' => true, 'data' => [['09:00' => '17:00']]]);
-    expect($hours['monday'])->toEqual(['available' => false, 'data' => []]);
-    expect($hours['tuesday'])->toEqual(['available' => true, 'data' => [['10:00' => '18:00']]]);
-});
-
-it('returns 403 for working hours when user has no worker', function () {
-    $regularUser = User::factory()->create(['email' => 'no-worker-hours@example.com']);
-    Sanctum::actingAs($regularUser);
-
-    $response = $this->getJson('/api/v1/cleaning/worker/working-hours');
-
-    $response->assertForbidden();
-});
-
-it('updates working hours for authenticated worker', function () {
-    $workerUser = User::factory()->create(['email' => 'worker-update-hours@example.com']);
-    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
-    Sanctum::actingAs($workerUser);
-
-    $payload = [
-        'defaultWorkingHours' => [
-            'sunday' => ['available' => true, 'data' => [['09:00' => '23:00']]],
-            'monday' => ['available' => true, 'data' => [['09:00' => '13:00'], ['15:00' => '23:00']]],
-            'tuesday' => ['available' => true, 'data' => [['09:00' => '23:00']]],
-            'wednesday' => ['available' => true, 'data' => [['09:00' => '23:00']]],
-            'thursday' => ['available' => true, 'data' => [['09:00' => '23:00']]],
-            'friday' => ['available' => true, 'data' => [['09:00' => '23:00']]],
-            'saturday' => ['available' => false, 'data' => []],
-        ],
-    ];
-
-    $response = $this->putJson('/api/v1/cleaning/worker/working-hours', $payload);
-
-    $response->assertOk();
-    expect($response->json('data.defaultWorkingHours'))->toEqual($payload['defaultWorkingHours']);
-    $worker->refresh();
-    expect($worker->default_working_hours)->toEqual($payload['defaultWorkingHours']);
+    $this->getJson('/api/v1/cleaning/worker/working-hours')->assertNotFound();
+    $this->putJson('/api/v1/cleaning/worker/working-hours', [
+        'defaultWorkingHours' => [],
+    ])->assertNotFound();
 });
 
 it('returns worker account work areas and updates them', function () {
@@ -1178,9 +1129,9 @@ it('returns worker account status and updates active flag', function () {
     expect($worker->is_active)->toBeFalse();
 });
 
-it('rejects activating worker account status without home location', function () {
-    $workerUser = User::factory()->create(['email' => 'worker-status-home-required@example.com']);
-    Worker::factory()->financiallyEligible()->create([
+it('allows activating worker accounts without a mission-start location', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-status-home-not-required@example.com']);
+    $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'is_active' => false,
         'home_address' => null,
@@ -1188,12 +1139,10 @@ it('rejects activating worker account status without home location', function ()
         'home_longitude' => null,
     ]);
     Sanctum::actingAs($workerUser);
-
-    $response = $this->patchJson('/api/v1/cleaning/worker/account/status', [
+    $this->patchJson('/api/v1/cleaning/worker/account/status', [
         'isActive' => true,
-    ]);
-
-    $response->assertUnprocessable()->assertJsonValidationErrors(['isActive']);
+    ])->assertOk()->assertJsonPath('isActive', true);
+    expect($worker->fresh()->is_active)->toBeTrue();
 });
 
 it('allows activating worker account after the worker provides a complete home location', function (): void {
@@ -1213,7 +1162,7 @@ it('allows activating worker account after the worker provides a complete home l
     expect($worker->fresh()->is_active)->toBeTrue();
 });
 
-it('prevents activating an unfunded-home worker through the alternate profile endpoint without partial user writes', function (): void {
+it('allows profile activation and user edits without a worker start location', function () {
     $workerUser = User::factory()->create([
         'email' => 'profile-activation-bypass@example.com',
         'name' => 'Original Worker User',
@@ -1226,17 +1175,15 @@ it('prevents activating an unfunded-home worker through the alternate profile en
         'home_longitude' => null,
     ]);
     Sanctum::actingAs($workerUser);
-
     $this->putJson('/api/v1/cleaning/worker/account/profile', [
-        'name' => 'Must Not Be Saved',
+        'name' => 'New Worker User',
         'isActive' => true,
-    ])->assertUnprocessable()->assertJsonValidationErrors(['isActive']);
-
-    expect($worker->fresh()->is_active)->toBeFalse()
-        ->and($workerUser->fresh()->name)->toBe('Original Worker User');
+    ])->assertOk();
+    expect($worker->fresh()->is_active)->toBeTrue()
+        ->and($workerUser->fresh()->name)->toBe('New Worker User');
 });
 
-it('does not allow an active worker to remove their home location by editing the profile', function (): void {
+it('does not change retired worker home data from profile update', function () {
     $workerUser = User::factory()->create(['email' => 'profile-clear-location@example.com']);
     $worker = Worker::factory()->create([
         'user_id' => $workerUser->id,
@@ -1246,19 +1193,16 @@ it('does not allow an active worker to remove their home location by editing the
         'home_longitude' => 37.1082,
     ]);
     Sanctum::actingAs($workerUser);
-
     $this->putJson('/api/v1/cleaning/worker/account/profile', [
         'homeAddress' => null,
         'homeLatitude' => null,
         'homeLongitude' => null,
-    ])->assertUnprocessable()->assertJsonValidationErrors(['isActive']);
-
+    ])->assertOk();
     expect($worker->fresh()->is_active)->toBeTrue()
-        ->and($worker->fresh()->home_address)->toBe('Existing Home')
-        ->and((float) $worker->fresh()->home_latitude)->toBe(36.1795);
+        ->and($worker->fresh()->home_address)->toBe('Existing Home');
 });
 
-it('allows a single profile update to set a complete home and activate the worker', function (): void {
+it('does not require a worker home when activating via profile', function () {
     $workerUser = User::factory()->create(['email' => 'profile-complete-activation@example.com']);
     $worker = Worker::factory()->create([
         'user_id' => $workerUser->id,
@@ -1271,13 +1215,9 @@ it('allows a single profile update to set a complete home and activate the worke
 
     $this->putJson('/api/v1/cleaning/worker/account/profile', [
         'isActive' => true,
-        'homeAddress' => 'Valid Worker Home',
-        'homeLatitude' => 36.1795,
-        'homeLongitude' => 37.1082,
     ])->assertOk();
-
     expect($worker->fresh()->is_active)->toBeTrue()
-        ->and($worker->fresh()->home_address)->toBe('Valid Worker Home');
+        ->and($worker->fresh()->home_address)->toBeNull();
 });
 
 describe('cleaning booking work timer', function () {

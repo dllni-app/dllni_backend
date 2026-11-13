@@ -78,21 +78,32 @@ final class SupervisedTeamService
         );
 
         return [
+            'bookingId' => (int) $booking->id,
+            'bookingNumber' => (string) $booking->booking_number,
             'requiredWorkers' => $required,
             'acceptedWorkers' => $accepted->count(),
+            // Physical arrival is not the same as supervisor-verified attendance.
+            // Keep both counts so a worker who has just arrived remains visible
+            // even before the supervisor enters their six-digit code.
+            'physicallyArrivedWorkers' => $arrived->count(),
             'arrivedWorkers' => $verifiedArrivals->count(),
             'teamReady' => $verifiedArrivals->count() >= $required,
-            'workers' => $assignments->map(fn ($assignment): array => [
+            'pendingAttendanceWorkers' => $arrived->count() - $verifiedArrivals->count(),
+            // Only disclose workers who have accepted this booking to its
+            // currently assigned supervisor. Pending candidates must not leak
+            // contact information or appear as accepted team members.
+            'workers' => $accepted->map(fn ($assignment): array => [
                 'assignmentId' => $assignment->id,
                 'workerId' => $assignment->worker_id,
                 'name' => $assignment->worker?->user?->name,
+                'phone' => $assignment->worker?->user?->phone,
                 'status' => $assignment->status?->value ?? (string) $assignment->status,
                 'acceptedAt' => $assignment->accepted_at?->toIso8601String(),
                 'startedTravelAt' => $assignment->started_travel_at?->toIso8601String(),
                 'arrivedAt' => $assignment->arrived_at?->toIso8601String(),
                 'attendanceConfirmed' => $confirmedIds === null ? $assignment->arrived_at !== null
                     : in_array($assignment->id, $confirmedIds, true),
-            ])->all(),
+            ])->values()->all(),
         ];
     }
 
@@ -113,6 +124,7 @@ final class SupervisedTeamService
                 ], true)) {
                 $actions[] = 'request_verification';
                 if ($state === 'verification_pending') {
+                    $actions[] = 'confirm_verification';
                 }
             }
             if ($state === 'verified') {
@@ -158,8 +170,10 @@ final class SupervisedTeamService
             'durationMinutes' => $minutes,
             'requiredWorkers' => $attendance['requiredWorkers'],
             'acceptedWorkers' => $attendance['acceptedWorkers'],
+            'physicallyArrivedWorkers' => $attendance['physicallyArrivedWorkers'],
             'arrivedWorkers' => $attendance['arrivedWorkers'],
             'teamReady' => $attendance['teamReady'],
+            'pendingAttendanceWorkers' => $attendance['pendingAttendanceWorkers'],
             'serverNow' => now()->toIso8601String(),
             'timezone' => config('app.timezone'),
             'allowedActions' => array_values(array_unique($actions)),

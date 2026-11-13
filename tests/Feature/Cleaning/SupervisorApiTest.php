@@ -344,3 +344,95 @@ it('requires authorization and a reason to replace the current supervisor', func
     Sanctum::actingAs($second);
     $this->getJson("/api/v1/supervisor/bookings/{$booking->id}")->assertOk();
 });
+
+it('shows only accepted workers with contact details before travel or arrival', function (): void {
+    $supervisor = supervisorUser();
+    $booking = supervisorBooking($supervisor, [
+        'number_of_workers' => 2,
+        'status' => CleaningBookingStatus::WorkerAssigned,
+    ]);
+    $acceptedWorker = Worker::factory()->create();
+    $acceptedWorker->user->forceFill(['phone' => '+963944780001'])->save();
+    $acceptedAssignment = $booking->workerAssignments()->create([
+        'worker_id' => $acceptedWorker->id,
+        'status' => 'accepted',
+        'accepted_at' => now(),
+    ]);
+    $pendingWorker = Worker::factory()->create();
+    $pendingWorker->user->forceFill(['phone' => '+963944780002'])->save();
+    $booking->workerAssignments()->create([
+        'worker_id' => $pendingWorker->id,
+        'status' => 'pending',
+    ]);
+
+    Sanctum::actingAs($supervisor);
+    $response = $this->getJson("/api/v1/supervisor/bookings/{$booking->id}/attendance")
+        ->assertOk()
+        ->assertJsonPath('data.acceptedWorkers', 1)
+        ->assertJsonPath('data.physicallyArrivedWorkers', 0)
+        ->assertJsonPath('data.arrivedWorkers', 0)
+        ->assertJsonPath('data.workers.0.assignmentId', $acceptedAssignment->id)
+        ->assertJsonPath('data.workers.0.phone', '+963944780001')
+        ->assertJsonPath('data.workers.0.status', 'accepted')
+        ->assertJsonCount(1, 'data.workers');
+    expect($response->json('data.workers.0.acceptedAt'))->toBeString();
+    expect(json_encode($response->json()))->not->toContain('+963944780002');
+});
+
+it('shows an early-arriving worker and their pending code to the assigned supervisor before the rest of the team accepts', function (): void {
+    $supervisor = supervisorUser();
+    $booking = supervisorBooking($supervisor, [
+        'booking_number' => 'CLN-USER-ANVHU9YH',
+        'number_of_workers' => 2,
+        'scheduled_date' => '2026-11-30',
+        'scheduled_time' => '12:30:00',
+        'status' => CleaningBookingStatus::WorkerAssigned,
+    ]);
+    $worker = Worker::factory()->create();
+    $assignment = $booking->workerAssignments()->create([
+        'worker_id' => $worker->id,
+        'status' => 'accepted',
+        'accepted_at' => now(),
+    ]);
+    $base = "/api/v1/supervisor/bookings/{$booking->id}";
+
+    Sanctum::actingAs($supervisor);
+    $this->getJson("$base/attendance")->assertOk()
+        ->assertJsonPath('data.bookingNumber', 'CLN-USER-ANVHU9YH')
+        ->assertJsonPath('data.acceptedWorkers', 1)
+        ->assertJsonPath('data.physicallyArrivedWorkers', 0)
+        ->assertJsonPath('data.arrivedWorkers', 0)
+        ->assertJsonCount(1, 'data.workers');
+
+    Sanctum::actingAs($worker->user);
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/start-travel")->assertOk();
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/arrive")->assertOk();
+    $code = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/worker-attendance/code")
+        ->assertOk()->json('data.code');
+    expect($code)->toMatch('/^\d{6}$/');
+
+    Sanctum::actingAs($supervisor);
+    $this->getJson("$base")->assertOk()
+        ->assertJsonPath('data.acceptedWorkers', 1)
+        ->assertJsonPath('data.physicallyArrivedWorkers', 1)
+        ->assertJsonPath('data.arrivedWorkers', 0)
+        ->assertJsonPath('data.pendingAttendanceWorkers', 1);
+    $this->getJson("$base/attendance")->assertOk()
+        ->assertJsonPath('data.bookingId', $booking->id)
+        ->assertJsonPath('data.bookingNumber', 'CLN-USER-ANVHU9YH')
+        ->assertJsonPath('data.acceptedWorkers', 1)
+        ->assertJsonPath('data.physicallyArrivedWorkers', 1)
+        ->assertJsonPath('data.arrivedWorkers', 0)
+        ->assertJsonPath('data.pendingAttendanceWorkers', 1)
+        ->assertJsonPath('data.teamReady', false)
+        ->assertJsonPath('data.workers.0.assignmentId', $assignment->id)
+        ->assertJsonPath('data.workers.0.attendanceConfirmed', false);
+    $this->postJson("$base/worker-attendance/{$assignment->id}/confirm", ['code' => $code])
+        ->assertOk()->assertJsonPath('data.status', 'confirmed');
+    $this->getJson("$base/attendance")->assertOk()
+        ->assertJsonPath('data.physicallyArrivedWorkers', 1)
+        ->assertJsonPath('data.arrivedWorkers', 1)
+        ->assertJsonPath('data.pendingAttendanceWorkers', 0)
+        ->assertJsonPath('data.workers.0.attendanceConfirmed', true)
+        ->assertJsonPath('data.teamReady', false);
+});

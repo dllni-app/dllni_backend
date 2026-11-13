@@ -72,10 +72,6 @@ final class CleaningBookingSessionWorkerEligibilityService
             return $this->blocked('invalid_schedule', 'Session schedule is invalid.');
         }
 
-        if (! $worker->isAvailableAt($startsAt)) {
-            return $this->blocked('worker_not_available', 'Worker is not available during this session.');
-        }
-
         $capacity = $this->solvencyService->capacitySummary($worker);
         if (! (bool) ($capacity['isEligibleForNewSessionRequests'] ?? false)) {
             return $this->blocked(

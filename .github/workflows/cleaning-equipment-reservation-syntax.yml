@@ -1,0 +1,33 @@
+name: Cleaning Equipment Reservation PHP Syntax
+
+on:
+  pull_request:
+    branches: [dev]
+    paths:
+      - 'Modules/Cleaning/app/Services/CleaningSpecialistEquipmentReservationService.php'
+      - 'tests/Feature/Cleaning/CleaningSpecialistReservationGateTest.php'
+      - '.github/workflows/cleaning-equipment-reservation-syntax.yml'
+  push:
+    branches: [dev]
+    paths:
+      - 'Modules/Cleaning/app/Services/CleaningSpecialistEquipmentReservationService.php'
+      - 'tests/Feature/Cleaning/CleaningSpecialistReservationGateTest.php'
+      - '.github/workflows/cleaning-equipment-reservation-syntax.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  php-syntax:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+      - name: Verify equipment reservation service and regression tests
+        run: |
+          php -l Modules/Cleaning/app/Services/CleaningSpecialistEquipmentReservationService.php
+          php -l tests/Feature/Cleaning/CleaningSpecialistReservationGateTest.php
