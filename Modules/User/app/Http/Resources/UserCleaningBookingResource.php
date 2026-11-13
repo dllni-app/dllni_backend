@@ -102,7 +102,10 @@ final class UserCleaningBookingResource extends JsonResource
         $payload['durationWorkerCount'] = $workerCount;
         $payload['discountAmount'] = $discountAmount;
         $payload['subtotalBeforeDiscount'] = (float) ($this->subtotal_before_discount ?? 0);
-        $payload['travelFeePending'] = ! (bool) $this->is_pricing_final;
+        // A fixed per-worker allowance is already known even when the team
+        // is not yet assigned. Keep the overall pricing lifecycle unchanged.
+        $payload['travelFeePending'] = ! (bool) $this->is_pricing_final
+            && ! app(CleaningPricingCalculator::class)->usesWorkerTransportAllowance();
         $payload['canEdit'] = $canEdit;
         $payload['can_edit'] = $canEdit;
 

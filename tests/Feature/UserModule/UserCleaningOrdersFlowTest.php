@@ -166,7 +166,17 @@ it('applies transport allowance for each requested worker before and after booki
 
     expect((float) $created->json('order.travelFee'))->toBe(225.0)
         ->and((int) $created->json('order.numberOfWorkers'))->toBe(3)
-        ->and((float) $created->json('order.totalPrice'))->toBe((float) $estimate->json('pricing.totalPrice'));
+        ->and((float) $created->json('order.totalPrice'))->toBe((float) $estimate->json('pricing.totalPrice'))
+        ->and($created->json('order.travelFeePending'))->toBeFalse();
+
+    $orderId = (int) $created->json('order.id');
+    $updated = patchJson("/api/v1/user/cleaning/orders/{$orderId}", [
+        'numberOfWorkers' => 2,
+    ])->assertOk();
+
+    expect((float) $updated->json('order.travelFee'))->toBe(150.0)
+        ->and((int) $updated->json('order.numberOfWorkers'))->toBe(2)
+        ->and($updated->json('order.travelFeePending'))->toBeFalse();
 });
 
 it('creates an open cleaning order with coupon deducted from provisional admin margin before worker share', function (): void {

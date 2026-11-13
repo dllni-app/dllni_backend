@@ -58,6 +58,7 @@ final class CleaningCustomerPricingObserver
             return $booking->isDirty([
                 'base_price',
                 'addons_total',
+                'number_of_workers',
                 'travel_fee',
                 'admin_margin_amount',
                 'total_price',

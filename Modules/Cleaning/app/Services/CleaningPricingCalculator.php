@@ -234,15 +234,21 @@ final class CleaningPricingCalculator
             );
     }
 
+    public function usesWorkerTransportAllowance(): bool
+    {
+        return (string) CleaningRuntimeSettings::financial()->travel_markup_type === 'worker_allowance';
+    }
+
     private function workerTransportAllowance(CleaningFinancialSetting $financial, int $workerCount): float
     {
         if ((string) $financial->travel_markup_type !== 'worker_allowance') {
             return 0.0;
         }
 
-        return $this->roundMoney(
-            max(0.0, (float) $financial->travel_markup_value) * max(1, $workerCount)
-        );
+        // Round the individual allowance first: the booking total must equal
+        // the sum of the same allowance paid to each assigned worker.
+        return $this->roundMoney(max(0.0, (float) $financial->travel_markup_value))
+            * max(1, $workerCount);
     }
 
     private function measureKm(float $a, float $b, float $c, float $d): float

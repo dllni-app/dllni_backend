@@ -104,15 +104,9 @@ final class UserCleaningOrderService
                     ? ($normalizedInput['preferredWorkerId'] !== null ? (int) $normalizedInput['preferredWorkerId'] : null)
                     : null,
             );
-            $storedPricing = $preferredWorkerPricing ? $pricing : [
-                'basePrice' => $pricing['basePrice'],
-                'addonsTotal' => $pricing['addonsTotal'],
-                'travelFee' => 0.0,
-                'distanceKm' => null,
-                'adminMargin' => 0.0,
-                'isPricingFinal' => false,
-                'totalPrice' => round((float) $pricing['basePrice'] + (float) $pricing['addonsTotal'], 2),
-            ];
+            // The server estimate already distinguishes provisional and final pricing.
+            // A fixed transport allowance is known even before workers are assigned.
+            $storedPricing = $pricing;
 
             if ($resolvedAssignmentMode === 'preferred_worker') {
                 $this->guardPreferredWorkerCoverage(
@@ -302,6 +296,8 @@ final class UserCleaningOrderService
                         $normalizedInput['addressLatitude'],
                         $normalizedInput['addressLongitude'],
                         $normalizedInput['preferredWorkerId'],
+                        null,
+                        max(1, (int) ($updates['number_of_workers'] ?? $booking->number_of_workers ?? 1)),
                     );
                 } catch (InvalidArgumentException $exception) {
                     throw ValidationException::withMessages([
@@ -329,7 +325,7 @@ final class UserCleaningOrderService
                 $updates['estimated_sqm'] = $estimation['estimatedSqm'];
                 $updates['estimated_hours'] = $estimation['estimatedHours'];
                 $updates['total_hours'] = $estimation['estimatedHours'];
-                $storedPricing = $this->resolveStoredPricingForUpdate($pricing, $validated, $booking);
+                $storedPricing = $pricing;
                 $updates['base_price'] = $storedPricing['basePrice'];
                 $updates['minimum_order_applied'] = (bool) ($pricing['pricingAlgorithm']['minimumOrderApplied'] ?? false);
                 $updates['travel_fee'] = $storedPricing['travelFee'];
@@ -922,36 +918,6 @@ final class UserCleaningOrderService
         throw ValidationException::withMessages([
             'preferredWorkerId' => [self::PREFERRED_WORKER_NEIGHBORHOOD_MESSAGE],
         ]);
-    }
-
-    /**
-     * @param  array<string, mixed>  $pricing
-     * @param  array<string, mixed>  $validated
-     * @return array{basePrice: float, addonsTotal: float, travelFee: float, distanceKm: ?float, adminMargin: float, isPricingFinal: bool, totalPrice: float}
-     */
-    private function resolveStoredPricingForUpdate(array $pricing, array $validated, CleaningBooking $booking): array
-    {
-        if ($this->shouldUsePreferredWorkerPricing($validated, $booking)) {
-            return [
-                'basePrice' => (float) $pricing['basePrice'],
-                'addonsTotal' => (float) $pricing['addonsTotal'],
-                'travelFee' => (float) $pricing['travelFee'],
-                'distanceKm' => $pricing['distanceKm'] !== null ? (float) $pricing['distanceKm'] : null,
-                'adminMargin' => (float) $pricing['adminMargin'],
-                'isPricingFinal' => (bool) $pricing['isPricingFinal'],
-                'totalPrice' => (float) $pricing['totalPrice'],
-            ];
-        }
-
-        return [
-            'basePrice' => (float) $pricing['basePrice'],
-            'addonsTotal' => (float) $pricing['addonsTotal'],
-            'travelFee' => 0.0,
-            'distanceKm' => null,
-            'adminMargin' => 0.0,
-            'isPricingFinal' => false,
-            'totalPrice' => round(((float) $pricing['basePrice']) + ((float) $pricing['addonsTotal']), 2),
-        ];
     }
 
     /**

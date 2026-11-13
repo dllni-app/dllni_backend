@@ -426,6 +426,7 @@ final class CleaningBookingTeamService
             $booking->minimum_order_applied,
         );
         $requiredWorkers = max(1, (int) ($booking->number_of_workers ?? 1));
+        $usesWorkerAllowance = $this->pricingCalculator->usesWorkerTransportAllowance();
         $totalTravelFee = 0.0;
         $totalAdminMargin = 0.0;
         $primaryWorkerId = null;
@@ -455,12 +456,13 @@ final class CleaningBookingTeamService
             $adminMargin = 0.0;
             $workerAmount = round($serviceShare, 2);
 
-            if ($worker instanceof Worker && $booking->address_latitude !== null && $booking->address_longitude !== null) {
+            if ($worker instanceof Worker && ($usesWorkerAllowance
+                || ($booking->address_latitude !== null && $booking->address_longitude !== null))) {
                 $pricing = $this->pricingCalculator->finalizedForWorker(
                     $serviceShare,
                     0.0,
-                    (float) $booking->address_latitude,
-                    (float) $booking->address_longitude,
+                    $booking->address_latitude !== null ? (float) $booking->address_latitude : null,
+                    $booking->address_longitude !== null ? (float) $booking->address_longitude : null,
                     $worker,
                     $workerIncludedAdminMarginBase,
                 );
@@ -514,12 +516,13 @@ final class CleaningBookingTeamService
                 $subtotal,
                 0.0,
                 $includedAdminMarginBase,
+                $requiredWorkers,
             );
 
             $booking->forceFill([
                 'status' => CleaningBookingStatus::Pending,
                 'worker_id' => null,
-                'travel_fee' => 0,
+                'travel_fee' => (float) $provisionalPricing['travelFee'],
                 'admin_margin_amount' => round((float) $provisionalPricing['adminMargin'], 2),
                 'total_price' => round((float) $provisionalPricing['totalPrice'], 2),
                 'travel_distance_km' => null,

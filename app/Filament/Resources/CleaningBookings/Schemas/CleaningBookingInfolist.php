@@ -17,6 +17,7 @@ use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingRoom;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\CleaningCouponPricingService;
+use Modules\Cleaning\Services\CleaningPricingCalculator;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 use Throwable;
 
@@ -153,15 +154,21 @@ final class CleaningBookingInfolist
                         Group::make()
                             ->schema([
                                 Section::make('الملخص المالي')
-                                    ->description('الأرقام النهائية التي يحتاجها مدير المنصة لمراجعة الطلب وحصص الأطراف.')
+                                    ->description('تفاصيل سعر الطلب وحصص الأطراف. قد يتغير التسعير غير النهائي قبل اكتمال الفريق.')
                                     ->schema([
                                         TextEntry::make('financial_service')
                                             ->label('قيمة الخدمة')
                                             ->state(fn (CleaningBooking $record): string => self::financialServiceSummary($record)),
                                         TextEntry::make('financial_travel')
                                             ->label('رسوم التنقل')
-                                            ->state(fn (CleaningBooking $record): string => self::money($record->travel_fee))
-                                            ->visible(fn (CleaningBooking $record): bool => (float) ($record->travel_fee ?? 0) > 0),
+                                            ->state(fn (CleaningBooking $record): string => ! $record->is_pricing_final
+                                                && ! app(CleaningPricingCalculator::class)->usesWorkerTransportAllowance()
+                                                && (float) ($record->travel_fee ?? 0) <= 0.0
+                                                    ? 'تحدد عند اكتمال الفريق'
+                                                    : self::money($record->travel_fee))
+                                            ->helperText(fn (CleaningBooking $record): ?string => ! $record->is_pricing_final
+                                                ? 'الفريق غير مكتمل؛ بدل المواصلات الثابت يحتسب لجميع العمال المطلوبين.'
+                                                : null),
                                         TextEntry::make('financial_admin')
                                             ->label('هامش الإدارة')
                                             ->state(fn (CleaningBooking $record): string => self::financialAdminSummary($record)),
