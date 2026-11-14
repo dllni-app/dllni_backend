@@ -8,10 +8,7 @@ use App\Services\ActivityLogService;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Modules\Supermarket\Data\SmOrderRejectStatusData;
 use Modules\Supermarket\Http\Requests\SmOrderAcceptRequest;
-use Modules\Supermarket\Http\Requests\SmOrderCancelRequest;
-use Modules\Supermarket\Http\Requests\SmOrderRejectStatusRequest;
 use Modules\Supermarket\Http\Resources\SmOrderResource;
 use Modules\Supermarket\Models\SmOrder;
 use Modules\Supermarket\Services\SmOrderNotificationService;
@@ -96,30 +93,6 @@ final class SmOrderStatusController
     }
 
     /**
-     * Cancel an accepted/preparing/ready order and release delivery offers or the assigned driver.
-     */
-    public function cancel(SmOrderCancelRequest $request, SmOrder $order): JsonResponse|JsonResource
-    {
-        $this->context->store((int) $order->store_id);
-        $previousStatus = $this->statusValue($order);
-
-        try {
-            $updated = $this->orderService->cancelAfterAcceptance(
-                $order,
-                (string) $request->validated('reason'),
-                $this->context->owner()->id,
-            );
-            $this->notifications->notifyStatusChanged($updated, $previousStatus, $this->statusValue($updated), 'owner');
-
-            return $this->resource($updated, 'Order cancelled successfully.');
-        } catch (Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage(),
-            ], 400);
-        }
-    }
-
-    /**
      * Hand order to courier (ready_for_pickup → picked_up).
      */
     public function courierHandover(SmOrder $order): JsonResponse|JsonResource
@@ -161,28 +134,6 @@ final class SmOrderStatusController
             }
 
             return $this->resource($updated, 'Customer pickup completed successfully.');
-        } catch (Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage(),
-            ], 400);
-        }
-    }
-
-    /**
-     * Reject a pending order with reason and type.
-     */
-    public function reject(SmOrderRejectStatusRequest $request, SmOrder $order): JsonResponse|JsonResource
-    {
-        $this->context->store((int) $order->store_id);
-        $previousStatus = $this->statusValue($order);
-
-        try {
-            $data = SmOrderRejectStatusData::from($request->validated());
-            $rejectedOrder = $this->orderService->rejectOrder($order, $data, $this->context->owner()->id);
-            $this->activityLogService->logSmOrderRejected((int) $order->id, $order->order_number, (int) $order->store_id);
-            $this->notifications->notifyStatusChanged($rejectedOrder, $previousStatus, $this->statusValue($rejectedOrder), 'owner');
-
-            return $this->resource($rejectedOrder, 'Order rejected successfully.');
         } catch (Exception $e) {
             return response()->json([
                 'message' => $e->getMessage(),

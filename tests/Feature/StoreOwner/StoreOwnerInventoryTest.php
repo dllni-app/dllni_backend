@@ -14,7 +14,6 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Laravel\Sanctum\Sanctum;
 use Modules\Supermarket\Enums\SmInventoryLogType;
-use Modules\Supermarket\Events\ReturnProcessed;
 use Modules\Supermarket\Events\StockUpdated;
 use Modules\Supermarket\Models\SmLostOpportunity;
 
@@ -400,118 +399,6 @@ describe('Product Expiration Management', function (): void {
     });
 });
 
-describe('Order Returns', function (): void {
-    it('processes return and increases stock', function (): void {
-        $store = SmStoreFactory::new()->create(['owner_user_id' => $this->seller->id]);
-        $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
-        $product = SmProductFactory::new()->create([
-            'store_id' => $store->id,
-            'category_id' => $category->id,
-            'stock_quantity' => 20,
-        ]);
-        $order = SmOrderFactory::new()->create(['store_id' => $store->id]);
-        $orderItem = SmOrderItemFactory::new()->create([
-            'order_id' => $order->id,
-            'product_id' => $product->id,
-            'quantity' => 5,
-        ]);
-        $initialStock = $product->stock_quantity;
-
-        $response = $this->postJson("/api/v1/store-owner/orders/{$order->id}/return", [
-            'items' => [
-                [
-                    'order_item_id' => $orderItem->id,
-                    'quantity' => 3,
-                ],
-            ],
-            'reason' => 'Customer changed mind',
-        ]);
-
-        $response->assertSuccessful()
-            ->assertJson([
-                'success' => true,
-                'data' => [
-                    'order_id' => $order->id,
-                    'returned_items' => [
-                        [
-                            'product_id' => $product->id,
-                            'returned_quantity' => 3,
-                            'new_stock' => $initialStock + 3,
-                        ],
-                    ],
-                ],
-            ]);
-
-        expect($product->refresh()->stock_quantity)->toBe($initialStock + 3);
-
-        assertDatabaseHas('sm_inventory_logs', [
-            'product_id' => $product->id,
-            'type' => SmInventoryLogType::Return->value,
-            'quantity_change' => 3,
-        ]);
-    });
-
-    it('dispatches ReturnProcessed event', function (): void {
-        Event::fake([ReturnProcessed::class]);
-
-        $store = SmStoreFactory::new()->create(['owner_user_id' => $this->seller->id]);
-        $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
-        $product = SmProductFactory::new()->create([
-            'store_id' => $store->id,
-            'category_id' => $category->id,
-            'stock_quantity' => 20,
-        ]);
-        $order = SmOrderFactory::new()->create(['store_id' => $store->id]);
-        $orderItem = SmOrderItemFactory::new()->create([
-            'order_id' => $order->id,
-            'product_id' => $product->id,
-            'quantity' => 5,
-        ]);
-
-        $this->postJson("/api/v1/store-owner/orders/{$order->id}/return", [
-            'items' => [
-                [
-                    'order_item_id' => $orderItem->id,
-                    'quantity' => 2,
-                ],
-            ],
-            'reason' => 'Defective product',
-        ]);
-
-        Event::assertDispatched(ReturnProcessed::class);
-    });
-
-    it('prevents returning more than ordered', function (): void {
-        $store = SmStoreFactory::new()->create(['owner_user_id' => $this->seller->id]);
-        $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
-        $product = SmProductFactory::new()->create([
-            'store_id' => $store->id,
-            'category_id' => $category->id,
-        ]);
-        $order = SmOrderFactory::new()->create(['store_id' => $store->id]);
-        $orderItem = SmOrderItemFactory::new()->create([
-            'order_id' => $order->id,
-            'product_id' => $product->id,
-            'quantity' => 3,
-        ]);
-
-        $response = $this->postJson("/api/v1/store-owner/orders/{$order->id}/return", [
-            'items' => [
-                [
-                    'order_item_id' => $orderItem->id,
-                    'quantity' => 5,
-                ],
-            ],
-            'reason' => 'Test return',
-        ]);
-
-        $response->assertStatus(400)
-            ->assertJson([
-                'success' => false,
-            ]);
-    });
-});
-
 describe('Lost Opportunities Tracking', function (): void {
     it('retrieves lost opportunities report', function (): void {
         $store = SmStoreFactory::new()->create(['owner_user_id' => $this->seller->id]);
@@ -588,8 +475,8 @@ describe('Lost Opportunities Tracking', function (): void {
     });
 });
 
-describe('Automatic Stock Deduction on Order Accept', function (): void {
-    it('deducts stock when order is accepted', function (): void {
+describe('No Stock Deduction on Order Accept', function (): void {
+    it('acceptance does not change stock because checkout already reserved it', function (): void {
         $store = SmStoreFactory::new()->create(['owner_user_id' => $this->seller->id]);
         $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
         $order = SmOrderFactory::new()->create(['store_id' => $store->id, 'status' => 'pending']);
@@ -620,17 +507,11 @@ describe('Automatic Stock Deduction on Order Accept', function (): void {
 
         $response->assertSuccessful();
 
-        expect($product1->refresh()->stock_quantity)->toBe(90);
-        expect($product2->refresh()->stock_quantity)->toBe(45);
-
-        assertDatabaseHas('sm_inventory_logs', [
-            'product_id' => $product1->id,
-            'type' => SmInventoryLogType::OrderDeduction->value,
-            'quantity_change' => -10,
-        ]);
+        expect($product1->refresh()->stock_quantity)->toBe(100);
+        expect($product2->refresh()->stock_quantity)->toBe(50);
     });
 
-    it('prevents accepting order with insufficient stock', function (): void {
+    it('acceptance does not attempt to deduct stock even if legacy order has inconsistent quantity', function (): void {
         $store = SmStoreFactory::new()->create(['owner_user_id' => $this->seller->id]);
         $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
         $order = SmOrderFactory::new()->create(['store_id' => $store->id, 'status' => 'pending']);
@@ -648,7 +529,7 @@ describe('Automatic Stock Deduction on Order Accept', function (): void {
 
         $response = $this->postJson("/api/v1/store-owner/orders/{$order->id}/accept");
 
-        $response->assertStatus(400);
+        $response->assertSuccessful();
 
         // Stock should not be changed
         expect($product->refresh()->stock_quantity)->toBe(5);

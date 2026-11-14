@@ -18,6 +18,7 @@ final class UserSupermarketShoppingListStoreRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
+            'storeId' => ['nullable', 'integer', 'min:1', 'exists:sm_stores,id'],
             'isActive' => ['sometimes', 'boolean'],
             'schedule' => ['sometimes', 'nullable', 'array'], // No change needed
             'schedule.isActive' => ['sometimes', 'boolean'],

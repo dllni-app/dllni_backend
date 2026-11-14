@@ -59,21 +59,25 @@ final class UserSupermarketShoppingListService
         ?string $description,
         bool $isActive,
         ?array $schedule = null,
+        ?int $storeId = null,
     ): array {
-        $list = SmSmartList::create([
-            'user_id' => $userId,
-            'name' => $name,
-            'description' => $description,
-            'is_active' => $isActive,
-        ]);
+        return DB::transaction(function () use ($userId, $name, $storeId, $description, $isActive, $schedule): array {
+            $list = SmSmartList::create([
+                'user_id' => $userId,
+                'store_id' => $storeId,
+                'name' => $name,
+                'description' => $description,
+                'is_active' => $isActive,
+            ]);
 
-        $this->upsertSchedule($list, $schedule);
+            $this->upsertSchedule($list, $schedule);
 
-        return $this->listDetail($list->fresh()->load([
-            'schedule',
-            'items' => fn ($query) => $query->orderBy('sort_order')->orderBy('id'),
-            'items.masterProduct',
-        ]));
+            return $this->listDetail($list->fresh()->load([
+                'schedule',
+                'items' => fn ($query) => $query->orderBy('sort_order')->orderBy('id'),
+                'items.masterProduct',
+            ]));
+        });
     }
 
     /**
@@ -82,34 +86,45 @@ final class UserSupermarketShoppingListService
      */
     public function updateList(int $userId, int $listId, array $validated): array
     {
-        $list = $this->findOwnedList($userId, $listId);
-        $data = [];
+        return DB::transaction(function () use ($userId, $listId, $validated): array {
 
-        if (array_key_exists('name', $validated)) {
-            $data['name'] = $validated['name'];
-        }
+            $list = $this->findOwnedList($userId, $listId);
+            $data = [];
 
-        if (array_key_exists('description', $validated)) {
-            $data['description'] = $validated['description'];
-        }
+            if (array_key_exists('name', $validated)) {
+                $data['name'] = $validated['name'];
+            }
 
-        if (array_key_exists('isActive', $validated)) {
-            $data['is_active'] = (bool) $validated['isActive'];
-        }
+            if (array_key_exists('description', $validated)) {
+                $data['description'] = $validated['description'];
+            }
 
-        if ($data !== []) {
-            $list->update($data);
-        }
+            if (array_key_exists('isActive', $validated)) {
+                $data['is_active'] = (bool) $validated['isActive'];
+            }
+            if (array_key_exists('storeId', $validated)) {
+                $data['store_id'] = $validated['storeId'];
+            }
 
-        if (array_key_exists('schedule', $validated)) {
-            $this->upsertSchedule($list->refresh(), is_array($validated['schedule']) ? $validated['schedule'] : null);
-        }
+            if ($data !== []) {
+                $list->update($data);
+            }
 
-        return $this->listDetail($list->fresh()->load([
-            'schedule',
-            'items' => fn ($query) => $query->orderBy('sort_order')->orderBy('id'),
-            'items.masterProduct',
-        ]));
+            if (array_key_exists('schedule', $validated)) {
+                $this->upsertSchedule($list->refresh(), is_array($validated['schedule']) ? $validated['schedule'] : null);
+            }
+
+            return $this->listDetail($list->fresh()->load([
+                'schedule',
+                'items' => fn ($query) => $query->orderBy('sort_order')->orderBy('id'),
+                'items.masterProduct',
+            ]));
+            if ($list->store_id === null && $list->schedule?->is_active) {
+                throw ValidationException::withMessages([
+                    'storeId' => ['Choose a store before enabling list reminders.'],
+                ]);
+            }
+        });
     }
 
     public function destroy(int $userId, int $listId): void
@@ -256,7 +271,15 @@ final class UserSupermarketShoppingListService
                 ]);
             }
 
-            $effectiveStoreId = (int) $candidateStoreIds[0];
+            if ($list->store_id !== null && ! in_array((int) $list->store_id, array_map('intval', $candidateStoreIds), true)) {
+                throw ValidationException::withMessages([
+                    'storeId' => ['Not all list products are available at the selected store.'],
+                ]);
+            }
+
+            $effectiveStoreId = $list->store_id === null
+                ? (int) $candidateStoreIds[0] // Legacy lists without a selected store.
+                : (int) $list->store_id;
             $lines = [];
 
             foreach ($resolvedItems as $itemOptions) {
@@ -305,6 +328,7 @@ final class UserSupermarketShoppingListService
             'name' => $list->name,
             'description' => $list->description,
             'isActive' => (bool) $list->is_active,
+            'storeId' => $list->store_id,
             'schedule' => $this->schedulePayload($list),
             'itemsCount' => (int) ($list->items_count ?? $list->items()->count()),
             'createdAt' => $list->created_at?->toDateTimeString(),
@@ -326,6 +350,7 @@ final class UserSupermarketShoppingListService
             'name' => $list->name,
             'description' => $list->description,
             'isActive' => (bool) $list->is_active,
+            'storeId' => $list->store_id,
             'schedule' => $this->schedulePayload($list),
             'items' => $items->map(fn (SmSmartListItem $item): array => $this->itemPayload($item))->values()->all(),
             'createdAt' => $list->created_at?->toDateTimeString(),
@@ -372,6 +397,12 @@ final class UserSupermarketShoppingListService
         $weekDays = $this->normalizeIntegerList($schedule['week_days'] ?? $schedule['weekDays'] ?? null);
         $monthDays = $this->normalizeIntegerList($schedule['month_days'] ?? $schedule['monthDays'] ?? null);
         $periods = $this->normalizePeriods($schedule['periods'] ?? null);
+
+        if ($isActive && $list->store_id === null) {
+            throw ValidationException::withMessages([
+                'storeId' => ['Choose a supermarket store before activating schedule reminders.'],
+            ]);
+        }
 
         if ($frequencyType === 'weekly' && $weekDays === []) {
             throw ValidationException::withMessages([

@@ -17,10 +17,8 @@ use Livewire\Livewire;
 use Modules\Delivery\Models\DeliveryCompany;
 use Modules\Delivery\Models\DeliveryDriver;
 use Modules\Delivery\Models\DeliveryOrder;
-use Modules\Supermarket\Data\SmOrderReturnData;
 use Modules\Supermarket\Models\SmOrder;
 use Modules\Supermarket\Models\SmOrderItem;
-use Modules\Supermarket\Services\SmInventoryService;
 use Spatie\Activitylog\Models\Activity;
 use Spatie\Permission\Models\Role;
 
@@ -31,46 +29,6 @@ beforeEach(function (): void {
     $admin = User::factory()->create();
     $admin->assignRole($role);
     $this->actingAs($admin);
-});
-
-it('shows supermarket return history from the inventory source of truth', function (): void {
-    $order = SmOrder::factory()->create(['order_number' => 'SM-RETURN-360']);
-
-    $product = SmProductFactory::new()->create([
-        'store_id' => $order->store_id,
-        'name' => 'Returned Milk',
-        'stock_quantity' => 10,
-    ]);
-
-    $item = SmOrderItem::query()->create([
-        'order_id' => $order->id,
-        'product_id' => $product->id,
-        'product_name' => 'Returned Milk',
-        'quantity' => 2,
-        'unit_price' => 3000,
-        'total_price' => 6000,
-    ]);
-
-    $actor = User::factory()->create();
-
-    $data = SmOrderReturnData::from([
-        'items' => [
-            ['order_item_id' => $item->id, 'quantity' => 1],
-        ],
-        'reason' => 'Damaged package',
-    ]);
-
-    app(SmInventoryService::class)->processReturn($order, $data, $actor->id);
-
-    expect((int) $product->fresh()->stock_quantity)->toBe(11)
-        ->and($order->returnInventoryLogs()->count())->toBe(1);
-
-    $this->get(SmOrderResource::getUrl('view', ['record' => $order], isAbsolute: false))
-        ->assertSuccessful()
-        ->assertSee('سجل الإرجاعات')
-        ->assertSee('Returned Milk')
-        ->assertSee('Damaged package')
-        ->assertSee('11');
 });
 
 it('provides global delivery dispute visibility and audited status intervention', function (): void {

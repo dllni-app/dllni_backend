@@ -9,12 +9,10 @@ use Exception;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Modules\Supermarket\Data\SmInventoryAuditData;
-use Modules\Supermarket\Data\SmOrderReturnData;
 use Modules\Supermarket\Data\SmProductExpirationData;
 use Modules\Supermarket\Data\SmStockUpdateData;
 use Modules\Supermarket\Enums\SmInventoryLogType;
 use Modules\Supermarket\Enums\SmStockOperation;
-use Modules\Supermarket\Events\ReturnProcessed;
 use Modules\Supermarket\Events\StockUpdated;
 use Modules\Supermarket\Models\SmInventoryLog;
 use Modules\Supermarket\Models\SmLostOpportunity;
@@ -27,57 +25,6 @@ final class SmInventoryService
     private const EXPIRATION_WARNING_DAYS = 7;
 
     private const DISCOUNT_PERCENTAGE_EXPIRING_SOON = 20;
-
-    /**
-     * Automatically deduct stock when order is accepted.
-     */
-    public function deductStockForOrder(SmOrder $order): void
-    {
-        DB::transaction(function () use ($order): void {
-            foreach ($order->items as $item) {
-                $product = $item->product;
-
-                if ($product->stock_quantity < $item->quantity) {
-                    throw new Exception("Insufficient stock for product: {$product->name}");
-                }
-
-                $previousStock = $product->stock_quantity;
-                $product->stock_quantity -= $item->quantity;
-                $product->save();
-
-                $this->logInventoryChange(
-                    product: $product,
-                    logType: SmInventoryLogType::OrderDeduction,
-                    quantityChange: -$item->quantity,
-                    quantityAfter: $product->stock_quantity,
-                    reference: $order,
-                    notes: "Stock deducted for order #{$order->order_number}",
-                );
-
-                $this->dispatchStockUpdatedEvent(
-                    product: $product,
-                    previousStock: $previousStock,
-                    newStock: $product->stock_quantity,
-                    reason: 'Order accepted'
-                );
-            }
-        });
-    }
-
-    /**
-     * Customer checkout deducts stock at placement to prevent overselling while
-     * the owner is deciding. The placement status log is written in the same
-     * database transaction, including for legacy orders created before inventory
-     * logs were added; acceptance must never deduct those orders twice.
-     */
-    public function isReservedByCustomerCheckout(SmOrder $order): bool
-    {
-        return $order->statusLogs()
-            ->whereNull('from_status')
-            ->where('to_status', 'pending')
-            ->where('notes', 'Order placed by customer.')
-            ->exists();
-    }
 
     /**
      * Reserve in the placement transaction and audit each stock movement.
@@ -106,67 +53,6 @@ final class SmInventoryService
             notes: "Stock reserved at customer checkout for order #{$order->order_number}",
         );
         $this->dispatchStockUpdatedEvent($product, $previous, (int) $product->stock_quantity, 'Customer checkout stock reservation');
-    }
-
-    /**
-     * Restore deducted stock once when a pending order is rejected or an
-     * accepted order is cancelled. A return of inventory is NOT a cash refund.
-     * Caller owns the outer transaction and locked order status transition.
-     */
-    public function restoreCancelledOrderStock(SmOrder $order): void
-    {
-        $reservedByCheckout = $this->isReservedByCustomerCheckout($order);
-        $counts = $order->items()
-            ->selectRaw('product_id, SUM(quantity) as ordered_quantity')
-            ->groupBy('product_id')
-            ->orderBy('product_id')
-            ->get();
-        foreach ($counts as $count) {
-            $productId = (int) $count->product_id;
-            if ($productId <= 0) {
-                continue;
-            }
-            $previousDeducted = (int) SmInventoryLog::query()
-                ->where('reference_type', SmOrder::class)
-                ->where('reference_id', $order->id)
-                ->where('product_id', $productId)
-                ->where('type', SmInventoryLogType::OrderDeduction->value)
-                ->sum('quantity_change');
-
-            // Historical customer checkouts did not write deduction logs.
-            $quantity = $previousDeducted < 0
-                ? -$previousDeducted
-                : ($reservedByCheckout ? (int) $count->ordered_quantity : 0);
-            if ($quantity <= 0) {
-                continue;
-            }
-            $alreadyReturned = (int) SmInventoryLog::query()
-                ->where('reference_type', SmOrder::class)
-                ->where('reference_id', $order->id)
-                ->where('product_id', $productId)
-                ->where('type', SmInventoryLogType::Return->value)
-                ->sum('quantity_change');
-            $release = max(0, $quantity - max(0, $alreadyReturned));
-            if ($release <= 0) {
-                continue;
-            }
-            $product = SmProduct::query()->lockForUpdate()->findOrFail($productId);
-            if ($product->stock_quantity === null) {
-                continue;
-            }
-            $old = (int) $product->stock_quantity;
-            $product->stock_quantity = $old + $release;
-            $product->save();
-            $this->logInventoryChange(
-                product: $product,
-                logType: SmInventoryLogType::Return,
-                quantityChange: $release,
-                quantityAfter: (int) $product->stock_quantity,
-                reference: $order,
-                notes: "Stock released after cancellation of order #{$order->order_number}; not a refund",
-            );
-            $this->dispatchStockUpdatedEvent($product, $old, (int) $product->stock_quantity, 'Cancelled order stock release');
-        }
     }
 
     /**
@@ -345,104 +231,6 @@ final class SmInventoryService
             'expires_at' => $data->expires_at->toIso8601String(),
             'is_expiring_soon' => $isExpiringSoon,
             'suggested_discount' => $suggestedDiscount,
-        ];
-    }
-
-    /**
-     * Process order return and increase stock.
-     */
-    public function processReturn(SmOrder $order, SmOrderReturnData $data, ?int $userId = null): array
-    {
-        $returnedItems = [];
-
-        DB::transaction(function () use ($order, $data, $userId, &$returnedItems): void {
-            // Lock the source order so simultaneous return/cancellation requests
-            // cannot both credit inventory for the same historical quantity.
-            SmOrder::query()->lockForUpdate()->findOrFail($order->id);
-            $requestedByProduct = [];
-            foreach ($data->items as $entry) {
-                $line = SmOrderItem::query()
-                    ->where('id', $entry->order_item_id)
-                    ->where('order_id', $order->id)
-                    ->firstOrFail();
-                $requestedByProduct[(int) $line->product_id] =
-                    ($requestedByProduct[(int) $line->product_id] ?? 0) + (int) $entry->quantity;
-            }
-            foreach ($requestedByProduct as $productId => $requested) {
-                $ordered = (int) SmOrderItem::query()->where('order_id', $order->id)
-                    ->where('product_id', $productId)->sum('quantity');
-                $alreadyReturned = (int) SmInventoryLog::query()
-                    ->where('reference_type', SmOrder::class)
-                    ->where('reference_id', $order->id)
-                    ->where('product_id', $productId)
-                    ->where('type', SmInventoryLogType::Return->value)
-                    ->sum('quantity_change');
-                if ($alreadyReturned + $requested > $ordered) {
-                    throw new Exception("Return quantity exceeds unreturned quantity for product #{$productId}");
-                }
-            }
-            foreach ($data->items as $returnItem) {
-                $orderItem = SmOrderItem::query()
-                    ->where('id', $returnItem->order_item_id)
-                    ->where('order_id', $order->id)
-                    ->firstOrFail();
-
-                if ($returnItem->quantity > $orderItem->quantity) {
-                    throw new Exception("Return quantity exceeds ordered quantity for item #{$orderItem->id}");
-                }
-
-                $product = $orderItem->product;
-                $previousStock = $product->stock_quantity;
-
-                $product->stock_quantity += $returnItem->quantity;
-                $product->save();
-
-                $this->logInventoryChange(
-                    product: $product,
-                    logType: SmInventoryLogType::Return,
-                    quantityChange: $returnItem->quantity,
-                    quantityAfter: $product->stock_quantity,
-                    reference: $order,
-                    notes: "Return for order #{$order->order_number}: {$data->reason}",
-                    userId: $userId
-                );
-
-                $returnedItems[] = [
-                    'product_id' => $product->id,
-                    'product_name' => $product->name,
-                    'returned_quantity' => $returnItem->quantity,
-                    'new_stock' => $product->stock_quantity,
-                ];
-
-                $this->dispatchStockUpdatedEvent(
-                    product: $product,
-                    previousStock: $previousStock,
-                    newStock: $product->stock_quantity,
-                    reason: 'Product returned'
-                );
-            }
-        });
-
-        try {
-            event(new ReturnProcessed(
-                order: $order,
-                returnedItems: $returnedItems,
-                reason: $data->reason
-            ));
-        } catch (Exception $e) {
-            Log::error('Failed to dispatch ReturnProcessed event', [
-                'order_id' => $order->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
-
-        return [
-            'order_id' => $order->id,
-            'order_number' => $order->order_number,
-            'returned_items' => $returnedItems,
-            'reason' => $data->reason,
-            'financial_refund_issued' => false,
-            'order_status_changed' => false,
         ];
     }
 

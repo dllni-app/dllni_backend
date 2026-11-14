@@ -141,21 +141,12 @@ Route::prefix('v1')->middleware(['auth:sanctum', InjectStoreIdFromOwnerContext::
         Route::post('orders/{order}/ready-for-pickup', [SmOrderStatusController::class, 'readyForPickup'])
             ->middleware($ordersPermission)
             ->name('orders.ready-for-pickup');
-        Route::post('orders/{order}/cancel', [SmOrderStatusController::class, 'cancel'])
-            ->middleware($ordersPermission)
-            ->name('orders.cancel');
-        Route::post('orders/{order}/reject', [SmOrderStatusController::class, 'reject'])
-            ->middleware($ordersPermission)
-            ->name('orders.reject');
         Route::post('orders/{order}/courier-handover', [SmOrderStatusController::class, 'courierHandover'])
             ->middleware($ordersPermission)
             ->name('orders.courier-handover');
         Route::post('orders/{order}/customer-pickup-complete', [SmOrderStatusController::class, 'customerPickupComplete'])
             ->middleware($ordersPermission)
             ->name('orders.customer-pickup-complete');
-        Route::post('orders/{order}/return', [StoreOwnerInventoryController::class, 'processReturn'])
-            ->middleware($ordersPermission)
-            ->name('orders.return');
 
         Route::get('inventory/counts', StoreOwnerInventoryCountsController::class)
             ->middleware($warehousePermission)

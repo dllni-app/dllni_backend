@@ -57,7 +57,7 @@ it('reorder carries line note and substitute into current cart for review', func
         ->and($cart[0]['items'][0]['substituteProductId'])->toBe($alternative->id);
 });
 
-it('customer cancellation restores reserved stock exactly once', function (): void {
+it('customer cancellation is forbidden and already deducted stock stays deducted', function (): void {
     $customer = User::factory()->create();
     $store = SmStoreFactory::new()->create();
     $product = SmProductFactory::new()->create(['store_id' => $store->id, 'stock_quantity' => 10]);
@@ -68,15 +68,12 @@ it('customer cancellation restores reserved stock exactly once', function (): vo
         'order_id' => $order->id, 'product_id' => $product->id, 'quantity' => 2,
     ]);
     app(SmInventoryService::class)->reserveStockForCustomerOrder($order, (int) $product->id, 2);
-    SmOrderStatusLog::query()->create([
-        'order_id' => $order->id, 'from_status' => null, 'to_status' => 'pending',
-        'notes' => 'Order placed by customer.', 'changed_by_user_id' => $customer->id,
-    ]);
-    $hub = app(UserOrderHubService::class);
-    $hub->cancel((int) $customer->id, 'supermarket', (int) $order->id, 'No longer needed');
-    expect($product->fresh()->stock_quantity)->toBe(10);
-    $hub->cancel((int) $customer->id, 'supermarket', (int) $order->id, 'Duplicate');
-    expect($product->fresh()->stock_quantity)->toBe(10);
+
+    expect(fn () => app(UserOrderHubService::class)
+        ->cancel((int) $customer->id, 'supermarket', (int) $order->id, 'No refunds'))
+        ->toThrow(\Symfony\Component\HttpKernel\Exception\ConflictHttpException::class);
+    expect($product->fresh()->stock_quantity)->toBe(8)
+        ->and($order->fresh()->status->value)->toBe('pending');
 });
 
 it('customer pickup ETA uses actual store preparation estimate instead of fabricated 35', function (): void {

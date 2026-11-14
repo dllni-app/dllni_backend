@@ -29,7 +29,7 @@ it('creates a shopping list and lists it for the authenticated user', function (
     $createResponse->assertCreated()
         ->assertJsonPath('data.name', 'Home list')
         ->assertJsonPath('data.items', [])
-        ->assertJsonMissingPath('data.storeId');
+        ->assertJsonPath('data.storeId', null);
 
     $listId = (int) $createResponse->json('data.id');
 
@@ -44,9 +44,11 @@ it('creates a shopping list and lists it for the authenticated user', function (
 it('returns shopping list schedules on create and show', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
+    $store = SmStore::factory()->create();
 
     $createResponse = $this->postJson('/api/v1/user/supermarket/shopping-lists', [
         'name' => 'Weekly groceries',
+        'storeId' => $store->id,
         'description' => 'Basics',
         'isActive' => true,
         'schedule' => [
@@ -78,18 +80,20 @@ it('returns shopping list schedules on create and show', function (): void {
         ->assertJsonPath('data.schedule.frequencyType', 'weekly')
         ->assertJsonPath('data.schedule.weekDays', [1, 4])
         ->assertJsonPath('data.schedule.periods.0.label', 'Morning')
-        ->assertJsonMissingPath('data.storeId');
+        ->assertJsonPath('data.storeId', $store->id);
 });
 
 it('accepts once frequency type for shopping list schedule', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
+    $store = SmStore::factory()->create();
 
     $fromTime = now()->addMinutes(10)->format('H:i');
     $toTime = now()->addHour()->format('H:i');
 
     $response = $this->postJson('/api/v1/user/supermarket/shopping-lists', [
         'name' => 'One time groceries',
+        'storeId' => $store->id,
         'description' => 'Run one time',
         'isActive' => true,
         'schedule' => [

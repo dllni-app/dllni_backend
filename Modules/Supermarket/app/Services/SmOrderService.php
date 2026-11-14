@@ -152,11 +152,8 @@ final class SmOrderService
                 );
             }
 
-            // Customer checkout already reserved stock in its placement transaction.
-            // Manual/legacy owner-created orders still deduct on acceptance.
-            if (! $this->inventoryService->isReservedByCustomerCheckout($order)) {
-                $this->inventoryService->deductStockForOrder($order);
-            }
+            // Stock is deducted once when the customer places the order.
+            // Accepting an order never changes inventory.
 
             $acceptedAt = now();
             $order->update([
@@ -260,38 +257,7 @@ final class SmOrderService
 
     public function cancelAfterAcceptance(SmOrder $order, string $reason, ?int $actorUserId): SmOrder
     {
-        // Keep source cancellation and linked courier cancellation atomic.
-        // Otherwise a courier pickup racing with store cancellation can leave
-        // the supermarket order cancelled while the delivery is still picked up.
-        return DB::transaction(function () use ($order, $reason, $actorUserId): SmOrder {
-            $lockedOrder = SmOrder::query()->lockForUpdate()->findOrFail($order->id);
-
-            if ($lockedOrder->status !== SmOrderStatus::Cancelled) {
-                if (! in_array($lockedOrder->status, [
-                    SmOrderStatus::Accepted,
-                    SmOrderStatus::Preparing,
-                    SmOrderStatus::ReadyForPickup,
-                ], true)) {
-                    throw new InvalidArgumentException('Only accepted, preparing, or ready-for-pickup orders can be cancelled by the store.');
-                }
-
-                $from = $lockedOrder->status;
-                $lockedOrder->forceFill([
-                    'status' => SmOrderStatus::Cancelled,
-                    'cancelled_at' => now(),
-                    'cancellation_reason' => $reason,
-                ])->save();
-
-                $this->logStatus($lockedOrder, $from, SmOrderStatus::Cancelled, $reason, $actorUserId);
-                $this->inventoryService->restoreCancelledOrderStock($lockedOrder);
-            }
-
-            // A failed delivery cancellation must roll back the source status
-            // and its status log, not merely return an error to the caller.
-            $this->merchantDelivery->cancelled($lockedOrder, $reason, $actorUserId);
-
-            return $lockedOrder->refresh();
-        });
+        throw new \DomainException('SUPERMARKET_ORDERS_ARE_FINAL_NO_CANCELLATION');
     }
 
     public function handOverToCourier(SmOrder $order, ?int $actorUserId): SmOrder
@@ -380,50 +346,7 @@ final class SmOrderService
 
     public function rejectOrder(SmOrder $order, SmOrderRejectStatusData $data, ?int $actorUserId = null): SmOrder
     {
-        $cancelled = DB::transaction(function () use ($order, $data, $actorUserId): SmOrder {
-            $lockedOrder = SmOrder::query()->lockForUpdate()->findOrFail($order->id);
-
-            if ($lockedOrder->status !== SmOrderStatus::Pending) {
-                throw new Exception(
-                    "Cannot reject order {$lockedOrder->order_number}. Order must be in PENDING status, currently in {$lockedOrder->status->value}"
-                );
-            }
-
-            $lockedOrder->update([
-                'status' => SmOrderStatus::Cancelled,
-                'cancelled_at' => now(),
-                'cancellation_reason' => $data->reason,
-            ]);
-
-            $this->logStatus(
-                $lockedOrder,
-                SmOrderStatus::Pending,
-                SmOrderStatus::Cancelled,
-                $data->reason,
-                $actorUserId,
-            );
-            $this->inventoryService->restoreCancelledOrderStock($lockedOrder);
-
-            $trustPenalty = $this->calculateTrustPenalty(RejectionType::from($data->rejectionType));
-
-            if ($trustPenalty > 0) {
-                $this->updateStoreTrustScore($lockedOrder->store, $trustPenalty);
-            }
-
-            $this->checkConsecutiveRejections($lockedOrder->store);
-
-            try {
-                Notification::send($lockedOrder->customer, new OrderRejectedNotification($lockedOrder, $data->reason));
-            } catch (Exception $e) {
-                Log::warning("Failed to send order rejection notification: {$e->getMessage()}");
-            }
-
-            return $lockedOrder->refresh();
-        });
-
-        $this->merchantDelivery->cancelled($cancelled, $data->reason, $actorUserId);
-
-        return $cancelled->refresh();
+        throw new \DomainException('SUPERMARKET_ORDERS_ARE_FINAL_NO_REJECTION');
     }
 
     private function calculateTrustPenalty(RejectionType $type): int

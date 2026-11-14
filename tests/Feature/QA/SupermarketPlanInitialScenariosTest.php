@@ -254,7 +254,7 @@ it('USR-SM-10 tracks a supermarket order', function (): void {
     $response = getJson("/api/v1/user/orders/supermarket/{$order->id}/tracking");
 
     $response->assertOk()
-        ->assertJsonPath('data.eta.minutes', 35)
+        ->assertJsonPath('data.eta.minutes', null)
         ->assertJsonPath('data.merchant.id', $order->store_id)
         ->assertJsonPath('data.timeline', fn (array $timeline): bool => is_array($timeline));
 });
@@ -596,7 +596,7 @@ it('OWN-SM-03 accepts a pending supermarket order', function (): void {
         ->assertJsonPath('data.status', 'accepted');
 });
 
-it('OWN-SM-04 validates reject reason and rejection type', function (): void {
+it('OWN-SM-04 cannot reject final supermarket orders', function (): void {
     $seller = User::factory()->create([
         'module_type' => UserModuleType::SupermarketSeller->value,
     ]);
@@ -614,8 +614,7 @@ it('OWN-SM-04 validates reject reason and rejection type', function (): void {
 
     $response = postJson("/api/v1/store-owner/orders/{$order->id}/reject", []);
 
-    $response->assertStatus(422)
-        ->assertJsonValidationErrors(['reason', 'rejectionType']);
+    $response->assertNotFound();
 });
 
 it('OWN-SM-05 hands over a ready order to the courier', function (): void {
@@ -946,7 +945,7 @@ it('OWN-SM-21 rejects courier handover for non-ready orders', function (): void 
         ->assertStatus(400);
 });
 
-it('OWN-SM-22 returns order return processing validation failure', function (): void {
+it('OWN-SM-22 has no product return API', function (): void {
     $seller = User::factory()->create([
         'module_type' => UserModuleType::SupermarketSeller->value,
     ]);
@@ -957,7 +956,7 @@ it('OWN-SM-22 returns order return processing validation failure', function (): 
 
     $response = postJson("/api/v1/store-owner/orders/{$order->id}/return", []);
 
-    $response->assertStatus(422);
+    $response->assertNotFound();
 });
 
 it('OWN-SM-23 rejects invalid operating hours payload', function (): void {

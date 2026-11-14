@@ -12,11 +12,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Modules\Supermarket\Data\SmInventoryAuditData;
-use Modules\Supermarket\Data\SmOrderReturnData;
 use Modules\Supermarket\Data\SmProductExpirationData;
 use Modules\Supermarket\Data\SmStockUpdateData;
 use Modules\Supermarket\Http\Requests\SmInventoryAuditRequest;
-use Modules\Supermarket\Http\Requests\SmOrderReturnRequest;
 use Modules\Supermarket\Http\Requests\SmProductExpirationRequest;
 use Modules\Supermarket\Http\Requests\SmStockUpdateRequest;
 use Modules\Supermarket\Models\SmOrder;
@@ -220,35 +218,6 @@ final class StoreOwnerInventoryController
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to update product expiration.',
-                'error' => $e->getMessage(),
-            ], 400);
-        }
-    }
-
-    /**
-     * Process order return.
-     *
-     * POST /api/v1/store-owner/orders/{order}/return
-     */
-    public function processReturn(SmOrderReturnRequest $request, SmOrder $order): JsonResponse
-    {
-        $this->context->store((int) $order->store_id);
-
-        try {
-            $data = SmOrderReturnData::from($request->validated());
-            $userId = $request->user()?->id;
-
-            $result = $this->inventoryService->processReturn($order, $data, $userId);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Order return processed successfully.',
-                'data' => $result,
-            ]);
-        } catch (Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to process return.',
                 'error' => $e->getMessage(),
             ], 400);
         }

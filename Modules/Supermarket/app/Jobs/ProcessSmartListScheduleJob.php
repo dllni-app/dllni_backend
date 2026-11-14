@@ -13,16 +13,8 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
-use Illuminate\Support\Str;
-use Illuminate\Support\Collection;
-use Modules\Supermarket\Enums\SmOrderStatus;
-use Modules\Supermarket\Enums\SmPickupMode;
-use Modules\Supermarket\Models\SmOrder;
-use Modules\Supermarket\Models\SmOrderItem;
-use Modules\Supermarket\Models\SmProduct;
 use Modules\Supermarket\Models\SmSmartListSchedule;
-use Modules\Supermarket\Notifications\SmartListScheduledOrderFailedNotification;
-use Modules\Supermarket\Notifications\SmartListScheduledOrderSentNotification;
+use Modules\Supermarket\Notifications\SmartListShoppingReminderNotification;
 
 final class ProcessSmartListScheduleJob implements ShouldQueue
 {
@@ -37,121 +29,45 @@ final class ProcessSmartListScheduleJob implements ShouldQueue
 
     public function handle(): void
     {
-        $schedule = SmSmartListSchedule::query()
-            ->with(['smartList.items.masterProduct', 'smartList.user'])
-            ->find($this->scheduleId);
+        // A scheduled shopping list is a reminder, NOT authorization to
+        // place an irrevocable order or deduct stock.
+        $notice = DB::transaction(function (): ?array {
+            $schedule = SmSmartListSchedule::query()
+                ->lockForUpdate()
+                ->with(['smartList.user'])
+                ->find($this->scheduleId);
 
-        if ($schedule === null || ! $schedule->is_active || $schedule->next_run_at === null || $schedule->next_run_at->isFuture()) {
-            return;
-        }
-
-        $smartList = $schedule->smartList;
-
-        if ($smartList === null || ! $smartList->is_active || $smartList->store_id === null) {
-            return;
-        }
-
-        $includedItems = $smartList->items->where('is_included', true)->values();
-
-        if ($includedItems->isEmpty()) {
-            $this->markFailedRun($schedule, $smartList->name, 'لا توجد عناصر مفعلة داخل القائمة الذكية.');
-
-            return;
-        }
-
-        $masterProductIds = $includedItems
-            ->pluck('master_product_id')
-            ->filter()
-            ->unique()
-            ->values();
-
-        $productsByMaster = SmProduct::query()
-            ->where('store_id', $smartList->store_id)
-            ->where('is_available', true)
-            ->whereIn('master_product_id', $masterProductIds)
-            ->get()
-            ->keyBy('master_product_id');
-
-        foreach ($includedItems as $item) {
-            if ($item->master_product_id === null || ! $productsByMaster->has($item->master_product_id)) {
-                $this->markFailedRun($schedule, $smartList->name, 'بعض المنتجات غير متوفرة حالياً في المتجر المحدد.');
-
-                return;
-            }
-        }
-
-        DB::transaction(function () use ($schedule, $smartList, $includedItems, $productsByMaster): void {
-            $lockedSchedule = SmSmartListSchedule::query()->lockForUpdate()->find($schedule->id);
-
-            if ($lockedSchedule === null || ! $lockedSchedule->is_active || $lockedSchedule->next_run_at === null || $lockedSchedule->next_run_at->isFuture()) {
-                return;
+            if ($schedule === null || ! $schedule->is_active ||
+                $schedule->next_run_at === null || $schedule->next_run_at->isFuture()) {
+                return null;
             }
 
-            $subtotal = 0.0;
-            $orderItemsPayload = [];
-
-            foreach ($includedItems as $item) {
-                /** @var SmProduct $product */
-                $product = $productsByMaster->get($item->master_product_id);
-                $quantity = max(1, (int) round((float) $item->quantity));
-                $unitPrice = (float) ($product->discounted_price ?? $product->price ?? 0);
-                $lineTotal = $quantity * $unitPrice;
-
-                $subtotal += $lineTotal;
-
-                $orderItemsPayload[] = [
-                    'product_id' => $product->id,
-                    'quantity' => $quantity,
-                    'unit_price' => $unitPrice,
-                    'total_price' => $lineTotal,
-                    'product_name' => $product->name,
-                ];
+            $list = $schedule->smartList;
+            if ($list === null || ! $list->is_active || $list->store_id === null) {
+                // Existing legacy schedules without a chosen store must not
+                // repeatedly requeue and must never create an order.
+                $schedule->update(['is_active' => false, 'next_run_at' => null]);
+                return null;
             }
 
-            $order = SmOrder::query()->create([
-                'customer_id' => $smartList->user_id,
-                'store_id' => $smartList->store_id,
-                'order_number' => $this->generateOrderNumber(),
-                'status' => SmOrderStatus::Pending->value,
-                'pickup_mode' => SmPickupMode::ImmediatePickup->value,
-                'subtotal' => $subtotal,
-                'discount_amount' => 0,
-                'service_fee' => 0,
-                'total_amount' => $subtotal,
-            ]);
-
-            foreach ($orderItemsPayload as $payload) {
-                SmOrderItem::query()->create([
-                    'order_id' => $order->id,
-                    ...$payload,
-                ]);
-            }
-
-            $lockedSchedule->update([
+            $schedule->update([
                 'last_run_at' => now(),
-                'next_run_at' => $this->calculateNextRunAt($lockedSchedule),
-                'is_active' => $lockedSchedule->frequency_type === 'once' ? false : $lockedSchedule->is_active,
+                'next_run_at' => $this->calculateNextRunAt($schedule),
+                'is_active' => $schedule->frequency_type === 'once' ? false : true,
             ]);
 
-            Notification::send(
-                $smartList->user,
-                new SmartListScheduledOrderSentNotification($smartList->name, (string) $order->order_number)
-            );
+            return [
+                'user' => $list->user,
+                'name' => $list->name,
+                'list_id' => (int) $list->id,
+                'store_id' => (int) $list->store_id,
+            ];
         });
-    }
 
-    private function markFailedRun(SmSmartListSchedule $schedule, string $smartListName, string $reason): void
-    {
-        $schedule->update([
-            'last_run_at' => now(),
-            'next_run_at' => $this->calculateNextRunAt($schedule),
-            'is_active' => $schedule->frequency_type === 'once' ? false : $schedule->is_active,
-        ]);
-
-        $user = $schedule->smartList?->user;
-
-        if ($user !== null) {
-            Notification::send($user, new SmartListScheduledOrderFailedNotification($smartListName, $reason));
+        if ($notice !== null && $notice['user'] !== null) {
+            Notification::send($notice['user'], new SmartListShoppingReminderNotification(
+                $notice['name'], $notice['list_id'], $notice['store_id'],
+            ));
         }
     }
 
@@ -248,12 +164,4 @@ final class ProcessSmartListScheduleJob implements ShouldQueue
         return null;
     }
 
-    private function generateOrderNumber(): string
-    {
-        do {
-            $value = 'SM-'.Str::upper(Str::random(10));
-        } while (SmOrder::query()->where('order_number', $value)->exists());
-
-        return $value;
-    }
 }

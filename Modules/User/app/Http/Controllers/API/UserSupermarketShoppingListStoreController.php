@@ -24,7 +24,8 @@ final class UserSupermarketShoppingListStoreController
                 name: (string) $validated['name'],
                 description: $validated['description'] ?? null,
                 isActive: (bool) $validated['isActive'],
-                schedule: $validated['schedule'] ?? null, // No change needed
+                schedule: $validated['schedule'] ?? null,
+                storeId: $validated['storeId'] ?? null,
             ),
         ], 201);
     }

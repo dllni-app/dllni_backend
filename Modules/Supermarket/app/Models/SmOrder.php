@@ -131,14 +131,6 @@ final class SmOrder extends Model
             ->oldest('created_at');
     }
 
-    public function returnInventoryLogs(): HasMany
-    {
-        return $this->hasMany(SmInventoryLog::class, 'reference_id')
-            ->where('reference_type', self::class)
-            ->where('type', SmInventoryLogType::Return->value)
-            ->latest('created_at');
-    }
-
     protected static function newFactory(): Factory
     {
         return SmOrderFactory::new();

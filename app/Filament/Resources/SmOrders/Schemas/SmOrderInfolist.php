@@ -260,22 +260,6 @@ final class SmOrderInfolist
                     ->columns(3)
                     ->visible(fn (SmOrder $record): bool => $record->deliveryOrder()->exists()),
 
-                Section::make('سجل الإرجاعات')
-                    ->schema([
-                        RepeatableEntry::make('returnInventoryLogs')
-                            ->label('')
-                            ->schema([
-                                TextEntry::make('product.name')->label('المنتج')->placeholder('—'),
-                                TextEntry::make('quantity_change')->label('الكمية المرجعة'),
-                                TextEntry::make('quantity_after')->label('المخزون بعد الإرجاع'),
-                                TextEntry::make('user.name')->label('نفذ العملية')->placeholder('النظام'),
-                                TextEntry::make('notes')->label('السبب/الملاحظة')->placeholder('—')->columnSpanFull(),
-                                TextEntry::make('created_at')->label('وقت الإرجاع')->dateTime('Y-m-d H:i'),
-                            ])
-                            ->columns(4),
-                    ])
-                    ->visible(fn (SmOrder $record): bool => $record->returnInventoryLogs()->exists()),
-
                 Section::make('النزاعات')
                     ->schema([
                         RepeatableEntry::make('disputes')
