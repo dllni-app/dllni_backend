@@ -65,6 +65,111 @@ final class SmInventoryService
     }
 
     /**
+     * Customer checkout deducts stock at placement to prevent overselling while
+     * the owner is deciding. The placement status log is written in the same
+     * database transaction, including for legacy orders created before inventory
+     * logs were added; acceptance must never deduct those orders twice.
+     */
+    public function isReservedByCustomerCheckout(SmOrder $order): bool
+    {
+        return $order->statusLogs()
+            ->whereNull('from_status')
+            ->where('to_status', 'pending')
+            ->where('notes', 'Order placed by customer.')
+            ->exists();
+    }
+
+    /**
+     * Reserve in the placement transaction and audit each stock movement.
+     * The product lock is shared with checkout validation and serializes
+     * concurrent purchases of the last available unit.
+     */
+    public function reserveStockForCustomerOrder(SmOrder $order, int $productId, int $quantity): void
+    {
+        $product = SmProduct::query()->lockForUpdate()->findOrFail($productId);
+        if ($product->stock_quantity === null) {
+            return;
+        }
+        if ((int) $product->stock_quantity < $quantity) {
+            throw new Exception("Insufficient stock for product: {$product->name}");
+        }
+        $previous = (int) $product->stock_quantity;
+        $product->stock_quantity = $previous - $quantity;
+        $product->save();
+
+        $this->logInventoryChange(
+            product: $product,
+            logType: SmInventoryLogType::OrderDeduction,
+            quantityChange: -$quantity,
+            quantityAfter: (int) $product->stock_quantity,
+            reference: $order,
+            notes: "Stock reserved at customer checkout for order #{$order->order_number}",
+        );
+        $this->dispatchStockUpdatedEvent($product, $previous, (int) $product->stock_quantity, 'Customer checkout stock reservation');
+    }
+
+    /**
+     * Restore deducted stock once when a pending order is rejected or an
+     * accepted order is cancelled. A return of inventory is NOT a cash refund.
+     * Caller owns the outer transaction and locked order status transition.
+     */
+    public function restoreCancelledOrderStock(SmOrder $order): void
+    {
+        $reservedByCheckout = $this->isReservedByCustomerCheckout($order);
+        $counts = $order->items()
+            ->selectRaw('product_id, SUM(quantity) as ordered_quantity')
+            ->groupBy('product_id')
+            ->orderBy('product_id')
+            ->get();
+        foreach ($counts as $count) {
+            $productId = (int) $count->product_id;
+            if ($productId <= 0) {
+                continue;
+            }
+            $previousDeducted = (int) SmInventoryLog::query()
+                ->where('reference_type', SmOrder::class)
+                ->where('reference_id', $order->id)
+                ->where('product_id', $productId)
+                ->where('type', SmInventoryLogType::OrderDeduction->value)
+                ->sum('quantity_change');
+
+            // Historical customer checkouts did not write deduction logs.
+            $quantity = $previousDeducted < 0
+                ? -$previousDeducted
+                : ($reservedByCheckout ? (int) $count->ordered_quantity : 0);
+            if ($quantity <= 0) {
+                continue;
+            }
+            $alreadyReturned = (int) SmInventoryLog::query()
+                ->where('reference_type', SmOrder::class)
+                ->where('reference_id', $order->id)
+                ->where('product_id', $productId)
+                ->where('type', SmInventoryLogType::Return->value)
+                ->sum('quantity_change');
+            $release = max(0, $quantity - max(0, $alreadyReturned));
+            if ($release <= 0) {
+                continue;
+            }
+            $product = SmProduct::query()->lockForUpdate()->findOrFail($productId);
+            if ($product->stock_quantity === null) {
+                continue;
+            }
+            $old = (int) $product->stock_quantity;
+            $product->stock_quantity = $old + $release;
+            $product->save();
+            $this->logInventoryChange(
+                product: $product,
+                logType: SmInventoryLogType::Return,
+                quantityChange: $release,
+                quantityAfter: (int) $product->stock_quantity,
+                reference: $order,
+                notes: "Stock released after cancellation of order #{$order->order_number}; not a refund",
+            );
+            $this->dispatchStockUpdatedEvent($product, $old, (int) $product->stock_quantity, 'Cancelled order stock release');
+        }
+    }
+
+    /**
      * Get products with low stock alert.
      */
     public function getLowStockProducts(int $storeId): array
@@ -251,6 +356,31 @@ final class SmInventoryService
         $returnedItems = [];
 
         DB::transaction(function () use ($order, $data, $userId, &$returnedItems): void {
+            // Lock the source order so simultaneous return/cancellation requests
+            // cannot both credit inventory for the same historical quantity.
+            SmOrder::query()->lockForUpdate()->findOrFail($order->id);
+            $requestedByProduct = [];
+            foreach ($data->items as $entry) {
+                $line = SmOrderItem::query()
+                    ->where('id', $entry->order_item_id)
+                    ->where('order_id', $order->id)
+                    ->firstOrFail();
+                $requestedByProduct[(int) $line->product_id] =
+                    ($requestedByProduct[(int) $line->product_id] ?? 0) + (int) $entry->quantity;
+            }
+            foreach ($requestedByProduct as $productId => $requested) {
+                $ordered = (int) SmOrderItem::query()->where('order_id', $order->id)
+                    ->where('product_id', $productId)->sum('quantity');
+                $alreadyReturned = (int) SmInventoryLog::query()
+                    ->where('reference_type', SmOrder::class)
+                    ->where('reference_id', $order->id)
+                    ->where('product_id', $productId)
+                    ->where('type', SmInventoryLogType::Return->value)
+                    ->sum('quantity_change');
+                if ($alreadyReturned + $requested > $ordered) {
+                    throw new Exception("Return quantity exceeds unreturned quantity for product #{$productId}");
+                }
+            }
             foreach ($data->items as $returnItem) {
                 $orderItem = SmOrderItem::query()
                     ->where('id', $returnItem->order_item_id)
@@ -311,6 +441,8 @@ final class SmInventoryService
             'order_number' => $order->order_number,
             'returned_items' => $returnedItems,
             'reason' => $data->reason,
+            'financial_refund_issued' => false,
+            'order_status_changed' => false,
         ];
     }
 

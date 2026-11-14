@@ -95,7 +95,7 @@ final class StoreOwnerProductOptionsController
                     $modifier->fill([
                         'modifier_group_id' => $group->id,
                         'name' => $modifierData['name'],
-                        'price' => (int) round((float) $modifierData['price']),
+                        'price' => round((float) $modifierData['price'], 2),
                         'sort_order' => (int) ($modifierData['sortOrder'] ?? 0),
                         'is_available' => (bool) $modifierData['isAvailable'],
                     ])->save();

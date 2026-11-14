@@ -127,14 +127,35 @@ trait SmStoreFilterQuery
 
         $now = now();
         $dayOfWeek = mb_strtolower($now->englishDayOfWeek);
+        $yesterday = mb_strtolower($now->copy()->subDay()->englishDayOfWeek);
         $time = $now->format('H:i:s');
 
-        return $query->whereHas('storeHours', fn ($hours) => $hours
-            ->where('day_of_week', $dayOfWeek)
-            ->where('is_closed', false)
-            ->whereNotNull('open_time')
-            ->whereNotNull('close_time')
-            ->where('open_time', '<=', $time)
-            ->where('close_time', '>=', $time));
+        return $query
+            ->where('is_active', true)
+            ->where('is_temporarily_closed', false)
+            ->where(fn (Builder $q) => $q->whereNull('suspension_until')
+                ->orWhere('suspension_until', '<=', $now))
+            ->where(function (Builder $q) use ($dayOfWeek, $yesterday, $time): void {
+                $q->whereHas('storeHours', static function (Builder $hours) use ($dayOfWeek, $time): void {
+                    $hours->where('day_of_week', $dayOfWeek)
+                        ->where('is_closed', false)
+                        ->whereNotNull('open_time')->whereNotNull('close_time')
+                        ->where(static function (Builder $windows) use ($time): void {
+                            $windows->whereColumn('open_time', 'close_time')
+                                ->orWhere(static fn (Builder $same) => $same
+                                    ->whereColumn('open_time', '<', 'close_time')
+                                    ->where('open_time', '<=', $time)
+                                    ->where('close_time', '>', $time))
+                                ->orWhere(static fn (Builder $overnight) => $overnight
+                                    ->whereColumn('open_time', '>', 'close_time')
+                                    ->where('open_time', '<=', $time));
+                        });
+                })->orWhereHas('storeHours', static function (Builder $hours) use ($yesterday, $time): void {
+                    $hours->where('day_of_week', $yesterday)
+                        ->where('is_closed', false)
+                        ->whereColumn('open_time', '>', 'close_time')
+                        ->where('close_time', '>', $time);
+                });
+            });
     }
 }

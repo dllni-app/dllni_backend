@@ -22,6 +22,7 @@ use Modules\Resturants\Models\OrderStatusLog;
 use Modules\Supermarket\Enums\SmOrderStatus;
 use Modules\Supermarket\Models\SmOrder;
 use Modules\Supermarket\Models\SmOrderStatusLog;
+use Modules\Supermarket\Services\SmInventoryService;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 final class UserOrderHubService
@@ -30,6 +31,7 @@ final class UserOrderHubService
         private readonly UserRestaurantCartService $restaurantCarts,
         private readonly UserSupermarketCartService $supermarketCarts,
         private readonly MerchantOrderDeliveryService $merchantDelivery,
+        private readonly SmInventoryService $supermarketInventory,
     ) {}
 
     public function list(int $userId, string $section = 'all', ?string $status = null, ?string $search = null, ?int $restaurantId = null, int $perPage = 20, int $page = 1): array
@@ -166,15 +168,44 @@ final class UserOrderHubService
             });
         }
 
-        $order = $this->findOrderModel($userId, $section, $orderId);
-        $status = $order->status?->value ?? (string) $order->status;
-        if (in_array($status, [SmOrderStatus::Cancelled->value, SmOrderStatus::Completed->value], true)) {
-            return $this->toPayload($section, $order);
-        }
-        $order->update(['status' => SmOrderStatus::Cancelled->value, 'cancelled_at' => now(), 'cancellation_reason' => $reason]);
-        SmOrderStatusLog::query()->create(['order_id' => $order->id, 'from_status' => $status, 'to_status' => SmOrderStatus::Cancelled->value, 'notes' => $reason, 'changed_by_user_id' => $userId]);
+        SmOrder::query()->where('customer_id', $userId)->select('id')->findOrFail($orderId);
 
-        return $this->toPayload($section, $order->fresh($this->supermarketOrderEagerLoads()));
+        return DB::transaction(function () use ($userId, $section, $orderId, $reason): array {
+            $delivery = DeliveryOrder::query()
+                ->where('source_type', DeliveryOrderCreationService::SOURCE_SUPERMARKET_ORDER)
+                ->where('source_id', $orderId)
+                ->lockForUpdate()
+                ->first();
+            $order = SmOrder::query()->where('customer_id', $userId)
+                ->lockForUpdate()->findOrFail($orderId);
+            $status = $order->status?->value ?? (string) $order->status;
+            if ($status === SmOrderStatus::Cancelled->value) {
+                return $this->toPayload($section, $order);
+            }
+            if (! in_array($status, ['pending', 'accepted', 'preparing'], true)) {
+                throw new ConflictHttpException('ORDER_CANNOT_BE_CANCELLED');
+            }
+            if ($delivery !== null) {
+                $this->assertDeliveryCanBeCancelled($delivery);
+            }
+            $cancelReason = $reason ?? 'Cancelled by customer';
+            $order->update([
+                'status' => SmOrderStatus::Cancelled->value,
+                'cancelled_at' => now(),
+                'cancellation_reason' => $cancelReason,
+            ]);
+            SmOrderStatusLog::query()->create([
+                'order_id' => $order->id,
+                'from_status' => $status,
+                'to_status' => SmOrderStatus::Cancelled->value,
+                'notes' => $cancelReason,
+                'changed_by_user_id' => $userId,
+            ]);
+            $this->merchantDelivery->cancelled($order, $cancelReason, $userId);
+            $this->supermarketInventory->restoreCancelledOrderStock($order);
+
+            return $this->toPayload($section, $order->fresh($this->supermarketOrderEagerLoads()));
+        });
     }
 
     public function schedule(int $userId, string $section, int $orderId, string $scheduledAt): array
@@ -212,13 +243,30 @@ final class UserOrderHubService
 
             return ['itemsAdded' => $count];
         }
-        $count = 0;
-        foreach ($order->items as $item) {
-            $this->supermarketCarts->addItem(userId: $userId, productId: (int) $item->product_id, quantity: (int) $item->quantity);
-            $count++;
-        }
+        // Keep historical line customizations when the current catalogue still
+        // accepts them. Roll back *all* additions if an old option is gone.
+        return DB::transaction(function () use ($order, $userId): array {
+            $count = 0;
+            foreach ($order->items as $item) {
+                $modifierIds = collect($item->modifier_snapshot ?? [])
+                    ->filter(fn ($modifier): bool => is_array($modifier) && isset($modifier['id']) && is_numeric($modifier['id']))
+                    ->map(fn (array $modifier): int => (int) $modifier['id'])
+                    ->unique()
+                    ->values()
+                    ->all();
+                $this->supermarketCarts->addItem(
+                    userId: $userId,
+                    productId: (int) $item->product_id,
+                    quantity: (int) $item->quantity,
+                    modifierIds: $modifierIds,
+                    substituteProductId: $item->substitute_product_id === null ? null : (int) $item->substitute_product_id,
+                    note: $item->note,
+                );
+                $count++;
+            }
 
-        return ['itemsAdded' => $count];
+            return ['itemsAdded' => $count, 'requiresReview' => true];
+        });
     }
 
     public function slots(string $section, int $merchantId, ?string $fulfillmentType, string $date): array
@@ -233,7 +281,8 @@ final class UserOrderHubService
 
     private function assertDeliveryCanBeCancelled(DeliveryOrder $deliveryOrder): void
     {
-        $status = DeliveryOrderStatus::tryFrom((string) $deliveryOrder->status);
+        $rawStatus = $deliveryOrder->status instanceof BackedEnum ? $deliveryOrder->status->value : (string) $deliveryOrder->status;
+        $status = DeliveryOrderStatus::tryFrom($rawStatus);
         $uncancellableStatuses = [
             DeliveryOrderStatus::PickedUp,
             DeliveryOrderStatus::ReturningToMerchant,
@@ -370,7 +419,7 @@ final class UserOrderHubService
         $status = $order->status?->value ?? (string) $order->status;
         $timeline = $order->statusLogs->map(fn (SmOrderStatusLog $log): array => ['fromStatus' => $log->from_status, 'toStatus' => $log->to_status, 'note' => $log->notes, 'changedAt' => $log->created_at?->toDateTimeString()])->values()->all();
 
-        return ['id' => $order->id, 'deliveryOrderId' => $deliveryOrder?->id, 'deliverySummary' => $deliverySummary, 'section' => 'supermarket', 'orderNumber' => $order->order_number, 'status' => $status, 'statusLabel' => Str::of($status)->replace('_', ' ')->title()->toString(), 'merchant' => ['id' => $order->store?->id, 'name' => $order->store?->name], 'fulfillment' => ['type' => $deliveryOrder ? 'delivery' : 'pickup', 'receiveMode' => $order->pickup_mode?->value ?? $order->pickup_mode, 'scheduledAt' => $order->pickup_scheduled_for?->toDateTimeString()], 'amounts' => ['subtotal' => (float) ($order->subtotal ?? 0), 'discount' => (float) ($order->discount_amount ?? 0), 'serviceFee' => (float) ($order->service_fee ?? 0), 'deliveryFee' => (float) ($order->delivery_fee ?? $deliveryOrder?->delivery_fee ?? 0), 'tax' => 0.0, 'total' => (float) ($order->total_amount ?? 0)], 'items' => $order->items->map(fn ($item): array => ['id' => $item->id, 'productId' => $item->product_id, 'name' => $item->product_name ?? $item->product?->name, 'quantity' => $item->quantity, 'unitPrice' => (float) ($item->unit_price ?? 0), 'totalPrice' => (float) ($item->total_price ?? 0), 'note' => null])->values()->all(), 'timeline' => $timeline, 'actions' => $this->actionsFor($status), 'createdAt' => $order->created_at?->toISOString(), 'updatedAt' => $order->updated_at?->toISOString()];
+        return ['id' => $order->id, 'deliveryOrderId' => $deliveryOrder?->id, 'deliverySummary' => $deliverySummary, 'section' => 'supermarket', 'orderNumber' => $order->order_number, 'status' => $status, 'statusLabel' => Str::of($status)->replace('_', ' ')->title()->toString(), 'merchant' => ['id' => $order->store?->id, 'name' => $order->store?->name], 'fulfillment' => ['type' => $deliveryOrder ? 'delivery' : 'pickup', 'receiveMode' => $order->pickup_mode?->value ?? $order->pickup_mode, 'scheduledAt' => $order->pickup_scheduled_for?->toDateTimeString(), 'estimatedReadyAt' => $order->estimated_ready_at?->toIso8601String(), 'estimatedPreparationMinutes' => $order->estimated_preparation_minutes], 'amounts' => ['subtotal' => (float) ($order->subtotal ?? 0), 'discount' => (float) ($order->discount_amount ?? 0), 'serviceFee' => (float) ($order->service_fee ?? 0), 'deliveryFee' => (float) ($order->delivery_fee ?? $deliveryOrder?->delivery_fee ?? 0), 'tax' => 0.0, 'total' => (float) ($order->total_amount ?? 0)], 'items' => $order->items->map(fn ($item): array => ['id' => $item->id, 'productId' => $item->product_id, 'name' => $item->product_name ?? $item->product?->name, 'quantity' => $item->quantity, 'unitPrice' => (float) ($item->unit_price ?? 0), 'totalPrice' => (float) ($item->total_price ?? 0), 'note' => $item->note, 'modifierSnapshot' => $item->modifier_snapshot ?? [], 'substituteProductId' => $item->substitute_product_id, 'substituteProduct' => $item->substituteProduct === null ? null : ['id' => $item->substituteProduct->id, 'name' => $item->substituteProduct->name]])->values()->all(), 'timeline' => $timeline, 'actions' => $this->actionsFor($status), 'createdAt' => $order->created_at?->toISOString(), 'updatedAt' => $order->updated_at?->toISOString()];
     }
 
     private function restaurantOrderEagerLoads(): array
@@ -380,7 +429,7 @@ final class UserOrderHubService
 
     private function supermarketOrderEagerLoads(): array
     {
-        return ['store', 'items.product', 'statusLogs', 'deliveryOrder.driver.user', 'deliveryOrder.driver.latestLocation', 'deliveryOrder.events'];
+        return ['store', 'items.product', 'items.substituteProduct', 'statusLogs', 'deliveryOrder.driver.user', 'deliveryOrder.driver.latestLocation', 'deliveryOrder.events'];
     }
 
     private function deliveryOrderFor(Order|SmOrder $order): ?DeliveryOrder
@@ -402,7 +451,27 @@ final class UserOrderHubService
 
     private function estimateEtaMinutes(string $section, array $payload): ?int
     {
-        return ($payload['status'] ?? null) === 'completed' ? 0 : ($section === 'restaurant' ? 25 : 35);
+        $status = $payload['status'] ?? null;
+        if ($status === 'completed' || $status === 'ready_for_pickup') {
+            return 0;
+        }
+        if (in_array($status, ['cancelled', 'rejected', 'returned', 'failed'], true)) {
+            return null;
+        }
+        if ($section === 'supermarket') {
+            // Do not advertise a fabricated 35-minute pickup preparation ETA.
+            $readyAt = $payload['fulfillment']['estimatedReadyAt'] ?? null;
+            if (! is_string($readyAt) || trim($readyAt) === '') {
+                return null;
+            }
+            try {
+                return max(0, (int) ceil(now()->diffInMinutes(\Carbon\CarbonImmutable::parse($readyAt), false)));
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+
+        return 25;
     }
 
     private function estimateEtaText(string $section, array $payload): ?string

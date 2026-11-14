@@ -55,6 +55,7 @@ final class UserSupermarketHomeStoreResource extends JsonResource
             'estimatedDeliveryMinutesMax' => $maxMinutes,
             'discountOfferBadge' => $store->getAttribute('discountOfferBadge'),
             'isMostRequested' => $popularCount >= HomepageService::mostRequestedMinOrders(),
+            'isTemporarilyClosed' => (bool) $store->is_temporarily_closed,
             'popularOrdersCount' => $popularCount,
             'isFavorited' => (bool) ($store->getAttribute('isFavoritedByUser') ?? false),
             'deliveryFee' => null,

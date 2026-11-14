@@ -77,6 +77,9 @@ final class SmStore extends Model
             ->ofMany(['discount_value' => 'max', 'id' => 'max'], static function ($query): void {
                 $query->where('is_active', true)
                     ->where(static function ($q): void {
+                        $q->whereNull('starts_at')->orWhere('starts_at', '<=', now());
+                    })
+                    ->where(static function ($q): void {
                         $q->whereNull('ends_at')
                             ->orWhere('ends_at', '>=', now());
                     });
@@ -131,6 +134,47 @@ final class SmStore extends Model
     public function userFavorites(): MorphMany
     {
         return $this->morphMany(Favorite::class, 'favorable');
+    }
+
+    /**
+     * Authoritative opening status based on application timezone, including
+     * yesterday's overnight shifts. Null means hours were not loaded/known.
+     */
+    public function currentlyOpen(?\DateTimeInterface $at = null): ?bool
+    {
+        if (! $this->is_active || $this->is_temporarily_closed ||
+            ($this->suspension_until !== null && $this->suspension_until->isFuture())) {
+            return false;
+        }
+        if (! $this->relationLoaded('storeHours')) {
+            return null;
+        }
+        if ($this->storeHours->isEmpty()) {
+            return null;
+        }
+        $now = $at === null ? now() : \Carbon\CarbonImmutable::instance($at);
+        $currentDay = mb_strtolower($now->englishDayOfWeek);
+        $previousDay = mb_strtolower($now->copy()->subDay()->englishDayOfWeek);
+        $time = $now->format('H:i:s');
+        foreach ($this->storeHours as $hour) {
+            if ($hour->is_closed || ! $hour->open_time || ! $hour->close_time) {
+                continue;
+            }
+            $start = \Carbon\CarbonImmutable::parse((string) $hour->open_time)->format('H:i:s');
+            $end = \Carbon\CarbonImmutable::parse((string) $hour->close_time)->format('H:i:s');
+            $dayValue = $hour->day_of_week;
+            $day = mb_strtolower($dayValue instanceof \BackedEnum ? $dayValue->value : (string) $dayValue);
+            if ($day === $currentDay && ($start === $end ||
+                ($start < $end && $time >= $start && $time < $end) ||
+                ($start > $end && $time >= $start))) {
+                return true;
+            }
+            if ($day === $previousDay && $start > $end && $time < $end) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     protected static function newFactory(): SmStoreFactory

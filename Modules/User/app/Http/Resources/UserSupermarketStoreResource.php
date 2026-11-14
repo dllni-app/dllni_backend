@@ -46,6 +46,8 @@ final class UserSupermarketStoreResource extends JsonResource
             'averageRating' => $this->average_rating,
             'totalReviews' => $this->total_reviews,
             'isActive' => $this->is_active,
+            'isTemporarilyClosed' => (bool) $this->is_temporarily_closed,
+            'isOpenNow' => $this->currentlyOpen(),
             'isFeatured' => $this->is_featured,
             'isFavorited' => (bool) ($attributes['isFavoritedByUser'] ?? false),
             'cart' => $attributes['cartPayload'] ?? null,

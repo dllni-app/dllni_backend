@@ -35,7 +35,12 @@ final class HomepageService
 
         $supermarketOffers = SmOffer::query()
             ->where('is_active', true)
+            ->where(fn ($query) => $query->whereNull('starts_at')->orWhere('starts_at', '<=', $now))
             ->where(fn ($query) => $query->whereNull('ends_at')->orWhere('ends_at', '>=', $now))
+            ->whereHas('store', fn ($q) => $q
+                ->where('is_active', true)
+                ->where('is_temporarily_closed', false)
+                ->where(fn ($active) => $active->whereNull('suspension_until')->orWhere('suspension_until', '<=', $now)))
             ->latest('starts_at')
             ->with('store')
             ->limit($limit)

@@ -152,7 +152,11 @@ final class SmOrderService
                 );
             }
 
-            $this->inventoryService->deductStockForOrder($order);
+            // Customer checkout already reserved stock in its placement transaction.
+            // Manual/legacy owner-created orders still deduct on acceptance.
+            if (! $this->inventoryService->isReservedByCustomerCheckout($order)) {
+                $this->inventoryService->deductStockForOrder($order);
+            }
 
             $acceptedAt = now();
             $order->update([
@@ -279,6 +283,7 @@ final class SmOrderService
                 ])->save();
 
                 $this->logStatus($lockedOrder, $from, SmOrderStatus::Cancelled, $reason, $actorUserId);
+                $this->inventoryService->restoreCancelledOrderStock($lockedOrder);
             }
 
             // A failed delivery cancellation must roll back the source status
@@ -397,6 +402,7 @@ final class SmOrderService
                 $data->reason,
                 $actorUserId,
             );
+            $this->inventoryService->restoreCancelledOrderStock($lockedOrder);
 
             $trustPenalty = $this->calculateTrustPenalty(RejectionType::from($data->rejectionType));
 

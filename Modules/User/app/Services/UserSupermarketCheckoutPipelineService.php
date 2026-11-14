@@ -21,6 +21,7 @@ use Modules\Supermarket\Models\SmOrderStatusLog;
 use Modules\Supermarket\Models\SmModifier;
 use Modules\Supermarket\Models\SmProduct;
 use Modules\Supermarket\Models\SmStore;
+use Modules\Supermarket\Services\SmInventoryService;
 use Modules\Supermarket\Services\SmOrderNotificationService;
 use Modules\User\Models\UserAddress;
 
@@ -28,6 +29,7 @@ final class UserSupermarketCheckoutPipelineService
 {
     public function __construct(
         private readonly SmOrderNotificationService $notifications,
+        private readonly SmInventoryService $inventory,
         private readonly DeliveryOrderCreationService $deliveryOrders,
         private readonly DeliveryPricingService $deliveryPricing,
         private readonly PlatformCouponRedemptionService $platformCoupons,
@@ -185,9 +187,8 @@ final class UserSupermarketCheckoutPipelineService
                     'note' => $item->note,
                 ]);
 
-                if ($item->product?->stock_quantity !== null) {
-                    $item->product->decrement('stock_quantity', (int) $item->quantity);
-                }
+                // Stock is reserved once during placement, never again at acceptance.
+                $this->inventory->reserveStockForCustomerOrder($order, (int) $item->product_id, (int) $item->quantity);
             }
 
             if ($platformQuote) {
@@ -441,7 +442,7 @@ final class UserSupermarketCheckoutPipelineService
                 'modifierGroupId' => (int) $modifier->modifier_group_id,
                 'groupName' => $modifier->modifierGroup?->name,
                 'name' => $modifier->name,
-                'price' => (int) $modifier->price,
+                'price' => (float) $modifier->price,
             ])
             ->values()
             ->all();
