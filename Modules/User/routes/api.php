@@ -40,6 +40,7 @@ use Modules\User\Http\Controllers\API\SmOrderStatusController;
 use Modules\User\Http\Controllers\API\SmProductShowController;
 use Modules\User\Http\Controllers\API\SmProductSimilarSearchController;
 use Modules\User\Http\Controllers\API\SmProductsSearchController;
+use Modules\User\Http\Controllers\API\UserSupermarketOfferShowController;
 use Modules\User\Http\Controllers\API\SmStoreShowController;
 use Modules\User\Http\Controllers\API\SmStoresIndexController;
 use Modules\User\Http\Controllers\API\UserAccountDestroyController;
@@ -162,6 +163,8 @@ Route::prefix('v1/user')->group(function (): void {
 
     Route::get('supermarket/stores', SmStoresIndexController::class);
     Route::get('supermarket/products/search', SmProductsSearchController::class);
+    Route::get('supermarket/offers/{offer}', UserSupermarketOfferShowController::class)
+        ->whereNumber('offer');
     Route::get('supermarket/stores/{store}', SmStoreShowController::class)
         ->middleware(RedirectBrowserDeepLinkApiRequests::class);
     Route::get('supermarket/products/{product}/similar', SmProductSimilarSearchController::class);
