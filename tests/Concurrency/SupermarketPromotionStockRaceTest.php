@@ -13,22 +13,14 @@ use Modules\Supermarket\Models\SmCart;
 use Modules\Supermarket\Models\SmOffer;
 use Modules\Supermarket\Models\SmProduct;
 use Modules\Supermarket\Models\SmStore;
-use Modules\User\Services\UserSupermarketCheckoutPipelineService;
-use RuntimeException;
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
-use Throwable;
 
 /** Runs separately against a disposable MySQL database; no enclosing test transaction. */
 final class SupermarketPromotionStockRaceTest extends TestCase
 {
     public function test_two_checkouts_cannot_both_reserve_the_last_reward_group(): void
     {
-        if (! function_exists('pcntl_fork')) {
-            if (getenv('CI')) {
-                $this->fail('The MySQL concurrency gate requires the pcntl extension.');
-            }
-            $this->markTestSkipped('This process race runs on Linux CI with pcntl.');
-        }
         self::assertSame('testing', app()->environment());
         self::assertSame('mysql', config('database.default'));
         self::assertContains(config('database.connections.mysql.host'), ['127.0.0.1', 'localhost']);
@@ -52,50 +44,35 @@ final class SupermarketPromotionStockRaceTest extends TestCase
             Sanctum::actingAs($customer);
             $quote = $this->postJson('/api/v1/user/commerce/checkout/quotes', ['section' => 'supermarket', 'cartId' => $cart->id,
                 'fulfillmentType' => 'pickup', 'receiveMode' => 'immediate'])->assertCreated()->json('data.quoteId');
-            $attempts[] = ['customer' => $customer, 'cart' => $cart->id, 'quote' => $quote, 'result' => tempnam(sys_get_temp_dir(), 'sm-race-result-')];
+            $resultFile = tempnam(sys_get_temp_dir(), 'sm-race-result-');
+            $attempts[] = ['customer' => $customer->id, 'cart' => $cart->id, 'quote' => $quote, 'result' => $resultFile, 'ready' => $resultFile.'.ready'];
         }
         $gate = tempnam(sys_get_temp_dir(), 'sm-race-gate-');
         unlink($gate);
-        // Never share an open PDO socket between forked processes.
+        $database = config('database.connections.mysql');
+        // Each worker boots Laravel and opens its own PDO connection on every platform.
         DB::disconnect();
         $children = [];
         try {
             foreach ($attempts as $index => $attempt) {
-                $pid = pcntl_fork();
-                self::assertNotSame(-1, $pid);
-                if ($pid === 0) {
-                    DB::purge();
-                    Sanctum::actingAs($attempt['customer']);
-                    $deadline = microtime(true) + 10;
-                    while (! is_file($gate) && microtime(true) < $deadline) {
-                        usleep(1000);
-                        clearstatcache(true, $gate);
-                    }
-                    try {
-                        if (! is_file($gate)) {
-                            throw new RuntimeException('Race gate timed out');
-                        }
-                        $order = app(UserSupermarketCheckoutPipelineService::class)->place(
-                            userId: $attempt['customer']->id, cartId: $attempt['cart'], fulfillmentType: 'pickup', receiveMode: 'immediate',
-                            scheduledAt: null, couponCode: null, note: null, idempotencyKey: 'promotion-race-'.$index, quoteId: $attempt['quote'],
-                        );
-                        $result = ['status' => 201, 'id' => $order->id];
-                    } catch (\Illuminate\Validation\ValidationException $exception) {
-                        $result = ['status' => 422];
-                    } catch (\Symfony\Component\HttpKernel\Exception\ConflictHttpException $exception) {
-                        $result = ['status' => 409];
-                    } catch (Throwable $exception) {
-                        $result = ['status' => 500, 'error' => $exception::class.': '.$exception->getMessage()];
-                    }
-                    file_put_contents($attempt['result'], json_encode($result, JSON_THROW_ON_ERROR));
-                    exit(0);
-                }
-                $children[] = $pid;
+                $process = new Process([PHP_BINARY, __DIR__.'/promotion_checkout_worker.php'], base_path(), ['APP_ENV' => 'testing']);
+                $process->setTimeout(60);
+                $process->setInput(json_encode([...$attempt, 'gate' => $gate, 'database' => $database, 'index' => $index], JSON_THROW_ON_ERROR));
+                $process->start();
+                $children[] = $process;
             }
+            $deadline = microtime(true) + 20;
+            do {
+                clearstatcache();
+                $ready = count(array_filter($attempts, fn ($attempt) => is_file($attempt['ready']))) === count($attempts);
+                if (! $ready) {
+                    usleep(1000);
+                }
+            } while (! $ready && microtime(true) < $deadline);
+            self::assertTrue($ready, implode("\n", array_map(fn ($process) => $process->getOutput().$process->getErrorOutput(), $children)));
             touch($gate);
-            foreach ($children as $pid) {
-                pcntl_waitpid($pid, $status);
-                self::assertSame(0, pcntl_wexitstatus($status));
+            foreach ($children as $process) {
+                self::assertSame(0, $process->wait(), $process->getOutput().$process->getErrorOutput());
             }
             DB::purge();
             $results = array_map(fn ($attempt) => json_decode(file_get_contents($attempt['result']), true, flags: JSON_THROW_ON_ERROR), $attempts);
@@ -107,7 +84,10 @@ final class SupermarketPromotionStockRaceTest extends TestCase
             self::assertSame(3, (int) DB::table('sm_order_items')->sum('quantity'));
             self::assertEquals(200, DB::table('sm_orders')->value('subtotal'));
         } finally {
-            foreach ([$gate, ...array_column($attempts, 'result')] as $file) {
+            foreach ($children as $process) {
+                $process->stop();
+            }
+            foreach ([$gate, ...array_column($attempts, 'result'), ...array_column($attempts, 'ready')] as $file) {
                 if (is_file($file)) {
                     unlink($file);
                 }

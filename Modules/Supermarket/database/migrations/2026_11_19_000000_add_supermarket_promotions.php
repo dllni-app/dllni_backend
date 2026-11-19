@@ -58,8 +58,8 @@ return new class extends Migration
             $table->timestamp('applied_at');
             $table->timestamp('reversed_at')->nullable();
             $table->string('reversal_reason')->nullable();
-            $table->unique(['order_id', 'original_offer_id']);
-            $table->index(['store_id', 'status', 'applied_at']);
+            $table->unique(['order_id', 'original_offer_id'], 'sm_promotion_order_offer_unique');
+            $table->index(['store_id', 'status', 'applied_at'], 'sm_promotion_store_lookup');
             $table->index(['original_offer_id', 'status', 'applied_at'], 'sm_promotion_offer_lookup');
         });
     }
