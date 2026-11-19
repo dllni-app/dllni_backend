@@ -17,7 +17,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Modules\Delivery\Models\DeliveryOrder;
-use Modules\Supermarket\Enums\SmInventoryLogType;
 use Modules\Supermarket\Enums\SmOrderStatus;
 use Modules\Supermarket\Enums\SmPickupMode;
 use Modules\Supermarket\Observers\SmOrderObserver;
@@ -32,6 +31,7 @@ final class SmOrder extends Model
     protected $table = 'sm_orders';
 
     protected $fillable = [
+        'original_items_subtotal', 'promotion_discount_amount', 'promotion_snapshot',
         'customer_id',
         'store_id',
         'coupon_id',
@@ -139,6 +139,7 @@ final class SmOrder extends Model
     protected function casts(): array
     {
         return [
+            'original_items_subtotal' => 'decimal:2', 'promotion_discount_amount' => 'decimal:2', 'promotion_snapshot' => 'array',
             'status' => SmOrderStatus::class,
             'pickup_mode' => SmPickupMode::class,
             'pickup_scheduled_for' => 'datetime',

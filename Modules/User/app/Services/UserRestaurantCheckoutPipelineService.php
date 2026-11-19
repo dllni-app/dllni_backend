@@ -6,6 +6,7 @@ namespace Modules\User\Services;
 
 use App\Models\PlatformCoupon;
 use App\Services\Coupons\PlatformCouponRedemptionService;
+use App\Services\Promotions\AbstractPromotionPricingResult as PromotionPricingResult;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Modules\Delivery\Services\DeliveryOrderCreationService;
@@ -17,9 +18,8 @@ use Modules\Resturants\Models\Cart;
 use Modules\Resturants\Models\Order;
 use Modules\Resturants\Models\OrderStatusLog;
 use Modules\Resturants\Models\PromoCode;
-use Modules\Resturants\Services\RestaurantOrderNotificationService;
-use Modules\Resturants\Services\Promotions\PromotionPricingResult;
 use Modules\Resturants\Services\Promotions\RestaurantCartPricingService;
+use Modules\Resturants\Services\RestaurantOrderNotificationService;
 use Modules\User\Models\UserAddress;
 
 final class UserRestaurantCheckoutPipelineService
@@ -213,25 +213,42 @@ final class UserRestaurantCheckoutPipelineService
             return $platformQuote['discount'];
         }
 
-        if (! is_string($couponCode) || trim($couponCode) === '') return 0.0;
-        $coupon = PromoCode::query()->where('restaurant_id', $restaurantId)->whereRaw('UPPER(code) = ?', [mb_strtoupper(trim($couponCode))])->first();
-        if (! $coupon || ! $coupon->is_active) return 0.0;
-        if ($coupon->starts_at && now()->lt($coupon->starts_at)) return 0.0;
-        if ($coupon->ends_at && now()->gt($coupon->ends_at)) return 0.0;
-        if ($coupon->min_order_amount !== null && $subtotal < (float) $coupon->min_order_amount) return 0.0;
-        if ($coupon->usage_limit !== null && (int) $coupon->usage_count >= (int) $coupon->usage_limit) return 0.0;
-        if ($coupon->discount_type?->value === 'percentage') return round($subtotal * ((float) $coupon->discount_value / 100), 2);
+        if (! is_string($couponCode) || mb_trim($couponCode) === '') {
+            return 0.0;
+        }
+        $coupon = PromoCode::query()->where('restaurant_id', $restaurantId)->whereRaw('UPPER(code) = ?', [mb_strtoupper(mb_trim($couponCode))])->first();
+        if (! $coupon || ! $coupon->is_active) {
+            return 0.0;
+        }
+        if ($coupon->starts_at && now()->lt($coupon->starts_at)) {
+            return 0.0;
+        }
+        if ($coupon->ends_at && now()->gt($coupon->ends_at)) {
+            return 0.0;
+        }
+        if ($coupon->min_order_amount !== null && $subtotal < (float) $coupon->min_order_amount) {
+            return 0.0;
+        }
+        if ($coupon->usage_limit !== null && (int) $coupon->usage_count >= (int) $coupon->usage_limit) {
+            return 0.0;
+        }
+        if ($coupon->discount_type?->value === 'percentage') {
+            return round($subtotal * ((float) $coupon->discount_value / 100), 2);
+        }
 
         return round(min((float) $coupon->discount_value, $subtotal), 2);
     }
 
     private function resolveUserAddress(int $userId, ?int $addressId): ?UserAddress
     {
-        if ($addressId === null) return null;
+        if ($addressId === null) {
+            return null;
+        }
         $address = UserAddress::query()->whereKey($addressId)->where('user_id', $userId)->first();
         if (! $address) {
             throw ValidationException::withMessages(['addressId' => ['The selected address does not belong to the authenticated user.']]);
         }
+
         return $address;
     }
 

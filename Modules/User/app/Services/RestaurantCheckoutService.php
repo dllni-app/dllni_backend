@@ -6,10 +6,12 @@ namespace Modules\User\Services;
 
 use App\Models\PlatformCoupon;
 use App\Services\Coupons\PlatformCouponRedemptionService;
+use App\Services\Promotions\AbstractPromotionPricingResult as PromotionPricingResult;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Modules\Delivery\Services\DeliveryPricingService;
 use Modules\Resturants\Enums\DiscountType;
 use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Enums\OrderType;
@@ -18,11 +20,9 @@ use Modules\Resturants\Models\Cart;
 use Modules\Resturants\Models\Order;
 use Modules\Resturants\Models\OrderItem;
 use Modules\Resturants\Models\PromoCode;
-use Modules\Resturants\Services\Promotions\PromotionPricingResult;
 use Modules\Resturants\Services\Promotions\RestaurantCartPricingService;
-use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
-use Modules\Delivery\Services\DeliveryPricingService;
 use Modules\User\Models\UserAddress;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 final class RestaurantCheckoutService
 {
@@ -211,12 +211,12 @@ final class RestaurantCheckoutService
     /** @return array{float, int|null} */
     private function resolveLegacyDiscount(int $restaurantId, ?string $promoCode, float $subtotal): array
     {
-        if (! is_string($promoCode) || trim($promoCode) === '') {
+        if (! is_string($promoCode) || mb_trim($promoCode) === '') {
             return [0.0, null];
         }
 
         $promo = PromoCode::query()
-            ->whereRaw('UPPER(code) = ?', [mb_strtoupper(trim($promoCode))])
+            ->whereRaw('UPPER(code) = ?', [mb_strtoupper(mb_trim($promoCode))])
             ->where('restaurant_id', $restaurantId)
             ->first();
 
@@ -229,11 +229,21 @@ final class RestaurantCheckoutService
 
     private function promoIsValid(PromoCode $promo, float $subtotal): bool
     {
-        if (! $promo->is_active) return false;
-        if ($promo->starts_at && now()->lessThan($promo->starts_at)) return false;
-        if ($promo->ends_at && now()->greaterThan($promo->ends_at)) return false;
-        if ($promo->min_order_amount !== null && $subtotal < (float) $promo->min_order_amount) return false;
-        if ($promo->usage_limit !== null && (int) $promo->usage_count >= (int) $promo->usage_limit) return false;
+        if (! $promo->is_active) {
+            return false;
+        }
+        if ($promo->starts_at && now()->lessThan($promo->starts_at)) {
+            return false;
+        }
+        if ($promo->ends_at && now()->greaterThan($promo->ends_at)) {
+            return false;
+        }
+        if ($promo->min_order_amount !== null && $subtotal < (float) $promo->min_order_amount) {
+            return false;
+        }
+        if ($promo->usage_limit !== null && (int) $promo->usage_count >= (int) $promo->usage_limit) {
+            return false;
+        }
 
         return true;
     }

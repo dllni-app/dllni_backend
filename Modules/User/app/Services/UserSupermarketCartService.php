@@ -9,8 +9,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Modules\Supermarket\Models\SmCart;
 use Modules\Supermarket\Models\SmCartItem;
-use Modules\Supermarket\Models\SmProduct;
 use Modules\Supermarket\Models\SmModifier;
+use Modules\Supermarket\Models\SmProduct;
 use Modules\Supermarket\Models\SmStore;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
@@ -108,8 +108,9 @@ final class UserSupermarketCartService
         ?int $substituteProductId = null,
         ?string $note = null,
         ?int $expectedRevision = null,
+        ?int $rewardOfferId = null,
     ): array {
-        return DB::transaction(function () use ($userId, $productId, $quantity, $modifierIds, $substituteProductId, $note, $expectedRevision): array {
+        return DB::transaction(function () use ($userId, $productId, $quantity, $modifierIds, $substituteProductId, $note, $expectedRevision, $rewardOfferId): array {
             $product = SmProduct::query()->with(['modifierGroups.modifiers'])->findOrFail($productId);
 
             if (! $product->store_id) {
@@ -126,7 +127,7 @@ final class UserSupermarketCartService
 
             $normalizedModifierIds = array_values(array_unique(array_map('intval', $modifierIds)));
             sort($normalizedModifierIds);
-            $normalizedNote = is_string($note) && trim($note) !== '' ? trim($note) : null;
+            $normalizedNote = is_string($note) && mb_trim($note) !== '' ? mb_trim($note) : null;
             $modifierTotal = $this->validateAndPriceModifiers($product, $normalizedModifierIds);
             $this->validateSubstituteProduct($product, $substituteProductId);
 
@@ -147,15 +148,18 @@ final class UserSupermarketCartService
                 ]);
             }
 
-            $item = $productItems->first(function (SmCartItem $candidate) use ($normalizedModifierIds, $substituteProductId, $normalizedNote): bool {
+            $item = $productItems->first(function (SmCartItem $candidate) use ($normalizedModifierIds, $substituteProductId, $normalizedNote, $rewardOfferId): bool {
                 $candidateModifierIds = array_values(array_map('intval', $candidate->modifier_ids ?? []));
                 sort($candidateModifierIds);
 
-                return $candidateModifierIds === $normalizedModifierIds
+                return $candidate->reward_offer_id === $rewardOfferId && $candidateModifierIds === $normalizedModifierIds
                     && (int) ($candidate->substitute_product_id ?? 0) === (int) ($substituteProductId ?? 0)
                     && ($candidate->note ?: null) === $normalizedNote;
             });
 
+            if ($quantity < 1 || $quantity + (int) ($item?->quantity ?? 0) > 200) {
+                throw ValidationException::withMessages(['quantity' => 'الحد الأقصى للسطر 200 وحدة.']);
+            }
             if ($item) {
                 $item->update([
                     'quantity' => (int) $item->quantity + $quantity,
@@ -167,6 +171,7 @@ final class UserSupermarketCartService
             } else {
                 $item = SmCartItem::create([
                     'cart_id' => $cart->id,
+                    'reward_offer_id' => $rewardOfferId,
                     'product_id' => $product->id,
                     'quantity' => $quantity,
                     'unit_price' => $unitPrice,
@@ -207,6 +212,9 @@ final class UserSupermarketCartService
                 ->keyBy('id');
 
             foreach ($mergedQuantities as $productId => $quantity) {
+                if ($quantity > 200) {
+                    throw ValidationException::withMessages(['quantity' => 'الحد الأقصى للسطر 200 وحدة.']);
+                }
                 $product = $products->get($productId);
                 if (! $product || (int) $product->store_id !== $storeId) {
                     throw ValidationException::withMessages([
@@ -224,14 +232,22 @@ final class UserSupermarketCartService
 
             foreach ($mergedQuantities as $productId => $quantity) {
                 $product = $products->get($productId);
+                $currentQuantity = (int) $cart->items()->where('product_id', $productId)->sum('quantity');
+                if ($product->stock_quantity !== null && $currentQuantity + $quantity > (int) $product->stock_quantity) {
+                    throw ValidationException::withMessages(['quantity' => 'الكمية المطلوبة تتجاوز المخزون المتاح.']);
+                }
                 $unitPrice = (float) ($product->discounted_price ?? $product->price ?? 0);
 
                 $item = SmCartItem::query()
                     ->where('cart_id', $cart->id)
                     ->where('product_id', $productId)
+                    ->whereNull('reward_offer_id')
                     ->lockForUpdate()
                     ->first();
 
+                if ((int) ($item?->quantity ?? 0) + $quantity > 200) {
+                    throw ValidationException::withMessages(['quantity' => 'الحد الأقصى للسطر 200 وحدة.']);
+                }
                 if ($item) {
                     $item->update([
                         'quantity' => (int) $item->quantity + $quantity,
@@ -254,9 +270,9 @@ final class UserSupermarketCartService
     /**
      * @return array<string, mixed>
      */
-    public function updateItem(int $userId, int $cartId, int $itemId, int $quantity, ?int $expectedRevision = null): array
+    public function updateItem(int $userId, int $cartId, int $itemId, int $quantity, ?int $expectedRevision = null, bool $convertRewardToOrdinary = false): array
     {
-        return DB::transaction(function () use ($userId, $cartId, $itemId, $quantity, $expectedRevision): array {
+        return DB::transaction(function () use ($userId, $cartId, $itemId, $quantity, $expectedRevision, $convertRewardToOrdinary): array {
             $lockedCart = SmCart::query()->whereKey($cartId)->where('user_id', $userId)->lockForUpdate()->firstOrFail();
             $this->assertExpectedRevision($lockedCart, $expectedRevision);
             $item = SmCartItem::query()
@@ -267,6 +283,12 @@ final class UserSupermarketCartService
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            if ($quantity < 1 || $quantity > 200) {
+                throw ValidationException::withMessages(['quantity' => 'الحد الأقصى للسطر 200 وحدة.']);
+            }
+            if ($convertRewardToOrdinary) {
+                $item->reward_offer_id = null;
+            }
             $product = $item->product;
             if (! $product || ! $product->is_available) {
                 throw ValidationException::withMessages([
@@ -332,6 +354,88 @@ final class UserSupermarketCartService
         });
     }
 
+    public function addOffer(int $userId, int $offerId, array $data): array
+    {
+        return DB::transaction(function () use ($userId, $offerId, $data): array {
+            $identity = \Modules\Supermarket\Models\SmOffer::findOrFail($offerId);
+            $lockedCart = $this->resolveStoreCart($userId, (int) $identity->store_id);
+            $lockedCart = SmCart::whereKey($lockedCart->id)->lockForUpdate()->firstOrFail();
+            $previousPricing = app(\Modules\Supermarket\Services\Promotions\SupermarketCartPricingService::class)->price($lockedCart, true);
+            $previous = (int) (collect($previousPricing->promotionsPayload())->firstWhere('offerId', $offerId)['applications'] ?? 0);
+            $offer = \Modules\Supermarket\Models\SmOffer::query()->with('offerProducts')->lockForUpdate()->findOrFail($offerId);
+            abort_unless(SmStore::query()->whereKey($offer->store_id)->where('is_active', true)->where('is_temporarily_closed', false)
+                ->where(fn ($q) => $q->whereNull('suspension_until')->orWhere('suspension_until', '<=', now()))->exists(), 404);
+            if (! \Modules\Supermarket\Support\SupermarketPromotionCapability::supported() || ! $offer->is_active || ($offer->starts_at && $offer->starts_at->isFuture()) || ($offer->ends_at && $offer->ends_at->lte(now()))) {
+                abort(404);
+            }
+            if ((int) $offer->rule_version !== (int) $data['ruleVersion']) {
+                throw new ConflictHttpException('PROMOTION_RULE_CHANGED');
+            }
+            if (! SmProduct::whereKey($data['productId'])->where('store_id', $offer->store_id)->exists()) {
+                abort(404);
+            }
+            if (! $offer->offerProducts->contains('product_id', (int) $data['productId'])) {
+                throw ValidationException::withMessages(['productId' => 'المنتج غير مشمول بالعرض.']);
+            }
+            $advanced = $offer->promotion_type === 'buy_x_get_y';
+            $specific = $advanced && $offer->reward_type === 'specific_products';
+            $required = $advanced ? (int) $offer->buy_quantity + ($specific ? 0 : (int) $offer->reward_quantity) : (int) $data['quantity'];
+            if ($required !== (int) $data['quantity']) {
+                throw ValidationException::withMessages(['quantity' => 'PROMOTION_REQUIREMENTS_NOT_MET']);
+            }
+            $payload = $this->addItem($userId, (int) $data['productId'], $required, $data['modifierIds'] ?? [], note: $data['note'] ?? null);
+            if ($specific) {
+                $rewardId = (int) ($data['rewardProductId'] ?? 0);
+                $cart = SmCart::findOrFail($payload['id']);
+                $rewardModifiers = array_values(array_unique(array_map('intval', $data['rewardModifierIds'] ?? [])));
+                sort($rewardModifiers);
+                $rewardNote = mb_trim((string) ($data['rewardNote'] ?? '')) ?: null;
+                $existing = $cart->items()->where('product_id', $rewardId)->where('reward_offer_id', $offerId)->get()->first(fn ($i) => ($i->modifier_ids ?? []) === $rewardModifiers && ($i->note ?: null) === $rewardNote);
+                $payload = $this->claimReward($userId, (int) $cart->id, $offerId, ['productId' => $rewardId,
+                    'quantity' => (int) ($existing?->quantity ?? 0) + (int) $offer->reward_quantity,
+                    'expectedRevision' => $payload['revision'], 'modifierIds' => $data['rewardModifierIds'] ?? [], 'note' => $data['rewardNote'] ?? null]);
+            }
+            if ($advanced && (int) (collect($payload['appliedPromotions'] ?? [])->firstWhere('offerId', $offerId)['applications'] ?? 0) <= $previous) {
+                throw ValidationException::withMessages(['promotion' => 'PROMOTION_REQUIREMENTS_NOT_MET']);
+            }
+
+            return $payload;
+        });
+    }
+
+    public function claimReward(int $userId, int $cartId, int $offerId, array $data): array
+    {
+        return DB::transaction(function () use ($userId, $cartId, $offerId, $data): array {
+            $cart = SmCart::query()->whereKey($cartId)->where('user_id', $userId)->lockForUpdate()->firstOrFail();
+            $offer = \Modules\Supermarket\Models\SmOffer::query()->whereKey($offerId)->where('store_id', $cart->store_id)->where('promotion_type', 'buy_x_get_y')->where('reward_type', 'specific_products')->lockForUpdate()->firstOrFail();
+            if (! \Modules\Supermarket\Support\SupermarketPromotionCapability::supported() || ! $offer->rewardProducts()->where('sm_products.id', $data['productId'])->exists()) {
+                throw ValidationException::withMessages(['productId' => 'مكافأة غير صالحة.']);
+            }
+            $ids = array_values(array_unique(array_map('intval', $data['modifierIds'] ?? [])));
+            sort($ids);
+            $note = mb_trim((string) ($data['note'] ?? '')) ?: null;
+            $item = $cart->items()->where('reward_offer_id', $offerId)->where('product_id', $data['productId'])->get()->first(fn ($i) => ($i->modifier_ids ?? []) === $ids && ($i->note ?: null) === $note);
+            $quantity = (int) $data['quantity'];
+            if ($quantity < 1 || $quantity > 200) {
+                throw ValidationException::withMessages(['quantity' => 'الحد الأقصى 200 وحدة.']);
+            }
+            if (! $item || (int) $item->quantity !== $quantity) {
+                $this->assertExpectedRevision($cart, (int) $data['expectedRevision']);
+                if ($item && $quantity < (int) $item->quantity) {
+                    $item->update(['quantity' => $quantity]);
+                } else {
+                    $this->addItem($userId, (int) $data['productId'], $quantity - (int) ($item?->quantity ?? 0), $ids, note: $note, rewardOfferId: $offerId);
+                }
+            }
+            $payload = $this->show($userId, $cartId);
+            if ($payload['invalidRewards'] !== []) {
+                throw ValidationException::withMessages(['promotion' => 'PROMOTION_REQUIREMENTS_NOT_MET']);
+            }
+
+            return $payload;
+        });
+    }
+
     private function assertExpectedRevision(SmCart $cart, ?int $expectedRevision): void
     {
         if ($expectedRevision !== null && ! array_key_exists('revision', $cart->getAttributes())) {
@@ -392,6 +496,7 @@ final class UserSupermarketCartService
 
                 if ($itemStoreId === null) {
                     $item->delete();
+
                     continue;
                 }
 
@@ -446,8 +551,7 @@ final class UserSupermarketCartService
             ->lockForUpdate()
             ->get()
             ->first(
-                fn (SmCartItem $candidate): bool =>
-                    $this->cartItemSignature($candidate) === $signature
+                fn (SmCartItem $candidate): bool => $this->cartItemSignature($candidate) === $signature
             );
 
         if ($existing !== null) {
@@ -472,7 +576,8 @@ final class UserSupermarketCartService
             (string) $item->product_id,
             json_encode($modifierIds, JSON_THROW_ON_ERROR),
             (string) ($item->substitute_product_id ?? 0),
-            trim((string) ($item->note ?? '')),
+            mb_trim((string) ($item->note ?? '')),
+            (string) ($item->reward_offer_id ?? 0),
         ]);
     }
 
@@ -527,7 +632,14 @@ final class UserSupermarketCartService
             'product.modifierGroups.modifiers',
         ]);
 
-        $mappedItems = $items->map(fn (SmCartItem $item): array => $this->itemPayload($item))->values();
+        $pricingService = app(\Modules\Supermarket\Services\Promotions\SupermarketCartPricingService::class);
+        $pricing = $pricingService->price($cart);
+        $pricingService->rememberAdvancedPricing($cart, $pricing);
+        if (($cart->promotion_pricing_required || $pricing->hasAdvancedPricing()) && ! \Modules\Supermarket\Support\SupermarketPromotionCapability::clientSupports()) {
+            throw new ConflictHttpException('PROMOTION_CLIENT_UPGRADE_REQUIRED');
+        }
+        $compatible = \Modules\Supermarket\Support\SupermarketPromotionCapability::clientSupports();
+        $mappedItems = $items->map(fn (SmCartItem $item): array => [...$this->itemPayload($item), ...($compatible ? [...$pricing->linePayload((int) $item->id), 'rewardOfferId' => $item->reward_offer_id] : [])])->values();
         $subtotal = (float) $mappedItems->sum('totalPrice');
         $discount = (float) $mappedItems->sum(
             fn (array $item): float => max(
@@ -555,7 +667,10 @@ final class UserSupermarketCartService
             'store' => $merchant,
             'items' => $mappedItems->all(),
             'productsCount' => (int) $mappedItems->sum('quantity'),
+            ...($compatible ? ['pricingFingerprint' => $pricing->fingerprint, 'requiresPriceConfirmation' => (bool) $cart->promotion_pricing_required,
+                'appliedPromotions' => $pricing->promotionsPayload(), 'promotionProgress' => $pricing->progress, 'invalidRewards' => $pricing->invalidRewards] : []),
             'amounts' => [
+                ...($compatible ? $pricing->amounts() : []),
                 'subtotal' => round($subtotal, 2),
                 'discount' => round($discount, 2),
                 'total' => round($subtotal, 2),

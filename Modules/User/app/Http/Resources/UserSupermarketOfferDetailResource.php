@@ -28,6 +28,7 @@ final class UserSupermarketOfferDetailResource extends JsonResource
         $storeAttrs = $store?->getAttributes() ?? [];
 
         return [
+            ...$offer->promotionAttributes(),
             'id' => $offer->id,
             'storeId' => $offer->store_id,
             'store' => $store === null ? null : [
@@ -51,11 +52,12 @@ final class UserSupermarketOfferDetailResource extends JsonResource
             'discountValue' => $offer->discount_value,
             'discountPercent' => $offer->discount_percent,
             'imageUrl' => ($storeAttrs['cover'] ?? null) ?? ($storeAttrs['logo'] ?? null),
-            'startsAt' => $offer->starts_at?->toDateTimeString(),
-            'endsAt' => $offer->ends_at?->toDateTimeString(),
+            'startsAt' => $offer->promotion_type === 'buy_x_get_y' ? $offer->starts_at?->toIso8601String() : $offer->starts_at?->toDateTimeString(),
+            'endsAt' => $offer->promotion_type === 'buy_x_get_y' ? $offer->ends_at?->toIso8601String() : $offer->ends_at?->toDateTimeString(),
             'isActive' => $offer->is_active,
+            'rewardProducts' => $offer->rewardProducts->filter(fn ($p) => (int) $p->store_id === (int) $offer->store_id && $p->is_available && ($p->expires_at === null || $p->expires_at->isFuture()) && ($p->stock_quantity === null || $p->stock_quantity > 0))->map(fn ($p) => self::product($p))->values()->all(),
             'offerProducts' => $offer->relationLoaded('offerProducts')
-                ? $offer->offerProducts->map(static fn (SmOfferProduct $item): array => [
+                ? $offer->offerProducts->filter(fn ($item) => $item->product && (int) $item->product->store_id === (int) $offer->store_id && ($offer->promotion_type !== 'buy_x_get_y' || app(\Modules\Supermarket\Services\Promotions\SupermarketCartPricingService::class)->available($item->product)))->map(static fn (SmOfferProduct $item): array => [
                     'id' => $item->id,
                     'offerId' => $item->offer_id,
                     'productId' => $item->product_id,
@@ -70,7 +72,9 @@ final class UserSupermarketOfferDetailResource extends JsonResource
     /** @return array<string, mixed>|null */
     private static function product(?SmProduct $product): ?array
     {
-        if ($product === null) return null;
+        if ($product === null) {
+            return null;
+        }
 
         $imageUrl = $product->relationLoaded('media')
             ? ($product->getFirstMediaUrl(SmProduct::IMAGE_COLLECTION) ?: null)

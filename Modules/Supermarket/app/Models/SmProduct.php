@@ -147,7 +147,7 @@ final class SmProduct extends Model implements HasMedia
         return $offerProducts
             ->filter(static function (SmOfferProduct $offerProduct) use ($now): bool {
                 $offer = $offerProduct->offer;
-                if (! $offer instanceof SmOffer || ! $offer->is_active) {
+                if (! $offer instanceof SmOffer || ! $offer->is_active || ($offer->promotion_type ?? 'product_discount') !== 'product_discount') {
                     return false;
                 }
                 if ($offer->starts_at !== null && $offer->starts_at->gt($now)) {

@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Modules\User\Services;
 
+use App\Services\Promotions\AbstractPromotionPricingResult as PromotionPricingResult;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Modules\Resturants\Models\Cart;
-use Modules\Resturants\Models\Order;
 use Modules\Resturants\Models\Offer;
-use Modules\Resturants\Services\Promotions\PromotionPricingResult;
+use Modules\Resturants\Models\Order;
 use Modules\Resturants\Services\Promotions\RestaurantCartPricingService;
 use Modules\Supermarket\Models\SmCart;
 use Modules\Supermarket\Models\SmOrder;
@@ -22,47 +22,6 @@ final class CommerceCheckoutQuoteService
     public function issue(int $userId, string $section, int $cartId, array $selection, array $amounts, ?string $expectedPricingFingerprint = null): array
     {
         return DB::transaction(fn (): array => $this->issueLocked($userId, $section, $cartId, $selection, $amounts, $expectedPricingFingerprint));
-    }
-
-    private function issueLocked(int $userId, string $section, int $cartId, array $selection, array $amounts, ?string $expectedPricingFingerprint): array
-    {
-        $id = (string) Str::uuid();
-        $expiresAt = now()->addMinutes(5);
-        [$fingerprint, $pricing, $cart] = $this->fingerprintContext($userId, $section, $cartId);
-        if ($pricing !== null) {
-            if ($expectedPricingFingerprint !== null && ! hash_equals($expectedPricingFingerprint, $pricing->fingerprint)) {
-                throw new ConflictHttpException('QUOTE_CHANGED');
-            }
-            $service = app(RestaurantCartPricingService::class);
-            $service->assertPreviewable($cart, $pricing);
-            $service->rememberAdvancedPricing($cart, $pricing);
-            $amounts['pricingFingerprint'] = $pricing->fingerprint;
-            $offers = Offer::query()->where('restaurant_id', $cart->restaurant_id)
-                ->where('is_active', true)
-                ->whereHas('products', fn ($query) => $query->whereIn('products.id', $cart->items->pluck('product_id')))
-                ->get(['starts_at', 'ends_at']);
-            foreach ($offers as $offer) {
-                foreach ([$offer->starts_at, $offer->ends_at?->copy()->addSecond()] as $boundary) {
-                    if ($boundary !== null && $boundary->isFuture() && $boundary->lessThan($expiresAt)) {
-                        $expiresAt = $boundary;
-                    }
-                }
-            }
-        }
-        DB::table('commerce_checkout_quotes')->insert([
-            'id' => $id,
-            'user_id' => $userId,
-            'section' => $section,
-            'cart_id' => $cartId,
-            'cart_fingerprint' => $fingerprint,
-            'selection' => json_encode($selection, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
-            'amounts' => json_encode($amounts, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
-            'expires_at' => $expiresAt,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        return ['quoteId' => $id, 'expiresAt' => $expiresAt->toIso8601String()];
     }
 
     public function assertCurrent(int $userId, string $section, int $cartId, string $quoteId, array $selection): ?PromotionPricingResult
@@ -126,7 +85,7 @@ final class CommerceCheckoutQuoteService
             'total' => (float) $order->total_amount,
         ];
 
-        if ($section === 'restaurant' && isset($expected['pricingFingerprint'])) {
+        if (isset($expected['pricingFingerprint'])) {
             if (! hash_equals((string) $expected['pricingFingerprint'], (string) ($order->promotion_snapshot['fingerprint'] ?? ''))) {
                 throw new ConflictHttpException('QUOTE_CHANGED');
             }
@@ -149,6 +108,47 @@ final class CommerceCheckoutQuoteService
             ->update(['consumed_order_id' => $order->getKey(), 'updated_at' => now()]);
     }
 
+    private function issueLocked(int $userId, string $section, int $cartId, array $selection, array $amounts, ?string $expectedPricingFingerprint): array
+    {
+        $id = (string) Str::uuid();
+        $expiresAt = now()->addMinutes(5);
+        [$fingerprint, $pricing, $cart] = $this->fingerprintContext($userId, $section, $cartId);
+        if ($pricing !== null) {
+            if ($expectedPricingFingerprint !== null && ! hash_equals($expectedPricingFingerprint, $pricing->fingerprint)) {
+                throw new ConflictHttpException('QUOTE_CHANGED');
+            }
+            $service = $section === 'restaurant' ? app(RestaurantCartPricingService::class) : app(\Modules\Supermarket\Services\Promotions\SupermarketCartPricingService::class);
+            $service->assertPreviewable($cart, $pricing);
+            $service->rememberAdvancedPricing($cart, $pricing);
+            $amounts['pricingFingerprint'] = $pricing->fingerprint;
+            $offers = ($section === 'restaurant' ? Offer::query()->where('restaurant_id', $cart->restaurant_id) : \Modules\Supermarket\Models\SmOffer::query()->where('store_id', $cart->store_id))
+                ->where('is_active', true)
+                ->whereHas($section === 'restaurant' ? 'products' : 'offerProducts', fn ($query) => $query->whereIn($section === 'restaurant' ? 'products.id' : 'product_id', $cart->items->pluck('product_id')))
+                ->get(['starts_at', 'ends_at']);
+            foreach ($offers as $offer) {
+                foreach ([$offer->starts_at, $offer->ends_at?->copy()->addSecond()] as $boundary) {
+                    if ($boundary !== null && $boundary->isFuture() && $boundary->lessThan($expiresAt)) {
+                        $expiresAt = $boundary;
+                    }
+                }
+            }
+        }
+        DB::table('commerce_checkout_quotes')->insert([
+            'id' => $id,
+            'user_id' => $userId,
+            'section' => $section,
+            'cart_id' => $cartId,
+            'cart_fingerprint' => $fingerprint,
+            'selection' => json_encode($selection, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+            'amounts' => json_encode($amounts, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+            'expires_at' => $expiresAt,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return ['quoteId' => $id, 'expiresAt' => $expiresAt->toIso8601String()];
+    }
+
     private function fingerprintContext(int $userId, string $section, int $cartId): array
     {
         if ($section === 'restaurant') {
@@ -158,9 +158,15 @@ final class CommerceCheckoutQuoteService
             $fingerprint = hash('sha256', json_encode([$cart->restaurant_id, $pricing->fingerprint], JSON_THROW_ON_ERROR));
 
             return [$fingerprint, $pricing, $cart];
-        } elseif ($section === 'supermarket') {
+        }
+        if ($section === 'supermarket') {
             $cart = SmCart::query()->whereKey($cartId)->where('user_id', $userId)
-                ->with('items.product')->firstOrFail();
+                ->with('items.product')->lockForUpdate()->firstOrFail();
+            if (\Modules\Supermarket\Support\SupermarketPromotionCapability::enabled() || $cart->promotion_pricing_required || $cart->items->contains(fn ($i) => $i->reward_offer_id !== null)) {
+                $pricing = app(\Modules\Supermarket\Services\Promotions\SupermarketCartPricingService::class)->price($cart, true);
+
+                return [hash('sha256', json_encode(['supermarket', $cart->store_id, $pricing->fingerprint], JSON_THROW_ON_ERROR)), $pricing, $cart];
+            }
 
             $lines = $cart->items->sortBy('id')->map(function ($item): array {
                 $modifierIds = array_map('intval', $item->modifier_ids ?? []);

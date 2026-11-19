@@ -42,6 +42,7 @@ final class SmProductResource extends JsonResource
         $primaryImageUrl = $storePrimaryImageUrl ?? $masterFallbackImageUrl;
 
         return [
+            'promotions' => \Modules\User\Services\SupermarketPromotionCatalog::forProduct($this->resource),
             'id' => $this->id,
             'storeId' => $this->store_id,
             'store' => SmStoreResource::make($this->whenLoaded('store')),
@@ -66,7 +67,7 @@ final class SmProductResource extends JsonResource
             'isFavorite' => (bool) ($attributes['isFavoritedByUser'] ?? false),
             'offers' => $this->whenLoaded('offerProducts', function () {
                 return SmOfferResource::collection(
-                    $this->offerProducts->map(fn ($offerProduct) => $offerProduct->offer)->filter()
+                    $this->offerProducts->map(fn ($offerProduct) => $offerProduct->offer)->filter(fn ($o) => $o && (int) $o->store_id === (int) $this->store_id && ($o->promotion_type === 'product_discount' || ($o->promotion_type === 'buy_x_get_y' && \Modules\Supermarket\Support\SupermarketPromotionCapability::supported())))
                 );
             }),
             'options' => $this->whenLoaded('modifierGroups', fn () => $this->modifierGroups

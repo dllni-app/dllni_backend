@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Modules\Supermarket\Models;
 
 use App\Models\User;
+use BackedEnum;
 use Database\Factories\SmStoreFactory;
+use DateTimeInterface;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -75,7 +77,7 @@ final class SmStore extends Model
     {
         return $this->hasOne(SmOffer::class, 'store_id')
             ->ofMany(['discount_value' => 'max', 'id' => 'max'], static function ($query): void {
-                $query->where('is_active', true)
+                $query->where('is_active', true)->where('promotion_type', 'product_discount')
                     ->where(static function ($q): void {
                         $q->whereNull('starts_at')->orWhere('starts_at', '<=', now());
                     })
@@ -140,7 +142,7 @@ final class SmStore extends Model
      * Authoritative opening status based on application timezone, including
      * yesterday's overnight shifts. Null means hours were not loaded/known.
      */
-    public function currentlyOpen(?\DateTimeInterface $at = null): ?bool
+    public function currentlyOpen(?DateTimeInterface $at = null): ?bool
     {
         if (! $this->is_active || $this->is_temporarily_closed ||
             ($this->suspension_until !== null && $this->suspension_until->isFuture())) {
@@ -163,7 +165,7 @@ final class SmStore extends Model
             $start = \Carbon\CarbonImmutable::parse((string) $hour->open_time)->format('H:i:s');
             $end = \Carbon\CarbonImmutable::parse((string) $hour->close_time)->format('H:i:s');
             $dayValue = $hour->day_of_week;
-            $day = mb_strtolower($dayValue instanceof \BackedEnum ? $dayValue->value : (string) $dayValue);
+            $day = mb_strtolower($dayValue instanceof BackedEnum ? $dayValue->value : (string) $dayValue);
             if ($day === $currentDay && ($start === $end ||
                 ($start < $end && $time >= $start && $time < $end) ||
                 ($start > $end && $time >= $start))) {

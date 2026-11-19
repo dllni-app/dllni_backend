@@ -50,6 +50,7 @@ final class SmOrderResource extends JsonResource
             'storeHandoverConfirmedByUserId' => $this->store_handover_confirmed_by_user_id,
             'customerPickupConfirmedAt' => $this->customer_pickup_confirmed_at?->toDateTimeString(),
             'subtotal' => $this->subtotal,
+            'originalSubtotal' => $this->original_items_subtotal, 'promotionDiscountAmount' => (float) ($this->promotion_discount_amount ?? 0), 'appliedPromotions' => $this->promotion_snapshot['appliedPromotions'] ?? [],
             'discountAmount' => $this->discount_amount,
             'serviceFee' => $this->service_fee,
             'deliveryFee' => $this->delivery_fee,

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\User\Services;
 
+use App\Services\Promotions\AbstractPromotionPricingResult as PromotionPricingResult;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -12,17 +13,14 @@ use Modules\Resturants\Enums\OfferType;
 use Modules\Resturants\Models\Cart;
 use Modules\Resturants\Models\CartItem;
 use Modules\Resturants\Models\Modifier;
-use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Offer;
-use Modules\Resturants\Services\Promotions\PromotionPricingResult;
+use Modules\Resturants\Models\Product;
 use Modules\Resturants\Services\Promotions\RestaurantCartPricingService;
 use Modules\Resturants\Support\RestaurantPromotionCapability;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 final class UserRestaurantCartService
 {
-    public function __construct(private readonly RestaurantCartPricingService $pricing) {}
-
     private const CART_RELATIONS = [
         'restaurant.media',
         'items.product.category',
@@ -31,6 +29,8 @@ final class UserRestaurantCartService
         'items.product.modifierGroups.modifiers',
         'items.modifiers',
     ];
+
+    public function __construct(private readonly RestaurantCartPricingService $pricing) {}
 
     /**
      * @return array<int, array<string, mixed>>
@@ -98,7 +98,7 @@ final class UserRestaurantCartService
             $requiredQuantity = $advanced
                 ? (int) $offer->buy_quantity + ($specific ? 0 : (int) $offer->reward_quantity)
                 : null;
-            if ($quantity < 1 || $quantity > 50 || ($advanced && $quantity !== $requiredQuantity)) {
+            if ($quantity < 1 || $quantity > 200 || ($advanced && $quantity !== $requiredQuantity)) {
                 throw ValidationException::withMessages(['quantity' => 'PROMOTION_REQUIREMENTS_NOT_MET']);
             }
             if ($specific !== ($rewardProductId !== null)) {
@@ -108,7 +108,7 @@ final class UserRestaurantCartService
                 $reward = $offer->rewardProducts->firstWhere('id', $rewardProductId);
                 if (! $reward || (int) $reward->restaurant_id !== (int) $offer->restaurant_id
                     || ! $reward->isAvailableNow() || ! $reward->isIndependentlyOrderable()
-                    || (int) $offer->reward_quantity > 50) {
+                    || (int) $offer->reward_quantity > 200) {
                     throw ValidationException::withMessages(['rewardProductId' => 'PROMOTION_REWARD_UNAVAILABLE']);
                 }
             }
@@ -117,6 +117,10 @@ final class UserRestaurantCartService
             $previous = $advanced
                 ? (int) (collect($this->pricing->price($cart, true)->promotionsPayload())->firstWhere('offerId', $offerId)['applications'] ?? 0)
                 : 0;
+            $offer->refresh();
+            if ((int) $offer->rule_version !== $ruleVersion) {
+                throw new ConflictHttpException('PROMOTION_RULE_CHANGED');
+            }
             $added = $this->addItem($userId, $productId, $quantity, $modifierIds, note: $note);
             $payload = $added['cart'];
 
@@ -217,6 +221,9 @@ final class UserRestaurantCartService
                 ]);
             }
 
+            if ($quantity < 1 || $quantity > 200) {
+                throw ValidationException::withMessages(['quantity' => 'الحد الأقصى للسطر 200 وحدة.']);
+            }
             $item->fill([
                 'quantity' => $quantity,
                 'unit_price' => $unitPrice,
@@ -330,6 +337,9 @@ final class UserRestaurantCartService
 
             if ($targetItem) {
                 $mergedQuantity = (int) $targetItem->quantity + $quantity;
+                if ($mergedQuantity > 200) {
+                    throw ValidationException::withMessages(['quantity' => 'الحد الأقصى للسطر 200 وحدة.']);
+                }
 
                 $targetItem->fill([
                     'quantity' => $mergedQuantity,
@@ -393,8 +403,8 @@ final class UserRestaurantCartService
         ?int $convertItemId = null,
     ): array {
         abort_unless(RestaurantPromotionCapability::supported(), 404);
-        if ($quantity < 1 || $quantity > 50) {
-            throw ValidationException::withMessages(['quantity' => 'Quantity must be between 1 and 50.']);
+        if ($quantity < 1 || $quantity > 200) {
+            throw ValidationException::withMessages(['quantity' => 'Quantity must be between 1 and 200.']);
         }
 
         return DB::transaction(function () use ($userId, $cartId, $offerId, $productId, $quantity, $modifierIds, $substituteProductId, $note, $expectedRevision, $convertItemId): array {
@@ -469,15 +479,6 @@ final class UserRestaurantCartService
         });
     }
 
-    private function assertRewardAllocated(array $payload, int $itemId): void
-    {
-        $line = collect($payload['items'])->firstWhere('id', $itemId);
-        if ($line === null || ($line['invalidRewardQuantity'] ?? 0) > 0
-            || ($line['rewardQuantity'] ?? 0) !== (int) $line['quantity']) {
-            throw ValidationException::withMessages(['promotion' => 'PROMOTION_REQUIREMENTS_NOT_MET']);
-        }
-    }
-
     public function deleteItem(int $userId, int $cartId, int $itemId, ?int $expectedRevision = null): array
     {
         return DB::transaction(function () use ($userId, $cartId, $itemId, $expectedRevision): array {
@@ -504,6 +505,15 @@ final class UserRestaurantCartService
 
             return $this->toPayload($freshCart);
         });
+    }
+
+    private function assertRewardAllocated(array $payload, int $itemId): void
+    {
+        $line = collect($payload['items'])->firstWhere('id', $itemId);
+        if ($line === null || ($line['invalidRewardQuantity'] ?? 0) > 0
+            || ($line['rewardQuantity'] ?? 0) !== (int) $line['quantity']) {
+            throw ValidationException::withMessages(['promotion' => 'PROMOTION_REQUIREMENTS_NOT_MET']);
+        }
     }
 
     private function assertExpectedRevision(Cart $cart, ?int $expectedRevision): void

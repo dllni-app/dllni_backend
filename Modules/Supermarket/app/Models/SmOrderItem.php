@@ -15,6 +15,7 @@ final class SmOrderItem extends Model
     protected $table = 'sm_order_items';
 
     protected $fillable = [
+        'original_unit_price', 'original_total_price', 'promotion_discount_amount', 'reward_quantity', 'promotion_snapshot',
         'order_id',
         'product_id',
         'quantity',
@@ -44,6 +45,7 @@ final class SmOrderItem extends Model
     protected function casts(): array
     {
         return [
+            'original_unit_price' => 'decimal:2', 'original_total_price' => 'decimal:2', 'promotion_discount_amount' => 'decimal:2', 'reward_quantity' => 'integer', 'promotion_snapshot' => 'array',
             'unit_price' => 'decimal:2',
             'total_price' => 'decimal:2',
             'modifier_snapshot' => 'array',

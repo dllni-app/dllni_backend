@@ -17,7 +17,7 @@ final class UserRestaurantOfferAddController
     {
         $data = $request->validate([
             'productId' => ['required', 'integer', 'exists:products,id'],
-            'quantity' => ['required', 'integer', 'min:1', 'max:50'],
+            'quantity' => ['required', 'integer', 'min:1', 'max:200'],
             'ruleVersion' => ['required', 'integer', 'min:1'],
             'modifierIds' => ['sometimes', 'array', 'max:30'],
             'modifierIds.*' => ['integer', 'exists:modifiers,id'],

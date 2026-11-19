@@ -24,6 +24,7 @@ final class UserSupermarketHomeOfferResource extends JsonResource
         $storeAttrs = $store !== null ? $store->getAttributes() : [];
 
         return [
+            ...$offer->promotionAttributes(),
             'id' => $offer->id,
             'storeId' => $offer->store_id,
             'store' => $store === null ? null : [
@@ -39,14 +40,17 @@ final class UserSupermarketHomeOfferResource extends JsonResource
             'discountPercent' => $offer->discount_percent,
             'badgeText' => $this->formatOfferBadge($offer),
             'imageUrl' => ($storeAttrs['cover'] ?? null) ?? ($storeAttrs['logo'] ?? null),
-            'startsAt' => $offer->starts_at?->toDateTimeString(),
-            'endsAt' => $offer->ends_at?->toDateTimeString(),
+            'startsAt' => $offer->promotion_type === 'buy_x_get_y' ? $offer->starts_at?->toIso8601String() : $offer->starts_at?->toDateTimeString(),
+            'endsAt' => $offer->promotion_type === 'buy_x_get_y' ? $offer->ends_at?->toIso8601String() : $offer->ends_at?->toDateTimeString(),
             'isActive' => $offer->is_active,
         ];
     }
 
     private function formatOfferBadge(SmOffer $offer): ?string
     {
+        if ($offer->promotion_type === 'buy_x_get_y') {
+            return 'اشترِ '.$offer->buy_quantity.' واحصل على '.$offer->reward_quantity.((float) $offer->reward_discount_percent === 100.0 ? ' مجاناً' : ' بخصم '.$offer->reward_discount_percent.'%');
+        }
         if ($offer->discount_percent !== null) {
             $percent = mb_rtrim(mb_rtrim((string) $offer->discount_percent, '0'), '.');
 

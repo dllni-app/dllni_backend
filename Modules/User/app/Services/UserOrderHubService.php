@@ -19,11 +19,11 @@ use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Models\Order;
 use Modules\Resturants\Models\OrderItem;
 use Modules\Resturants\Models\OrderStatusLog;
-use Modules\Supermarket\Enums\SmOrderStatus;
 use Modules\Supermarket\Models\SmOrder;
 use Modules\Supermarket\Models\SmOrderStatusLog;
 use Modules\Supermarket\Services\SmInventoryService;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
+use Throwable;
 
 final class UserOrderHubService
 {
@@ -207,6 +207,7 @@ final class UserOrderHubService
 
             return ['itemsAdded' => $count];
         }
+
         // Keep historical line customizations when the current catalogue still
         // accepts them. Roll back *all* additions if an old option is gone.
         return DB::transaction(function () use ($order, $userId): array {
@@ -383,7 +384,7 @@ final class UserOrderHubService
         $status = $order->status?->value ?? (string) $order->status;
         $timeline = $order->statusLogs->map(fn (SmOrderStatusLog $log): array => ['fromStatus' => $log->from_status, 'toStatus' => $log->to_status, 'note' => $log->notes, 'changedAt' => $log->created_at?->toDateTimeString()])->values()->all();
 
-        return ['id' => $order->id, 'deliveryOrderId' => $deliveryOrder?->id, 'deliverySummary' => $deliverySummary, 'section' => 'supermarket', 'orderNumber' => $order->order_number, 'status' => $status, 'statusLabel' => Str::of($status)->replace('_', ' ')->title()->toString(), 'merchant' => ['id' => $order->store?->id, 'name' => $order->store?->name], 'fulfillment' => ['type' => $deliveryOrder ? 'delivery' : 'pickup', 'receiveMode' => $order->pickup_mode?->value ?? $order->pickup_mode, 'scheduledAt' => $order->pickup_scheduled_for?->toDateTimeString(), 'estimatedReadyAt' => $order->estimated_ready_at?->toIso8601String(), 'estimatedPreparationMinutes' => $order->estimated_preparation_minutes], 'amounts' => ['subtotal' => (float) ($order->subtotal ?? 0), 'discount' => (float) ($order->discount_amount ?? 0), 'serviceFee' => (float) ($order->service_fee ?? 0), 'deliveryFee' => (float) ($order->delivery_fee ?? $deliveryOrder?->delivery_fee ?? 0), 'tax' => 0.0, 'total' => (float) ($order->total_amount ?? 0)], 'items' => $order->items->map(fn ($item): array => ['id' => $item->id, 'productId' => $item->product_id, 'name' => $item->product_name ?? $item->product?->name, 'quantity' => $item->quantity, 'unitPrice' => (float) ($item->unit_price ?? 0), 'totalPrice' => (float) ($item->total_price ?? 0), 'note' => $item->note, 'modifierSnapshot' => $item->modifier_snapshot ?? [], 'substituteProductId' => $item->substitute_product_id, 'substituteProduct' => $item->substituteProduct === null ? null : ['id' => $item->substituteProduct->id, 'name' => $item->substituteProduct->name]])->values()->all(), 'timeline' => $timeline, 'actions' => array_replace($this->actionsFor($status), ['canCancel' => false]), 'createdAt' => $order->created_at?->toISOString(), 'updatedAt' => $order->updated_at?->toISOString()];
+        return ['id' => $order->id, 'deliveryOrderId' => $deliveryOrder?->id, 'deliverySummary' => $deliverySummary, 'section' => 'supermarket', 'promotionDiscountAmount' => (float) ($order->promotion_discount_amount ?? 0), 'appliedPromotions' => $order->promotion_snapshot['appliedPromotions'] ?? [], 'orderNumber' => $order->order_number, 'status' => $status, 'statusLabel' => Str::of($status)->replace('_', ' ')->title()->toString(), 'merchant' => ['id' => $order->store?->id, 'name' => $order->store?->name], 'fulfillment' => ['type' => $deliveryOrder ? 'delivery' : 'pickup', 'receiveMode' => $order->pickup_mode?->value ?? $order->pickup_mode, 'scheduledAt' => $order->pickup_scheduled_for?->toDateTimeString(), 'estimatedReadyAt' => $order->estimated_ready_at?->toIso8601String(), 'estimatedPreparationMinutes' => $order->estimated_preparation_minutes], 'amounts' => ['subtotal' => (float) ($order->subtotal ?? 0), 'discount' => (float) ($order->discount_amount ?? 0), 'serviceFee' => (float) ($order->service_fee ?? 0), 'deliveryFee' => (float) ($order->delivery_fee ?? $deliveryOrder?->delivery_fee ?? 0), 'tax' => 0.0, 'total' => (float) ($order->total_amount ?? 0)], 'items' => $order->items->map(fn ($item): array => ['id' => $item->id, 'productId' => $item->product_id, 'name' => $item->product_name ?? $item->product?->name, 'quantity' => $item->quantity, 'unitPrice' => (float) ($item->unit_price ?? 0), 'totalPrice' => (float) ($item->total_price ?? 0), 'rewardQuantity' => (int) ($item->reward_quantity ?? 0), 'promotionDiscountAmount' => (float) ($item->promotion_discount_amount ?? 0), 'note' => $item->note, 'modifierSnapshot' => $item->modifier_snapshot ?? [], 'substituteProductId' => $item->substitute_product_id, 'substituteProduct' => $item->substituteProduct === null ? null : ['id' => $item->substituteProduct->id, 'name' => $item->substituteProduct->name]])->values()->all(), 'timeline' => $timeline, 'actions' => array_replace($this->actionsFor($status), ['canCancel' => false]), 'createdAt' => $order->created_at?->toISOString(), 'updatedAt' => $order->updated_at?->toISOString()];
     }
 
     private function restaurantOrderEagerLoads(): array
@@ -425,12 +426,12 @@ final class UserOrderHubService
         if ($section === 'supermarket') {
             // Do not advertise a fabricated 35-minute pickup preparation ETA.
             $readyAt = $payload['fulfillment']['estimatedReadyAt'] ?? null;
-            if (! is_string($readyAt) || trim($readyAt) === '') {
+            if (! is_string($readyAt) || mb_trim($readyAt) === '') {
                 return null;
             }
             try {
                 return max(0, (int) ceil(now()->diffInMinutes(\Carbon\CarbonImmutable::parse($readyAt), false)));
-            } catch (\Throwable) {
+            } catch (Throwable) {
                 return null;
             }
         }

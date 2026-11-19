@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Tests\RestaurantV2;
+namespace Tests\Feature\RestaurantPromotions;
 
 use App\Enums\UserModuleType;
 use App\Models\User;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
@@ -22,64 +22,32 @@ use Tests\TestCase;
 
 final class RestaurantPromotionLifecycleTest extends TestCase
 {
-    use DatabaseTransactions;
+    use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
-        self::assertSame('local', app()->environment());
-        self::assertSame('mysql', config('database.default'));
-        self::assertContains(config('database.connections.mysql.host'), ['127.0.0.1', 'localhost']);
-        self::assertSame('alnadha_worker_test', DB::selectOne('SELECT DATABASE() AS db')->db);
-        config(['restaurant-promotions.enabled' => true]);
+        self::assertSame('testing', app()->environment());
+        config(['restaurant-promotions.enabled' => true, 'restaurant_v2.enabled' => true]);
         Queue::fake();
         Notification::fake();
         $this->withHeader('X-Restaurant-Promotions', '1');
     }
 
-    private function fixture(): array
+    public function test_full_size_offer_and_merged_quantity_limit(): void
     {
-        $owner = User::factory()->create(['module_type' => UserModuleType::RestaurantSeller->value]);
-        $restaurant = Restaurant::factory()->create(['user_id' => $owner->id, 'is_active' => true]);
-        $category = Category::factory()->create(['restaurant_id' => $restaurant->id]);
-        $meal = Product::factory()->create(['restaurant_id' => $restaurant->id, 'category_id' => $category->id,
-            'price' => 30000, 'discounted_price' => null, 'catalog_role' => 'independent', 'is_available' => true]);
-        $drink = Product::factory()->create(['restaurant_id' => $restaurant->id, 'category_id' => $category->id,
-            'price' => 5000, 'discounted_price' => null, 'catalog_role' => 'independent', 'is_available' => true]);
-        return [$owner, $restaurant, $meal, $drink];
-    }
-
-    private function createOffer(User $owner, Product $meal, ?Product $reward = null): Offer
-    {
+        [$owner, , $meal] = $this->fixture();
         Sanctum::actingAs($owner);
-        $payload = ['name' => 'QA promotion', 'offerType' => 'buy_x_get_y', 'productIds' => [$meal->id],
-            'buyQuantity' => 2, 'rewardQuantity' => 1, 'rewardType' => $reward ? 'specific_products' : 'same_product',
+        $id = $this->postJson('/api/v1/restaurant-owner/offers', [
+            'name' => 'Large group', 'offerType' => 'buy_x_get_y', 'productIds' => [$meal->id],
+            'buyQuantity' => 100, 'rewardQuantity' => 100, 'rewardType' => 'same_product',
             'rewardDiscountPercent' => 100, 'isRepeatable' => true, 'isActive' => true,
-            'startsAt' => now()->subHour()->toIso8601String(), 'endsAt' => now()->addHour()->toIso8601String()];
-        if ($reward) $payload['rewardProductIds'] = [$reward->id];
-        $result = $this->postJson('/api/v1/restaurant-owner/offers', $payload)->assertCreated();
-        return Offer::query()->findOrFail($result->json('data.id'));
-    }
-
-    private function customer(): User
-    {
-        $user = User::factory()->create();
-        Sanctum::actingAs($user);
-        return $user;
-    }
-
-    private function add(Product $product, int $quantity, array $modifierIds = []): array
-    {
-        return $this->postJson('/api/v1/user/restaurants/cart/items', [
-            'productId' => $product->id, 'quantity' => $quantity, 'modifierIds' => $modifierIds,
-        ])->assertCreated()->json('data');
-    }
-
-    private function quote(int $cartId): string
-    {
-        return $this->postJson('/api/v1/user/commerce/checkout/quotes', [
-            'section' => 'restaurant', 'cartId' => $cartId, 'fulfillmentType' => 'pickup', 'receiveMode' => 'immediate',
-        ])->assertCreated()->json('data.quoteId');
+        ])->assertCreated()->json('data.id');
+        $this->customer();
+        $this->postJson('/api/v1/user/restaurants/cart/offers/'.$id, ['productId' => $meal->id, 'quantity' => 200, 'ruleVersion' => 1])
+            ->assertCreated()->assertJsonPath('data.amounts.total', 3000000);
+        $this->postJson('/api/v1/user/restaurants/cart/items', ['productId' => $meal->id, 'quantity' => 1])->assertUnprocessable();
+        self::assertEquals(200, DB::table('cart_items')->sum('quantity'));
     }
 
     public function test_same_product_checkout_snapshots_replay_and_reversal(): void
@@ -219,7 +187,6 @@ final class RestaurantPromotionLifecycleTest extends TestCase
         $this->getJson('/api/v2/user/restaurants/offers/'.$id)->assertOk();
     }
 
-
     public function test_scheduled_publication_modes_and_price_boundaries(): void
     {
         [$owner, $restaurant, $meal, $drink] = $this->fixture();
@@ -305,4 +272,53 @@ final class RestaurantPromotionLifecycleTest extends TestCase
         $this->travelBack();
     }
 
+    private function fixture(): array
+    {
+        $owner = User::factory()->create(['module_type' => UserModuleType::RestaurantSeller->value]);
+        $restaurant = Restaurant::factory()->create(['user_id' => $owner->id, 'is_active' => true]);
+        $category = Category::factory()->create(['restaurant_id' => $restaurant->id]);
+        $meal = Product::factory()->create(['restaurant_id' => $restaurant->id, 'category_id' => $category->id,
+            'price' => 30000, 'discounted_price' => null, 'catalog_role' => 'independent', 'is_available' => true]);
+        $drink = Product::factory()->create(['restaurant_id' => $restaurant->id, 'category_id' => $category->id,
+            'price' => 5000, 'discounted_price' => null, 'catalog_role' => 'independent', 'is_available' => true]);
+
+        return [$owner, $restaurant, $meal, $drink];
+    }
+
+    private function createOffer(User $owner, Product $meal, ?Product $reward = null): Offer
+    {
+        Sanctum::actingAs($owner);
+        $payload = ['name' => 'QA promotion', 'offerType' => 'buy_x_get_y', 'productIds' => [$meal->id],
+            'buyQuantity' => 2, 'rewardQuantity' => 1, 'rewardType' => $reward ? 'specific_products' : 'same_product',
+            'rewardDiscountPercent' => 100, 'isRepeatable' => true, 'isActive' => true,
+            'startsAt' => now()->subHour()->toIso8601String(), 'endsAt' => now()->addHour()->toIso8601String()];
+        if ($reward) {
+            $payload['rewardProductIds'] = [$reward->id];
+        }
+        $result = $this->postJson('/api/v1/restaurant-owner/offers', $payload)->assertCreated();
+
+        return Offer::query()->findOrFail($result->json('data.id'));
+    }
+
+    private function customer(): User
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        return $user;
+    }
+
+    private function add(Product $product, int $quantity, array $modifierIds = []): array
+    {
+        return $this->postJson('/api/v1/user/restaurants/cart/items', [
+            'productId' => $product->id, 'quantity' => $quantity, 'modifierIds' => $modifierIds,
+        ])->assertCreated()->json('data');
+    }
+
+    private function quote(int $cartId): string
+    {
+        return $this->postJson('/api/v1/user/commerce/checkout/quotes', [
+            'section' => 'restaurant', 'cartId' => $cartId, 'fulfillmentType' => 'pickup', 'receiveMode' => 'immediate',
+        ])->assertCreated()->json('data.quoteId');
+    }
 }

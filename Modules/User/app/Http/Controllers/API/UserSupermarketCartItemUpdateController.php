@@ -23,6 +23,7 @@ final class UserSupermarketCartItemUpdateController
                 itemId: $itemId,
                 quantity: (int) $request->integer('quantity'),
                 expectedRevision: $request->has('expectedRevision') ? $request->integer('expectedRevision') : null,
+                convertRewardToOrdinary: $request->boolean('convertRewardToOrdinary'),
             ),
         ]);
     }

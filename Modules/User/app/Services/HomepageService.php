@@ -33,10 +33,7 @@ final class HomepageService
         $now = CarbonImmutable::now();
         $limit = $request->integer('limit', 10);
 
-        $supermarketOffers = SmOffer::query()
-            ->where('is_active', true)
-            ->where(fn ($query) => $query->whereNull('starts_at')->orWhere('starts_at', '<=', $now))
-            ->where(fn ($query) => $query->whereNull('ends_at')->orWhere('ends_at', '>=', $now))
+        $supermarketOffers = SupermarketPromotionCatalog::constrain(SmOffer::query(), $request->boolean('includeUpcoming'))
             ->whereHas('store', fn ($q) => $q
                 ->where('is_active', true)
                 ->where('is_temporarily_closed', false)
@@ -151,6 +148,7 @@ final class HomepageService
 
         $offers = SmOffer::query()
             ->whereIn('store_id', $storeIds)
+            ->where('promotion_type', 'product_discount')
             ->where('is_active', true)
             ->where(fn ($query) => $query->whereNull('ends_at')->orWhere('ends_at', '>=', $now))
             ->orderByDesc('discount_percent')

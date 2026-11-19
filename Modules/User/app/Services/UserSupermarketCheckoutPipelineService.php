@@ -15,10 +15,10 @@ use Modules\Supermarket\Enums\SmOrderStatus;
 use Modules\Supermarket\Enums\SmPickupMode;
 use Modules\Supermarket\Models\SmCart;
 use Modules\Supermarket\Models\SmCoupon;
+use Modules\Supermarket\Models\SmModifier;
 use Modules\Supermarket\Models\SmOrder;
 use Modules\Supermarket\Models\SmOrderItem;
 use Modules\Supermarket\Models\SmOrderStatusLog;
-use Modules\Supermarket\Models\SmModifier;
 use Modules\Supermarket\Models\SmProduct;
 use Modules\Supermarket\Models\SmStore;
 use Modules\Supermarket\Services\SmInventoryService;
@@ -44,13 +44,22 @@ final class UserSupermarketCheckoutPipelineService
         }
 
         $cart = SmCart::query()->whereKey($cartId)->where('user_id', $userId)->with(['store', 'items.product.store'])->firstOrFail();
-        if ($cart->items->isEmpty()) throw ValidationException::withMessages(['cart' => ['Cart is empty.']]);
+        if ($cart->items->isEmpty()) {
+            throw ValidationException::withMessages(['cart' => ['Cart is empty.']]);
+        }
 
         $address = $this->resolveUserAddress($userId, $addressId);
-        if ($fulfillmentType === 'delivery' && $address instanceof UserAddress) $this->assertDeliveryCoordinates($cart, $address);
+        if ($fulfillmentType === 'delivery' && $address instanceof UserAddress) {
+            $this->assertDeliveryCoordinates($cart, $address);
+        }
 
         $storeId = $this->resolveSingleStoreId($cart);
         $subtotal = $this->refreshAndValidateCartItems($cart, false);
+        $pricingService = app(\Modules\Supermarket\Services\Promotions\SupermarketCartPricingService::class);
+        $pricing = $pricingService->price($cart);
+        $pricingService->assertPreviewable($cart, $pricing);
+        $pricingService->rememberAdvancedPricing($cart, $pricing);
+        $subtotal = $pricing->netSubtotal / 100;
         $discount = $this->computeDiscount($userId, $storeId, $couponCode, $subtotal, false);
         $serviceFee = 0.0;
         $store = $cart->store ?? $cart->items->first()?->product?->store;
@@ -61,9 +70,10 @@ final class UserSupermarketCheckoutPipelineService
 
         return [
             'cartId' => $cart->id,
+            'pricingFingerprint' => \Modules\Supermarket\Support\SupermarketPromotionCapability::clientSupports() ? $pricing->fingerprint : null,
             'merchant' => ['id' => $store?->id, 'name' => $store?->name],
             'fulfillment' => ['type' => $fulfillmentType, 'receiveMode' => $receiveMode, 'scheduledAt' => $scheduledAt, 'address' => $address ? $this->addressPayload($address) : null],
-            'amounts' => ['subtotal' => round($subtotal, 2), 'discount' => round($discount, 2), 'serviceFee' => round($serviceFee, 2), 'deliveryFee' => round($deliveryFee, 2), 'tax' => 0.0, 'total' => round($total, 2)],
+            'amounts' => [...(\Modules\Supermarket\Support\SupermarketPromotionCapability::clientSupports() ? $pricing->amounts() : []), 'subtotal' => round($subtotal, 2), 'discount' => round($discount, 2), 'serviceFee' => round($serviceFee, 2), 'deliveryFee' => round($deliveryFee, 2), 'tax' => 0.0, 'total' => round($total, 2)],
             'note' => $note,
         ];
     }
@@ -104,7 +114,7 @@ final class UserSupermarketCheckoutPipelineService
                 $this->quotes->assertCurrent($userId, 'supermarket', $cartId, $quoteId, $selection);
             }
 
-            $order = $this->placeNew($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $addressId);
+            $order = $this->placeNew($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $addressId, $quoteId !== null);
 
             if ($quoteId !== null) {
                 $this->quotes->consume($userId, 'supermarket', $quoteId, $order);
@@ -114,7 +124,7 @@ final class UserSupermarketCheckoutPipelineService
         });
     }
 
-    private function placeNew(int $userId, int $cartId, string $fulfillmentType, string $receiveMode, ?string $scheduledAt, ?string $couponCode, ?string $note, ?int $addressId): SmOrder
+    private function placeNew(int $userId, int $cartId, string $fulfillmentType, string $receiveMode, ?string $scheduledAt, ?string $couponCode, ?string $note, ?int $addressId, bool $promotionConfirmed = false): SmOrder
     {
         if ($fulfillmentType === 'delivery' && $addressId === null) {
             throw ValidationException::withMessages(['addressId' => ['يرجى اختيار عنوان توصيل صالح.']]);
@@ -126,21 +136,30 @@ final class UserSupermarketCheckoutPipelineService
             $this->assertDeliveryCoordinates($cartForValidation, $address);
         }
 
-        $order = DB::transaction(function () use ($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $address): SmOrder {
-            return $this->placeWithDeliveryTransaction($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $address);
+        $order = DB::transaction(function () use ($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $address, $promotionConfirmed): SmOrder {
+            return $this->placeWithDeliveryTransaction($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $address, $promotionConfirmed);
         });
 
         return $order;
     }
 
-    private function placeWithDeliveryTransaction(int $userId, int $cartId, string $fulfillmentType, string $receiveMode, ?string $scheduledAt, ?string $couponCode, ?string $note, ?UserAddress $address): SmOrder
+    private function placeWithDeliveryTransaction(int $userId, int $cartId, string $fulfillmentType, string $receiveMode, ?string $scheduledAt, ?string $couponCode, ?string $note, ?UserAddress $address, bool $promotionConfirmed = false): SmOrder
     {
-        $order = DB::transaction(function () use ($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $address): SmOrder {
+        $order = DB::transaction(function () use ($userId, $cartId, $fulfillmentType, $receiveMode, $scheduledAt, $couponCode, $note, $address, $promotionConfirmed): SmOrder {
             $cart = SmCart::query()->whereKey($cartId)->where('user_id', $userId)->with(['store', 'items.product.store'])->lockForUpdate()->firstOrFail();
-            if ($cart->items->isEmpty()) throw ValidationException::withMessages(['cart' => ['Cart is empty.']]);
+            if ($cart->items->isEmpty()) {
+                throw ValidationException::withMessages(['cart' => ['Cart is empty.']]);
+            }
 
             $storeId = $this->resolveSingleStoreId($cart);
-            $subtotal = $this->refreshAndValidateCartItems($cart, true);
+            $pricingService = app(\Modules\Supermarket\Services\Promotions\SupermarketCartPricingService::class);
+            $pricing = $pricingService->price($cart, true);
+            $this->refreshAndValidateCartItems($cart, true);
+            $pricingService->assertPreviewable($cart, $pricing);
+            if (($cart->promotion_pricing_required || $pricing->hasAdvancedPricing()) && ! $promotionConfirmed) {
+                throw new \Symfony\Component\HttpKernel\Exception\ConflictHttpException('PROMOTION_CONFIRMATION_REQUIRED');
+            }
+            $subtotal = $pricing->netSubtotal / 100;
             $platformQuote = $this->platformCoupons->quoteForPlacement(
                 userId: $userId,
                 section: PlatformCoupon::SECTION_SUPERMARKET,
@@ -167,6 +186,9 @@ final class UserSupermarketCheckoutPipelineService
                 'pickup_mode' => $receiveMode === 'scheduled' ? SmPickupMode::ScheduledPickup->value : SmPickupMode::ImmediatePickup->value,
                 'pickup_scheduled_for' => $scheduledAt,
                 'subtotal' => $subtotal,
+                'original_items_subtotal' => $pricing->originalSubtotal / 100,
+                'promotion_discount_amount' => $pricing->promotionDiscount / 100,
+                'promotion_snapshot' => ['fingerprint' => $pricing->fingerprint, 'appliedPromotions' => $pricing->promotionsPayload(), 'ordinaryDiscount' => $pricing->ordinaryDiscount / 100],
                 'discount_amount' => $discount,
                 'service_fee' => $serviceFee,
                 'delivery_fee' => $deliveryFee,
@@ -175,22 +197,38 @@ final class UserSupermarketCheckoutPipelineService
             ]);
 
             foreach ($cart->items as $item) {
-                SmOrderItem::query()->create([
-                    'order_id' => $order->id,
-                    'product_id' => $item->product_id,
-                    'quantity' => $item->quantity,
-                    'unit_price' => $item->unit_price,
-                    'total_price' => (float) ($item->unit_price ?? 0) * (int) $item->quantity,
-                    'product_name' => $item->product?->name,
-                    'modifier_snapshot' => $this->modifierSnapshot($item->modifier_ids ?? []),
-                    'substitute_product_id' => $item->substitute_product_id,
-                    'note' => $item->note,
-                ]);
+                foreach ($pricing->lines[(int) $item->id]['allocations'] as $segment) {
+                    SmOrderItem::query()->create([
+                        'order_id' => $order->id,
+                        'product_id' => $item->product_id,
+                        'quantity' => $segment['quantity'],
+                        'unit_price' => $segment['netUnit'] / 100,
+                        'total_price' => $segment['netUnit'] * $segment['quantity'] / 100,
+                        'original_unit_price' => $segment['originalUnit'] / 100,
+                        'original_total_price' => $segment['originalUnit'] * $segment['quantity'] / 100,
+                        'promotion_discount_amount' => $segment['promotionDiscount'] * $segment['quantity'] / 100,
+                        'reward_quantity' => $segment['role'] === 'reward' ? $segment['quantity'] : 0,
+                        'promotion_snapshot' => $segment['offerId'] === null ? null : ['offerId' => $segment['offerId'], 'role' => $segment['role']],
+                        'product_name' => $item->product?->name,
+                        'modifier_snapshot' => $this->modifierSnapshot($item->modifier_ids ?? []),
+                        'substitute_product_id' => $item->substitute_product_id,
+                        'note' => $item->note,
+                    ]);
 
+                }
                 // Stock is reserved once during placement, never again at acceptance.
                 $this->inventory->reserveStockForCustomerOrder($order, (int) $item->product_id, (int) $item->quantity);
             }
 
+            foreach ($pricing->appliedPromotions as $application) {
+                $rule = $application['rule'];
+                DB::table('sm_order_promotion_applications')->insert([
+                    'order_id' => $order->id, 'offer_id' => $rule['offerId'], 'original_offer_id' => $rule['offerId'], 'store_id' => $storeId,
+                    'rule_version' => $rule['ruleVersion'], 'application_count' => $application['applications'], 'reward_quantity' => $application['rewardQuantity'],
+                    'free_quantity' => $application['freeQuantity'], 'discount_amount' => $application['discount'] / 100, 'net_eligible_revenue' => $application['netRevenue'] / 100,
+                    'rule_snapshot' => json_encode($rule, JSON_THROW_ON_ERROR), 'status' => 'applied', 'applied_at' => now(),
+                ]);
+            }
             if ($platformQuote) {
                 $this->platformCoupons->record(
                     coupon: $platformQuote['coupon'],
@@ -354,20 +392,36 @@ final class UserSupermarketCheckoutPipelineService
         $quote = $lock
             ? $this->platformCoupons->quoteForPlacement($userId, PlatformCoupon::SECTION_SUPERMARKET, $couponCode, $subtotal)
             : $this->platformCoupons->preview($userId, PlatformCoupon::SECTION_SUPERMARKET, $couponCode, $subtotal);
-        if ($quote) return $quote['discount'];
+        if ($quote) {
+            return $quote['discount'];
+        }
         $coupon = $this->findLegacyCoupon($storeId, $couponCode, $subtotal);
+
         return $coupon ? $this->legacyDiscount($coupon, $subtotal) : 0.0;
     }
 
     private function findLegacyCoupon(int $storeId, ?string $couponCode, float $subtotal): ?SmCoupon
     {
-        if (! is_string($couponCode) || trim($couponCode) === '') return null;
-        $coupon = SmCoupon::query()->where('store_id', $storeId)->whereRaw('UPPER(code) = ?', [mb_strtoupper(trim($couponCode))])->first();
-        if (! $coupon || ! $coupon->is_active) return null;
-        if ($coupon->starts_at && now()->lt($coupon->starts_at)) return null;
-        if ($coupon->ends_at && now()->gt($coupon->ends_at)) return null;
-        if ($coupon->min_order_amount !== null && $subtotal < (float) $coupon->min_order_amount) return null;
-        if ($coupon->usage_limit !== null && (int) $coupon->used_count >= (int) $coupon->usage_limit) return null;
+        if (! is_string($couponCode) || mb_trim($couponCode) === '') {
+            return null;
+        }
+        $coupon = SmCoupon::query()->where('store_id', $storeId)->whereRaw('UPPER(code) = ?', [mb_strtoupper(mb_trim($couponCode))])->first();
+        if (! $coupon || ! $coupon->is_active) {
+            return null;
+        }
+        if ($coupon->starts_at && now()->lt($coupon->starts_at)) {
+            return null;
+        }
+        if ($coupon->ends_at && now()->gt($coupon->ends_at)) {
+            return null;
+        }
+        if ($coupon->min_order_amount !== null && $subtotal < (float) $coupon->min_order_amount) {
+            return null;
+        }
+        if ($coupon->usage_limit !== null && (int) $coupon->used_count >= (int) $coupon->usage_limit) {
+            return null;
+        }
+
         return $coupon;
     }
 
@@ -375,9 +429,13 @@ final class UserSupermarketCheckoutPipelineService
     {
         if ($coupon->type === 'percentage') {
             $amount = $subtotal * ((float) ($coupon->percent ?? 0) / 100);
-            if ($coupon->max_discount_amount !== null) $amount = min($amount, (float) $coupon->max_discount_amount);
+            if ($coupon->max_discount_amount !== null) {
+                $amount = min($amount, (float) $coupon->max_discount_amount);
+            }
+
             return round($amount, 2);
         }
+
         return round(min((float) ($coupon->value ?? 0), $subtotal), 2);
     }
 
@@ -385,17 +443,29 @@ final class UserSupermarketCheckoutPipelineService
     {
         $cartStoreId = $cart->store_id !== null ? (int) $cart->store_id : null;
         $itemStoreIds = $cart->items->map(fn ($item): ?int => $item->product?->store_id ? (int) $item->product->store_id : null)->filter()->unique()->values();
-        if ($cartStoreId === null && $itemStoreIds->isEmpty()) throw ValidationException::withMessages(['cart' => ['Cart contains products that are not linked to a store.']]);
-        if ($cartStoreId !== null && $itemStoreIds->contains(fn (int $storeId): bool => $storeId !== $cartStoreId)) throw ValidationException::withMessages(['cart' => ['Supermarket cart items must belong to the cart store.']]);
-        if ($itemStoreIds->count() > 1) throw ValidationException::withMessages(['cart' => ['Supermarket cart items must belong to one store.']]);
+        if ($cartStoreId === null && $itemStoreIds->isEmpty()) {
+            throw ValidationException::withMessages(['cart' => ['Cart contains products that are not linked to a store.']]);
+        }
+        if ($cartStoreId !== null && $itemStoreIds->contains(fn (int $storeId): bool => $storeId !== $cartStoreId)) {
+            throw ValidationException::withMessages(['cart' => ['Supermarket cart items must belong to the cart store.']]);
+        }
+        if ($itemStoreIds->count() > 1) {
+            throw ValidationException::withMessages(['cart' => ['Supermarket cart items must belong to one store.']]);
+        }
+
         return $cartStoreId ?? (int) $itemStoreIds->first();
     }
 
     private function resolveUserAddress(int $userId, ?int $addressId): ?UserAddress
     {
-        if ($addressId === null) return null;
+        if ($addressId === null) {
+            return null;
+        }
         $address = UserAddress::query()->whereKey($addressId)->where('user_id', $userId)->first();
-        if (! $address) throw ValidationException::withMessages(['addressId' => ['The selected address does not belong to the authenticated user.']]);
+        if (! $address) {
+            throw ValidationException::withMessages(['addressId' => ['The selected address does not belong to the authenticated user.']]);
+        }
+
         return $address;
     }
 
@@ -447,5 +517,4 @@ final class UserSupermarketCheckoutPipelineService
             ->values()
             ->all();
     }
-
 }

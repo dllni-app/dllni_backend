@@ -27,6 +27,7 @@ final class SmOrderItemResource extends JsonResource
             'productId' => $this->product_id,
             'product' => SmProductResource::make($this->whenLoaded('product')),
             'quantity' => $this->quantity,
+            'rewardQuantity' => (int) ($this->reward_quantity ?? 0), 'promotionDiscountAmount' => (float) ($this->promotion_discount_amount ?? 0), 'originalUnitPrice' => $this->original_unit_price, 'promotion' => $this->promotion_snapshot,
             'unitPrice' => $this->unit_price,
             'totalPrice' => $this->total_price,
             'productName' => $this->product_name,

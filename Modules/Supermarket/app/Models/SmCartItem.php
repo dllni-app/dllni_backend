@@ -17,6 +17,7 @@ final class SmCartItem extends Model
     protected $table = 'sm_cart_items';
 
     protected $fillable = [
+        'reward_offer_id',
         'cart_id',
         'product_id',
         'quantity',
@@ -51,6 +52,7 @@ final class SmCartItem extends Model
     protected function casts(): array
     {
         return [
+            'reward_offer_id' => 'integer',
             'unit_price' => 'decimal:2',
             'modifier_ids' => 'array',
             'substitute_product_id' => 'integer',

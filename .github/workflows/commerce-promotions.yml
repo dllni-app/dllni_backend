@@ -1,0 +1,69 @@
+name: Restaurant and supermarket promotions
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'app/Services/Promotions/**'
+      - 'Modules/Resturants/**'
+      - 'Modules/Supermarket/**'
+      - 'Modules/User/**'
+      - 'config/*promotions.php'
+      - 'tests/**'
+      - 'phpunit*.xml'
+      - '.github/workflows/commerce-promotions.yml'
+  push:
+    branches: [dev]
+    paths:
+      - 'app/Services/Promotions/**'
+      - 'Modules/Resturants/**'
+      - 'Modules/Supermarket/**'
+      - 'Modules/User/**'
+      - 'config/*promotions.php'
+      - 'tests/**'
+      - 'phpunit*.xml'
+      - '.github/workflows/commerce-promotions.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: testing
+          MYSQL_DATABASE: dllni_promotions_test
+        ports: ['3306:3306']
+        options: --health-cmd="mysqladmin ping -h 127.0.0.1 -ptesting" --health-interval=10s --health-timeout=5s --health-retries=10
+    env:
+      APP_ENV: testing
+      DB_USERNAME: root
+      DB_PASSWORD: testing
+      DB_HOST: 127.0.0.1
+      DB_DATABASE: dllni_promotions_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql, pdo_sqlite, pcntl, mbstring, bcmath, intl, gd
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: cp .env.example .env && php artisan key:generate
+      - name: SQLite rules, contracts and complete promotion lifecycle
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+        run: php vendor/bin/pest -c phpunit.xml tests/Unit/Restaurant/RestaurantPromotionEngineTest.php tests/Feature/RestaurantPromotions tests/Feature/SupermarketPromotions tests/Feature/UserModule/CommerceCheckoutQuoteTest.php tests/Feature/UserModule/UserSupermarketCheckoutHardeningTest.php
+      - name: MySQL lifecycle and decimal snapshots
+        env:
+          DB_CONNECTION: mysql
+        run: php vendor/bin/pest -c phpunit.xml tests/Feature/RestaurantPromotions tests/Feature/SupermarketPromotions
+      - name: Simultaneous final-stock checkout race
+        env:
+          DB_CONNECTION: mysql
+        run: php vendor/bin/phpunit -c phpunit.promotions-mysql.xml

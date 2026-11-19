@@ -18,7 +18,7 @@ final class UserRestaurantCartItemUpdateRequest extends FormRequest
         return [
             'expectedRevision' => ['sometimes', 'integer', 'min:0'],
             'convertRewardToOrdinary' => ['sometimes', 'boolean'],
-            'quantity' => ['required', 'integer', 'min:1', 'max:50'],
+            'quantity' => ['required', 'integer', 'min:1', 'max:200'],
             'modifierIds' => ['sometimes', 'array', 'max:30'],
             'modifierIds.*' => ['integer', 'exists:modifiers,id'],
             'substituteProductId' => ['sometimes', 'nullable', 'integer', 'exists:products,id'],

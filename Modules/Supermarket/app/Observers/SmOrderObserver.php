@@ -36,6 +36,9 @@ final class SmOrderObserver
             return;
         }
 
+        \Illuminate\Support\Facades\DB::table('sm_order_promotion_applications')->where('order_id', $order->id)->where('status', 'applied')->update([
+            'status' => 'reversed', 'reversed_at' => now(), 'reversal_reason' => (string) ($order->cancellation_reason ?? 'Supermarket order cancelled'),
+        ]);
         $this->platformCoupons->reverseForOrder(
             $order,
             (string) ($order->cancellation_reason ?? 'Supermarket order cancelled'),

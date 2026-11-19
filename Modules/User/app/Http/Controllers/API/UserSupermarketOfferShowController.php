@@ -15,16 +15,13 @@ final class UserSupermarketOfferShowController
     {
         $now = CarbonImmutable::now();
 
-        $model = SmOffer::query()
+        $model = \Modules\User\Services\SupermarketPromotionCatalog::constrain(SmOffer::query(), request()->boolean('includeUpcoming'))
             ->where('id', $offer)
             ->where('is_active', true)
             ->where(static function ($query) use ($now): void {
-                $query->whereNull('starts_at')->orWhere('starts_at', '<=', $now);
-            })
-            ->where(static function ($query) use ($now): void {
                 $query->whereNull('ends_at')->orWhere('ends_at', '>=', $now);
             })
-            ->whereHas('store', static function ($query) use ($now): void {
+            ->whereHas('store', static function ($query): void {
                 $query
                     ->where('is_active', true)
                     ->where('is_temporarily_closed', false)
@@ -34,6 +31,7 @@ final class UserSupermarketOfferShowController
             })
             ->with([
                 'store',
+                'rewardProducts.media',
                 'offerProducts.product.media',
                 'offerProducts.product.masterProduct.media',
             ])

@@ -79,6 +79,7 @@ final class RestaurantOwnerOffersIndexController
                 'id' => $offer->id,
                 'restaurantId' => $offer->restaurant_id,
                 'name' => $offer->name,
+                'description' => $offer->description,
                 'discountType' => $offer->discount_type?->value ?? $offer->discount_type,
                 'discountValue' => (float) ($offer->discount_value ?? 0),
                 'startsAt' => $offer->isProductDiscount() ? $offer->starts_at?->toDateTimeString() : $offer->starts_at?->toIso8601String(),
@@ -107,6 +108,7 @@ final class RestaurantOwnerOffersIndexController
         return response()->json([
             'data' => $data,
             'meta' => [
+                'advancedPromotionsEnabled' => RestaurantPromotionCapability::supported(),
                 'currentPage' => $paginator->currentPage(),
                 'lastPage' => $paginator->lastPage(),
                 'perPage' => $paginator->perPage(),

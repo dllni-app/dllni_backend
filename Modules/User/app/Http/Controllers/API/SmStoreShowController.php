@@ -44,10 +44,7 @@ final class SmStoreShowController
                         'media',
                         'offerProducts.offer',
                     ]),
-                'offers' => fn ($query) => $query
-                    ->where('is_active', true)
-                    ->where(fn ($validity) => $validity->whereNull('starts_at')->orWhere('starts_at', '<=', $now))
-                    ->where(fn ($validity) => $validity->whereNull('ends_at')->orWhere('ends_at', '>=', $now)),
+                'offers' => fn ($query) => \Modules\User\Services\SupermarketPromotionCatalog::constrain($query, request()->boolean('includeUpcoming')),
                 'coupons' => fn ($query) => $query
                     ->where('is_active', true)
                     ->where(fn ($validity) => $validity->whereNull('starts_at')->orWhere('starts_at', '<=', $now))

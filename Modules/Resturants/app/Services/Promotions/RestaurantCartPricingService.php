@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Modules\Resturants\Services\Promotions;
 
+use App\Services\Promotions\AbstractPromotionPricingResult as PromotionPricingResult;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Modules\Resturants\Models\Cart;
-use Modules\Resturants\Models\CartItem;
 use Modules\Resturants\Models\Modifier;
 use Modules\Resturants\Models\Product;
 use Modules\Resturants\Support\RestaurantPromotionCapability;
@@ -27,6 +27,11 @@ final class RestaurantCartPricingService
         private readonly RestaurantPromotionEngine $engine,
         private readonly RestaurantPromotionRuleResolver $rules,
     ) {}
+
+    public static function minor(mixed $price): int
+    {
+        return max(0, (int) round((float) ($price ?? 0) * 100, 0, PHP_ROUND_HALF_UP));
+    }
 
     /** Read-only; callers doing placement must already hold the cart lock. */
     public function price(Cart $cart, bool $lockRules = false): PromotionPricingResult
@@ -85,11 +90,6 @@ final class RestaurantCartPricingService
         }
 
         return $result;
-    }
-
-    public static function minor(mixed $price): int
-    {
-        return max(0, (int) round((float) ($price ?? 0) * 100, 0, PHP_ROUND_HALF_UP));
     }
 
     public function configurationIsEligible(Product $product, array $modifierIds, ?Product $substitute = null): bool

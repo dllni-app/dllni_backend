@@ -18,7 +18,7 @@ final class UserRestaurantPromotionClaimRequest extends FormRequest
         return [
             'expectedRevision' => ['required', 'integer', 'min:0'],
             'productId' => ['required', 'integer', 'min:1'],
-            'quantity' => ['required', 'integer', 'min:1', 'max:50'],
+            'quantity' => ['required', 'integer', 'min:1', 'max:200'],
             'modifierIds' => ['sometimes', 'array', 'max:30'],
             'modifierIds.*' => ['integer', 'distinct', 'min:1'],
             'substituteProductId' => ['nullable', 'integer', 'min:1'],

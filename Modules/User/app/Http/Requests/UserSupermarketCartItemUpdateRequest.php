@@ -17,6 +17,7 @@ final class UserSupermarketCartItemUpdateRequest extends FormRequest
     {
         return [
             'expectedRevision' => ['sometimes', 'integer', 'min:0'],
+            'convertRewardToOrdinary' => ['sometimes', 'boolean'],
             'quantity' => ['required', 'integer', 'min:1', 'max:200'],
             'modifierIds' => ['sometimes', 'array'],
             'substituteProductId' => ['sometimes', 'nullable', 'integer'],

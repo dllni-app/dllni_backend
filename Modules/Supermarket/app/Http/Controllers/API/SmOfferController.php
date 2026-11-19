@@ -29,10 +29,12 @@ final class SmOfferController
     {
         $offers = SmOffer::getQuery()
             ->where('store_id', $this->context->ownedStore()->id)
+            ->when(! \Modules\Supermarket\Support\SupermarketPromotionCapability::clientSupports(), fn ($q) => $q->where('promotion_type', 'product_discount'))
+            ->with(['offerProducts.product', 'rewardProducts'])
             ->withAnalyticsCounts()
             ->paginate($request->get('perPage', 20));
 
-        return SmOfferResource::collection($offers);
+        return SmOfferResource::collection($offers)->additional(['meta' => ['advancedPromotionsEnabled' => \Modules\Supermarket\Support\SupermarketPromotionCapability::supported()]]);
     }
 
     public function store(SmOfferRequest $request): JsonResponse
@@ -40,8 +42,9 @@ final class SmOfferController
         $validated = $request->validated();
         $offerProducts = $validated['offerProducts'] ?? null;
         $offer = $this->service->store(
-            SmOfferData::from(Arr::except($validated, ['offerProducts'])),
+            SmOfferData::from(Arr::except($validated, ['offerProducts', 'rewardProductIds'])),
             $offerProducts,
+            $validated['rewardProductIds'] ?? null,
         );
 
         return SmOfferResource::make($this->resolveOfferWithCounts($offer->id))
@@ -51,6 +54,7 @@ final class SmOfferController
 
     public function show(SmOffer $smOffer): SmOfferResource
     {
+        abort_if($smOffer->promotion_type === 'buy_x_get_y' && ! \Modules\Supermarket\Support\SupermarketPromotionCapability::clientSupports(), 404);
         $this->context->store((int) $smOffer->store_id);
 
         return SmOfferResource::make($this->resolveOfferWithCounts($smOffer->id));
@@ -62,9 +66,10 @@ final class SmOfferController
         $validated = $request->validated();
         $offerProducts = $validated['offerProducts'] ?? null;
         $offer = $this->service->update(
-            SmOfferData::from(Arr::except($validated, ['offerProducts'])),
+            SmOfferData::from(Arr::except($validated, ['offerProducts', 'rewardProductIds'])),
             $smOffer,
             $offerProducts,
+            $validated['rewardProductIds'] ?? null,
         );
 
         return SmOfferResource::make($this->resolveOfferWithCounts($offer->id));
@@ -85,7 +90,7 @@ final class SmOfferController
     {
         return SmOffer::query()
             ->where('store_id', $this->context->ownedStore()->id)
-            ->with('store')
+            ->with(['store', 'offerProducts.product', 'rewardProducts'])
             ->withAnalyticsCounts()
             ->findOrFail($offerId);
     }

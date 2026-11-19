@@ -19,6 +19,7 @@ final class SmOffersTable
             ->columns([
                 TextColumn::make('store.name')->label(__('supermarket_admin.stores'))->searchable()->sortable()->placeholder('—'),
                 TextColumn::make('name')->label(__('supermarket_admin.infolist.product_name'))->searchable()->sortable(),
+                TextColumn::make('promotion_type')->label('آلية العرض')->badge()->formatStateUsing(fn ($state) => $state === 'buy_x_get_y' ? 'اشترِ واحصل' : 'خصم منتج'),
                 IconColumn::make('is_active')->label(__('supermarket_admin.form.is_active'))->boolean(),
                 TextColumn::make('starts_at')->label(__('supermarket_admin.form.starts_at'))->dateTime('Y-m-d H:i')->placeholder('—')->sortable(),
                 TextColumn::make('ends_at')->label(__('supermarket_admin.form.ends_at'))->dateTime('Y-m-d H:i')->placeholder('—')->sortable(),

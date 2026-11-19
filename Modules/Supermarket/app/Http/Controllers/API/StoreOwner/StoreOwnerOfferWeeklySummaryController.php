@@ -42,7 +42,7 @@ final class StoreOwnerOfferWeeklySummaryController
                 $join->on('sm_offer.id', '=', 'sm_offer_product.offer_id')
                     ->on('sm_offer.store_id', '=', 'sm_order.store_id');
             })
-            ->where('sm_order.store_id', $storeId)
+            ->where('sm_order.store_id', $storeId)->where('sm_offer.promotion_type', 'product_discount')
             ->whereBetween('sm_order.created_at', [$weekStart, $weekEnd])
             ->where(function ($query): void {
                 $query->whereNull('sm_offer.starts_at')
@@ -52,9 +52,12 @@ final class StoreOwnerOfferWeeklySummaryController
                 $query->whereNull('sm_offer.ends_at')
                     ->orWhereColumn('sm_offer.ends_at', '>=', 'sm_order.created_at');
             })
-            ->selectRaw('DATE(sm_order.created_at) as day_date, COUNT(DISTINCT sm_order.id) as orders_count')
-            ->groupBy('day_date')
-            ->pluck('orders_count', 'day_date');
+            ->select('sm_order.id', 'sm_order.created_at')->distinct();
+        $promotionOrders = DB::table('sm_order_promotion_applications as pa')->join('sm_orders as orders', 'orders.id', '=', 'pa.order_id')
+            ->where('pa.store_id', $storeId)->where('pa.status', 'applied')->whereBetween('orders.created_at', [$weekStart, $weekEnd])
+            ->select('orders.id', 'orders.created_at')->distinct();
+        $ordersUsedByDay = DB::query()->fromSub($ordersUsedByDay->union($promotionOrders), 'benefited_orders')
+            ->selectRaw('DATE(created_at) as day_date, COUNT(*) as orders_count')->groupBy('day_date')->pluck('orders_count', 'day_date');
 
         $series = [];
         $totals = [

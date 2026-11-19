@@ -35,6 +35,14 @@ final class SmOfferData extends Data
         public ?string $endsAt,
         #[BooleanType]
         public ?bool $isActive,
+        public ?string $promotionType = null,
+        public ?int $buyQuantity = null,
+        public ?int $rewardQuantity = null,
+        public ?string $rewardType = null,
+        public ?float $rewardDiscountPercent = null,
+        public ?bool $isRepeatable = null,
+        public ?int $maxApplicationsPerOrder = null,
+        public ?bool $showUpcoming = null,
     ) {}
 
     public function onlyModelAttributes(): array
