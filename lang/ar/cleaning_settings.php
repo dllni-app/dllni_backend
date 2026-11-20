@@ -33,7 +33,7 @@ return [
         'living_room' => 'غرفة معيشة',
         'balcony' => 'شرفة',
         'corridor' => 'ممر',
-        'shed' => 'مستودع',
+        'shed' => 'سقيفة',
     ],
 
     'room_sizes' => [
