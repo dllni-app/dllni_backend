@@ -37,7 +37,12 @@ final class UserCleaningOrderCancelController
             ->findOrFail($order);
 
         $reason = $request->validated('reason');
-        $fee = CleaningFinancialSetting::currentUserCancellationFee();
+        // If the worker search expired without any acceptance, cancellation
+        // is a no-worker decision, not a late cancellation of accepted work.
+        // All bookings with accepted workers keep the existing fee policy.
+        $fee = $model->searchWindowExpired()
+            ? 0.0
+            : CleaningFinancialSetting::currentUserCancellationFee();
 
         if ($model->isEventAssistanceBooking() && $model->sessions->isNotEmpty()) {
             $cancelled = $sessionLifecycle->cancelRemainingSessions(
