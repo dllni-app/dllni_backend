@@ -103,6 +103,9 @@ final class CleaningRoomBlueprints
     {
         $label = match ($roomType) {
             'bedroom' => 'Bedroom',
+            'room' => 'غرفة',
+            'garden' => 'جنينة',
+            'garage_back' => 'ظهر كراج',
             'bathroom' => 'Bathroom',
             'kitchen' => 'Kitchen',
             'living_room' => 'Living Room',
