@@ -149,3 +149,52 @@ it('links seeded supermarket products to the correct shared master product', fun
         ->and($secondMilk->master_product_id)->toBe($existingMasterProduct->id)
         ->and($uniqueProduct->master_product_id)->not->toBeNull();
 });
+
+it('returns a readable Arabic no-match message instead of an error', function (): void {
+    $store = SmStore::factory()->create(['is_active' => true, 'suspension_until' => null]);
+    $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+    $master = MasterProductFactory::new()->create(['name' => 'QA Unique Pack']);
+    $selected = SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'category_id' => $category->id,
+        'master_product_id' => $master->id,
+        'name' => 'QA Unique Pack',
+        'is_available' => true,
+    ]);
+
+    $this->getJson("/api/v1/user/supermarket/products/{$selected->id}/compare")
+        ->assertOk()
+        ->assertJsonCount(0, 'data')
+        ->assertJsonPath('meta.total', 0)
+        ->assertJsonPath('code', 'NO_SIMILAR_PRODUCTS')
+        ->assertJsonPath('message', 'لا يوجد منتج مشابه لهذا المنتج في متاجر أخرى حالياً.');
+});
+
+it('does not mistake a duplicate from the same store for a cross-store comparison', function (): void {
+    $store = SmStore::factory()->create(['is_active' => true, 'suspension_until' => null]);
+    $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+    $master = MasterProductFactory::new()->create(['name' => 'QA Shared Master']);
+    $selected = SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'category_id' => $category->id,
+        'master_product_id' => $master->id,
+        'is_available' => true,
+    ]);
+    SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'category_id' => $category->id,
+        'master_product_id' => $master->id,
+        'is_available' => true,
+    ]);
+
+    $this->getJson("/api/v1/user/supermarket/products/{$selected->id}/compare")
+        ->assertOk()
+        ->assertJsonCount(0, 'data')
+        ->assertJsonPath('code', 'NO_SIMILAR_PRODUCTS');
+});
+
+it('returns a readable message when the comparison product is unavailable', function (): void {
+    $this->getJson('/api/v1/user/supermarket/products/999999999/compare')
+        ->assertNotFound()
+        ->assertJsonPath('message', 'المنتج المطلوب غير متاح للمقارنة حالياً.');
+});

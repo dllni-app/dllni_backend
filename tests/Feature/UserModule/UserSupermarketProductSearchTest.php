@@ -271,7 +271,7 @@ it('shows a supermarket product by id', function (): void {
 
     $response->assertOk()
         ->assertJsonPath('data.id', $product->id)
-        ->assertJsonPath('data.originalPrice', 40)
+        ->assertJsonPath('data.originalPrice', '40.00')
         ->assertJsonPath('data.finalPrice', 25)
         ->assertJsonPath('data.hasDiscount', true)
         ->assertJsonPath('product.id', $product->id)
@@ -386,6 +386,11 @@ it('supports supermarket product compare endpoint alias', function (): void {
     ]);
 
     $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+    $comparisonStore = SmStore::factory()->create([
+        'is_active' => true,
+        'suspension_until' => null,
+    ]);
+    $comparisonCategory = SmCategoryFactory::new()->create(['store_id' => $comparisonStore->id]);
 
     $selectedProduct = SmProductFactory::new()->create([
         'store_id' => $store->id,
@@ -395,8 +400,8 @@ it('supports supermarket product compare endpoint alias', function (): void {
     ]);
 
     $cheaper = SmProductFactory::new()->create([
-        'store_id' => $store->id,
-        'category_id' => $category->id,
+        'store_id' => $comparisonStore->id,
+        'category_id' => $comparisonCategory->id,
         'name' => 'Fresh Milk 500ml',
         'price' => 10,
         'discounted_price' => null,
@@ -404,8 +409,8 @@ it('supports supermarket product compare endpoint alias', function (): void {
     ]);
 
     $expensive = SmProductFactory::new()->create([
-        'store_id' => $store->id,
-        'category_id' => $category->id,
+        'store_id' => $comparisonStore->id,
+        'category_id' => $comparisonCategory->id,
         'name' => 'Fresh Milk 1L',
         'price' => 20,
         'discounted_price' => null,

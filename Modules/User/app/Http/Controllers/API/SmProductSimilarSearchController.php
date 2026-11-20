@@ -25,7 +25,11 @@ final class SmProductSimilarSearchController
                 ->where(fn ($query) => $query
                     ->whereNull('suspension_until')
                     ->orWhere('suspension_until', '<=', $now)))
-            ->findOrFail($product);
+            ->find($product);
+
+        if ($selectedProduct === null) {
+            abort(404, 'المنتج المطلوب غير متاح للمقارنة حالياً.');
+        }
 
         $isCompareRequest = str_ends_with(
             (string) ($request->route()?->uri() ?? ''),
@@ -45,6 +49,12 @@ final class SmProductSimilarSearchController
                 ->where(fn ($query) => $query
                     ->whereNull('suspension_until')
                     ->orWhere('suspension_until', '<=', $now)));
+
+        if ($isCompareRequest) {
+            // Compare the same product across *other* stores, not duplicates
+            // from the current store.
+            $productsQuery->where('store_id', '!=', $selectedProduct->store_id);
+        }
 
         if ($isCompareRequest && $selectedProduct->master_product_id !== null) {
             $productsQuery->where('master_product_id', $selectedProduct->master_product_id);
@@ -80,6 +90,14 @@ final class SmProductSimilarSearchController
             });
         }
 
-        return SmProductResource::collection($products);
+        $response = SmProductResource::collection($products);
+        if ($isCompareRequest && $products->total() === 0) {
+            return $response->additional([
+                'code' => 'NO_SIMILAR_PRODUCTS',
+                'message' => 'لا يوجد منتج مشابه لهذا المنتج في متاجر أخرى حالياً.',
+            ]);
+        }
+
+        return $response;
     }
 }
