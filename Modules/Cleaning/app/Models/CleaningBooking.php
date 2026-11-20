@@ -328,6 +328,8 @@ final class CleaningBooking extends Model
             'estimated_sqm' => 'decimal:2',
             'estimated_hours' => 'decimal:2',
             'scheduled_date' => 'date',
+            'search_started_at' => 'datetime',
+            'search_retry_count' => 'integer',
             'supervised_base_minutes' => 'integer',
             'supervised_duration_minutes' => 'integer',
             'supervised_scheduled_end_at' => 'datetime',
@@ -485,6 +487,29 @@ final class CleaningBooking extends Model
         }
 
         return max(0, (int) $count);
+    }
+
+    /**
+     * Six-hour discovery window ends only when nobody accepted this request.
+     * Any accepted session/worker keeps the normal cancellation policy in force.
+     */
+    public function searchWindowExpired(): bool
+    {
+        $status = $this->status instanceof CleaningBookingStatus
+            ? $this->status->value
+            : (string) $this->status;
+
+        if ($status !== CleaningBookingStatus::Pending->value ||
+            $this->acceptedWorkerCount() > 0 ||
+            $this->sessions()->whereHas('workerAssignments', static function ($query): void {
+                $query->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
+            })->exists()) {
+            return false;
+        }
+
+        $started = $this->search_started_at ?? $this->created_at;
+
+        return $started !== null && $started->copy()->addHours(6)->lessThanOrEqualTo(now());
     }
 
     public function remainingWorkerCount(): int
