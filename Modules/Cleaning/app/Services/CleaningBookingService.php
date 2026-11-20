@@ -151,6 +151,9 @@ final class CleaningBookingService
 
     public function accept(CleaningBooking $booking): CleaningBooking
     {
+        if ($booking->fresh()?->searchWindowExpired()) {
+            throw new InvalidArgumentException('انتهت مهلة البحث عن العمال. اطلب من العميل إعادة إرسال الطلب.');
+        }
         $fromStatus = (string) $booking->status->value;
 
         $updated = DB::transaction(function () use ($booking): CleaningBooking {
