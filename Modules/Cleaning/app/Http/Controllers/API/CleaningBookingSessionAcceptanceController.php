@@ -78,6 +78,9 @@ final class CleaningBookingSessionAcceptanceController
 
     private function assertBookingOpen(CleaningBooking $booking): void
     {
+        if ($booking->fresh()?->searchWindowExpired()) {
+            abort(Response::HTTP_CONFLICT, 'انتهت مهلة البحث عن العمال. يمكن للعميل إعادة إرسال الطلب.');
+        }
         $status = $booking->status instanceof CleaningBookingStatus
             ? $booking->status->value
             : (string) $booking->status;
