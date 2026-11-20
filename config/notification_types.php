@@ -131,6 +131,23 @@ return [
                 ],
             ],
         ],
+        'cleaning.booking.search_expired' => [
+            'legacy_type' => 'cleaning_booking_search_expired',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'انتهت مهلة البحث عن عمال',
+                    'body' => 'لم يقبل أي عامل طلب التنظيف رقم :booking_number خلال 6 ساعات. افتح الطلب لإعادة إرساله أو إلغائه.',
+                ],
+                'en' => [
+                    'title' => 'Worker search timed out',
+                    'body' => 'No worker accepted booking :booking_number within six hours. Open the order to retry or cancel.',
+                ],
+            ],
+        ],
         'cleaning.booking.worker_assigned' => [
             'legacy_type' => 'worker_assigned',
             'module' => 'cleaning',
