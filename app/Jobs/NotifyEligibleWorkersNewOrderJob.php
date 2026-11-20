@@ -61,7 +61,10 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
         $bookingDateTime = $this->bookingDateTime($booking);
 
         $assignmentMode = $booking->resolvedAssignmentMode();
-        $rejectedWorkerIds = $booking->rejections()->pluck('worker_id')->map(static fn (mixed $workerId): int => (int) $workerId)->all();
+        $searchStartedAt = $booking->search_started_at ?? $booking->created_at;
+        $rejectedWorkerIds = $booking->rejections()
+            ->where('rejected_at', '>=', $searchStartedAt)
+            ->pluck('worker_id')->map(static fn (mixed $workerId): int => (int) $workerId)->all();
         $acceptedWorkerIds = $booking->workerAssignments()
             ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
             ->pluck('worker_id')
