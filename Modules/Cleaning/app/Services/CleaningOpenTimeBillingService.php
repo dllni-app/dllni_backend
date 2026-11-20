@@ -261,7 +261,7 @@ final class CleaningOpenTimeBillingService
             'warningMinutes' => max(1, (int) ($snapshot['warningMinutes'] ?? 30)),
             'extensionOptions' => array_values((array) ($snapshot['extensionOptions'] ?? [15, 30, 60])),
             'ceilingEndsAt' => $ceilingEndsAt?->toIso8601String(),
-            'remainingMinutes' => $ceilingEndsAt === null ? null : max(0, (int) $now->diffInMinutes($ceilingEndsAt, false)),
+            'remainingMinutes' => $finishedAt !== null ? 0 : ($ceilingEndsAt === null ? null : max(0, (int) $now->diffInMinutes($ceilingEndsAt, false))),
             'remainingToCeilingMinutes' => $finishedAt !== null ? 0 : ($ceilingEndsAt === null ? null : max(0, (int) $now->diffInMinutes($ceilingEndsAt, false))),
             'serverNow' => $now->toIso8601String(),
             'workStartedAt' => $startedAt?->toIso8601String(),
