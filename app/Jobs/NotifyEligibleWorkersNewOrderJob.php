@@ -338,6 +338,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
 
         // Expansion retries target only workers who have not received this booking.
         $alreadyNotified = DB::table('notifications')
+            ->where('created_at', '>=', $booking->search_started_at ?? $booking->created_at)
             ->where('type', NewOrderRequestNotification::class)
             ->where('notifiable_id', $worker->user->id)
             ->where(function ($query) use ($booking): void {
