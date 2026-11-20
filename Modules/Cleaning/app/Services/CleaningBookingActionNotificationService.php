@@ -38,6 +38,7 @@ final class CleaningBookingActionNotificationService
         $lookback = max(1, (int) config('cleaning_action_notifications.lookback_minutes', 180));
         $chunkSize = max(1, (int) config('cleaning_action_notifications.chunk_size', 100));
         $sent = $this->eventSessionNotifications->dispatchDueReminders($now);
+        $sent += app(CleaningPendingSearchTimeoutService::class)->dispatchDue($now);
 
         CleaningBooking::query()
             ->with([
