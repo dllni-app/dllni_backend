@@ -37,7 +37,8 @@ final class CleaningGeographicDispatchService
 
     public function radiusKm(CleaningBooking $booking): int
     {
-        $minutes = max(0, (int) $booking->created_at->diffInMinutes(now()));
+        $searchStartedAt = $booking->search_started_at ?? $booking->created_at;
+        $minutes = max(0, (int) $searchStartedAt->diffInMinutes(now()));
 
         return min(self::MAX_RADIUS_KM, 10 * (1 + intdiv($minutes, 15)));
     }
