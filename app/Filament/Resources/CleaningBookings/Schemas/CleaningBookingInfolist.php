@@ -586,7 +586,7 @@ final class CleaningBookingInfolist
             'living_room' => 'غرفة معيشة',
             'balcony' => 'شرفة',
             'corridor' => 'ممر',
-            'shed' => 'مستودع',
+            'shed' => 'سقيفة',
             default => 'غرفة',
         };
 
