@@ -33,6 +33,8 @@ final class CleaningPendingSearchTimeoutService
         CleaningBooking::query()
             ->with('customer')
             ->where('status', CleaningBookingStatus::Pending->value)
+            // Historical past-due bookings are not revived by the new feature.
+            ->whereDate('scheduled_date', '>=', $now->toDateString())
             ->where(static function (Builder $query) use ($cutoff): void {
                 $query->where('search_started_at', '<=', $cutoff)
                     ->orWhere(static function (Builder $legacy) use ($cutoff): void {
