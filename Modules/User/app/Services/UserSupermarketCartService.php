@@ -32,12 +32,12 @@ final class UserSupermarketCartService
     {
         return SmCart::query()
             ->where('user_id', $userId)
-            ->with(self::CART_RELATIONS)
             ->latest()
             ->get()
-            ->filter(fn (SmCart $cart): bool => $cart->items->isNotEmpty())
-            ->map(fn (SmCart $cart): array => $this->toPayload($this->normalizeCart($cart)))
-            ->filter(fn (array $payload): bool => $payload['id'] !== null && $payload['items'] !== [])
+            ->map(fn (SmCart $cart): SmCart => $this->normalizeCart($cart))
+            ->unique('id')
+            ->filter(fn (SmCart $cart): bool => $cart->store_id !== null || $cart->items->isNotEmpty())
+            ->map(fn (SmCart $cart): array => $this->toPayload($cart->fresh(self::CART_RELATIONS) ?? $cart))
             ->values()
             ->all();
     }
@@ -486,6 +486,35 @@ final class UserSupermarketCartService
                     ->first();
 
                 if ($firstStoreId !== null) {
+                    $existingStoreCart = SmCart::query()
+                        ->where('user_id', $lockedCart->user_id)
+                        ->where('store_id', $firstStoreId)
+                        ->whereKeyNot($lockedCart->id)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($existingStoreCart !== null) {
+                        // A legacy cart may contain items from several stores. Move each
+                        // item to its store's cart before removing the unscoped cart.
+                        foreach ($items as $item) {
+                            $itemStoreId = $item->product?->store_id !== null ? (int) $item->product->store_id : null;
+                            if ($itemStoreId === null) {
+                                $item->delete();
+
+                                continue;
+                            }
+
+                            $targetCart = $itemStoreId === $firstStoreId
+                                ? $existingStoreCart
+                                : $this->resolveStoreCart((int) $lockedCart->user_id, $itemStoreId);
+                            $this->moveOrMergeItem($item, $targetCart);
+                        }
+
+                        $lockedCart->delete();
+
+                        return $this->normalizeCart($existingStoreCart);
+                    }
+
                     $lockedCart->update(['store_id' => $firstStoreId]);
                     $lockedCart->store_id = $firstStoreId;
                 }

@@ -239,3 +239,64 @@ it('returns supermarket product discounts explicitly in cart totals', function (
         ->assertJsonPath('data.items.0.hasDiscount', true);
 });
 
+it('merges a legacy unscoped supermarket cart into existing store carts when listing', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $firstStore = SmStoreFactory::new()->create();
+    $secondStore = SmStoreFactory::new()->create();
+    $firstCategory = SmCategoryFactory::new()->create(['store_id' => $firstStore->id]);
+    $secondCategory = SmCategoryFactory::new()->create(['store_id' => $secondStore->id]);
+    $firstProduct = SmProductFactory::new()->create(['store_id' => $firstStore->id, 'category_id' => $firstCategory->id]);
+    $secondProduct = SmProductFactory::new()->create(['store_id' => $secondStore->id, 'category_id' => $secondCategory->id]);
+
+    $legacy = SmCart::create(['user_id' => $user->id, 'store_id' => null]);
+    $firstCart = SmCart::create(['user_id' => $user->id, 'store_id' => $firstStore->id]);
+    $secondCart = SmCart::create(['user_id' => $user->id, 'store_id' => $secondStore->id]);
+    foreach ([
+        [$legacy->id, $firstProduct->id, 2],
+        [$legacy->id, $secondProduct->id, 4],
+        [$firstCart->id, $firstProduct->id, 3],
+        [$secondCart->id, $secondProduct->id, 1],
+    ] as [$cartId, $productId, $quantity]) {
+        Modules\Supermarket\Models\SmCartItem::create([
+            'cart_id' => $cartId,
+            'product_id' => $productId,
+            'quantity' => $quantity,
+            'unit_price' => 10,
+        ]);
+    }
+
+    $response = $this->getJson('/api/v1/user/supermarket/carts')->assertOk()->assertJsonCount(2, 'data');
+    $carts = collect($response->json('data'))->keyBy('storeId');
+    expect($carts->get($firstStore->id)['id'])->toBe($firstCart->id);
+    expect($carts->get($secondStore->id)['id'])->toBe($secondCart->id);
+    expect($carts->get($firstStore->id)['items'][0]['quantity'])->toBe(5);
+    expect($carts->get($secondStore->id)['items'][0]['quantity'])->toBe(5);
+
+    $this->assertDatabaseMissing('sm_carts', ['id' => $legacy->id]);
+    $this->assertDatabaseCount('sm_carts', 2);
+    $this->getJson('/api/v1/user/supermarket/carts')->assertOk()->assertJsonCount(2, 'data');
+    $this->assertDatabaseHas('sm_cart_items', ['cart_id' => $firstCart->id, 'product_id' => $firstProduct->id, 'quantity' => 5]);
+    $this->assertDatabaseHas('sm_cart_items', ['cart_id' => $secondCart->id, 'product_id' => $secondProduct->id, 'quantity' => 5]);
+});
+
+it('resolves a legacy cart detail into an existing store cart without a duplicate key error', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+    $store = SmStoreFactory::new()->create();
+    $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+    $product = SmProductFactory::new()->create(['store_id' => $store->id, 'category_id' => $category->id]);
+    $legacy = SmCart::create(['user_id' => $user->id, 'store_id' => null]);
+    $existing = SmCart::create(['user_id' => $user->id, 'store_id' => $store->id]);
+    Modules\Supermarket\Models\SmCartItem::create([
+        'cart_id' => $legacy->id, 'product_id' => $product->id, 'quantity' => 2, 'unit_price' => 10,
+    ]);
+
+    $this->getJson('/api/v1/user/supermarket/carts/'.$legacy->id)
+        ->assertOk()
+        ->assertJsonPath('data.id', $existing->id)
+        ->assertJsonPath('data.storeId', $store->id)
+        ->assertJsonPath('data.items.0.quantity', 2);
+    $this->assertDatabaseMissing('sm_carts', ['id' => $legacy->id]);
+});

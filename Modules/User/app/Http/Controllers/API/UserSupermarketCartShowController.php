@@ -6,7 +6,6 @@ namespace Modules\User\Http\Controllers\API;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Modules\Supermarket\Models\SmCart;
 use Modules\User\Services\UserSupermarketCartService;
 
 final class UserSupermarketCartShowController
@@ -25,16 +24,8 @@ final class UserSupermarketCartShowController
             ]);
         }
 
-        $cartPayloads = SmCart::query()
-            ->where('user_id', $userId)
-            ->latest()
-            ->pluck('id')
-            ->map(fn ($id): array => $this->carts->show($userId, (int) $id))
-            ->values()
-            ->all();
-
         return response()->json([
-            'data' => $cartPayloads,
+            'data' => $this->carts->list($userId),
         ]);
     }
 }
