@@ -78,19 +78,48 @@ final class RedactCleaningCustomerContactForUnacceptedWorker
             }
         }
 
+        $area = $this->publicNeighborhoodLabel($booking);
         if (isset($booking['address']) && is_array($booking['address'])) {
             foreach ($booking['address'] as $key => $_) {
                 if (! in_array($key, ['neighborhoodId', 'neighborhoodName'], true)) {
                     $booking['address'][$key] = null;
                 }
             }
+            $booking['address']['neighborhoodName'] = $area;
         }
 
         $booking['addressLatitude'] = null;
         $booking['addressLongitude'] = null;
-        $booking['locationName'] = $booking['neighborhoodName'] ?? null;
+        // Only a broad area can be displayed before the worker accepts.
+        // Never fall back to the full address or a customer-authored note.
+        $booking['neighborhoodName'] = $area;
+        $booking['locationName'] = $area;
 
         return $booking;
+    }
+
+    private function publicNeighborhoodLabel(array $booking): string
+    {
+        $candidates = [
+            $booking['neighborhoodName'] ?? null,
+            $booking['neighborhood_name'] ?? null,
+            $booking['address']['neighborhoodName'] ?? null,
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (! is_string($candidate)) {
+                continue;
+            }
+            $name = mb_trim($candidate);
+            // A long or multiline string might contain the exact street
+            // address rather than the general district. Do not reveal it.
+            if ($name !== '' && mb_strlen($name) <= 60 &&
+                ! preg_match('/[\\r\\n,،0-9]/u', $name)) {
+                return $name;
+            }
+        }
+
+        return 'المنطقة غير محددة';
     }
 
     private function workerHasAcceptedBooking(array $booking, int $workerId): bool
