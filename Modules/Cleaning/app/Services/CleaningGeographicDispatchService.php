@@ -15,6 +15,10 @@ final class CleaningGeographicDispatchService
 
     public function hasOpenWorkerSlots(CleaningBooking $booking): bool
     {
+        if ($booking->searchWindowExpired()) {
+            return false;
+        }
+
         if (! $booking->isTeamFulfilled()) {
             return true;
         }
