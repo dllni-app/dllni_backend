@@ -14,11 +14,9 @@ return new class extends Migration
             return;
         }
 
-        // Retain historical codes and their prices for existing bookings.
-        // Only the new-customer catalog hides these two legacy choices.
-        DB::table('cleaning_room_types')
-            ->whereIn('code', ['bedroom', 'living_room'])
-            ->update(['is_active' => false, 'updated_at' => now()]);
+        // Preserve current bookability until an administrator configures
+        // positive rates and activates the replacement "غرف" type in Filament.
+        // Activating that type retires the legacy options automatically.
 
         $types = [
             [
