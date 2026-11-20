@@ -263,6 +263,7 @@ Route::prefix('v1/user')->group(function (): void {
         Route::patch('cleaning/orders/{order}', UserCleaningOrderUpdateController::class);
         Route::post('cleaning/orders/{order}/last-hour-team-decision', UserCleaningLastHourTeamDecisionController::class);
         Route::post('cleaning/orders/{order}/cancel', UserCleaningOrderCancelController::class);
+        Route::post('cleaning/orders/{order}/search/retry', Modules\User\Http\Controllers\API\UserCleaningOrderSearchRetryController::class);
         Route::post('cleaning/orders/{order}/preferred-worker-rejection/decision', [UserCleaningPreferredWorkerRejectionDecisionController::class, 'decide']);
         Route::post('cleaning/orders/{order}/sos', UserCleaningOrderSosController::class);
         Route::post('cleaning/orders/{order}/start-verification/confirm', UserCleaningOrderStartVerificationConfirmController::class)
