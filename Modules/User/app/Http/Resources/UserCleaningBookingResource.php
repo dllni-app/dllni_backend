@@ -92,6 +92,14 @@ final class UserCleaningBookingResource extends JsonResource
             ? $this->specificWorkerIds()
             : [];
         $payload['bookingKind'] = (string) ($this->booking_kind ?? 'standard');
+        $searchStartedAt = $this->search_started_at ?? $this->created_at;
+        $payload['workerSearch'] = [
+            'startedAt' => $searchStartedAt?->toIso8601String(),
+            'expiresAt' => $searchStartedAt?->copy()->addHours(6)->toIso8601String(),
+            'expired' => $this->searchWindowExpired(),
+            'canRetry' => $this->searchWindowExpired(),
+            'retryCount' => (int) ($this->search_retry_count ?? 0),
+        ];
         $payload['lastHourTeamDecision'] = app(
             \Modules\Cleaning\Services\CleaningLastHourCoverageService::class
         )->decision($this->resource);
