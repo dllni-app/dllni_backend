@@ -103,7 +103,7 @@ final class CleaningGeographicDispatchService
             })
             ->get()
             ->filter(function (CleaningBooking $booking) use ($worker): bool {
-                if (! $this->hasRequiredLocations($worker, $booking) || $booking->isTeamFulfilled()) {
+                if (! $this->hasRequiredLocations($worker, $booking) || $booking->isTeamFulfilled() || $booking->searchWindowExpired()) {
                     return false;
                 }
 
