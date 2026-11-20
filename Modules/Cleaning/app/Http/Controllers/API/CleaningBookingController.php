@@ -298,6 +298,9 @@ final class CleaningBookingController
     public function accept(CleaningBookingAcceptRequest $request, CleaningBooking $cleaning_booking): CleaningBookingResource|JsonResponse
     {
         $this->ensureWorkerCanActOnBooking($cleaning_booking, requireOwnership: false);
+        if ($cleaning_booking->searchWindowExpired()) {
+            return response()->json(['message' => 'انتهت مهلة قبول الطلب. يمكن للعميل إعادة إرسال الطلب.'], 409);
+        }
         // Signed room-period V2 bookings must be accepted per execution
         // session. The legacy parent accept path creates no V2 session proof
         // and can change the pricing components after the customer signs.
