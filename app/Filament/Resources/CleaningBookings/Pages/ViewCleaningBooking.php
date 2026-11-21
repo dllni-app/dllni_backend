@@ -31,6 +31,7 @@ use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
 use Modules\Cleaning\Models\CleaningTimeWarning;
 use Modules\Cleaning\Services\CleaningAdministrativeOperationsService;
+use Modules\Cleaning\Services\CleaningSettledVisitFundingAuditService;
 use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
 use Modules\Cleaning\Services\CleaningMaterialInventoryService;
 use Modules\Cleaning\Services\CleaningSupervisorAssignmentService;
@@ -65,6 +66,24 @@ final class ViewCleaningBooking extends ViewRecord
 
         return $schema->components([
             ...$existingComponents,
+            Section::make('مراجعة تسويات الزيارات')
+                ->description('تنبيه تدقيقي فقط: التسوية مسجلة تاريخياً، ولا يعني ذلك إثبات التمويل أو السماح بتعديل المبالغ.')
+                ->schema([
+                    RepeatableEntry::make('settled_visit_funding_audit')
+                        ->hiddenLabel()
+                        ->getStateUsing(fn (CleaningBooking $record): array => app(CleaningSettledVisitFundingAuditService::class)->unresolved($record))
+                        ->schema([
+                            TextEntry::make('sequence')->label('الزيارة'),
+                            TextEntry::make('payment_status')->label('حالة التسوية')->badge()->color('warning'),
+                            TextEntry::make('worker_amount')->label('مستحق العمال'),
+                            TextEntry::make('travel')->label('المواصلات المضمنة'),
+                            TextEntry::make('gap')->label('العجز غير الممول')->badge()->color('danger'),
+                            TextEntry::make('reason')->label('سبب المراجعة')->columnSpanFull(),
+                        ])
+                        ->columns(['default' => 1, 'md' => 2, 'xl' => 3]),
+                ])
+                ->visible(fn (CleaningBooking $record): bool => app(CleaningSettledVisitFundingAuditService::class)->unresolved($record) !== [])
+                ->columnSpanFull(),
             Section::make('تقارير التأخر وعدم التنقل')
                 ->description('سجل بلاغات العميل المتعلقة بالطلب والعمال، مع الإجراء الذي اختاره ووقت إغلاق الحالة.')
                 ->schema([

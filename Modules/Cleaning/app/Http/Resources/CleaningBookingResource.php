@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Http\Resources;
 
 use App\Models\CleaningFinancialSetting;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Arr;
@@ -443,7 +444,142 @@ final class CleaningBookingResource extends JsonResource
             }
         }
 
+        if ($currentWorkerId !== null && (int) $currentUser?->id !== (int) $this->customer_id) {
+            $this->applyWorkerCustomerDataDisclosure($payload, $request);
+        }
+
         return $payload;
+    }
+
+    public function withResponse(Request $request, JsonResponse $response): void
+    {
+        if ($request->user()?->worker !== null
+            && (int) $request->user()->id !== (int) $this->customer_id) {
+            $response->headers->set('Cache-Control', 'private, no-store');
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function applyWorkerCustomerDataDisclosure(array &$payload, Request $request): void
+    {
+        $worker = $request->user()?->worker;
+        $mayViewDestination = $worker !== null
+            && app(\Modules\Cleaning\Services\CleaningWorkerCustomerDataDisclosurePolicy::class)
+                ->mayViewDestination($this->resource, $worker, $request);
+
+        if (is_array($payload['customer'] ?? null)) {
+            $payload['customer']['id'] = null;
+            $payload['customer']['name'] = null;
+            $payload['customer']['email'] = null;
+            $payload['customer']['phone'] = null;
+        }
+        $payload['customerId'] = null;
+
+        $area = app(\Modules\Cleaning\Services\CleaningWorkerCustomerDataDisclosurePolicy::class)
+            ->neighborhoodLabel($this->resource);
+        $payload['neighborhoodName'] = $area;
+        $payload['locationName'] = $mayViewDestination
+            ? ($payload['address']['fullAddress'] ?? $area)
+            : $area;
+        $payload['propertyDetails'] = $this->safeWorkerPropertyDetails($payload['propertyDetails'] ?? []);
+        $payload['property_details'] = $this->safeWorkerPropertyDetails($payload['property_details'] ?? []);
+        $payload['specialServices'] = $this->safeWorkerSpecialServices($payload['specialServices'] ?? []);
+
+        if ($mayViewDestination) {
+            $address = is_array($payload['address'] ?? null) ? $payload['address'] : [];
+            $payload['address'] = [
+                'fullAddress' => $address['fullAddress'] ?? null,
+                'full_address' => $address['full_address'] ?? null,
+                'locationName' => $address['locationName'] ?? null,
+                'location_name' => $address['location_name'] ?? null,
+                'neighborhoodId' => $this->neighborhood_id,
+                'neighborhoodName' => $area,
+                'latitude' => $this->address_latitude !== null ? (float) $this->address_latitude : null,
+                'longitude' => $this->address_longitude !== null ? (float) $this->address_longitude : null,
+                'building' => $address['building'] ?? null,
+                'floor' => $address['floor'] ?? null,
+                'apartment' => $address['apartment'] ?? null,
+                'notes' => null,
+            ];
+
+            return;
+        }
+
+        $payload['addressLatitude'] = null;
+        $payload['addressLongitude'] = null;
+        $payload['address'] = [
+            'fullAddress' => null,
+            'full_address' => null,
+            'locationName' => null,
+            'location_name' => null,
+            'neighborhoodId' => $this->neighborhood_id,
+            'neighborhoodName' => $area,
+            'latitude' => null,
+            'longitude' => null,
+            'building' => null,
+            'floor' => null,
+            'apartment' => null,
+            'notes' => null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function safeWorkerPropertyDetails(mixed $details): array
+    {
+        if (! is_array($details)) {
+            return [];
+        }
+
+        return array_intersect_key($details, array_flip([
+            'bedrooms', 'bathrooms', 'kitchens', 'rooms', 'balconies', 'sheds',
+            'living_room_size', 'living_room_size_label', 'room_size', 'room_size_label',
+            'room_type', 'room_type_label', 'cleaning_mode', 'cleaning_mode_label',
+            'event_type', 'event_type_label', 'venue_type', 'venue_type_label',
+            'eventType', 'eventTypeLabel', 'venueType', 'venueTypeLabel',
+            'cleaningMode', 'cleaningModeLabel', 'hours', 'is_hot_order',
+        ]));
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function safeWorkerSpecialServices(mixed $services): array
+    {
+        if (! is_array($services)) {
+            return [];
+        }
+
+        return array_map(static function (mixed $service): array {
+            if (! is_array($service)) {
+                return [];
+            }
+
+            foreach (['notes', 'unableReason', 'failureReason'] as $field) {
+                if (array_key_exists($field, $service)) {
+                    $service[$field] = null;
+                }
+            }
+
+            if (is_array($service['items'] ?? null)) {
+                $service['items'] = array_map(static function (mixed $item): array {
+                    if (! is_array($item)) {
+                        return [];
+                    }
+
+                    if (array_key_exists('notes', $item)) {
+                        $item['notes'] = null;
+                    }
+
+                    return $item;
+                }, $service['items']);
+            }
+
+            return $service;
+        }, $services);
     }
 
     private function workerOwnedAssignmentPayload(CleaningBookingWorkerAssignment $assignment): array

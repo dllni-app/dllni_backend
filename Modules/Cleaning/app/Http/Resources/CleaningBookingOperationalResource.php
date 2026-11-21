@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Http\Resources;
 
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -22,6 +23,9 @@ final class CleaningBookingOperationalResource extends JsonResource
         $payload['materials'] = $this->materialsPayload();
         $payload['materialKit'] = $this->materialKitPayload();
         $payload['specialServices'] = $this->specialServicesPayload();
+        if ($request->user()?->worker !== null && (int) $request->user()->id !== (int) $this->customer_id) {
+            $payload['specialServices'] = $this->redactWorkerSpecialServiceText($payload['specialServices']);
+        }
         $payload['openTime'] = (string) ($this->booking_kind ?? '') === 'open_time'
             ? app(CleaningOpenTimeBillingService::class)->presentation($this->resource)
             : null;
@@ -38,6 +42,14 @@ final class CleaningBookingOperationalResource extends JsonResource
         ];
 
         return $payload;
+    }
+
+    public function withResponse(Request $request, JsonResponse $response): void
+    {
+        if ($request->user()?->worker !== null
+            && (int) $request->user()->id !== (int) $this->customer_id) {
+            $response->headers->set('Cache-Control', 'private, no-store');
+        }
     }
 
     /** @return array<int, array<string, mixed>> */
@@ -115,5 +127,24 @@ final class CleaningBookingOperationalResource extends JsonResource
             'receivedAt' => $kit->received_at?->toIso8601String(),
             'receivedByWorkerId' => $kit->received_by_worker_id !== null ? (int) $kit->received_by_worker_id : null,
         ];
+    }
+
+    /** @param array<int, array<string, mixed>> $services
+     * @return array<int, array<string, mixed>>
+     */
+    private function redactWorkerSpecialServiceText(array $services): array
+    {
+        foreach ($services as &$service) {
+            $service['notes'] = null;
+            $service['unableReason'] = null;
+
+            foreach ($service['items'] ?? [] as &$item) {
+                $item['notes'] = null;
+            }
+            unset($item);
+        }
+        unset($service);
+
+        return $services;
     }
 }

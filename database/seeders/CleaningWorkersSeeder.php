@@ -126,19 +126,6 @@ final class CleaningWorkersSeeder extends Seeder
         }
     }
 
-    private static function defaultWorkingHours(): array
-    {
-        return [
-            'sunday' => ['available' => false, 'data' => []],
-            'monday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
-            'tuesday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
-            'wednesday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
-            'thursday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
-            'friday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
-            'saturday' => ['available' => true, 'data' => [['10:00' => '16:00']]],
-        ];
-    }
-
     /**
      * @param  array<string, mixed>  $workerData
      */
@@ -179,7 +166,6 @@ final class CleaningWorkersSeeder extends Seeder
                 'home_address' => $workerData['home_address'],
                 'home_latitude' => $workerData['home_latitude'],
                 'home_longitude' => $workerData['home_longitude'],
-                'default_working_hours' => self::defaultWorkingHours(),
             ]
         );
 
@@ -201,13 +187,11 @@ final class CleaningWorkersSeeder extends Seeder
             'home_address' => $workerData['home_address'],
             'home_latitude' => $workerData['home_latitude'],
             'home_longitude' => $workerData['home_longitude'],
-            'default_working_hours' => self::defaultWorkingHours(),
         ];
 
         if (Schema::hasColumn('workers', 'birthday')) {
             $updates['birthday'] = $workerData['birthday'];
         }
-
 
         $worker->forceFill($updates)->save();
 

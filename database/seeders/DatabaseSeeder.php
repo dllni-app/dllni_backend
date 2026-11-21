@@ -6,6 +6,7 @@ namespace Database\Seeders;
 
 use Database\Seeders\Permissions\RestaurantOwnerEmployeePermissionsSeeder;
 use Database\Seeders\Permissions\SupermarketOwnerEmployeePermissionsSeeder;
+use Database\Seeders\Permissions\WorkerCompliancePermissionsSeeder;
 use Illuminate\Database\Seeder;
 use Modules\Cleaning\Database\Seeders\CleaningBannerSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningBookingSeeder;
@@ -26,6 +27,7 @@ final class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call([
+            WorkerCompliancePermissionsSeeder::class,
             DashboardPermissionsSeeder::class,
             DeliveryPermissionsSeeder::class,
             RestaurantOwnerEmployeePermissionsSeeder::class,            SupermarketOwnerEmployeePermissionsSeeder::class,
@@ -93,5 +95,4 @@ final class DatabaseSeeder extends Seeder
     {
         return config('app.env') !== 'production';
     }
-
 }

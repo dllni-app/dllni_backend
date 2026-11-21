@@ -15,6 +15,8 @@ use Modules\Cleaning\Http\Resources\CleaningBookingOperationalResource;
 use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Services\CleaningBookingWorkerSessionVisibilityService;
+use Modules\Cleaning\Services\CleaningV3WorkerBookingReadProjection;
+use Modules\Cleaning\Services\CleaningWorkerCustomerDataDisclosurePolicy;
 use Modules\Cleaning\Support\WorkerBookingRequirementsPresenter;
 use Modules\Cleaning\Support\WorkerPendingSpecialServicesPreview;
 
@@ -27,6 +29,30 @@ final class CleaningBookingShowController
             abort(404);
         }
         $worker = Auth::user()?->worker;
+        if ($worker instanceof Worker && (string) ($cleaning_booking->contract_version ?? '') === 'v3') {
+            // A V3 parent represents multiple independent visits. Never return
+            // booking-wide property, customer or location details to a worker.
+            // Precise navigation remains scoped to an authorized visit route.
+            $visibility = app(CleaningBookingWorkerSessionVisibilityService::class);
+            abort_unless($visibility->canViewBooking($cleaning_booking, $worker), 404);
+            $visible = $visibility->visibleSessions($cleaning_booking, $worker);
+
+            return response()->json(['data' => app(CleaningV3WorkerBookingReadProjection::class)->present(
+                [
+                    'id' => (int) $cleaning_booking->id,
+                    'bookingNumber' => (string) $cleaning_booking->booking_number,
+                    'status' => $cleaning_booking->status?->value ?? (string) $cleaning_booking->status,
+                    'locationSummary' => app(CleaningWorkerCustomerDataDisclosurePolicy::class)
+                        ->neighborhoodLabel($cleaning_booking),
+                ],
+                $visible->map(static fn ($visit): array => [
+                    'sessionId' => (int) $visit->id,
+                    'scheduledDate' => $visit->scheduled_date?->format('Y-m-d'),
+                    'scheduledTime' => mb_substr((string) $visit->scheduled_time, 0, 5),
+                    'status' => $visit->status?->value ?? (string) $visit->status,
+                ])->values()->all(),
+            )])->header('Cache-Control', 'private, no-store');
+        }
         if ($worker instanceof Worker && $this->shouldScopeV2WorkerRooms($cleaning_booking)) {
             $eligibleOffer = $this->isWorkerDispatchCandidate($cleaning_booking)
                 && ((string) $cleaning_booking->booking_kind === 'standard'
@@ -34,10 +60,12 @@ final class CleaningBookingShowController
                         ->visibleSessions($cleaning_booking, $worker)->isNotEmpty());
             abort_unless($this->workerHasAcceptedAssignment($cleaning_booking, $worker) || $eligibleOffer, 404);
 
-            return response()->json(['data' => $this->workerDiscoveryPayload($cleaning_booking, $worker)]);
+            return response()->json(['data' => $this->workerDiscoveryPayload($cleaning_booking, $worker)])
+                ->header('Cache-Control', 'private, no-store');
         }
         if ($worker instanceof Worker && $this->isWorkerDispatchCandidate($cleaning_booking)) {
-            return response()->json(['data' => $this->workerDiscoveryPayload($cleaning_booking, $worker)]);
+            return response()->json(['data' => $this->workerDiscoveryPayload($cleaning_booking, $worker)])
+                ->header('Cache-Control', 'private, no-store');
         }
 
         $this->ensureWorkerCanViewBooking($cleaning_booking);
@@ -147,16 +175,15 @@ final class CleaningBookingShowController
                 : $booking->rooms()->get()->map(fn ($room): array => ['id' => $room->id, 'roomKey' => $room->room_key, 'roomType' => $room->room_type, 'roomSize' => $room->room_size, 'displayLabel' => $room->display_label])->all(),
             $scopeVisitRooms ? null : (is_array($booking->property_details) ? $booking->property_details : null),
         );
-        $safe['locationSummary'] = $booking->neighborhood_name;
-        $safe['neighborhoodName'] = $booking->neighborhood_name;
+        $neighborhoodLabel = app(CleaningWorkerCustomerDataDisclosurePolicy::class)->neighborhoodLabel($booking);
+        $safe['locationSummary'] = $neighborhoodLabel;
+        $safe['neighborhoodName'] = $neighborhoodLabel;
 
         // A candidate may review the task description and selected time before
         // accepting an Open-Time offer. Keep full address, totals and other
         // property metadata redacted until acceptance.
         if ((string) $booking->booking_kind === 'open_time') {
-            $safe['propertyDetails'] = [
-                'notes' => mb_trim((string) data_get($booking->property_details, 'notes', '')),
-            ];
+            $safe['propertyDetails'] = [];
             $safe['openTime'] = [
                 'isOpenTime' => true,
                 'requestedWorkerCount' => max(1, (int) $booking->number_of_workers),
@@ -215,15 +242,17 @@ final class CleaningBookingShowController
                 $safe['supervisorContact'] = $payload['supervisorContact'];
             }
             $safe['roomTasks'] = $booking->rooms()->get()->map(static fn ($room): array => [
-                    'id' => $room->id, 'roomKey' => $room->room_key,
-                    'roomType' => $room->room_type, 'roomSize' => $room->room_size,
-                    'displayLabel' => $room->display_label,
-                ])->all();
+                'id' => $room->id, 'roomKey' => $room->room_key,
+                'roomType' => $room->room_type, 'roomSize' => $room->room_size,
+                'displayLabel' => $room->display_label,
+            ])->all();
             // Booking-level service details are available after acceptance.
             $safe['bookingBasePrice'] = (float) ($payload['bookingBasePrice'] ?? $booking->base_price ?? 0);
-            $safe['address'] = $payload['address'] ?? ['fullAddress' => data_get($booking->property_details, 'address')];
-            $safe['addressLatitude'] = $payload['addressLatitude'] ?? null;
-            $safe['addressLongitude'] = $payload['addressLongitude'] ?? null;
+            if (app(CleaningWorkerCustomerDataDisclosurePolicy::class)->mayViewDestination($booking, $worker, request())) {
+                $safe['address'] = $payload['address'] ?? null;
+                $safe['addressLatitude'] = $payload['addressLatitude'] ?? null;
+                $safe['addressLongitude'] = $payload['addressLongitude'] ?? null;
+            }
             $safe = array_merge($safe, $this->acceptedWorkerOperationalDetails($booking, $worker, array_column($acceptedSessions, 'id')));
         }
         foreach (['workerOffer', 'worker_offer', 'myAssignment', 'worker_assignment'] as $key) {
@@ -308,8 +337,6 @@ final class CleaningBookingShowController
         ])->all();
     }
 
-    /**
-     */
     private function shouldScopeV2WorkerRooms(CleaningBooking $booking): bool
     {
         if ((int) $booking->number_of_workers <= 1

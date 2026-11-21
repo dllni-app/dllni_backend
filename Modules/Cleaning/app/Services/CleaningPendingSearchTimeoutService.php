@@ -34,7 +34,12 @@ final class CleaningPendingSearchTimeoutService
             ->with('customer')
             ->where('status', CleaningBookingStatus::Pending->value)
             // Historical past-due bookings are not revived by the new feature.
-            ->whereDate('scheduled_date', '>=', $now->toDateString())
+            ->where(static function (Builder $query) use ($now): void {
+                $query->whereDate('scheduled_date', '>=', $now->toDateString())
+                    ->orWhereHas('sessions', static function (Builder $sessions) use ($now): void {
+                        $sessions->whereDate('scheduled_date', '>=', $now->toDateString());
+                    });
+            })
             ->where(static function (Builder $query) use ($cutoff): void {
                 $query->where('search_started_at', '<=', $cutoff)
                     ->orWhere(static function (Builder $legacy) use ($cutoff): void {
@@ -44,7 +49,8 @@ final class CleaningPendingSearchTimeoutService
             })
             ->chunkById(100, function ($bookings) use ($now, &$sent): void {
                 foreach ($bookings as $booking) {
-                    if ($booking->customer === null || ! $booking->searchWindowExpired()) {
+                    if ($booking->customer === null || ! $booking->searchWindowExpired()
+                        || ! app(CleaningSearchDiscoveryWindowPolicy::class)->hasAcceptableFutureStart($booking)) {
                         continue;
                     }
 
@@ -53,7 +59,8 @@ final class CleaningPendingSearchTimeoutService
                         continue;
                     }
                     $due = $start->copy()->addHours(6);
-                    $dedupe = hash('sha256', "cleaning.search.expired|{$booking->id}|{$start->toIso8601String()}");
+                    $dedupe = app(CleaningSearchEscalationDedupeKey::class)
+                        ->make((int) $booking->id, $start);
                     $notification = CleaningNotificationDispatch::query()->firstOrCreate(
                         ['dedupe_key' => $dedupe],
                         [

@@ -106,21 +106,11 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
             'home_address' => 'حلب - الحمدانية',
             'home_latitude' => 36.1795,
             'home_longitude' => 37.1082,
-            'default_working_hours' => [
-                'sunday' => ['available' => true, 'data' => [['09:00' => '17:00']]],
-                'monday' => ['available' => true, 'data' => [['09:00' => '17:00']]],
-                'tuesday' => ['available' => true, 'data' => [['09:00' => '17:00']]],
-                'wednesday' => ['available' => true, 'data' => [['09:00' => '17:00']]],
-                'thursday' => ['available' => true, 'data' => [['09:00' => '17:00']]],
-                'friday' => ['available' => false, 'data' => []],
-                'saturday' => ['available' => false, 'data' => []],
-            ],
         ];
 
         if (Schema::hasColumn('workers', 'birthday')) {
             $workerUpdates['birthday'] = '1994-02-14';
         }
-
 
         $worker->forceFill($workerUpdates)->save();
         $worker->user->update(['name' => 'رنا أحمد']);

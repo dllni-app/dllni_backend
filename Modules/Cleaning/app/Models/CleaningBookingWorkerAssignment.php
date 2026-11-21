@@ -7,12 +7,15 @@ namespace Modules\Cleaning\Models;
 use App\Models\Worker;
 use Closure;
 use Illuminate\Database\Eloquent\Casts\Attribute;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Modules\Cleaning\Observers\WorkerComplianceBookingAssignmentObserver;
 
+#[ObservedBy([WorkerComplianceBookingAssignmentObserver::class])]
 final class CleaningBookingWorkerAssignment extends Model
 {
     use HasFactory;

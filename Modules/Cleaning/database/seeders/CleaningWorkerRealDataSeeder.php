@@ -56,15 +56,6 @@ final class CleaningWorkerRealDataSeeder extends Seeder
                 'home_address' => 'حلب - الجميلية - شارع النصر',
                 'home_latitude' => 36.2127,
                 'home_longitude' => 37.1456,
-                'default_working_hours' => [
-                    'sunday' => ['available' => true, 'data' => [['08:00' => '16:00']]],
-                    'monday' => ['available' => true, 'data' => [['08:00' => '16:00']]],
-                    'tuesday' => ['available' => true, 'data' => [['08:00' => '16:00']]],
-                    'wednesday' => ['available' => true, 'data' => [['08:00' => '16:00']]],
-                    'thursday' => ['available' => true, 'data' => [['08:00' => '16:00']]],
-                    'friday' => ['available' => false, 'data' => []],
-                    'saturday' => ['available' => false, 'data' => []],
-                ],
             ]
         );
 

@@ -21,6 +21,37 @@ use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
 use Modules\Cleaning\Models\CleaningTimeWarning;
 
+it('does not cache a real issued visit code or authenticated visit transition payload', function (): void {
+    [$customer, $workerUser, $worker, $booking] = makeLifecycleScenario();
+    $session = makeLifecycleSession($booking, 1, now()->addDay()->toDateString(), '10:00');
+    makeLifecycleAssignment($session, $worker);
+
+    $path = "/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}";
+
+    Sanctum::actingAs($workerUser);
+    $this->postJson("{$path}/start-travel")->assertOk();
+    $this->postJson("{$path}/arrive")->assertOk();
+
+    $issued = $this->getJson("{$path}/security-code")->assertOk();
+    $securityCode = (string) $issued->json('data.securityCode');
+    expect($securityCode)->toMatch('/^\\d{4}$/')
+        ->and((string) $issued->headers->get('Cache-Control'))->toContain('private', 'no-store');
+
+    Sanctum::actingAs($customer);
+    $confirmed = $this->postJson(
+        "{$path}/start-verification/confirm",
+        ['code' => $securityCode],
+    )->assertOk();
+
+    // Customer authorization does not make a booking, roster and schedule
+    // safe for shared proxies or browser disk caches.
+    expect((string) $confirmed->headers->get('Cache-Control'))->toContain('private', 'no-store');
+
+    Sanctum::actingAs($workerUser);
+    $started = $this->postJson("{$path}/start-work")->assertOk();
+    expect((string) $started->headers->get('Cache-Control'))->toContain('private', 'no-store');
+});
+
 it('allows a worker assigned only to a child session to view the parent booking details', function (): void {
     [, $workerUser, $worker, $booking] = makeLifecycleScenario();
     $session = makeLifecycleSession(

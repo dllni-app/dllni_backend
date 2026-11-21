@@ -3,18 +3,25 @@
 declare(strict_types=1);
 
 use App\Models\Worker;
-use Laravel\Sanctum\Sanctum;
 use Illuminate\Support\Facades\DB;
+use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningSpecialService;
 
 it('scopes supervised team worker details and never reveals cleaning materials or order pricing', function () {
     $booking = CleaningBooking::factory()->create([
         'booking_kind' => 'supervised_team',
         'status' => CleaningBookingStatus::WorkerAssigned,
+        'neighborhood_name' => 'Aleppo, Private Street 123',
+        'address_latitude' => 36.2,
+        'address_longitude' => 37.1,
         'property_details' => [
             'room_cleaning_modes' => ['bedroom.medium.1' => 'deep'],
             'cleaning_materials' => ['secret-kit'],
+            'full_address' => 'Private Street 123, Building 4',
+            'custom_service' => 'Call me at +963900000001',
+            'special_requirement' => 'Door code 1357',
         ],
     ]);
     $booking->rooms()->create([
@@ -31,6 +38,24 @@ it('scopes supervised team worker details and never reveals cleaning materials o
         'status' => 'accepted',
         'accepted_at' => now(),
     ]);
+    $service = CleaningSpecialService::query()->create([
+        'name' => 'Additional cleaning',
+        'slug' => 'additional-cleaning-'.$booking->id,
+        'pricing_unit' => 'piece',
+        'base_unit_price' => 100,
+    ]);
+    $booking->specialServices()->create([
+        'cleaning_special_service_id' => $service->id,
+        'service_name' => 'Additional cleaning',
+        'pricing_unit' => 'piece',
+        'dirtiness_level' => 'normal',
+        'quantity' => 1,
+        'base_unit_price' => 100,
+        'price_multiplier' => 1,
+        'total_price' => 100,
+        'execution_status' => 'pending',
+        'notes' => 'Access code 9876; phone +963900000002',
+    ]);
 
     Sanctum::actingAs($outsider->user);
     $this->getJson('/api/v1/cleaning/supervised-worker/bookings/'.$booking->id)
@@ -44,6 +69,10 @@ it('scopes supervised team worker details and never reveals cleaning materials o
         ->assertJsonPath('data.scopeRooms.0.cleaningMode', 'deep')
         ->assertJsonPath('data.scopeRooms.0.title', 'غرفة النوم')
         ->assertJsonPath('data.allowedActions', ['view', 'sos'])
+        ->assertJsonPath('data.neighborhoodName', 'المنطقة غير محددة')
+        ->assertJsonPath('data.destination', null)
+        ->assertJsonPath('data.propertyDetails.eventType', null)
+        ->assertJsonPath('data.specializedServices.0.notes', null)
         ->assertJsonPath('data.myAttendance.canStartTravel', true)
         ->assertJsonPath('data.myAttendance.canArrive', false)
         ->assertJsonPath('data.myAttendance.startedTravelAt', null)
@@ -51,6 +80,20 @@ it('scopes supervised team worker details and never reveals cleaning materials o
 
     expect($result->json('data'))->not->toHaveKeys(['materials', 'totalPrice', 'adminMargin']);
     expect(json_encode($result->json()))->not->toContain('secret-kit');
+    expect(json_encode($result->json()))
+        ->not->toContain('Private Street 123')
+        ->not->toContain('1357')
+        ->not->toContain('+963900000001')
+        ->not->toContain('+963900000002')
+        ->not->toContain('9876');
+
+    $booking->workerAssignments()->where('worker_id', $member->id)
+        ->update(['started_travel_at' => now()]);
+    $this->getJson('/api/v1/cleaning/supervised-worker/bookings/'.$booking->id)
+        ->assertOk()
+        ->assertJsonPath('data.destination.latitude', 36.2)
+        ->assertJsonPath('data.destination.longitude', 37.1)
+        ->assertJsonPath('data.neighborhoodName', 'المنطقة غير محددة');
 
     $booking->workerAssignments()->where('worker_id', $member->id)
         ->update(['status' => 'withdrawn']);
@@ -157,8 +200,8 @@ it('does not confuse legacy open count bookings with supervisor managed service'
 });
 
 it('lets a supervised standard team worker show a personal attendance code and updates confirmation state', function (): void {
-    \Spatie\Permission\Models\Role::findOrCreate('Cleaning Supervisor', 'web');
-    $supervisor = \App\Models\User::factory()->create(['is_active' => true]);
+    Spatie\Permission\Models\Role::findOrCreate('Cleaning Supervisor', 'web');
+    $supervisor = App\Models\User::factory()->create(['is_active' => true]);
     $supervisor->assignRole('Cleaning Supervisor');
     $booking = CleaningBooking::factory()->create([
         'booking_kind' => 'standard',

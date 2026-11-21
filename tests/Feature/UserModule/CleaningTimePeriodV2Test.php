@@ -45,7 +45,7 @@ beforeEach(function (): void {
     $minutes['bedroom']['medium']['deep'] = 240;
     $minutes['bathroom']['small']['regular'] = 120;
     $minutes['kitchen']['medium']['deep'] = 240;
-    CleaningFinancialSetting::query()->updateOrCreate(['id' => 1], ['default_commission_rate' => 10, 'commission_type' => 'percent', 'cleaning_base_unit_price' => 50, 'cleaning_minimum_order_price' => 0, 'cleaning_room_pricing_units' => CleaningFinancialDefaults::roomPricingUnits(), 'cleaning_room_deep_multipliers' => CleaningFinancialDefaults::roomDeepMultipliers(2), 'cleaning_room_time_minutes' => $minutes]);
+    CleaningFinancialSetting::query()->updateOrCreate(['id' => 1], ['default_commission_rate' => 10, 'commission_type' => 'percent', 'cleaning_base_unit_price' => 50, 'cleaning_minimum_order_price' => 0, 'cleaning_room_pricing_units' => CleaningFinancialDefaults::roomPricingUnits(), 'cleaning_room_deep_multipliers' => CleaningFinancialDefaults::roomDeepMultipliers(2), 'cleaning_room_time_minutes' => $minutes, 'travel_markup_type' => 'worker_allowance', 'travel_markup_value' => 10]);
     // Room durations are now managed through the room catalog rather than the
     // legacy financial multiplier matrix. Preserve the overlapping periods
     // that these scheduling tests intentionally exercise.
@@ -86,14 +86,38 @@ it('quotes a fixed transport allowance for every worker on each independent orde
         ->and((float) $bookings->sum('total_price'))->toBe((float) $quote['pricing']['totalPrice']);
 });
 
-it('rejects a new standard quote when the fixed worker allowance is not configured', function (): void {
+it('allows a customer to quote and create a booking when no worker transport allowance is configured', function (): void {
     CleaningFinancialSetting::query()->where('id', 1)->update([
         'travel_markup_type' => 'worker_allowance',
         'travel_markup_value' => 0,
         'travel_per_km' => 10,
     ]);
-    $this->postJson('/api/v1/user/cleaning/orders/estimate-price', timePeriodPayload())
-        ->assertUnprocessable()->assertJsonValidationErrors('transport');
+
+    $input = timePeriodPayload();
+    $input['neighborhood'] = 'حي الأندلس';
+    $input['propertyDetails']['neighborhood'] = 'حي الأندلس';
+    $input['propertyDetails']['street'] = 'شارع السرو';
+    $input['propertyDetails']['address'] = 'حلب، حي الأندلس، شارع السرو';
+    $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)
+        ->assertOk()
+        ->assertJsonPath('pricing.travelFee', 0)
+        ->assertJsonPath('pricing.isPricingFinal', true)
+        ->json();
+    $input = timePeriodAcceptGroups($input, $quote);
+    $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)
+        ->assertOk()
+        ->assertJsonPath('pricing.travelFee', 0)
+        ->json();
+
+    $created = $this->postJson(
+        '/api/v1/user/cleaning/orders',
+        timePeriodStorePayload($input, $quote),
+    )->assertCreated()->json();
+
+    $booking = CleaningBooking::query()->findOrFail($created['order']['id']);
+    expect((float) $booking->travel_fee)->toBe(0.0)
+        ->and($booking->neighborhood_name)->toBe('حي الأندلس')
+        ->and(data_get($booking->property_details, 'address'))->toBe('حلب، حي الأندلس، شارع السرو');
 });
 
 it('groups exact matching intervals into one period with two independent room schedules', function (): void {
@@ -320,8 +344,9 @@ it('allows the same missing material across weekly appointments and rejects dupl
     $this->assertDatabaseCount('cleaning_bookings', 2);
     $this->assertDatabaseCount('cleaning_booking_sessions', 0);
     $this->assertDatabaseCount('cleaning_booking_materials', 2);
-    $this->assertDatabaseHas('cleaning_booking_materials', ['cleaning_material_type_id' => $type->id, 'quantity' => 1]);
-    $this->assertDatabaseHas('cleaning_materials', ['cleaning_material_type_id' => $type->id, 'stock_quantity' => 98]);
+    // Two rooms at 0.25 units each are consumed by each independent booking.
+    $this->assertDatabaseHas('cleaning_booking_materials', ['cleaning_material_type_id' => $type->id, 'quantity' => 0.5]);
+    $this->assertDatabaseHas('cleaning_materials', ['cleaning_material_type_id' => $type->id, 'stock_quantity' => 99]);
 
     $input['appointments'][0]['timePeriods'][0]['materials']['materialTypeIds'] = [$type->id, $type->id];
     $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)
@@ -374,9 +399,10 @@ it('requires authentication for the corrected estimate and create contract', fun
     $this->postJson('/api/v1/user/cleaning/orders', timePeriodPayload())->assertUnauthorized();
 });
 
-it('supports a preferred worker for independently scheduled rooms and blocks insufficient or inactive teams', function (): void {
-    $hours = array_fill_keys(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'], ['available' => true, 'data' => [['from' => '00:00', 'to' => '23:59']]]);
-    $workers = Worker::factory()->financiallyEligible()->count(3)->create(['default_working_hours' => $hours, 'trust_score' => 100, 'home_address' => 'عنوان العامل', 'home_latitude' => 33.51, 'home_longitude' => 36.27]);
+it('supports preferred workers regardless of legacy personal hours and blocks inactive teams', function (): void {
+    $hours = array_fill_keys(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'], ['available' => false, 'data' => []]);
+    $workers = Worker::factory()->financiallyEligible()->count(3)->create(['trust_score' => 100, 'home_address' => 'عنوان العامل', 'home_latitude' => 33.51, 'home_longitude' => 36.27]);
+    DB::table('workers')->whereIn('id', $workers->pluck('id'))->update(['default_working_hours' => json_encode($hours)]);
     $input = timePeriodPayload();
     $input['workerScope'] = 'specific';
     $input['preferredWorkerIds'] = $workers->pluck('id')->all();
@@ -404,9 +430,10 @@ it('accepts a customer team larger than the room count but caps the team at six'
         ->assertUnprocessable()->assertJsonValidationErrors('numberOfWorkers');
 });
 
-it('preserves single preferred-worker selection and checks the entire service interval', function (): void {
-    $hours = array_fill_keys(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'], ['available' => true, 'data' => [['from' => '08:00', 'to' => '13:00']]]);
-    $worker = Worker::factory()->financiallyEligible()->create(['default_working_hours' => $hours, 'trust_score' => 100, 'home_address' => 'عنوان العامل', 'home_latitude' => 33.51, 'home_longitude' => 36.27]);
+it('preserves preferred-worker selection outside legacy personal hours', function (): void {
+    $hours = array_fill_keys(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'], ['available' => false, 'data' => []]);
+    $worker = Worker::factory()->financiallyEligible()->create(['trust_score' => 100, 'home_address' => 'عنوان العامل', 'home_latitude' => 33.51, 'home_longitude' => 36.27]);
+    DB::table('workers')->where('id', $worker->id)->update(['default_working_hours' => json_encode($hours)]);
     $input = timePeriodPayload();
     $input['propertyDetails']['room_size_breakdown'] = ['bathroom' => ['small' => 1]];
     $input['rooms'] = [$input['rooms'][1]];
@@ -417,7 +444,7 @@ it('preserves single preferred-worker selection and checks the entire service in
     $this->postJson('/api/v1/user/cleaning/orders', timePeriodStorePayload($input, $quote))->assertCreated();
     $this->assertDatabaseHas('cleaning_bookings', ['assignment_mode' => 'preferred_worker', 'preferred_worker_id' => $worker->id]);
     $input['appointments'][0]['roomSchedules'][0]['scheduledTime'] = '12:00';
-    $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)->assertUnprocessable()->assertJsonValidationErrors('preferredWorkerIds');
+    $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)->assertOk();
 });
 
 it('uses the same saved-address normalization for approved quote and creation', function (): void {
@@ -459,11 +486,12 @@ it('keeps each appointment service price on its independent booking and reconcil
     $quote = $this->postJson('/api/v1/user/cleaning/orders/estimate-price', $input)->assertOk()->json();
     $created = $this->postJson('/api/v1/user/cleaning/orders', timePeriodStorePayload($input, $quote))
         ->assertCreated()->assertJsonCount(2, 'orders')->json();
-    $bookings = CleaningBooking::query()->whereKey($created['orders'][0]['id'])
-        ->orWhereKey($created['orders'][1]['id'])->orderBy('scheduled_date')->get();
+    $bookings = CleaningBooking::query()
+        ->whereKey([$created['orders'][0]['id'], $created['orders'][1]['id']])
+        ->orderBy('scheduled_date')->get();
     expect($bookings)->toHaveCount(2)
-        ->and((float) $bookings[0]->special_services_total)->toBe(0.0)
-        ->and((float) $bookings[1]->special_services_total)->toBe(125.0)
+        ->and((float) data_get($bookings[0]->property_details, '_time_period_v2.pricing.specialServicesTotal'))->toBe(0.0)
+        ->and((float) data_get($bookings[1]->property_details, '_time_period_v2.pricing.specialServicesTotal'))->toBe(125.0)
         ->and(round((float) $bookings->sum('total_price'), 2))->toBe((float) $quote['pricing']['totalPrice'])
         ->and($bookings[0]->sessions()->count())->toBe(0)
         ->and($bookings[1]->sessions()->count())->toBe(0);
@@ -568,7 +596,7 @@ it('rehydrates approved V2 material choices and targeted services from database 
         ->assertCreated()->assertJsonPath('appointments.0.timePeriods.0.materials.choice', 'customer_partial')
         ->assertJsonPath('appointments.0.timePeriods.0.materials.materialTypeIds', [$type->id])
         ->assertJsonPath('appointments.0.timePeriods.0.specialServices.0.targetRoomKeys', ['bathroom.1', 'bedroom.1'])
-        ->assertJsonPath('pricing.coverage', 'all_appointments')->json();
+        ->assertJsonPath('pricing.coverage', 'this_booking')->json();
     $booking = CleaningBooking::query()->findOrFail($created['order']['id']);
     $data = $booking->property_details;
     $data['_time_period_v2']['appointments'] = [];

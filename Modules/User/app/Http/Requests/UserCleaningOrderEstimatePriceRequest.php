@@ -44,6 +44,8 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             'propertyDetails' => ['required', 'array'],
             'propertyDetails.address' => ['sometimes', 'nullable', 'string', 'max:500'],
             'propertyDetails.location_name' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'propertyDetails.neighborhood' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'propertyDetails.street' => ['sometimes', 'nullable', 'string', 'max:255'],
             'propertyDetails.notes' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'propertyDetails.specialRequirement' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'propertyDetails.bedrooms' => ['nullable', 'integer', 'min:0', 'max:20'],

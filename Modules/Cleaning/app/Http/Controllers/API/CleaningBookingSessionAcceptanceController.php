@@ -78,9 +78,8 @@ final class CleaningBookingSessionAcceptanceController
 
     private function assertBookingOpen(CleaningBooking $booking): void
     {
-        if ($booking->fresh()?->searchWindowExpired()) {
-            abort(Response::HTTP_CONFLICT, 'انتهت مهلة البحث عن العمال. يمكن للعميل إعادة إرسال الطلب.');
-        }
+        // Per-visit acceptance validates each future start independently.
+        // An expired customer notification window is not a dispatch shutdown.
         $status = $booking->status instanceof CleaningBookingStatus
             ? $booking->status->value
             : (string) $booking->status;

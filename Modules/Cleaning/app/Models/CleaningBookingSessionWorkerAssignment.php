@@ -8,7 +8,10 @@ use App\Models\Worker;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Modules\Cleaning\Observers\WorkerComplianceSessionAssignmentObserver;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 
+#[ObservedBy([WorkerComplianceSessionAssignmentObserver::class])]
 final class CleaningBookingSessionWorkerAssignment extends Model
 {
     protected $fillable = [

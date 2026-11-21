@@ -96,7 +96,15 @@ final class UserCleaningBookingResource extends JsonResource
         $payload['workerSearch'] = [
             'startedAt' => $searchStartedAt?->toIso8601String(),
             'expiresAt' => $searchStartedAt?->copy()->addHours(6)->toIso8601String(),
+            'escalationAt' => $searchStartedAt?->copy()->addHours(6)->toIso8601String(),
+            // Expired denotes the six-hour notification escalation only;
+            // worker discovery continues for future, unfilled visits.
             'expired' => $this->searchWindowExpired(),
+            'escalated' => $this->searchWindowExpired(),
+            'discoveryActive' => (string) ($this->status?->value ?? $this->status) === 'pending'
+                && ! $this->isTeamFulfilled()
+                && app(\Modules\Cleaning\Services\CleaningSearchDiscoveryWindowPolicy::class)
+                    ->hasAcceptableFutureStart($this->resource),
             'canRetry' => $this->searchWindowExpired(),
             'retryCount' => (int) ($this->search_retry_count ?? 0),
         ];

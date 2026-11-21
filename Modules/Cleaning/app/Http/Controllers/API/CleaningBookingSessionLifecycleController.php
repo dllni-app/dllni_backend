@@ -82,7 +82,7 @@ final class CleaningBookingSessionLifecycleController
         return response()->json([
             'success' => true,
             'data' => $code,
-        ]);
+        ])->header('Cache-Control', 'private, no-store');
     }
 
     public function confirmStartVerification(
@@ -365,7 +365,7 @@ final class CleaningBookingSessionLifecycleController
             ->values()
             ->all();
 
-        return response()->json([
+        $response = response()->json([
             'success' => true,
             'data' => [
                 'id' => (int) $freshBooking->id,
@@ -382,6 +382,11 @@ final class CleaningBookingSessionLifecycleController
             ],
             'sessionId' => (int) $session->id,
         ]);
+
+        // Visit schedules, worker assignments and review targets are private
+        // to the authenticated customer or authorized worker alike. Never
+        // allow browser/proxy caches to persist lifecycle response payloads.
+        return $response->header('Cache-Control', 'private, no-store');
     }
 
     private function currentWorker(): Worker

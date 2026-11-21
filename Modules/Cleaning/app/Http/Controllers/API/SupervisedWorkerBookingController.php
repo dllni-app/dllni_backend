@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Services\CleaningWorkerCustomerDataDisclosurePolicy;
 
 final class SupervisedWorkerBookingController
 {
@@ -44,6 +45,10 @@ final class SupervisedWorkerBookingController
             true,
         );
         $travelStarted = $assignment->started_travel_at !== null;
+        $mayViewDestination = app(CleaningWorkerCustomerDataDisclosurePolicy::class)
+            ->mayViewDestination($booking, $worker, $request);
+        $neighborhoodLabel = app(CleaningWorkerCustomerDataDisclosurePolicy::class)
+            ->neighborhoodLabel($booking);
         $arrived = $assignment->arrived_at !== null;
         $attendanceConfirmed = DB::table('cleaning_worker_attendance_proofs')
             ->where('cleaning_booking_id', $booking->id)
@@ -95,23 +100,21 @@ final class SupervisedWorkerBookingController
             'status' => $booking->status?->value ?? (string) $booking->status,
             'scheduledDate' => $booking->scheduled_date?->format('Y-m-d'),
             'scheduledTime' => $booking->scheduled_time,
-            'neighborhoodName' => $booking->neighborhood_name,
+            'neighborhoodName' => $neighborhoodLabel,
             // An accepted worker may navigate to the customer only after their
             // own start-travel action. Never disclose coordinates in advance.
-            'destination' => $travelStarted && $booking->address_latitude !== null
+            'destination' => $mayViewDestination && $booking->address_latitude !== null
                 && $booking->address_longitude !== null ? [
                     'latitude' => (float) $booking->address_latitude,
                     'longitude' => (float) $booking->address_longitude,
                     'label' => data_get($booking->property_details, 'full_address')
                         ?: data_get($booking->property_details, 'address')
-                        ?: $booking->neighborhood_name,
+                        ?: $neighborhoodLabel,
                 ] : null,
             'propertyType' => $booking->property_type,
             'propertyDetails' => [
-                'customService' => data_get($booking->property_details, 'custom_service'),
                 'eventType' => data_get($booking->property_details, 'event_type'),
                 'hours' => data_get($booking->property_details, 'hours'),
-                'specialRequirement' => data_get($booking->property_details, 'special_requirement'),
             ],
             'supervisor' => $supervisor ? [
                 'id' => $supervisor->supervisor_user_id,
@@ -137,7 +140,7 @@ final class SupervisedWorkerBookingController
                 'name' => $service->service_name,
                 'quantity' => $service->quantity,
                 'dirtinessLevel' => $service->dirtiness_level,
-                'notes' => $service->notes,
+                'notes' => null,
                 'items' => $service->items->map(fn ($item) => [
                     'id' => $item->id,
                     'name' => $item->name ?? null,
@@ -145,6 +148,6 @@ final class SupervisedWorkerBookingController
             ])->values(),
             'allowedActions' => in_array($booking->status?->value ?? (string) $booking->status,
                 ['completed', 'cancelled'], true) ? ['view'] : ['view', 'sos'],
-        ]]);
+        ]])->header('Cache-Control', 'private, no-store');
     }
 }

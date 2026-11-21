@@ -26,7 +26,9 @@ use Illuminate\Support\ServiceProvider;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
+use Modules\Cleaning\Models\WorkerComplianceReviewCase;
 use Modules\Cleaning\Observers\CleaningBookingCancellationAuditObserver;
+use Modules\Cleaning\Policies\WorkerComplianceReviewCasePolicy;
 use Modules\Delivery\Models\DeliveryCompany;
 use Modules\Delivery\Models\DeliveryDriver;
 use Modules\Delivery\Models\DeliveryOrder;
@@ -77,6 +79,8 @@ final class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        Gate::policy(WorkerComplianceReviewCase::class, WorkerComplianceReviewCasePolicy::class);
+
         $this->app->useLangPath(base_path('lang'));
 
         $this->configureLocalPublicStorageUrl();

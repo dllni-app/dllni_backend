@@ -66,6 +66,6 @@ final class CleaningBookingScheduleController
                 'canReview' => $canReview,
                 'schedule' => $schedule,
             ],
-        ]);
+        ])->header('Cache-Control', 'private, no-store');
     }
 }

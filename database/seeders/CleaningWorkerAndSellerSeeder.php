@@ -93,15 +93,6 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                 'home_address' => 'حلب - الحمدانية - شارع القدس',
                 'home_latitude' => 36.1795,
                 'home_longitude' => 37.1082,
-                'default_working_hours' => [
-                    'sunday' => ['available' => false, 'data' => []],
-                    'monday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
-                    'tuesday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
-                    'wednesday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
-                    'thursday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
-                    'friday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
-                    'saturday' => ['available' => true, 'data' => [['10:00' => '16:00']]],
-                ],
             ]
         );
 
@@ -128,21 +119,11 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
             'home_address' => 'حلب - الحمدانية - شارع القدس',
             'home_latitude' => 36.1795,
             'home_longitude' => 37.1082,
-            'default_working_hours' => [
-                'sunday' => ['available' => false, 'data' => []],
-                'monday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
-                'tuesday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
-                'wednesday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
-                'thursday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
-                'friday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
-                'saturday' => ['available' => true, 'data' => [['10:00' => '16:00']]],
-            ],
         ];
 
         if (Schema::hasColumn('workers', 'birthday')) {
             $workerUpdates['birthday'] = '1992-06-18';
         }
-
 
         $worker->forceFill($workerUpdates)->save();
 

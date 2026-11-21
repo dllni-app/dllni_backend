@@ -130,7 +130,7 @@ final class UserCleaningOrderService
                 ]);
             }
 
-            // A fixed transport allowance is priced before selecting a worker.
+            // Any configured transport allowance is priced before worker selection.
             $storedPricing = $pricing;
 
             if ($explicitWorkerScope === CleaningBooking::WORKER_SCOPE_SPECIFIC) {

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Services;
 
 use App\Models\Worker;
+use BackedEnum;
 use Illuminate\Support\Collection;
 use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
@@ -50,6 +51,12 @@ final class CleaningBookingWorkerSessionVisibilityService
         // update so the client can remove stale session state. The historical
         // assignment is a legitimate booking relationship, but it does not make
         // the released Event Assistance day visible again.
+        // V3 releases do not retain parent-level read access. Historical
+        // assignments may remain audit-visible to operations, never workers.
+        if ((string) ($booking->contract_version ?? '') === 'v3') {
+            return false;
+        }
+
         return $this->hasSessionAssignmentHistory($sessions, $worker);
     }
 
@@ -104,11 +111,13 @@ final class CleaningBookingWorkerSessionVisibilityService
                     return true;
                 }
 
-                // A released event day stays hidden for the replaced worker,
-                // while other unassigned event days remain independently available.
-                if ($isEventAssistance && $session->workerAssignments->contains(
-                    static fn (CleaningBookingSessionWorkerAssignment $assignment): bool => (int) $assignment->worker_id === (int) $worker->id,
-                )) {
+                // Released visits stay hidden from replaced workers in both
+                // Event Assistance and V3. Other independently eligible visits
+                // remain separately discoverable with district-only context.
+                if (($isEventAssistance || (string) ($booking->contract_version ?? '') === 'v3')
+                    && $session->workerAssignments->contains(
+                        static fn (CleaningBookingSessionWorkerAssignment $assignment): bool => (int) $assignment->worker_id === (int) $worker->id,
+                    )) {
                     return false;
                 }
 
@@ -151,7 +160,7 @@ final class CleaningBookingWorkerSessionVisibilityService
 
     private function isPendingOfferVisibleToWorker(CleaningBooking $booking, Worker $worker): bool
     {
-        $status = $booking->status instanceof \BackedEnum
+        $status = $booking->status instanceof BackedEnum
             ? $booking->status->value
             : (string) $booking->status;
 
@@ -177,7 +186,7 @@ final class CleaningBookingWorkerSessionVisibilityService
             return true;
         }
 
-        $status = $booking->status instanceof \BackedEnum
+        $status = $booking->status instanceof BackedEnum
             ? $booking->status->value
             : (string) $booking->status;
 

@@ -34,14 +34,6 @@ function makeRecurringScopeEligibleWorker(string $email): array
     ]);
 
     $user = User::factory()->create(['email' => $email, 'is_active' => true]);
-    $workingHours = [];
-    foreach (['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as $day) {
-        $workingHours[$day] = [
-            'available' => true,
-            'data' => [['00:00' => '23:59']],
-        ];
-    }
-
     $worker = Worker::factory()->create([
         'user_id' => $user->id,
         'is_active' => true,
@@ -50,7 +42,6 @@ function makeRecurringScopeEligibleWorker(string $email): array
         'home_address' => 'Scope test worker home',
         'home_latitude' => 36.2000,
         'home_longitude' => 37.1500,
-        'default_working_hours' => $workingHours,
     ]);
 
     CleaningWorkerDeposit::query()->create([
@@ -182,14 +173,8 @@ it('dispatches explicit recurring specific scope only to selected workers', func
         (int) $secondWorker->id,
     ]);
 
-    $bookingStartsAt = Carbon\Carbon::parse(
-        $booking->scheduled_date->format('Y-m-d').' '.mb_trim((string) $booking->scheduled_time),
-        config('app.timezone'),
-    );
     expect(app(Modules\Cleaning\Services\DepositService::class)->isWorkerEligibleForDispatch($firstWorker->fresh(['user', 'deposit'])))->toBeTrue()
-        ->and(app(Modules\Cleaning\Services\DepositService::class)->isWorkerEligibleForDispatch($secondWorker->fresh(['user', 'deposit'])))->toBeTrue()
-        ->and($firstWorker->fresh()->isAvailableAt($bookingStartsAt))->toBeTrue()
-        ->and($secondWorker->fresh()->isAvailableAt($bookingStartsAt))->toBeTrue();
+        ->and(app(Modules\Cleaning\Services\DepositService::class)->isWorkerEligibleForDispatch($secondWorker->fresh(['user', 'deposit'])))->toBeTrue();
     foreach ([$firstWorker, $secondWorker] as $candidate) {
         $candidateSolvency = app(Modules\Cleaning\Services\WorkerOrderSolvencyService::class)
             ->solvencyPayloadForBooking($candidate->fresh(['user', 'deposit']), $booking->fresh());

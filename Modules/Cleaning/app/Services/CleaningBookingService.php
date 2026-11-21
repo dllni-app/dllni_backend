@@ -151,8 +151,8 @@ final class CleaningBookingService
 
     public function accept(CleaningBooking $booking): CleaningBooking
     {
-        if ($booking->fresh()?->searchWindowExpired()) {
-            throw new InvalidArgumentException('انتهت مهلة البحث عن العمال. اطلب من العميل إعادة إرسال الطلب.');
+        if (! app(CleaningSearchDiscoveryWindowPolicy::class)->hasAcceptableFutureStart($booking->fresh() ?? $booking)) {
+            throw new InvalidArgumentException('انتهى موعد تنفيذ الطلب؛ اختر طلباً بموعد مستقبلي.');
         }
         $fromStatus = (string) $booking->status->value;
 

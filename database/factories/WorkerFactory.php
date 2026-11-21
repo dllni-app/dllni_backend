@@ -35,7 +35,6 @@ final class WorkerFactory extends Factory
             'home_address' => fake()->optional()->address(),
             'home_latitude' => fake()->optional()->latitude(),
             'home_longitude' => fake()->optional()->longitude(),
-            'default_working_hours' => null,
         ];
     }
 

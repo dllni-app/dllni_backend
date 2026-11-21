@@ -1,0 +1,89 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Modules\Cleaning\Services;
+
+use DomainException;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Validation\ValidationException;
+use Modules\Cleaning\Models\CleaningEventType;
+use Modules\Cleaning\Models\CleaningHomeType;
+use Modules\Cleaning\Models\CleaningMaterialType;
+use Modules\Cleaning\Models\CleaningRoomType;
+use Modules\Cleaning\Models\CleaningService;
+use Modules\Cleaning\Models\CleaningSpecialService;
+use Modules\Cleaning\Models\CleaningV3CatalogVersion;
+
+final class CleaningV3CatalogDraftValidator
+{
+    /** @var array<string, class-string<Model>> */
+    private const SOURCES = [
+        'property' => CleaningHomeType::class,
+        'room' => CleaningRoomType::class,
+        'service' => CleaningService::class,
+        'special_service' => CleaningSpecialService::class,
+        'material' => CleaningMaterialType::class,
+        'event_type' => CleaningEventType::class,
+    ];
+
+    public function assertActiveSource(string $type, int $id): void
+    {
+        $model = self::SOURCES[$type] ?? null;
+        if ($model === null || $id < 1 || ! $model::query()->whereKey($id)->where('is_active', true)->exists()) {
+            throw ValidationException::withMessages([
+                'source_id' => 'The item must reference an active record in the existing cleaning catalog.',
+            ]);
+        }
+    }
+
+    /**
+     * Returns problems instead of ever silently publishing an incomplete tariff.
+     *
+     * @return list<string>
+     */
+    public function review(CleaningV3CatalogVersion $version): array
+    {
+        $problems = [];
+        $items = $version->items()->with('presets')->orderBy('sort_order')->get();
+
+        if ($items->isEmpty()) {
+            $problems[] = 'CATALOG_EMPTY';
+        }
+
+        foreach ($items as $item) {
+            try {
+                $this->assertActiveSource((string) $item->source_type, (int) $item->source_id);
+            } catch (ValidationException) {
+                $problems[] = 'INVALID_SOURCE:'.$item->item_key;
+            }
+
+            $presets = $item->presets->sortBy('minimum_value')->values();
+            $lastMaximum = null;
+            foreach ($presets as $preset) {
+                if ((float) $preset->maximum_value <= (float) $preset->minimum_value) {
+                    $problems[] = 'INVALID_PRESET:'.$item->item_key;
+                }
+                if ($lastMaximum !== null && (float) $preset->minimum_value < $lastMaximum) {
+                    $problems[] = 'OVERLAPPING_PRESETS:'.$item->item_key;
+                }
+                $lastMaximum = (float) $preset->maximum_value;
+            }
+        }
+
+        // An approved tariff and funding contract must be imported explicitly.
+        $problems[] = 'APPROVED_CATALOG_COVERAGE_MATRIX_MISSING';
+        $problems[] = 'APPROVED_V3_PRICING_AND_FUNDING_PROOF_MISSING';
+
+        return array_values(array_unique($problems));
+    }
+
+    public function publish(CleaningV3CatalogVersion $version): never
+    {
+        $version->assertEditable();
+
+        throw new DomainException(
+            'V3 catalog publication is blocked pending approved coverage, pricing, refund and funding evidence.'
+        );
+    }
+}

@@ -15,7 +15,9 @@ final class CleaningGeographicDispatchService
 
     public function hasOpenWorkerSlots(CleaningBooking $booking): bool
     {
-        if ($booking->searchWindowExpired()) {
+        // Six hours triggers customer escalation only. Continue discovering
+        // eligible workers while an actual future visit remains unfilled.
+        if (! app(CleaningSearchDiscoveryWindowPolicy::class)->hasAcceptableFutureStart($booking)) {
             return false;
         }
 
@@ -97,13 +99,18 @@ final class CleaningGeographicDispatchService
     {
         return CleaningBooking::query()
             ->where('status', 'pending')
-            ->whereDate('scheduled_date', '>=', today())
+            ->where(static function ($query): void {
+                $query->whereDate('scheduled_date', '>=', today())
+                    ->orWhereHas('sessions', static function ($visits): void {
+                        $visits->whereDate('scheduled_date', '>=', today());
+                    });
+            })
             ->where(function ($query) use ($worker): void {
                 $query->whereNull('worker_id')->orWhere('worker_id', $worker->id);
             })
             ->get()
             ->filter(function (CleaningBooking $booking) use ($worker): bool {
-                if (! $this->hasRequiredLocations($worker, $booking) || $booking->isTeamFulfilled() || $booking->searchWindowExpired()) {
+                if (! $this->hasRequiredLocations($worker, $booking) || ! $this->hasOpenWorkerSlots($booking)) {
                     return false;
                 }
 

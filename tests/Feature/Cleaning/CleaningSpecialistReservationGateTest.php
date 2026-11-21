@@ -178,7 +178,8 @@ it('keeps overlapping sessions separate even when they belong to one booking', f
             'session_type' => 'recurring_cleaning',
             'calculation_mode' => 'estimated_hours',
             'scheduled_date' => now()->addDays(5)->toDateString(),
-            'scheduled_time' => '10:00',
+            // Separate booking slots that still overlap by 90 minutes.
+            'scheduled_time' => $sequence === 1 ? '10:00' : '10:30',
             'duration_hours' => 2,
             'required_workers' => 1,
             'coverage_status' => 'fully_covered',

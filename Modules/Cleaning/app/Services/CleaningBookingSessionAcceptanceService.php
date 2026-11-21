@@ -183,6 +183,7 @@ final class CleaningBookingSessionAcceptanceService
                         $assignment = $this->createAcceptedAssignment($session, $worker);
                         $this->specialistReservations->confirmForSession($booking, $session, $worker);
                         $this->coverageService->refresh($session);
+
                         return $assignment;
                     });
                     $accepted[] = (int) $assignment->cleaning_booking_session_id;
@@ -340,6 +341,9 @@ final class CleaningBookingSessionAcceptanceService
 
         if ($session->remainingWorkerCount() <= 0) {
             return $this->rejection((int) $session->id, 'session_fully_covered', 'All worker seats for this session are already filled.');
+        }
+        if ($session->startsAt() === null || ! $session->startsAt()->isFuture()) {
+            return $this->rejection((int) $session->id, 'session_past_due', 'Past-due visits are not available for acceptance.');
         }
 
         $eligibility = $this->eligibilityService->check($booking, $session, $worker);

@@ -82,7 +82,6 @@ final class WorkerSeeder extends Seeder
                     'home_address' => $data['address'],
                     'home_latitude' => $data['lat'],
                     'home_longitude' => $data['lng'],
-                    'default_working_hours' => self::defaultWorkingHours(),
                 ],
             );
             $workerUpdates = [
@@ -103,7 +102,6 @@ final class WorkerSeeder extends Seeder
                 'home_address' => $data['address'],
                 'home_latitude' => $data['lat'],
                 'home_longitude' => $data['lng'],
-                'default_working_hours' => self::defaultWorkingHours(),
             ];
 
             if (Schema::hasColumn('workers', 'birthday')) {
@@ -325,18 +323,5 @@ final class WorkerSeeder extends Seeder
             static fn (string $column): bool => Schema::hasColumn($table, $column),
             ARRAY_FILTER_USE_KEY,
         );
-    }
-
-    private static function defaultWorkingHours(): array
-    {
-        return [
-            'sunday' => ['available' => false, 'data' => []],
-            'monday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
-            'tuesday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
-            'wednesday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
-            'thursday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
-            'friday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
-            'saturday' => ['available' => true, 'data' => [['10:00' => '16:00']]],
-        ];
     }
 }

@@ -6,6 +6,7 @@ namespace Modules\User\Services;
 
 use App\Models\Worker;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 use Modules\Cleaning\Models\CleaningBooking;
 
@@ -70,23 +71,29 @@ final class CleaningTimePeriodWorkerPolicy
         }
         foreach ($demand as $time => $required) {
             $at = CarbonImmutable::parse($time);
-            $available = $workers->filter(static function (Worker $worker) use ($at, $busy): bool {
-                if (! $worker->isAvailableAt($at)) {
-                    return false;
-                }
-                foreach ($busy[$worker->id] ?? [] as [$start, $end]) {
-                    if ($at->timestamp >= $start && $at->timestamp < $end) {
-                        return false;
-                    }
-                }
-
-                return true;
-            })->count();
+            $available = $this->availableWorkersAt($workers, $at, $busy);
             // The remaining team can be assembled by open worker dispatch.
             if ($available < min($required, count($ids))) {
                 $this->invalid('العمال المفضلون غير متاحين طوال الموعد. اختر موعداً أو عاملاً آخر.');
             }
         }
+    }
+
+    /**
+     * @param  Collection<int, Worker>  $workers
+     * @param  array<int, array<int, array{0: int, 1: int}>>  $busy
+     */
+    public function availableWorkersAt(Collection $workers, CarbonImmutable $at, array $busy): int
+    {
+        return $workers->filter(static function (Worker $worker) use ($at, $busy): bool {
+            foreach ($busy[$worker->id] ?? [] as [$start, $end]) {
+                if ($at->timestamp >= $start && $at->timestamp < $end) {
+                    return false;
+                }
+            }
+
+            return true;
+        })->count();
     }
 
     private function invalid(string $message): never

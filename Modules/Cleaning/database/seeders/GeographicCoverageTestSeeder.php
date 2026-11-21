@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Database\Seeders;
 
+use App\Enums\GenderPreference;
 use App\Enums\UserModuleType;
 use App\Models\User;
 use App\Models\Worker;
-use App\Enums\GenderPreference;
 use App\Models\WorkerZone;
 use Illuminate\Database\Seeder;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
@@ -122,14 +122,6 @@ final class GeographicCoverageTestSeeder extends Seeder
                 'is_active' => true,
                 'is_suspended' => false,
                 'home_address' => 'حلب - سوريا',
-                'default_working_hours' => [
-                    'monday' => ['09:00', '18:00'],
-                    'tuesday' => ['09:00', '18:00'],
-                    'wednesday' => ['09:00', '18:00'],
-                    'thursday' => ['09:00', '18:00'],
-                    'friday' => ['09:00', '18:00'],
-                    'saturday' => ['10:00', '16:00'],
-                ],
             ]
         );
     }
@@ -146,7 +138,7 @@ final class GeographicCoverageTestSeeder extends Seeder
         ];
 
         for ($i = 1; $i <= $count; $i++) {
-            $bookingNumber = sprintf('GEO-ALEPPO-ACTIVE-%s-%03d', strtoupper($propertyType), $i);
+            $bookingNumber = sprintf('GEO-ALEPPO-ACTIVE-%s-%03d', mb_strtoupper($propertyType), $i);
             $basePrice = 100.00;
             $travelFee = 10.00;
 
@@ -188,7 +180,7 @@ final class GeographicCoverageTestSeeder extends Seeder
         ];
 
         for ($i = 1; $i <= $count; $i++) {
-            $bookingNumber = sprintf('GEO-ALEPPO-HIST-%s-%03d', strtoupper($propertyType), $i);
+            $bookingNumber = sprintf('GEO-ALEPPO-HIST-%s-%03d', mb_strtoupper($propertyType), $i);
             $basePrice = 100.00;
             $addonsTotal = 10.00;
             $travelFee = 25.00;
@@ -224,7 +216,7 @@ final class GeographicCoverageTestSeeder extends Seeder
     {
         $suffix = $baseSuffix;
         while (true) {
-            $candidate = '+9639'.str_pad((string) $suffix, 7, '0', STR_PAD_LEFT);
+            $candidate = '+9639'.mb_str_pad((string) $suffix, 7, '0', STR_PAD_LEFT);
             $exists = User::query()
                 ->where('phone', $candidate)
                 ->where('id', '!=', $user->id)

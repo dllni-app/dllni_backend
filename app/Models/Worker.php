@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use App\Enums\DayOfWeek;
 use App\Enums\UserModuleType;
 use App\Traits\FilterQueries\WorkerFilterQuery;
-use Carbon\Carbon;
-use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -21,7 +18,6 @@ use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
-use Throwable;
 
 final class Worker extends Model implements HasMedia
 {
@@ -54,7 +50,6 @@ final class Worker extends Model implements HasMedia
         'home_address',
         'home_latitude',
         'home_longitude',
-        'default_working_hours',
         'security_deposit_status',
     ];
 
@@ -127,11 +122,6 @@ final class Worker extends Model implements HasMedia
         });
     }
 
-    public function availability(): HasMany
-    {
-        return $this->hasMany(WorkerAvailability::class);
-    }
-
     public function trustLogs(): HasMany
     {
         return $this->hasMany(WorkerTrustLog::class);
@@ -173,7 +163,6 @@ final class Worker extends Model implements HasMedia
             'is_featured' => 'boolean',
             'featured_until' => 'datetime',
             'suspended_until' => 'datetime',
-            'default_working_hours' => 'array',
             'security_deposit_status' => 'string',
         ];
     }
@@ -214,71 +203,14 @@ final class Worker extends Model implements HasMedia
         return in_array($type, $this->preferredWorkTypes(), true);
     }
 
-    /**
-     * @return array<string, array{available: bool, data: array<int, array<string, string>>}>
-     */
-    public function getNormalizedDefaultWorkingHours(): array
-    {
-        $raw = $this->default_working_hours ?? [];
-        $normalized = [];
-        foreach (DayOfWeek::values() as $day) {
-            $normalized[$day] = $this->normalizeDayWorkingHours($raw[$day] ?? null);
-        }
-
-        return $normalized;
-    }
-
-    public function isAvailableForBooking(?CleaningBooking $booking): bool
-    {
-        if (! $booking instanceof CleaningBooking) {
-            return false;
-        }
-
-        $dateTime = $this->bookingDateTime($booking);
-
-        if (! $dateTime instanceof CarbonInterface) {
-            return false;
-        }
-
-        return $this->isAvailableAt($dateTime);
-    }
-
     public function hasActiveCoverageForNeighborhood(?int $neighborhoodId): bool
     {
         return $neighborhoodId !== null;
     }
 
-    public function isAvailableAt(CarbonInterface $dateTime): bool
+    public function registerMediaConversions(?\Spatie\MediaLibrary\MediaCollections\Models\Media $media = null): void
     {
-        $dayKey = mb_strtolower($dateTime->format('l'));
-        $dayHours = $this->getNormalizedDefaultWorkingHours()[$dayKey] ?? ['available' => false, 'data' => []];
-
-        if (! (bool) ($dayHours['available'] ?? false)) {
-            return false;
-        }
-
-        $targetMinutes = $this->minutesFromTime($dateTime->format('H:i'));
-        if ($targetMinutes === null) {
-            return false;
-        }
-
-        foreach ($dayHours['data'] as $period) {
-            if (! is_array($period)) {
-                continue;
-            }
-
-            [$from, $to] = $this->timeRangeFromPeriod($period);
-
-            if ($from === null || $to === null) {
-                continue;
-            }
-
-            if ($this->isWithinWorkingPeriod($targetMinutes, $from, $to)) {
-                return true;
-            }
-        }
-
-        return false;
+        \App\Support\ImageVariants::register($this, $media);
     }
 
     protected static function booted(): void
@@ -342,122 +274,6 @@ final class Worker extends Model implements HasMedia
         return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
     }
 
-    /**
-     * @param  array<string, mixed>|array<int, array{from: string, to: string}>|bool|null  $value
-     * @return array{available: bool, data: array<int, array<string, string>>}
-     */
-    private function normalizeDayWorkingHours(mixed $value): array
-    {
-        if ($value === null || $value === false) {
-            return ['available' => false, 'data' => []];
-        }
-
-        if (isset($value['available'], $value['data']) && is_array($value['data'])) {
-            return [
-                'available' => (bool) $value['available'],
-                'data' => $value['data'],
-            ];
-        }
-
-        if (is_array($value)) {
-            $data = [];
-            foreach ($value as $period) {
-                if (is_array($period) && isset($period['from'], $period['to'])) {
-                    $data[] = [$period['from'] => $period['to']];
-                }
-            }
-
-            return [
-                'available' => count($data) > 0,
-                'data' => $data,
-            ];
-        }
-
-        return ['available' => false, 'data' => []];
-    }
-
-    private function bookingDateTime(CleaningBooking $booking): ?CarbonInterface
-    {
-        if ($booking->scheduled_date === null || $booking->scheduled_time === null) {
-            return null;
-        }
-
-        $scheduledDate = $booking->scheduled_date instanceof CarbonInterface
-            ? $booking->scheduled_date->toDateString()
-            : (string) $booking->scheduled_date;
-        $scheduledTime = mb_trim((string) $booking->scheduled_time);
-
-        if ($scheduledDate === '' || $scheduledTime === '') {
-            return null;
-        }
-
-        try {
-            return Carbon::parse($scheduledDate.' '.$scheduledTime, config('app.timezone'));
-        } catch (Throwable) {
-            return null;
-        }
-    }
-
-    /**
-     * @param  array<string, string>  $period
-     * @return array{0: ?string, 1: ?string}
-     */
-    private function timeRangeFromPeriod(array $period): array
-    {
-        if (isset($period['from'], $period['to']) && is_string($period['from']) && is_string($period['to'])) {
-            return [$period['from'], $period['to']];
-        }
-
-        $from = array_key_first($period);
-        if (! is_string($from)) {
-            return [null, null];
-        }
-
-        $to = $period[$from] ?? null;
-        if (! is_string($to)) {
-            return [null, null];
-        }
-
-        return [$from, $to];
-    }
-
-    private function isWithinWorkingPeriod(int $targetMinutes, string $from, string $to): bool
-    {
-        $startMinutes = $this->minutesFromTime($from);
-        $endMinutes = $this->minutesFromTime($to);
-
-        if ($startMinutes === null || $endMinutes === null) {
-            return false;
-        }
-
-        if ($startMinutes === $endMinutes) {
-            return true;
-        }
-
-        if ($endMinutes > $startMinutes) {
-            return $targetMinutes >= $startMinutes && $targetMinutes <= $endMinutes;
-        }
-
-        return $targetMinutes >= $startMinutes || $targetMinutes <= $endMinutes;
-    }
-
-    private function minutesFromTime(string $time): ?int
-    {
-        foreach (['H:i', 'H:i:s'] as $format) {
-            try {
-                $parsed = Carbon::createFromFormat($format, $time);
-
-                if ($parsed instanceof CarbonInterface) {
-                    return $parsed->hour * 60 + $parsed->minute;
-                }
-            } catch (Throwable) {
-                continue;
-            }
-        }
-
-        return null;
-    }
-
     private function homeAddressMatchesNeighborhood(int $neighborhoodId): bool
     {
         $homeAddress = CleaningNeighborhoodNameNormalizer::normalize((string) $this->home_address);
@@ -479,10 +295,4 @@ final class Worker extends Model implements HasMedia
 
         return false;
     }
-
-    public function registerMediaConversions(?\Spatie\MediaLibrary\MediaCollections\Models\Media $media = null): void
-    {
-        \App\Support\ImageVariants::register($this, $media);
-    }
-
 }

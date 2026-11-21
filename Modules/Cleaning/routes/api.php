@@ -26,6 +26,9 @@ use Modules\Cleaning\Http\Controllers\API\CleaningScheduleChangeController;
 use Modules\Cleaning\Http\Controllers\API\CleaningServiceController;
 use Modules\Cleaning\Http\Controllers\API\CleaningSuiteConfigController;
 use Modules\Cleaning\Http\Controllers\API\CleaningTimeWarningController;
+use Modules\Cleaning\Http\Controllers\API\CleaningV3CatalogController;
+use Modules\Cleaning\Http\Controllers\API\CleaningV3FinancialHoldController;
+use Modules\Cleaning\Http\Controllers\API\CleaningV3VisitPlanPreviewController;
 use Modules\Cleaning\Http\Controllers\API\DashboardOverviewController;
 use Modules\Cleaning\Http\Controllers\API\DepositManagementController;
 use Modules\Cleaning\Http\Controllers\API\EventBookingController;
@@ -100,12 +103,20 @@ Route::prefix('v1')->group(function () {
     Route::apiResource('cleaning-services.pricing', ServicePricingController::class)->only(['index', 'show'])->scoped();
     Route::apiResource('cleaning-billing-policies', CleaningBillingPolicyController::class)->only(['index', 'show']);
     Route::get('cleaning/suite-config', CleaningSuiteConfigController::class);
+    // Read-only versioned V3 catalog. No V3 quote/write routes; held until approved.
+    Route::get('cleaning/catalog/v3', CleaningV3CatalogController::class)->middleware('throttle:60,1');
 
     Route::middleware(['auth:sanctum'])->group(function (): void {
         Route::post('cleaning-bookings/{booking}/worker-attendance/code', [BookingWorkerAttendanceCodeController::class, 'issue'])
             ->whereNumber('booking')->middleware('throttle:6,1');
         Route::get('cleaning/neighborhoods', [CleaningNeighborhoodController::class, 'index']);
         Route::post('cleaning/neighborhoods/match', [CleaningNeighborhoodController::class, 'match']);
+
+        // Phase 3: customer-authenticated, no-cost draft planning only. Real
+        // V3 quote and booking writes stay explicitly fail-closed.
+        Route::post('cleaning/v3/visit-plan/preview', CleaningV3VisitPlanPreviewController::class)->middleware('throttle:30,1');
+        Route::post('cleaning/v3/quotes', CleaningV3FinancialHoldController::class)->middleware('throttle:20,1');
+        Route::post('cleaning/v3/bookings', CleaningV3FinancialHoldController::class)->middleware('throttle:20,1');
 
         Route::get('cleaning/dashboard/overview', DashboardOverviewController::class);
         Route::post('cleaning/worker/current-location', WorkerCurrentLocationController::class);

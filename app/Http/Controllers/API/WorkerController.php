@@ -42,14 +42,14 @@ final class WorkerController
         }
 
         return WorkerResource::make(
-            $worker->load(['user', 'zones.neighborhood', 'availability', 'trustLogs', 'media'])
+            $worker->load(['user', 'zones.neighborhood', 'trustLogs', 'media'])
         );
     }
 
     public function show(Worker $worker): WorkerResource
     {
         $worker->load([
-            'user', 'zones.neighborhood', 'availability', 'trustLogs', 'media',
+            'user', 'zones.neighborhood', 'trustLogs', 'media',
         ]);
 
         return WorkerResource::make($worker);
@@ -67,7 +67,7 @@ final class WorkerController
         }
 
         return WorkerResource::make(
-            $updated->load(['user', 'zones.neighborhood', 'availability', 'trustLogs', 'media'])
+            $updated->load(['user', 'zones.neighborhood', 'trustLogs', 'media'])
         );
     }
 

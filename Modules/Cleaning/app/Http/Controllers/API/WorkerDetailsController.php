@@ -11,7 +11,7 @@ final class WorkerDetailsController
 {
     public function __invoke(Worker $worker): WorkerResource
     {
-        $worker->load(['user', 'zones.neighborhood', 'availability', 'media']);
+        $worker->load(['user', 'zones.neighborhood', 'media']);
 
         return WorkerResource::make($worker);
     }

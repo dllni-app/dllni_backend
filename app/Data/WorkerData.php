@@ -33,6 +33,5 @@ final class WorkerData extends Data
         public ?string $homeAddress,
         public ?float $homeLatitude,
         public ?float $homeLongitude,
-        public ?array $defaultWorkingHours,
     ) {}
 }

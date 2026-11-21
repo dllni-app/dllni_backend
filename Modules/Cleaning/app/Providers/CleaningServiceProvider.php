@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\ServiceProvider;
 use Modules\Cleaning\Console\DeleteCleaningOrdersCommand;
 use Modules\Cleaning\Console\DispatchDueCleaningBookingNotificationsCommand;
+use Modules\Cleaning\Console\PurgeWorkerComplianceSamplesCommand;
+use Modules\Cleaning\Console\ReconcileWorkerComplianceSamplesCommand;
 use Modules\Cleaning\Console\RepairCleaningCouponPricingCommand;
 use Modules\Cleaning\Console\RepairInclusiveCouponBookingCommand;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -93,6 +95,8 @@ final class CleaningServiceProvider extends ServiceProvider
         $this->commands([
             DeleteCleaningOrdersCommand::class,
             DispatchDueCleaningBookingNotificationsCommand::class,
+            PurgeWorkerComplianceSamplesCommand::class,
+            ReconcileWorkerComplianceSamplesCommand::class,
             RepairCleaningCouponPricingCommand::class,
             RepairInclusiveCouponBookingCommand::class,
         ]);
@@ -101,6 +105,14 @@ final class CleaningServiceProvider extends ServiceProvider
     public function registerCommandSchedules(): void
     {
         Schedule::command('cleaning:dispatch-due-action-notifications')
+            ->everyMinute()
+            ->withoutOverlapping(5);
+
+        Schedule::command('cleaning:purge-compliance-samples')
+            ->everyMinute()
+            ->withoutOverlapping(5);
+
+        Schedule::command('cleaning:reconcile-worker-compliance-samples')
             ->everyMinute()
             ->withoutOverlapping(5);
     }

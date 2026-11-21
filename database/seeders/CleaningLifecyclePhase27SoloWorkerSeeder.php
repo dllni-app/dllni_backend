@@ -11,7 +11,7 @@ use App\Models\Worker;
 use App\Models\WorkerAvailability;
 use App\Models\WorkerZone;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 /**
  * A separate, non-conflicting QA worker for Phase 2.7 solo lifecycle checks.
@@ -25,7 +25,7 @@ final class CleaningLifecyclePhase27SoloWorkerSeeder extends Seeder
     {
         if (app()->environment('production') || config('database.default') !== 'mysql'
             || ! in_array(config('database.connections.mysql.host'), ['127.0.0.1', 'localhost'], true)) {
-            throw new \RuntimeException('QA Seeder requires a local MySQL database host.');
+            throw new RuntimeException('QA Seeder requires a local MySQL database host.');
         }
 
         $source = Worker::query()->with('user', 'zones')->findOrFail(1);
@@ -50,7 +50,6 @@ final class CleaningLifecyclePhase27SoloWorkerSeeder extends Seeder
             'home_address' => $source->home_address,
             'home_latitude' => $source->home_latitude,
             'home_longitude' => $source->home_longitude,
-            'default_working_hours' => $source->default_working_hours,
         ]);
 
         CleaningWorkerDeposit::query()->firstOrCreate(['worker_id' => $worker->id], [

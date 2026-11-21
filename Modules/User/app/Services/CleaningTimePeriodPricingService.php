@@ -181,13 +181,11 @@ final class CleaningTimePeriodPricingService
             );
             $base = $this->calculator->roundMoney($base + $supervisor['fee']);
         }
-        // Transport allowance belongs to each booked worker seat, even when
-        // the room schedule's peak concurrency is lower than the chosen team.
+        // A configured transport allowance is charged per booked worker seat.
+        // Missing configuration means no transport charge; it must not block
+        // the customer from requesting a cleaning booking.
         $financial = CleaningRuntimeSettings::financial();
-        if ((float) $financial->travel_markup_value <= 0) {
-            $this->invalid('transport', 'يجب إعداد بدل مواصلات ثابت للعامل قبل تسعير الطلب.');
-        }
-        $perWorkerTravel = $this->calculator->roundMoney((float) $financial->travel_markup_value);
+        $perWorkerTravel = $this->calculator->roundMoney(max(0.0, (float) ($financial->travel_markup_value ?? 0)));
         $priced = $this->calculator->provisional($base, $addons, 0, $requestedWorkers * count($appointments));
         $minimum = max(0.0, (float) (CleaningRuntimeSettings::financial()->cleaning_minimum_order_price ?? 0));
         if ($priced['totalPrice'] < $minimum) {

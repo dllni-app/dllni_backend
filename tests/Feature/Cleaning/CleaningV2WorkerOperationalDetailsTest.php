@@ -47,12 +47,14 @@ it('shows shared booking-level special service tasks to accepted team members on
             'pricing_unit' => 'unit', 'dirtiness_level' => 'normal', 'quantity' => 1,
             'base_unit_price' => 100, 'price_multiplier' => 1, 'total_price' => 100,
             'execution_status' => 'pending',
+            'notes' => 'Private access code: 12345 and phone +963900000001',
         ])->sessions()->attach($sessions[$index]->id);
     }
     Sanctum::actingAs($worker->user);
     $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")
         ->assertOk()
         ->assertJsonPath('data.specialServices.0.name', 'My service')
+        ->assertJsonPath('data.specialServices.0.notes', null)
         ->assertJsonPath('data.specialServices.1.name', 'Other service')
         ->assertJsonCount(2, 'data.specialServices')
         ->assertJsonStructure(['data' => ['materials', 'materialKit']]);
@@ -60,6 +62,7 @@ it('shows shared booking-level special service tasks to accepted team members on
     $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")
         ->assertOk()
         ->assertJsonPath('data.specialServices.0.name', 'My service')
+        ->assertJsonPath('data.specialServices.0.notes', null)
         ->assertJsonPath('data.specialServices.1.name', 'Other service')
         ->assertJsonCount(2, 'data.specialServices');
     $unassigned = Worker::factory()->create(['user_id' => User::factory()->create()->id]);

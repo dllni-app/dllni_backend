@@ -50,7 +50,6 @@ final class WorkerResource extends JsonResource
                 ->map(fn (WorkerZone $zone): array => $this->serializeZone($zone))
                 ->values()
                 ->all()),
-            'availability' => $this->whenLoaded('availability'),
             'trustLogs' => $this->whenLoaded('trustLogs'),
             'createdAt' => $this->created_at?->toDateTimeString(),
             'updatedAt' => $this->updated_at?->toDateTimeString(),

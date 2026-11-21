@@ -51,7 +51,7 @@ final class UserCleaningOrderSearchRetryController
         NotifyEligibleWorkersNewOrderJob::dispatch((int) $booking->id);
 
         return response()->json([
-            'message' => 'أعدنا إرسال الطلب للبحث عن عمال. تبدأ مهلة جديدة مدتها 6 ساعات.',
+            'message' => 'تم تجديد نافذة تنبيهات البحث لست ساعات، ويبقى البحث نشطاً ما دام موعد الخدمة قادماً.',
             'data' => UserCleaningBookingResource::make($booking),
         ]);
     }

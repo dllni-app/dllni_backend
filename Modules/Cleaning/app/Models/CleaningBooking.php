@@ -33,7 +33,7 @@ use Modules\Cleaning\Traits\FilterQueries\CleaningBookingFilterQuery;
  * @property-read EloquentCollection<int, \App\Models\SosAlert> $sosAlerts
  * @property-read EloquentCollection<int, \App\Models\SystemAlert> $systemAlerts
  */
-#[ObservedBy([CleaningBookingObserver::class])]
+#[ObservedBy([CleaningBookingObserver::class, \Modules\Cleaning\Observers\WorkerComplianceBookingObserver::class])]
 final class CleaningBooking extends Model
 {
     use CleaningBookingFilterQuery;
@@ -490,8 +490,9 @@ final class CleaningBooking extends Model
     }
 
     /**
-     * Six-hour discovery window ends only when nobody accepted this request.
-     * Any accepted session/worker keeps the normal cancellation policy in force.
+     * Six-hour customer escalation threshold, NOT a dispatch shutdown.
+     * It applies only if nobody accepted. Accepted work retains normal
+     * cancellation rules and discovery may continue after notification.
      */
     public function searchWindowExpired(): bool
     {
