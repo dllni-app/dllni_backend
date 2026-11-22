@@ -71,7 +71,10 @@ final class CleaningV3WorkClockProjectionService
         $terminal = in_array($status, CleaningBookingSessionStatus::terminalValues(), true);
 
         if (($terminal && $openSince !== null)
-            || ($status === CleaningBookingSessionStatus::Paused->value && $openSince !== null)
+            || ($status === CleaningBookingSessionStatus::Paused->value
+                && ($openSince !== null || $rows->isEmpty()))
+            || ($status === CleaningBookingSessionStatus::InProgress->value && $openSince === null)
+            || ($status === CleaningBookingSessionStatus::Scheduled->value && $openSince !== null)
             || ($pendingCount > 0 && ($openSince === null || $terminal))) {
             throw new DomainException('INVALID_V3_CLOCK_VISIT_STATE');
         }

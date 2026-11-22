@@ -30,7 +30,7 @@ function v3ClockTestVisit(?User $customer = null): CleaningBookingSession
         'duration_hours' => 2,
         'required_workers' => 1,
         'coverage_status' => 'fully_covered',
-        'status' => 'in_progress',
+        'status' => 'scheduled',
     ]);
 }
 
@@ -139,7 +139,7 @@ test('work clock counts only active intervals and a pending pause does not stop 
         'created_at' => now(),
         'updated_at' => now(),
     ]);
-    $visit->forceFill(['clock_revision' => 2])->save();
+    $visit->forceFill(['clock_revision' => 2, 'status' => 'in_progress'])->save();
 
     $clock = app(CleaningV3WorkClockProjectionService::class)->project(
         $visit->fresh(), CarbonImmutable::parse('2026-11-23 13:00:00', 'UTC'),
@@ -228,4 +228,97 @@ test('clock read is restricted to the owning customer and the exact V3 session',
     ]);
     $this->getJson("/api/v1/cleaning-bookings/{$legacy->id}/sessions/{$legacyVisit->id}/work-clock")
         ->assertNotFound();
+});
+
+test('only an accepted, non-released V3 visit worker can read that visit clock', function (): void {
+    $visit = v3ClockTestVisit();
+    $otherVisit = v3ClockTestVisit();
+    $workerUser = User::factory()->create(['is_active' => true]);
+    $worker = App\Models\Worker::factory()->create(['user_id' => $workerUser->id]);
+    $url = "/api/v1/cleaning-bookings/{$visit->cleaning_booking_id}/sessions/{$visit->id}/work-clock";
+
+    Sanctum::actingAs($workerUser);
+    $this->getJson($url)->assertNotFound();
+
+    $assignment = $visit->workerAssignments()->create([
+        'worker_id' => $worker->id,
+        'status' => 'pending',
+    ]);
+    $this->getJson($url)->assertNotFound();
+
+    $assignment->update(['status' => 'accepted', 'accepted_at' => now()]);
+    $this->getJson($url)->assertOk()
+        ->assertJsonPath('data.visitId', $visit->id)
+        ->assertJsonPath('data.state', 'not_started')
+        ->assertDontSee('customer_id');
+
+    $this->getJson("/api/v1/cleaning-bookings/{$otherVisit->cleaning_booking_id}/sessions/{$otherVisit->id}/work-clock")
+        ->assertNotFound();
+
+    $assignment->forceFill(['released_at' => now()])->save();
+    $this->getJson($url)->assertNotFound();
+});
+
+test('only the current, explicitly assigned supervisor can read a V3 team clock', function (): void {
+    Spatie\Permission\Models\Role::findOrCreate('Cleaning Supervisor', 'web');
+
+    $visit = v3ClockTestVisit();
+    $visit->booking->forceFill(['booking_kind' => 'standard', 'number_of_workers' => 2])->save();
+
+    $supervisor = User::factory()->create(['is_active' => true]);
+    $supervisor->assignRole('Cleaning Supervisor');
+    $unassigned = User::factory()->create(['is_active' => true]);
+    $unassigned->assignRole('Cleaning Supervisor');
+    $url = "/api/v1/cleaning-bookings/{$visit->cleaning_booking_id}/sessions/{$visit->id}/work-clock";
+
+    Sanctum::actingAs($unassigned);
+    $this->getJson($url)->assertNotFound();
+
+    $assignmentId = DB::table('cleaning_supervisor_assignments')->insertGetId([
+        'cleaning_booking_id' => $visit->cleaning_booking_id,
+        'supervisor_user_id' => $supervisor->id,
+        'active_slot' => 1,
+        'assigned_at' => now(),
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    Sanctum::actingAs($supervisor);
+    $this->getJson($url)->assertOk()
+        ->assertJsonPath('data.visitId', $visit->id)
+        ->assertJsonPath('data.activeSeconds', 0)
+        ->assertDontSee('customer_id');
+
+    DB::table('cleaning_supervisor_assignments')->where('id', $assignmentId)->update([
+        'active_slot' => null,
+        'released_at' => now(),
+    ]);
+
+    $this->getJson($url)->assertNotFound();
+});
+
+test('clock refuses mismatches between the persisted visit state and active interval history', function (): void {
+    $service = app(CleaningV3WorkClockProjectionService::class);
+    $now = CarbonImmutable::parse('2026-11-23 13:00:00', 'UTC');
+    $visit = v3ClockTestVisit();
+
+    $visit->update(['status' => 'in_progress']);
+    expect(fn () => $service->project($visit->fresh(), $now))
+        ->toThrow(DomainException::class, 'INVALID_V3_CLOCK_VISIT_STATE');
+
+    $visit->update(['status' => 'paused']);
+    expect(fn () => $service->project($visit->fresh(), $now))
+        ->toThrow(DomainException::class, 'INVALID_V3_CLOCK_VISIT_STATE');
+
+    DB::table('cleaning_work_intervals')->insert(
+        v3ClockInterval($visit, 'start-1', '2026-11-23 10:00:00'),
+    );
+
+    $visit->update(['status' => 'scheduled']);
+    expect(fn () => $service->project($visit->fresh(), $now))
+        ->toThrow(DomainException::class, 'INVALID_V3_CLOCK_VISIT_STATE');
+
+    $visit->update(['status' => 'completed']);
+    expect(fn () => $service->project($visit->fresh(), $now))
+        ->toThrow(DomainException::class, 'INVALID_V3_CLOCK_VISIT_STATE');
 });
