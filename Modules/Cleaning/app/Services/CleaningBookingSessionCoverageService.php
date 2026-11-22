@@ -52,6 +52,12 @@ final class CleaningBookingSessionCoverageService
                 );
             }
 
+            if ((string) ($locked->booking->contract_version ?? '') === 'v3') {
+                // Recompute remaining seats without ever resetting the visit's
+                // original six-hour search deadline after a worker withdraws.
+                app(CleaningV3VisitDispatchService::class)->reconcileCoverage($locked);
+            }
+
             return $locked->fresh(['workerAssignments']) ?? $locked;
         });
     }

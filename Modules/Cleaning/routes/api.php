@@ -28,6 +28,7 @@ use Modules\Cleaning\Http\Controllers\API\CleaningSuiteConfigController;
 use Modules\Cleaning\Http\Controllers\API\CleaningTimeWarningController;
 use Modules\Cleaning\Http\Controllers\API\CleaningV3CatalogController;
 use Modules\Cleaning\Http\Controllers\API\CleaningV3FinancialHoldController;
+use Modules\Cleaning\Http\Controllers\API\CleaningV3VisitDispatchController;
 use Modules\Cleaning\Http\Controllers\API\CleaningV3VisitPlanPreviewController;
 use Modules\Cleaning\Http\Controllers\API\CleaningV3WorkClockCommandController;
 use Modules\Cleaning\Http\Controllers\API\CleaningV3WorkClockController;
@@ -119,6 +120,9 @@ Route::prefix('v1')->group(function () {
         Route::post('cleaning/v3/visit-plan/preview', CleaningV3VisitPlanPreviewController::class)->middleware('throttle:30,1');
         Route::post('cleaning/v3/quotes', CleaningV3FinancialHoldController::class)->middleware('throttle:20,1');
         Route::post('cleaning/v3/bookings', CleaningV3FinancialHoldController::class)->middleware('throttle:20,1');
+        // Exact-visit, customer-only V3 dispatch progress; never resets the search deadline.
+        Route::get('cleaning-bookings/{booking}/sessions/{session}/dispatch', CleaningV3VisitDispatchController::class)
+            ->whereNumber('booking')->whereNumber('session')->middleware('throttle:60,1');
         // Server-owned V3 clock; writes use locked, idempotent visit transitions.
         Route::get('cleaning-bookings/{booking}/sessions/{session}/work-clock', CleaningV3WorkClockController::class)
             ->whereNumber('booking')->whereNumber('session')->middleware('throttle:60,1');

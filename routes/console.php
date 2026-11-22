@@ -2,9 +2,10 @@
 
 declare(strict_types=1);
 
+use App\Models\WorkerZone;
+use App\Services\DeliverySystemAlertGenerator;
 use App\Services\RestaurantSystemAlertGenerator;
 use App\Services\SupermarketSystemAlertGenerator;
-use App\Services\DeliverySystemAlertGenerator;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -12,13 +13,25 @@ use Modules\Cleaning\Services\CleaningNeighborhoodResolver;
 use Modules\Delivery\Jobs\RecoverDriverTrustScoreJob;
 use Modules\Supermarket\Jobs\DispatchDueSmartListSchedulesJob;
 use Modules\Supermarket\Services\OpenFoodFactsMasterProductImportService;
-use Modules\User\Models\UserAddress;
 use Modules\User\Jobs\ProcessExpiredRestaurantGroupOrdersJob;
-use App\Models\WorkerZone;
+use Modules\User\Models\UserAddress;
 
+// V3 dispatch escalation writes only durable notice intentions. Delivery
+// must be retried through an audited outbox adapter; no cancellation occurs.
+Artisan::command('cleaning:v3-escalate-incomplete-visits', function (
+    Modules\Cleaning\Services\CleaningV3VisitDispatchService $service
+): int {
+    $count = $service->escalateDue();
+    $this->info('Escalated V3 visits: '.$count);
+
+    return 0;
+})->purpose('Record six-hour V3 visit shortages and enqueue customer/admin notice intentions');
+
+Schedule::command('cleaning:v3-escalate-incomplete-visits')
+    ->everyFiveMinutes()->withoutOverlapping();
 
 Artisan::command('cleaning:expand-geographic-dispatch', function (): int {
-    \Modules\Cleaning\Models\CleaningBooking::query()
+    CleaningBooking::query()
         ->whereIn('status', ['pending', 'worker_assigned'])
         ->whereNotNull('address_latitude')
         ->whereNotNull('address_longitude')
@@ -27,8 +40,8 @@ Artisan::command('cleaning:expand-geographic-dispatch', function (): int {
         ->orderBy('id')
         ->chunkById(100, function ($bookings): void {
             foreach ($bookings as $booking) {
-                if (app(\Modules\Cleaning\Services\CleaningGeographicDispatchService::class)->hasOpenWorkerSlots($booking)) {
-                    \App\Jobs\NotifyEligibleWorkersNewOrderJob::dispatch((int) $booking->id);
+                if (app(Modules\Cleaning\Services\CleaningGeographicDispatchService::class)->hasOpenWorkerSlots($booking)) {
+                    App\Jobs\NotifyEligibleWorkersNewOrderJob::dispatch((int) $booking->id);
                 }
             }
         });
@@ -39,7 +52,7 @@ Artisan::command('cleaning:expand-geographic-dispatch', function (): int {
 Schedule::command('cleaning:expand-geographic-dispatch')->everyFiveMinutes()->withoutOverlapping();
 
 Artisan::command('cleaning:resolve-last-hour-coverage', function (
-    \Modules\Cleaning\Services\CleaningLastHourCoverageService $service
+    Modules\Cleaning\Services\CleaningLastHourCoverageService $service
 ): int {
     $outcome = $service->processDue();
     $this->info('Last-hour cleaning coverage: '.json_encode($outcome));
@@ -60,10 +73,10 @@ Artisan::command('restaurant:generate-system-alerts', function (RestaurantSystem
 
 Schedule::command('restaurant:generate-system-alerts')->everyFiveMinutes();
 
-
 Artisan::command('supermarket:generate-system-alerts', function (SupermarketSystemAlertGenerator $generator): int {
     $count = $generator->handle();
     $this->info("Supermarket alerts generated: {$count}");
+
     return 0;
 })->purpose('Generate proactive system alerts for supermarket operations');
 
@@ -72,6 +85,7 @@ Schedule::command('supermarket:generate-system-alerts')->everyFiveMinutes();
 Artisan::command('delivery:generate-system-alerts', function (DeliverySystemAlertGenerator $generator): int {
     $count = $generator->handle();
     $this->info("Delivery alerts generated: {$count}");
+
     return 0;
 })->purpose('Generate proactive system alerts for delivery operations');
 
@@ -307,6 +321,6 @@ Artisan::command(
     }
 )->purpose('Import Syrian OpenFoodFacts products into the master catalog');
 
-if (app()->environment('local') && config('telescope.enabled') && class_exists(\Laravel\Telescope\Telescope::class)) {
+if (app()->environment('local') && config('telescope.enabled') && class_exists(Laravel\Telescope\Telescope::class)) {
     Schedule::command('telescope:prune --hours=48')->daily();
 }
