@@ -29,6 +29,7 @@ use Modules\Cleaning\Http\Controllers\API\CleaningTimeWarningController;
 use Modules\Cleaning\Http\Controllers\API\CleaningV3CatalogController;
 use Modules\Cleaning\Http\Controllers\API\CleaningV3FinancialHoldController;
 use Modules\Cleaning\Http\Controllers\API\CleaningV3VisitPlanPreviewController;
+use Modules\Cleaning\Http\Controllers\API\CleaningV3WorkClockController;
 use Modules\Cleaning\Http\Controllers\API\DashboardOverviewController;
 use Modules\Cleaning\Http\Controllers\API\DepositManagementController;
 use Modules\Cleaning\Http\Controllers\API\EventBookingController;
@@ -117,6 +118,9 @@ Route::prefix('v1')->group(function () {
         Route::post('cleaning/v3/visit-plan/preview', CleaningV3VisitPlanPreviewController::class)->middleware('throttle:30,1');
         Route::post('cleaning/v3/quotes', CleaningV3FinancialHoldController::class)->middleware('throttle:20,1');
         Route::post('cleaning/v3/bookings', CleaningV3FinancialHoldController::class)->middleware('throttle:20,1');
+        // Read-only customer V3 clock. Mutation endpoints remain deliberately absent.
+        Route::get('cleaning-bookings/{booking}/sessions/{session}/work-clock', CleaningV3WorkClockController::class)
+            ->whereNumber('booking')->whereNumber('session')->middleware('throttle:60,1');
 
         Route::get('cleaning/dashboard/overview', DashboardOverviewController::class);
         Route::post('cleaning/worker/current-location', WorkerCurrentLocationController::class);
