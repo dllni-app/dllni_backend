@@ -363,8 +363,17 @@ final class CleaningBookingSessionLifecycleService
         Worker $worker,
     ): CleaningBookingSession {
         return DB::transaction(function () use ($booking, $session, $worker): CleaningBookingSession {
+            if ((string) ($booking->contract_version ?? '') === 'v3') {
+                // V3 clock commands lock parent before visit. Keep the same
+                // order in the approved work-start path to avoid deadlocks.
+                CleaningBooking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
+            }
             $locked = $this->lockSession($booking, $session);
             $this->assertSessionNotTerminal($locked);
+            if ((string) ($booking->contract_version ?? '') === 'v3'
+                && $locked->status === CleaningBookingSessionStatus::Paused) {
+                throw new InvalidArgumentException('Paused V3 visits can only restart through the authorized resume command.');
+            }
             $assignment = $this->activeAssignment($locked, $worker, true);
 
             if ($assignment->arrived_at === null) {
@@ -404,6 +413,14 @@ final class CleaningBookingSessionLifecycleService
                     : CleaningBookingSessionStatus::AwaitingWorkerStartConfirmation,
             ])->save();
 
+            if ((string) ($booking->contract_version ?? '') === 'v3'
+                && $locked->status === CleaningBookingSessionStatus::InProgress) {
+                // The verified session start, not an untrusted timer button,
+                // opens exactly one authoritative interval for V3.
+                app(CleaningV3WorkClockCommandService::class)
+                    ->initializeApprovedVisit((int) $booking->id, (int) $locked->id);
+            }
+
             $this->syncParentStatus($booking);
 
             return $this->freshSession($locked);
@@ -417,6 +434,9 @@ final class CleaningBookingSessionLifecycleService
         ?string $message = null,
     ): CleaningBookingSession {
         return DB::transaction(function () use ($booking, $session, $worker, $message): CleaningBookingSession {
+            if ((string) ($booking->contract_version ?? '') === 'v3') {
+                CleaningBooking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
+            }
             $locked = $this->lockSession($booking, $session);
             $this->assertSessionNotTerminal($locked);
             $assignment = $this->activeAssignment($locked, $worker, true);
@@ -443,6 +463,12 @@ final class CleaningBookingSessionLifecycleService
                 ->count();
 
             $readyForCustomer = $readyCount >= $locked->requiredWorkerCount();
+            if ($readyForCustomer && (string) ($booking->contract_version ?? '') === 'v3') {
+                // Finish the entire visit's clock exactly once when the last
+                // assigned worker finishes; partial team work keeps running.
+                app(CleaningV3WorkClockCommandService::class)
+                    ->stopForApprovedCompletion((int) $booking->id, (int) $locked->id);
+            }
             $locked->forceFill([
                 'status' => $readyForCustomer
                     ? CleaningBookingSessionStatus::AwaitingCustomerCompletion
@@ -450,7 +476,9 @@ final class CleaningBookingSessionLifecycleService
                 'work_finished_at' => $readyForCustomer
                     ? ($locked->work_finished_at ?? now())
                     : null,
-                'payment_status' => $readyForCustomer ? 'ready' : ($locked->payment_status ?: 'pending'),
+                'payment_status' => $readyForCustomer
+                    ? ((string) ($booking->contract_version ?? '') === 'v3' ? 'pending' : 'ready')
+                    : ($locked->payment_status ?: 'pending'),
             ])->save();
 
             $this->syncParentStatus($booking);
@@ -639,6 +667,9 @@ final class CleaningBookingSessionLifecycleService
             $message,
             &$workerIds,
         ): CleaningBookingSession {
+            if ((string) ($booking->contract_version ?? '') === 'v3') {
+                CleaningBooking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
+            }
             $locked = $this->lockSession($booking, $session);
             $this->assertSessionNotTerminal($locked);
 
@@ -671,6 +702,11 @@ final class CleaningBookingSessionLifecycleService
                     'work_finished_at' => null,
                     'worker_completion_message' => null,
                 ])->save();
+            }
+
+            if ((string) ($booking->contract_version ?? '') === 'v3') {
+                app(CleaningV3WorkClockCommandService::class)
+                    ->resumeAfterRejectedCompletion((int) $booking->id, (int) $locked->id);
             }
 
             $locked->forceFill([
@@ -841,6 +877,9 @@ final class CleaningBookingSessionLifecycleService
         }
 
         $updatedSession = DB::transaction(function () use ($booking, $session, $administrative): CleaningBookingSession {
+            if ((string) ($booking->contract_version ?? '') === 'v3') {
+                CleaningBooking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
+            }
             $locked = $this->lockSession($booking, $session);
             if ($locked->status === CleaningBookingSessionStatus::Completed) {
                 return $this->freshSession($locked);
@@ -862,7 +901,15 @@ final class CleaningBookingSessionLifecycleService
             }
 
             $completedAt = now();
-            $this->finalizeOpenTimeSession($booking, $locked, $completedAt);
+            $isV3 = (string) ($booking->contract_version ?? '') === 'v3';
+            if ($isV3 && ($locked->payment_settled_at !== null || $locked->payment_status === 'settled')) {
+                throw ValidationException::withMessages([
+                    'funding' => ['V3 payment state requires an independently verified funding reconciliation.'],
+                ]);
+            }
+            if (! $isV3) {
+                $this->finalizeOpenTimeSession($booking, $locked, $completedAt);
+            }
             CleaningBookingSessionWorkerAssignment::query()
                 ->where('cleaning_booking_session_id', $locked->id)
                 ->whereIn('status', [
@@ -882,7 +929,7 @@ final class CleaningBookingSessionLifecycleService
                 ->get();
 
             $legacySettlementEligible = false;
-            if ($locked->is_pricing_final) {
+            if (! $isV3 && $locked->is_pricing_final) {
                 // A frozen customer quote is not an external funding source.
                 // Existing sessions may settle only inside that quote; V2
                 // supervised visits require configured supervisor liability.
@@ -961,11 +1008,18 @@ final class CleaningBookingSessionLifecycleService
             if ($legacySettlementEligible) {
                 $completionAttributes['payment_status'] = 'settled';
                 $completionAttributes['payment_settled_at'] = $locked->payment_settled_at ?? $completedAt;
+            } elseif ($isV3) {
+                // Work completion does not prove collection or funding.
+                // The V3 settlement ledger is intentionally a separate gate.
+                $completionAttributes['payment_status'] = 'pending';
+                $completionAttributes['payment_settled_at'] = null;
             }
 
             $locked->forceFill($completionAttributes)->save();
 
-            $this->refreshOpenTimeParentPricing($booking, $completedAt);
+            if (! $isV3) {
+                $this->refreshOpenTimeParentPricing($booking, $completedAt);
+            }
 
             $this->syncParentStatus($booking);
 
@@ -1222,7 +1276,10 @@ final class CleaningBookingSessionLifecycleService
             $status = CleaningBookingStatus::TimeExtensionRequested;
         } elseif ($statuses->contains(CleaningBookingSessionStatus::AwaitingCustomerCompletion->value)) {
             $status = CleaningBookingStatus::AwaitingCustomerCompletion;
-        } elseif ($statuses->contains(CleaningBookingSessionStatus::InProgress->value)) {
+        } elseif ($statuses->contains(CleaningBookingSessionStatus::InProgress->value)
+            || ((string) ($booking->contract_version ?? '') === 'v3'
+                && $statuses->contains(CleaningBookingSessionStatus::Paused->value))) {
+            // A paused V3 work clock is still an active commercial visit.
             $status = CleaningBookingStatus::InProgress;
         } elseif ($statuses->contains(CleaningBookingSessionStatus::AwaitingStartVerification->value)) {
             $status = CleaningBookingStatus::AwaitingStartVerification;

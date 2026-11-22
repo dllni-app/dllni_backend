@@ -29,6 +29,7 @@ use Modules\Cleaning\Http\Controllers\API\CleaningTimeWarningController;
 use Modules\Cleaning\Http\Controllers\API\CleaningV3CatalogController;
 use Modules\Cleaning\Http\Controllers\API\CleaningV3FinancialHoldController;
 use Modules\Cleaning\Http\Controllers\API\CleaningV3VisitPlanPreviewController;
+use Modules\Cleaning\Http\Controllers\API\CleaningV3WorkClockCommandController;
 use Modules\Cleaning\Http\Controllers\API\CleaningV3WorkClockController;
 use Modules\Cleaning\Http\Controllers\API\DashboardOverviewController;
 use Modules\Cleaning\Http\Controllers\API\DepositManagementController;
@@ -118,9 +119,18 @@ Route::prefix('v1')->group(function () {
         Route::post('cleaning/v3/visit-plan/preview', CleaningV3VisitPlanPreviewController::class)->middleware('throttle:30,1');
         Route::post('cleaning/v3/quotes', CleaningV3FinancialHoldController::class)->middleware('throttle:20,1');
         Route::post('cleaning/v3/bookings', CleaningV3FinancialHoldController::class)->middleware('throttle:20,1');
-        // Read-only customer V3 clock. Mutation endpoints remain deliberately absent.
+        // Server-owned V3 clock; writes use locked, idempotent visit transitions.
         Route::get('cleaning-bookings/{booking}/sessions/{session}/work-clock', CleaningV3WorkClockController::class)
             ->whereNumber('booking')->whereNumber('session')->middleware('throttle:60,1');
+        // V3-only visit commands: old V2 session APIs and financial routes are unchanged.
+        Route::post('cleaning-bookings/{booking}/sessions/{session}/pause-requests', [CleaningV3WorkClockCommandController::class, 'requestPause'])
+            ->whereNumber('booking')->whereNumber('session')->middleware('throttle:20,1');
+        Route::post('cleaning-bookings/{booking}/sessions/{session}/pause-requests/{pauseRequest}/withdraw', [CleaningV3WorkClockCommandController::class, 'withdrawPause'])
+            ->whereNumber('booking')->whereNumber('session')->whereNumber('pauseRequest')->middleware('throttle:20,1');
+        Route::post('cleaning-bookings/{booking}/sessions/{session}/pause-requests/{pauseRequest}/decision', [CleaningV3WorkClockCommandController::class, 'decidePause'])
+            ->whereNumber('booking')->whereNumber('session')->whereNumber('pauseRequest')->middleware('throttle:20,1');
+        Route::post('cleaning-bookings/{booking}/sessions/{session}/resume', [CleaningV3WorkClockCommandController::class, 'resume'])
+            ->whereNumber('booking')->whereNumber('session')->middleware('throttle:20,1');
 
         Route::get('cleaning/dashboard/overview', DashboardOverviewController::class);
         Route::post('cleaning/worker/current-location', WorkerCurrentLocationController::class);
@@ -129,13 +139,13 @@ Route::prefix('v1')->group(function () {
         Route::get('cleaning/worker/reviews', [WorkerReviewController::class, 'index']);
         Route::get('worker/{worker}', WorkerDetailsController::class);
         Route::get('cleaning/worker/profile', Modules\Cleaning\Http\Controllers\API\WorkerProfileController::class);
-                Route::prefix('cleaning/worker/account')->group(function (): void {
+        Route::prefix('cleaning/worker/account')->group(function (): void {
             Route::get('profile', Modules\Cleaning\Http\Controllers\API\WorkerProfileController::class);
             Route::put('profile', [WorkerAccountProfileController::class, 'update']);
             Route::put("pass\x77ord", [WorkerAccountProfileController::class, 'updatePassword']);
             Route::get('work-areas', [WorkerWorkAreasController::class, 'show']);
             Route::put('work-areas', [WorkerWorkAreasController::class, 'update']);
-                            Route::get('notifications', [UserNotificationController::class, 'index']);
+            Route::get('notifications', [UserNotificationController::class, 'index']);
             Route::patch('notifications/read-all', [UserNotificationController::class, 'markAllAsRead']);
             Route::delete('notifications/all', [UserNotificationController::class, 'destroyAll']);
             Route::delete('notifications/{id}', [UserNotificationController::class, 'destroy']);

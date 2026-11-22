@@ -13,9 +13,8 @@ use Modules\Cleaning\Models\CleaningBookingSession;
 /**
  * Read-only, server-clock V3 visit projection. Never trusts device timers.
  *
- * No action is exposed for opening/closing intervals or approving pauses:
- * those operations require visit-scoped actor authorization, a canonical
- * idempotency record, row locks, and verified financial admission.
+ * Interval mutations are handled only by the visit-scoped, transactional
+ * command service. Financial settlement remains separately guarded.
  */
 final class CleaningV3WorkClockProjectionService
 {
@@ -58,10 +57,11 @@ final class CleaningV3WorkClockProjectionService
             }
         }
 
-        $pendingCount = DB::table('cleaning_work_pause_requests')
+        $pendingRequests = DB::table('cleaning_work_pause_requests')
             ->where('cleaning_booking_session_id', $visit->id)
             ->where('status', 'pending')
-            ->count();
+            ->get(['id']);
+        $pendingCount = $pendingRequests->count();
 
         if ($pendingCount > 1) {
             throw new DomainException('INVALID_V3_PAUSE_REQUEST_HISTORY');
@@ -94,6 +94,7 @@ final class CleaningV3WorkClockProjectionService
             'activeSeconds' => $activeSeconds,
             'activeSince' => $openSince?->toIso8601String(),
             'pausePending' => $pendingCount === 1,
+            'pendingPauseRequestId' => $pendingCount === 1 ? (int) $pendingRequests->first()->id : null,
             'visitId' => (int) $visit->id,
             'canSettle' => false,
         ];

@@ -16,7 +16,6 @@ use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
 use Modules\Cleaning\Support\CleaningScheduledCivilTime;
-use Throwable;
 
 final class WorkerBookingScheduleConflictService
 {
@@ -41,6 +40,34 @@ final class WorkerBookingScheduleConflictService
     public function hasConflictForSession(Worker $worker, CleaningBookingSession $candidate): bool
     {
         return $this->conflictsForSession($worker, $candidate) !== [];
+    }
+
+    /**
+     * A resumed V3 visit uses the actual prospective remaining-work window,
+     * not its stale original appointment interval. Other visits of the same
+     * booking are deliberately NOT excluded from the conflict check.
+     */
+    public function hasConflictForV3ResumeWindow(
+        Worker $worker,
+        CleaningBookingSession $visit,
+        CarbonImmutable $from,
+        CarbonImmutable $until,
+    ): bool {
+        if ($until <= $from) {
+            return true;
+        }
+
+        return $this->conflictsForIntervals(
+            $worker,
+            [[
+                'bookingId' => (int) $visit->cleaning_booking_id,
+                'sessionId' => (int) $visit->id,
+                'start' => $from,
+                'end' => $until,
+            ]],
+            (int) $visit->cleaning_booking_id,
+            (int) $visit->id,
+        ) !== [];
     }
 
     /**

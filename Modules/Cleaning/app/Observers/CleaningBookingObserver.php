@@ -323,7 +323,10 @@ final class CleaningBookingObserver
     private function chargeAdminCommission(CleaningBooking $booking): void
     {
         try {
-            if ($booking->sessions()->exists()) {
+            // V3 worker dues and platform fees require separately verified
+            // visit-level funding. Never reuse the legacy booking-level debit.
+            if ((string) ($booking->contract_version ?? '') === 'v3'
+                || $booking->sessions()->exists()) {
                 return;
             }
 
