@@ -564,6 +564,7 @@ final class CleaningBookingResource extends JsonResource
         $sensitiveKeys = [
             'address', 'fulladdress', 'location', 'locationname', 'destination',
             'latitude', 'longitude', 'lat', 'lng', 'coordinates',
+            'gps', 'geopoint', 'geolocation', 'mapurl', 'preciselocation',
             'phone', 'phonenumber', 'mobile', 'email', 'contact',
             'customer', 'customerid', 'customername', 'username',
             'street', 'building', 'floor', 'apartment', 'landmark',
