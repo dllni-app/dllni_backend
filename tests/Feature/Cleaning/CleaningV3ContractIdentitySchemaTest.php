@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Modules\Cleaning\Models\CleaningBooking;
 
@@ -24,16 +23,9 @@ it('adds optional V3 contract identity without changing legacy bookings or V2 qu
 
     // Legacy V2 accepted quotes deliberately retain multiple booking headers
     // (one per appointment sequence). A global quote_id unique key would break V2.
-    $quoteIndexes = DB::table('information_schema.STATISTICS')
-        ->where('TABLE_SCHEMA', DB::connection()->getDatabaseName())
-        ->where('TABLE_NAME', 'cleaning_quote_bookings')
-        ->where('NON_UNIQUE', 0)
-        ->select(['INDEX_NAME', 'COLUMN_NAME', 'SEQ_IN_INDEX'])
-        ->orderBy('INDEX_NAME')
-        ->orderBy('SEQ_IN_INDEX')
-        ->get()
-        ->groupBy('INDEX_NAME')
-        ->map(static fn ($items): array => $items->pluck('COLUMN_NAME')->all())
+    $quoteIndexes = collect(Schema::getIndexes('cleaning_quote_bookings'))
+        ->filter(static fn (array $index): bool => $index['unique'])
+        ->map(static fn (array $index): array => $index['columns'])
         ->values()
         ->all();
 
