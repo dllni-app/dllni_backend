@@ -322,3 +322,24 @@ test('clock refuses mismatches between the persisted visit state and active inte
     expect(fn () => $service->project($visit->fresh(), $now))
         ->toThrow(DomainException::class, 'INVALID_V3_CLOCK_VISIT_STATE');
 });
+
+test('terminal and non-running V3 clock states are never mislabeled as completed or paused', function (): void {
+    $visit = v3ClockTestVisit();
+    $clock = app(CleaningV3WorkClockProjectionService::class);
+    $now = CarbonImmutable::parse('2026-11-23 13:00:00', 'UTC');
+
+    foreach (['cancelled', 'skipped', 'superseded', 'completed'] as $terminal) {
+        $visit->update(['status' => $terminal]);
+        expect($clock->project($visit->fresh(), $now)['state'])->toBe($terminal);
+    }
+
+    DB::table('cleaning_work_intervals')->insert(
+        v3ClockInterval($visit, 'start-1', '2026-11-23 10:00:00', '2026-11-23 11:00:00'),
+    );
+    $visit->update(['status' => 'awaiting_customer_completion']);
+    $result = $clock->project($visit->fresh(), $now);
+
+    expect($result['state'])->toBe('not_running')
+        ->and($result['activeSeconds'])->toBe(3600)
+        ->and($result['pausePending'])->toBeFalse();
+});

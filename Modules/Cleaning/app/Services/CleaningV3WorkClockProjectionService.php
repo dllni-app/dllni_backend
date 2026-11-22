@@ -79,9 +79,13 @@ final class CleaningV3WorkClockProjectionService
             throw new DomainException('INVALID_V3_CLOCK_VISIT_STATE');
         }
 
-        $state = $terminal
-            ? 'completed'
-            : ($openSince !== null ? 'running' : ($rows->isEmpty() ? 'not_started' : 'paused'));
+        $state = match (true) {
+            $terminal => $status,
+            $openSince !== null => 'running',
+            $status === CleaningBookingSessionStatus::Paused->value => 'paused',
+            $rows->isEmpty() => 'not_started',
+            default => 'not_running',
+        };
 
         return [
             'state' => $state,
