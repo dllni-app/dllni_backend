@@ -486,6 +486,13 @@ final class CleaningBookingResource extends JsonResource
         $payload['propertyDetails'] = $this->safeWorkerPropertyDetails($payload['propertyDetails'] ?? []);
         $payload['property_details'] = $this->safeWorkerPropertyDetails($payload['property_details'] ?? []);
         $payload['specialServices'] = $this->safeWorkerSpecialServices($payload['specialServices'] ?? []);
+        // V2 snapshots may contain nested user-supplied address/contact fields.
+        // Only structural room and appointment data belongs in a worker response.
+        foreach (['rooms', 'appointments'] as $field) {
+            if (is_array($payload[$field] ?? null)) {
+                $payload[$field] = $this->safeWorkerPlanningSnapshot($payload[$field]);
+            }
+        }
 
         if ($mayViewDestination) {
             $address = is_array($payload['address'] ?? null) ? $payload['address'] : [];
@@ -542,6 +549,48 @@ final class CleaningBookingResource extends JsonResource
             'eventType', 'eventTypeLabel', 'venueType', 'venueTypeLabel',
             'cleaningMode', 'cleaningModeLabel', 'hours', 'is_hot_order',
         ]));
+    }
+
+    /**
+     * Remove personal/location details from nested V2 planning snapshots. These
+     * snapshots are customer-authored and may contain future additive fields.
+     * Redact by key at every depth rather than relying on the Flutter UI.
+     *
+     * @param array<array-key, mixed> $snapshot
+     * @return array<array-key, mixed>
+     */
+    private function safeWorkerPlanningSnapshot(array $snapshot): array
+    {
+        $sensitiveKeys = [
+            'address', 'fulladdress', 'location', 'locationname', 'destination',
+            'latitude', 'longitude', 'lat', 'lng', 'coordinates',
+            'phone', 'phonenumber', 'mobile', 'email', 'contact',
+            'customer', 'customerid', 'customername', 'username',
+            'street', 'building', 'floor', 'apartment', 'landmark',
+            'notes', 'comments', 'freetext', 'addressdetails',
+        ];
+
+        foreach ($snapshot as $key => $value) {
+            if (is_string($key)) {
+                $normalized = strtolower(preg_replace('/[^a-z]/i', '', $key) ?? '');
+                if (in_array($normalized, $sensitiveKeys, true)
+                    || str_contains($normalized, 'customer')
+                    || str_contains($normalized, 'phone')
+                    || str_contains($normalized, 'contact')
+                    || str_contains($normalized, 'address')
+                    || str_contains($normalized, 'coordinate')) {
+                    unset($snapshot[$key]);
+
+                    continue;
+                }
+            }
+
+            if (is_array($value)) {
+                $snapshot[$key] = $this->safeWorkerPlanningSnapshot($value);
+            }
+        }
+
+        return $snapshot;
     }
 
     /**
