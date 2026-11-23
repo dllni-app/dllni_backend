@@ -32,10 +32,8 @@ it('traces full HTTP first business SQL and transaction depth for both worker se
         'travel_distance_start_point' => 'worker_home',
     ]);
     $user = User::factory()->create(['is_active' => true]);
-    $hours = [];
-    foreach (['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as $day) {
-        $hours[$day] = ['available' => true, 'data' => [['00:00' => '23:59']]];
-    }
+    // The personal worker-hours dispatch restriction was removed.
+    // Keep this SQL trace fixture independent of legacy hours data.
     $worker = Worker::factory()->create([
         'user_id' => $user->id,
         'gender' => 'male',
@@ -45,7 +43,6 @@ it('traces full HTTP first business SQL and transaction depth for both worker se
         'home_address' => 'Worker Home',
         'home_latitude' => 36.20,
         'home_longitude' => 37.15,
-        'default_working_hours' => $hours,
         'security_deposit_status' => 'active',
     ]);
     CleaningWorkerDeposit::query()->updateOrCreate(['worker_id' => $worker->id], [

@@ -25,6 +25,7 @@ final class CleaningBookingSessionAcceptanceService
         private readonly CleaningBookingSessionCoverageService $coverageService,
         private readonly CleaningBookingSessionWorkerEligibilityService $eligibilityService,
         private readonly CleaningSpecialistEquipmentReservationService $specialistReservations,
+        private readonly CleaningV3DistinctVisitCrewPolicy $distinctCrew,
     ) {}
 
     /**
@@ -217,8 +218,20 @@ final class CleaningBookingSessionAcceptanceService
         $rejected = [];
         $remainingCapacity = (float) ($this->solvencyService->capacitySummary($worker)['availableCommissionCapacity'] ?? 0.0);
         $selectedIntervals = [];
+        $selectedAppointmentKeys = [];
 
         foreach ($sessions as $session) {
+            $appointmentKey = (string) ($session->appointment_key ?? '');
+            if ((string) ($booking->contract_version ?? '') === 'v3'
+                && $appointmentKey !== '' && isset($selectedAppointmentKeys[$appointmentKey])) {
+                $rejected[] = $this->rejection(
+                    (int) $session->id,
+                    'v3_distinct_crew_required',
+                    'Sequential visits of the same appointment require different workers.',
+                );
+
+                continue;
+            }
             $basic = $this->validateSeatAndWorker($booking, $session, $worker);
             if ($basic !== null) {
                 $rejected[] = $basic;
@@ -274,6 +287,9 @@ final class CleaningBookingSessionAcceptanceService
 
             $remainingCapacity = round($remainingCapacity - $requiredCommission, 2);
             $selectedIntervals[] = ['start' => $start, 'end' => $end];
+            if ((string) ($booking->contract_version ?? '') === 'v3' && $appointmentKey !== '') {
+                $selectedAppointmentKeys[$appointmentKey] = true;
+            }
         }
 
         return $rejected;
@@ -341,6 +357,13 @@ final class CleaningBookingSessionAcceptanceService
 
         if ($session->remainingWorkerCount() <= 0) {
             return $this->rejection((int) $session->id, 'session_fully_covered', 'All worker seats for this session are already filled.');
+        }
+        if ($this->distinctCrew->hasCommittedSibling($booking, $session, $worker)) {
+            return $this->rejection(
+                (int) $session->id,
+                'v3_distinct_crew_required',
+                'Sequential visits of the same appointment require different workers.',
+            );
         }
         if ($session->startsAt() === null || ! $session->startsAt()->isFuture()) {
             return $this->rejection((int) $session->id, 'session_past_due', 'Past-due visits are not available for acceptance.');
