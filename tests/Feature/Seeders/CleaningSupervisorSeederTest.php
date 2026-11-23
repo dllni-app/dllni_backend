@@ -21,6 +21,14 @@ it('seeds a verified active supervisor who can sign in to the supervisor app', f
         'phone' => CleaningSupervisorSeeder::PHONE,
         'password' => 'password',
     ])->assertOk()->assertJsonPath('data.user.id', $supervisor->id);
+
+    // Supervisor accounts must use the dedicated app, not the cleaning worker app.
+    $this->postJson('/api/login', [
+        'phone' => CleaningSupervisorSeeder::PHONE,
+        'password' => 'password',
+        'module' => 'cleaning_worker',
+    ])->assertUnprocessable()
+        ->assertJsonPath('errors.phone.0', 'هذا حساب مشرف تنظيف. يرجى تسجيل الدخول من تطبيق المشرف.');
 });
 
 it('is idempotent and preserves an existing supervisor password', function (): void {

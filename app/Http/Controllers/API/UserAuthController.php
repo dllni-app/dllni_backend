@@ -25,6 +25,8 @@ final class UserAuthController
 
     private const MODULE_ACCESS_DENIED_MESSAGE = 'هذا الحساب غير مصرح له بتسجيل الدخول إلى هذا التطبيق.';
 
+    private const SUPERVISOR_USE_SUPERVISOR_APP_MESSAGE = 'هذا حساب مشرف تنظيف. يرجى تسجيل الدخول من تطبيق المشرف.';
+
     private const LOGOUT_SUCCESS_MESSAGE = 'تم تسجيل الخروج بنجاح.';
 
     public function login(UserLoginRequest $request): JsonResponse
@@ -53,6 +55,10 @@ final class UserAuthController
         } else {
             $requestedModuleType = UserModuleType::from($requestedModule);
             if ($user->module_type !== $requestedModuleType) {
+                if ($requestedModuleType === UserModuleType::CleaningWorker && $user->hasRole('Cleaning Supervisor')) {
+                    $this->throwValidationError('phone', self::SUPERVISOR_USE_SUPERVISOR_APP_MESSAGE);
+                }
+
                 $this->throwValidationError('phone', self::MODULE_ACCESS_DENIED_MESSAGE);
             }
         }
