@@ -53,6 +53,7 @@ final class WorkerCompliancePilotEnrollmentService
                     ...$attributes,
                     'created_at' => now(),
                 ]);
+
                 return;
             }
 

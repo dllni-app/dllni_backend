@@ -7,7 +7,6 @@ namespace App\Filament\Resources\Workers\Tables;
 use App\Filament\Resources\SystemUsers\Support\ResetAccountPasswordAction;
 use App\Filament\Resources\Workers\Support\WorkerSuspensionActions;
 use App\Models\Worker;
-use Modules\Cleaning\Services\WorkerCompliancePilotEnrollmentService;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
@@ -16,6 +15,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Support\HtmlString;
+use Modules\Cleaning\Services\WorkerCompliancePilotEnrollmentService;
 
 final class WorkersTable
 {
@@ -92,8 +92,7 @@ final class WorkersTable
                     ->label(__('worker_compliance.settings.enroll_worker'))
                     ->icon('heroicon-o-map-pin')
                     ->color('warning')
-                    ->visible(static fn (Worker $record): bool =>
-                        (auth()->user()?->can('cleaning.worker_compliance.configure') ?? false)
+                    ->visible(static fn (Worker $record): bool => (auth()->user()?->can('cleaning.worker_compliance.configure') ?? false)
                         && ! app(WorkerCompliancePilotEnrollmentService::class)->isEnrolled($record))
                     ->requiresConfirmation()
                     ->modalDescription(__('worker_compliance.settings.enroll_confirm'))
@@ -103,8 +102,7 @@ final class WorkersTable
                     ->label(__('worker_compliance.settings.unenroll_worker'))
                     ->icon('heroicon-o-x-circle')
                     ->color('danger')
-                    ->visible(static fn (Worker $record): bool =>
-                        (auth()->user()?->can('cleaning.worker_compliance.configure') ?? false)
+                    ->visible(static fn (Worker $record): bool => (auth()->user()?->can('cleaning.worker_compliance.configure') ?? false)
                         && app(WorkerCompliancePilotEnrollmentService::class)->isEnrolled($record))
                     ->requiresConfirmation()
                     ->modalDescription(__('worker_compliance.settings.unenroll_confirm'))
@@ -121,9 +119,9 @@ final class WorkersTable
     {
         return new HtmlString(
             '<span style="display:flex;flex-direction:column;line-height:1.2;">'
-                . '<span style="display:block;font-weight:600;color:inherit;">' . e($label) . '</span>'
-                . '<span style="display:block;margin-top:2px;font-size:11px;font-weight:400;color:#9ca3af;">' . e($description) . '</span>'
-                . '</span>',
+                .'<span style="display:block;font-weight:600;color:inherit;">'.e($label).'</span>'
+                .'<span style="display:block;margin-top:2px;font-size:11px;font-weight:400;color:#9ca3af;">'.e($description).'</span>'
+                .'</span>',
         );
     }
 }

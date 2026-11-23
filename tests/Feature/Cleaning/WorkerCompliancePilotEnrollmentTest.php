@@ -81,5 +81,5 @@ it('does not offer tracking to a suspended worker', function (): void {
 
     expect(fn () => app(WorkerCompliancePilotEnrollmentService::class)
         ->setEnrollment($worker, $manager, true))
-        ->toThrow(\Illuminate\Validation\ValidationException::class);
+        ->toThrow(Illuminate\Validation\ValidationException::class);
 });

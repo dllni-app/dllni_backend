@@ -21,7 +21,7 @@ return [
     'minimum_supported_build' => (string) env('CLEANING_WORKER_COMPLIANCE_MINIMUM_BUILD', '0'),
     'privacy_policy_url' => (string) env(
         'CLEANING_WORKER_COMPLIANCE_PRIVACY_URL',
-        rtrim((string) env('APP_URL', ''), '/').'/legal/cleaning-worker-monitoring',
+        mb_rtrim((string) env('APP_URL', ''), '/').'/legal/cleaning-worker-monitoring',
     ),
     'session_lease_minutes' => 60,
     'sample_retention_days' => 7,
