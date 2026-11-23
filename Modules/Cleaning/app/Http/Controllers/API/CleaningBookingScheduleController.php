@@ -61,6 +61,7 @@ final class CleaningBookingScheduleController
                 'booking_id' => $bookingId,
                 'bookingNumber' => $bookingNumber,
                 'booking_number' => $bookingNumber,
+                'contractVersion' => (string) ($cleaning_booking->contract_version ?? '') === 'v3' ? 3 : 2,
                 'status' => $cleaning_booking->status?->value ?? (string) $cleaning_booking->status,
                 'hasReview' => $hasReview,
                 'canReview' => $canReview,

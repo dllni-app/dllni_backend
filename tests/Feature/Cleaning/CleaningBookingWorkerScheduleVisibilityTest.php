@@ -337,14 +337,8 @@ it('rejects every worker lifecycle action against another workers session', func
 
 function makeVisibilityWorker(): Worker
 {
-    $workingHours = [];
-    foreach (['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as $day) {
-        $workingHours[$day] = [
-            'available' => true,
-            'data' => [['00:00' => '23:59']],
-        ];
-    }
-
+    // Worker personal working hours were removed from dispatch eligibility.
+    // Test fixtures must not reintroduce that deprecated data field.
     $user = User::factory()->create(['is_active' => true]);
     $worker = Worker::factory()->create([
         'user_id' => $user->id,
@@ -355,7 +349,6 @@ function makeVisibilityWorker(): Worker
         'home_address' => 'Worker Home',
         'home_latitude' => 36.20,
         'home_longitude' => 37.15,
-        'default_working_hours' => $workingHours,
         'security_deposit_status' => 'active',
     ]);
 
@@ -475,7 +468,6 @@ function makeVisibilityAssignment(
     ]);
 }
 
-
 it('lets an eligible worker view a pending ordinary booking schedule before accepting when no child sessions exist', function (): void {
     $customer = User::factory()->create(['is_active' => true]);
     $worker = makeVisibilityWorker();
@@ -512,4 +504,24 @@ it('does not expose a pending ordinary booking schedule to a gender-ineligible w
 
     $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/schedule")
         ->assertForbidden();
+});
+
+it('advertises V3 schedule contract identity to the owning customer without exposing another booking', function (): void {
+    $customer = User::factory()->create(['is_active' => true]);
+    $booking = makeVisibilityBooking($customer, CleaningBookingStatus::WorkerAssigned);
+    makeVisibilitySession($booking, 1, now()->addDay()->toDateString());
+    $booking->forceFill(['contract_version' => 'v3'])->save();
+
+    Sanctum::actingAs($customer);
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/schedule")
+        ->assertOk()
+        ->assertJsonPath('data.contractVersion', 3);
+
+    $booking->forceFill(['contract_version' => 'v2'])->save();
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/schedule")
+        ->assertOk()
+        ->assertJsonPath('data.contractVersion', 2);
+
+    Sanctum::actingAs(User::factory()->create(['is_active' => true]));
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/schedule")->assertForbidden();
 });
