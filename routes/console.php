@@ -30,6 +30,19 @@ Artisan::command('cleaning:v3-escalate-incomplete-visits', function (
 Schedule::command('cleaning:v3-escalate-incomplete-visits')
     ->everyFiveMinutes()->withoutOverlapping();
 
+// In-app database notifications only; this does not claim FCM delivery.
+Artisan::command('cleaning:v3-deliver-dispatch-notices', function (
+    Modules\Cleaning\Services\CleaningV3DispatchNoticeDeliveryService $service
+): int {
+    $stats = $service->deliverPending();
+    $this->info('V3 notice inbox delivery: '.json_encode($stats));
+
+    return 0;
+})->purpose('Persist V3 search shortage alerts to customer and dashboard admin inboxes');
+
+Schedule::command('cleaning:v3-deliver-dispatch-notices')
+    ->everyFiveMinutes()->withoutOverlapping();
+
 Artisan::command('cleaning:expand-geographic-dispatch', function (): int {
     CleaningBooking::query()
         ->whereIn('status', ['pending', 'worker_assigned'])

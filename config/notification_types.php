@@ -148,6 +148,43 @@ return [
                 ],
             ],
         ],
+        // V3 shortage escalation is not V2's retry-or-cancel timeout.
+        // Only durable in-app database delivery is enabled at this phase;
+        // Push is a separate transport with its own delivery verification.
+        'cleaning.v3.visit.shortage_customer' => [
+            'legacy_type' => 'cleaning_v3_visit_shortage_customer',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'فريق زيارة التنظيف لم يكتمل بعد',
+                    'body' => 'مرّت 6 ساعات على البحث لزيارة رقم :sequence من طلب :booking_number وما زال ينقصها :remaining_workers عامل. تم إبلاغ الإدارة والمتابعة مستمرة.',
+                ],
+                'en' => [
+                    'title' => 'Cleaning visit team is not complete yet',
+                    'body' => 'Six hours have elapsed for visit :sequence of booking :booking_number. :remaining_workers workers are still needed. The team search continues.',
+                ],
+            ],
+        ],
+        'cleaning.v3.visit.shortage_admin' => [
+            'legacy_type' => 'cleaning_v3_visit_shortage_admin',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'تصعيد نقص عمال زيارة V3',
+                    'body' => 'لم يكتمل فريق الزيارة رقم :sequence من الطلب :booking_number بعد 6 ساعات. العمال الناقصون: :remaining_workers. يرجى مراجعة لوحة الزيارات.',
+                ],
+                'en' => [
+                    'title' => 'V3 cleaning visit staffing escalation',
+                    'body' => 'Visit :sequence of booking :booking_number remains understaffed after six hours. Missing workers: :remaining_workers.',
+                ],
+            ],
+        ],
         'cleaning.booking.worker_assigned' => [
             'legacy_type' => 'worker_assigned',
             'module' => 'cleaning',
