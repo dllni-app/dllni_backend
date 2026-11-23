@@ -60,6 +60,10 @@ return [
         'independent_evidence' => 'Enter a reference to evidence independent of location data. Proximity alone cannot support confirmation.',
     ],
     'settings' => [
+        'enroll_worker' => 'Offer location pilot',
+        'unenroll_worker' => 'Stop location pilot',
+        'enroll_confirm' => 'The worker will see a clear notice before the device asks for location access. Collection will not start until they agree.',
+        'unenroll_confirm' => 'The worker\'s current tracking session will be revoked and new samples rejected. Enrollment may be offered again later.',
         'nav' => 'Worker Compliance Settings',
         'read_only' => 'Read-only configuration overview. Changes to retention, collection and investigation rules require reviewed server configuration; this screen cannot silently alter active investigations.',
         'release_gate' => 'Important: Continuous location monitoring and mandatory permissions require legal review, app-store policy approval, and a valid privacy notice. An enabled setting does not guarantee uninterrupted 24-hour location delivery.',
