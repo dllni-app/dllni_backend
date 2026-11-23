@@ -69,6 +69,14 @@ final class CleaningV3PublishedTariffEvaluator
             if ($item === null) {
                 throw new DomainException('V3_PUBLISHED_TARIFF_ITEM_UNAVAILABLE');
             }
+            // Count and piece are indivisible units. A fixed line is exactly
+            // one unit. Do not let a decimal quantity create fractional tasks.
+            if ((in_array($item->measurement_mode, ['count', 'piece'], true)
+                    && bccomp($line['quantity'], bcadd($line['quantity'], '0', 0), 2) !== 0)
+                || ($item->measurement_mode === 'fixed'
+                    && bccomp($line['quantity'], '1', 2) !== 0)) {
+                throw new DomainException('V3_PUBLISHED_MEASUREMENT_INVALID');
+            }
 
             $matching = $item->tariffRules
                 ->where('is_enabled', true)
@@ -108,6 +116,7 @@ final class CleaningV3PublishedTariffEvaluator
                 'cleaningMode' => $line['cleaningMode'],
                 'scopeKey' => $line['scopeKey'],
                 'ruleKey' => (string) $rule->rule_key,
+                'measurementMode' => (string) $item->measurement_mode,
                 'quantity' => bcadd($line['quantity'], '0', 2),
                 'unitPriceSyp' => bcadd($price, '0', 2),
                 'unitEffortMinutes' => bcadd($effort, '0', 2),
