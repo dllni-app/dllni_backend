@@ -48,6 +48,34 @@ it('rejects location collection without a secure privacy policy link', function 
     expect(DB::table('worker_compliance_states')->where('worker_id', $this->worker->id)->value('epoch'))->toBeNull();
 });
 
+it('stops accepting samples when the privacy policy notice is withdrawn', function (): void {
+    enrollWorkerForCompliance($this->worker);
+
+    $session = $this->postJson('/api/v1/cleaning/worker/compliance/session', [
+        'installationId' => Str::random(32),
+        'platform' => 'android',
+        'build' => '1.0.0',
+        'noticeVersion' => 'notice-v1',
+    ])->assertOk();
+
+    config()->set('cleaning.worker_compliance.privacy_policy_url', '');
+
+    $this->postJson('/api/v1/cleaning/worker/compliance/samples', [
+        'epoch' => $session->json('epoch'),
+        'permissionState' => 'always',
+        'locationServicesEnabled' => true,
+        'samples' => [[
+            'id' => (string) Str::uuid(),
+            'capturedAt' => now()->toIso8601String(),
+            'latitude' => 36.2,
+            'longitude' => 37.15,
+            'accuracyM' => 10,
+        ]],
+    ])->assertForbidden();
+
+    expect(DB::table('worker_compliance_samples')->where('worker_id', $this->worker->id)->count())->toBe(0);
+});
+
 it('keeps compliance collection disabled by default', function (): void {
     config()->set('cleaning.worker_compliance.enabled', false);
     enrollWorkerForCompliance($this->worker);
