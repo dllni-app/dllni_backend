@@ -137,7 +137,7 @@ final class UserCleaningBookingResource extends JsonResource
         // The approved quote snapshot is only retained for read-only requirements
         // that have no separate inventory row when the customer brings materials.
         $timePeriodSnapshot = $this->property_details['_time_period_v2'] ?? null;
-        if (is_array($timePeriodSnapshot)) {
+        if (is_array($timePeriodSnapshot) && (string) ($this->contract_version ?? '') !== 'v3') {
             $details = app(\Modules\User\Services\CleaningTimePeriodCustomerDetailService::class)
                 ->forBooking($this->resource);
             if ($details !== null) {

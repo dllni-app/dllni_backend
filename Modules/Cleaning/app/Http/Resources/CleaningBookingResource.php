@@ -163,8 +163,12 @@ final class CleaningBookingResource extends JsonResource
 
         $payload = [
             'id' => $this->id,
+            // Explicit contract identity is required by updated Flutter clients.
+            // Never make a V3 visit appear as an ordinary legacy V1 request.
+            'contractVersion' => (string) ($this->contract_version ?? '') === 'v3'
+                ? 3
+                : (($this->property_details['_time_period_v2'] ?? null) ? 2 : 1),
             ...($this->property_details['_time_period_v2'] ?? null ? [
-                'contractVersion' => 2,
                 'rooms' => $this->property_details['_time_period_v2']['rooms'] ?? [],
                 'appointments' => $this->property_details['_time_period_v2']['appointments'] ?? [],
             ] : []),
