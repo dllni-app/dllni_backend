@@ -275,6 +275,15 @@ final class WorkerComplianceController
             return false;
         }
 
+        // Privacy notice must be accessible before any location collection.
+        // Disabling or withdrawing the approved URL immediately revokes active
+        // sessions through hasCurrentSession(), without deleting their audit.
+        $policyUrl = (string) config('cleaning.worker_compliance.privacy_policy_url', '');
+        if (filter_var($policyUrl, FILTER_VALIDATE_URL) === false
+            || strtolower((string) parse_url($policyUrl, PHP_URL_SCHEME)) !== 'https') {
+            return false;
+        }
+
         $minimumBuild = (string) config('cleaning.worker_compliance.minimum_supported_build', '0');
 
         return in_array($platform, config('cleaning.worker_compliance.enabled_platforms', []), true)
