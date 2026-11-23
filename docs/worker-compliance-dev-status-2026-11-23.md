@@ -16,12 +16,13 @@ This round made these changes:
 4. Worker app: removed the obsolete working-hours destination, V2 port contracts, adapters, screen/editor and tests. Then removed legacy working-hours domain use cases, endpoints, BLoC events/state, profile JSON model and unused UI widgets, while preserving the customer's appointment and billed service times. Existing unrelated Windows-generated local edits were not staged.
 5. Backend compliance activation: will not enable collection unless an HTTPS privacy policy URL is configured; stops any previously active tracking lease when the approval URL is withdrawn. Added feature tests.
 6. Filament: added a **read-only, permission-gated Worker Compliance Settings** page exposing collection rollout, matching, threshold and retention settings without revealing secrets or allowing silent changes. Added Arabic/English copy and access tests.
-7. Existing consumer app rebooking and preferred-worker selection were inspected. Existing supervisor and customer repositories did not require modifications for the above scoped changes.
+7. Backend location ingestion quality now honors the configured maximum GPS error (rather than a hard-coded 50 metres); regression tests cover the threshold boundary.
+8. Existing consumer app rebooking and preferred-worker selection were inspected. Existing supervisor and customer repositories did not require modifications for the above scoped changes.
 
 ## Verified tests
 
-- Compliance ingestion, matching, case review, visit evaluator, planning redaction: **27 passing tests (110 assertions)** after the privacy-URL safeguard.
-- Filament monitoring-settings page: **2 passing tests (6 assertions)**.
+- Combined compliance ingestion, matching, case review, monitoring-settings authorization, visit evaluation and planning-redaction suite: **30 passing tests (121 assertions)**.
+- The monitoring-settings authorization cases independently passed **2 tests (6 assertions)** and are included in the combined total.
 - Existing V2 worker location/visit privacy and operational task tests: **6 passing tests (81 assertions)**.
 - Flutter access/account V2, notifications, location sample queue: **29 passing tests**.
 - Flutter analyzer on affected worker modules: **no issues**. A separate global analysis surfaced an existing unrelated `curly_braces_in_flow_control_structures` info in `supervised_worker_navigation_card.dart`; it was deliberately not included in this compliance refactor.
