@@ -178,3 +178,48 @@ test('authorized Filament catalog editor exposes the draft tariff and effort rel
     expect($version->fresh()->status)->toBe('draft')
         ->and($version->published_at)->toBeNull();
 });
+
+test('draft readiness detects unsupported mandatory components and invalid dynamic input rules before publication', function (): void {
+    [$version, $item] = tariffDraftFixture();
+    tariffDraftRule($item, 'valid-base', '0', '90');
+
+    $item->update(['input_rules' => [
+        'componentId' => 'room_builder',
+        'min' => 10,
+        'max' => 5,
+        'step' => 0,
+        'hiddenConditionalRule' => ['client' => 'deep'],
+    ]]);
+
+    $problems = app(CleaningV3CatalogDraftValidator::class)->review($version);
+    expect($problems)->toContain(
+        'UNSUPPORTED_INPUT_RULES:restaurant.kitchen',
+        'REQUIRED_COMPONENT_UNSUPPORTED:restaurant.kitchen',
+        'INVALID_INPUT_CONSTRAINTS:restaurant.kitchen',
+        'APPROVED_CATALOG_COVERAGE_MATRIX_MISSING',
+        'APPROVED_V3_PRICING_AND_FUNDING_PROOF_MISSING',
+    );
+
+    expect($version->fresh()->status)->toBe('draft')
+        ->and($version->fresh()->published_digest)->toBeNull();
+});
+
+test('Filament readiness action reviews actual draft issues without publishing or changing prices', function (): void {
+    [$version, $item] = tariffDraftFixture();
+    tariffDraftRule($item, 'valid-base', '0', '90');
+
+    app(Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+    $admin = App\Models\User::factory()->create();
+    $admin->assignRole(Spatie\Permission\Models\Role::findOrCreate('admin', 'web'));
+    $this->actingAs($admin);
+
+    Livewire\Livewire::test(
+        App\Filament\Resources\CleaningV3CatalogVersions\Pages\EditCleaningV3CatalogVersion::class,
+        ['record' => $version->getRouteKey()],
+    )->callAction('reviewDraftReadiness')->assertHasNoErrors();
+
+    expect($version->fresh()->status)->toBe('draft')
+        ->and($version->fresh()->published_at)->toBeNull()
+        ->and($version->fresh()->published_digest)->toBeNull()
+        ->and($item->tariffRules()->firstOrFail()->unit_price)->toBe('150000.00');
+});

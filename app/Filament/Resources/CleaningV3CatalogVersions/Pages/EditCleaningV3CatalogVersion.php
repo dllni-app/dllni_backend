@@ -12,6 +12,7 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Modules\Cleaning\Models\CleaningV3CatalogVersion;
 use Modules\Cleaning\Services\CleaningV3CatalogDraftEstimateService;
+use Modules\Cleaning\Services\CleaningV3CatalogDraftValidator;
 use Throwable;
 
 final class EditCleaningV3CatalogVersion extends EditRecord
@@ -21,6 +22,32 @@ final class EditCleaningV3CatalogVersion extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('reviewDraftReadiness')
+                ->label('فحص جاهزية نشر الكتالوج')
+                ->icon('heroicon-o-clipboard-document-check')
+                ->color('warning')
+                ->visible(fn (): bool => CleaningV3CatalogVersionResource::canEdit($this->record))
+                ->authorize(fn (): bool => CleaningV3CatalogVersionResource::canEdit($this->record))
+                ->action(function (): void {
+                    /** @var CleaningV3CatalogVersion $version */
+                    $version = $this->record;
+                    $problems = app(CleaningV3CatalogDraftValidator::class)->review($version);
+                    // All reads are fresh. This action NEVER publishes,
+                    // approves financing, or changes a saved price.
+                    Notification::make()
+                        ->title($problems === []
+                            ? 'لا توجد مشاكل بنيوية مكتشفة'
+                            : 'الكتالوج غير جاهز للنشر: '.count($problems).' مشكلة')
+                        ->body($problems === []
+                            ? 'هذا الفحص لا يعتبر موافقة مالية أو إذناً بالنشر.'
+                            : implode(' — ', array_map(
+                                fn (string $problem): string => $this->readinessIssueLabel($problem),
+                                array_slice($problems, 0, 12),
+                            )))
+                        ->warning()
+                        ->persistent()
+                        ->send();
+                }),
             Action::make('previewDraftTariff')
                 ->label('معاينة السعر والجهد دون حجز')
                 ->icon('heroicon-o-calculator')
@@ -78,5 +105,28 @@ final class EditCleaningV3CatalogVersion extends EditRecord
                     }
                 }),
         ];
+    }
+
+    private function readinessIssueLabel(string $problem): string
+    {
+        [$code, $itemKey] = array_pad(explode(':', $problem, 2), 2, null);
+        $message = match ($code) {
+            'CATALOG_EMPTY' => 'لا توجد بنود في المسودة',
+            'INVALID_SOURCE' => 'مصدر البند غير صالح أو غير مفعّل',
+            'INVALID_PRESET' => 'حدود قياس غير صحيحة',
+            'OVERLAPPING_PRESETS' => 'تداخل نطاقات القياس',
+            'UNSUPPORTED_INPUT_RULES' => 'قواعد إدخال غير مدعومة',
+            'REQUIRED_COMPONENT_UNSUPPORTED' => 'حقل إلزامي لا يستطيع الخادم التحقق منه',
+            'INVALID_INPUT_CONSTRAINTS' => 'قيود الحقل غير صحيحة',
+            'TARIFF_MISSING' => 'سعر أو جهد البند غير محدد',
+            'INVALID_TARIFF' => 'سعر أو جهد غير صالح',
+            'OVERLAPPING_TARIFFS' => 'شرائح أسعار متداخلة',
+            'TARIFF_GAP' => 'فجوة بين شرائح الأسعار',
+            'APPROVED_CATALOG_COVERAGE_MATRIX_MISSING' => 'مصفوفة تغطية الكتالوج غير معتمدة',
+            'APPROVED_V3_PRICING_AND_FUNDING_PROOF_MISSING' => 'اعتماد التسعير والتمويل لم يكتمل',
+            default => 'حالة تتطلب مراجعة فنية: '.$code,
+        };
+
+        return $itemKey === null ? $message : $message.' ('.$itemKey.')';
     }
 }

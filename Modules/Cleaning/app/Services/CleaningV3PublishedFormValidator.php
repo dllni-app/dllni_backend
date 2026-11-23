@@ -77,10 +77,14 @@ final class CleaningV3PublishedFormValidator
                     if (! is_int($value) && ! is_float($value) && ! is_string($value)) {
                         $this->deny($key, 'INVALID_NUMBER');
                     }
-                    if (! is_numeric($value) || ! is_finite((float) $value)) {
+                    // Published V3 quantities are canonical base-10 decimals;
+                    // scientific notation or extra precision must not be
+                    // coerced into a different payable quantity by floats.
+                    $decimal = (string) $value;
+                    if (! preg_match('/^(?:0|[1-9][0-9]{0,9})(?:\\.[0-9]{1,2})?$/D', $decimal)) {
                         $this->deny($key, 'INVALID_NUMBER');
                     }
-                    $number = (float) $value;
+                    $number = (float) $decimal;
                     if (($component === 'stepper' && floor($number) !== $number)
                         || (isset($constraints['min']) && $number < (float) $constraints['min'])
                         || (isset($constraints['max']) && $number > (float) $constraints['max'])) {

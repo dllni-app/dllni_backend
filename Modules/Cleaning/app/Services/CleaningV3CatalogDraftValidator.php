@@ -52,6 +52,32 @@ final class CleaningV3CatalogDraftValidator
         }
 
         foreach ($items as $item) {
+            $inputRules = is_array($item->input_rules) ? $item->input_rules : [];
+            $allowedInputRules = ['componentId', 'descriptionAr', 'descriptionEn', 'min', 'max', 'step', 'maxSelections'];
+            if (array_diff(array_keys($inputRules), $allowedInputRules) !== []) {
+                $problems[] = 'UNSUPPORTED_INPUT_RULES:'.$item->item_key;
+            }
+            if ($item->required && isset($inputRules['componentId'])
+                && ! in_array($inputRules['componentId'], ['text', 'numeric', 'stepper', 'select', 'multiselect'], true)) {
+                $problems[] = 'REQUIRED_COMPONENT_UNSUPPORTED:'.$item->item_key;
+            }
+            foreach (['min', 'max', 'step'] as $field) {
+                if (isset($inputRules[$field])
+                    && (! is_numeric($inputRules[$field])
+                        || ! is_finite((float) $inputRules[$field]))) {
+                    $problems[] = 'INVALID_INPUT_CONSTRAINTS:'.$item->item_key;
+                }
+            }
+            if ((isset($inputRules['min'], $inputRules['max'])
+                    && is_numeric($inputRules['min']) && is_numeric($inputRules['max'])
+                    && (float) $inputRules['max'] <= (float) $inputRules['min'])
+                || (isset($inputRules['step']) && is_numeric($inputRules['step'])
+                    && (float) $inputRules['step'] <= 0)
+                || (isset($inputRules['maxSelections'])
+                    && (! is_int($inputRules['maxSelections']) || $inputRules['maxSelections'] < 1))) {
+                $problems[] = 'INVALID_INPUT_CONSTRAINTS:'.$item->item_key;
+            }
+
             try {
                 $this->assertActiveSource((string) $item->source_type, (int) $item->source_id);
             } catch (ValidationException) {

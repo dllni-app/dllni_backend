@@ -116,3 +116,16 @@ test('V3 numeric step requires alignment with published step and lower bound', f
     expect(fn () => (new CleaningV3PublishedFormValidator)->normalize($items, $valid))
         ->toThrow(CleaningV3VisitPlanException::class, 'NUMBER_STEP_MISMATCH');
 });
+
+test('V3 rejects scientific notation, excess decimal places, leading zeros and invalid numeric formats', function (): void {
+    $validator = new CleaningV3PublishedFormValidator;
+    $valid = ['property.area' => '70', 'room.count' => 2, 'service.kind' => 'deep'];
+
+    foreach (['7e1', '70.001', '070', ' 70 ', '+70', '70,5', 'NaN', '-70', '10000000000', '70.'] as $bad) {
+        expect(fn () => $validator->normalize(publishedV3Fields(), [...$valid, 'property.area' => $bad]))
+            ->toThrow(CleaningV3VisitPlanException::class, 'INVALID_NUMBER');
+    }
+
+    expect($validator->normalize(publishedV3Fields(), [...$valid, 'property.area' => '70.25'])['property.area'])
+        ->toBe(70.25);
+});
