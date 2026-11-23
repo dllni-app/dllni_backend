@@ -157,6 +157,43 @@ it('accepts and encrypts recent fixes, reports duplicates and rejects late fixes
     $replay->assertJsonPath('duplicateIds.0', $sampleId);
 });
 
+it('classifies GPS quality using the configured accuracy threshold', function (): void {
+    config()->set('cleaning.worker_compliance.maximum_accuracy_m', 20);
+    enrollWorkerForCompliance($this->worker);
+
+    $session = $this->postJson('/api/v1/cleaning/worker/compliance/session', [
+        'installationId' => Str::random(32),
+        'platform' => 'android',
+        'build' => '1.0.0',
+        'noticeVersion' => 'notice-v1',
+    ])->assertOk();
+
+    $accurateId = (string) Str::uuid();
+    $poorId = (string) Str::uuid();
+    $base = [
+        'capturedAt' => now()->toIso8601String(),
+        'latitude' => 36.2,
+        'longitude' => 37.15,
+    ];
+
+    $this->postJson('/api/v1/cleaning/worker/compliance/samples', [
+        'epoch' => $session->json('epoch'),
+        'permissionState' => 'always',
+        'locationServicesEnabled' => true,
+        'samples' => [
+            [...$base, 'id' => $accurateId, 'accuracyM' => 20],
+            [...$base, 'id' => $poorId, 'accuracyM' => 21],
+        ],
+    ])->assertOk()->assertJsonCount(2, 'acceptedIds');
+
+    $quality = DB::table('worker_compliance_samples')
+        ->whereIn('client_id', [$accurateId, $poorId])
+        ->pluck('quality', 'client_id');
+
+    expect($quality[$accurateId])->toBe('usable')
+        ->and($quality[$poorId])->toBe('poor_accuracy');
+});
+
 it('rejects samples from an obsolete or expired epoch', function (): void {
     enrollWorkerForCompliance($this->worker);
 
