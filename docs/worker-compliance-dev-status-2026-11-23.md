@@ -58,3 +58,4 @@ This round made these changes:
 - In-scope combined regression suite: **43 tests, 192 assertions passed** before the subsequent degraded-permission regression; then the focused updated test set of **18 tests, 74 assertions passed** with Pint clean.
 - The device disconnected from ADB after initial inspection. Initially, Android 13 had background location and notification permissions denied. Do not state real-device telemetry is validated until the device is reconnected and the user grants permissions via the OS prompt.
 - Safe activation runbook: `docs/worker-compliance-dev-rollout.md`.
+- A clean detached checkout of worker app `dev` at commit `1cc8280` was built with `flutter build apk --debug` successfully. QA artifact on the development laptop: `D:\\my_projects\\dllni_com\\_qa_worker_compliance_dev\\build\\app\\outputs\\flutter-apk\\app-debug.apk`. The APK was **not installed on a phone**, since ADB showed no connected device after the initial inspection.
