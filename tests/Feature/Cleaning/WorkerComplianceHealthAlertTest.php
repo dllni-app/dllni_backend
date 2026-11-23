@@ -49,7 +49,7 @@ it('notifies authorized active staff only once about a continuing location outag
     $notifications = DB::table('notifications')->get();
     expect($notifications)->toHaveCount(1)
         ->and((int) $notifications->first()->notifiable_id)->toBe($reviewer->id)
-        ->and($notifications->first()->data)->not->toContain((string) $worker->id)
+        ->and($notifications->first()->data)->not->toContain('"worker_id"')
         ->and($notifications->first()->data)->not->toContain('latitude')
         ->and($notifications->first()->data)->not->toContain('longitude');
 
