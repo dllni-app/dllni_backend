@@ -436,3 +436,48 @@ it('shows an early-arriving worker and their pending code to the assigned superv
         ->assertJsonPath('data.workers.0.attendanceConfirmed', true)
         ->assertJsonPath('data.teamReady', false);
 });
+
+it('returns only assigned supervisor V3 visit identities, without changing V2 supervisor summary', function (): void {
+    $supervisor = supervisorUser();
+    $outsider = supervisorUser();
+    $booking = supervisorBooking($supervisor);
+    $booking->forceFill(['contract_version' => 'v3'])->save();
+
+    $first = $booking->sessions()->create([
+        'sequence' => 1,
+        'session_type' => 'recurring_cleaning',
+        'scheduled_date' => now()->addDay()->toDateString(),
+        'scheduled_time' => '10:00',
+        'duration_hours' => 2,
+        'required_workers' => 1,
+        'status' => 'scheduled',
+        'coverage_status' => 'searching',
+    ]);
+    $second = $booking->sessions()->create([
+        'sequence' => 2,
+        'session_type' => 'recurring_cleaning',
+        'scheduled_date' => now()->addDays(2)->toDateString(),
+        'scheduled_time' => '10:00',
+        'duration_hours' => 2,
+        'required_workers' => 1,
+        'status' => 'scheduled',
+        'coverage_status' => 'searching',
+    ]);
+
+    Sanctum::actingAs($supervisor);
+    $this->getJson('/api/v1/supervisor/bookings/'.$booking->id)
+        ->assertOk()
+        ->assertJsonPath('data.contractVersion', 3)
+        ->assertJsonPath('data.v3VisitIds', [$first->id, $second->id]);
+
+    Sanctum::actingAs($outsider);
+    $this->getJson('/api/v1/supervisor/bookings/'.$booking->id)
+        ->assertNotFound();
+
+    $booking->forceFill(['contract_version' => 'v2'])->save();
+    Sanctum::actingAs($supervisor);
+    $this->getJson('/api/v1/supervisor/bookings/'.$booking->id)
+        ->assertOk()
+        ->assertJsonPath('data.contractVersion', 2)
+        ->assertJsonPath('data.v3VisitIds', []);
+});

@@ -156,6 +156,12 @@ final class SupervisedTeamService
 
         return [
             'id' => $booking->id,
+            // Expose visit identities only to the currently assigned supervisor
+            // through the already authorization-scoped summary endpoint.
+            'contractVersion' => (string) ($booking->contract_version ?? '') === 'v3' ? 3 : 2,
+            'v3VisitIds' => (string) ($booking->contract_version ?? '') === 'v3'
+                ? $booking->sessions()->orderBy('sequence')->pluck('id')->map(static fn ($id): int => (int) $id)->all()
+                : [],
             'bookingNumber' => $booking->booking_number,
             'serviceType' => (string) $booking->booking_kind,
             'status' => $booking->status?->value ?? (string) $booking->status,
