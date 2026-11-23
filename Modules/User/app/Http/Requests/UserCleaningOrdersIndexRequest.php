@@ -30,6 +30,7 @@ final class UserCleaningOrdersIndexRequest extends FormRequest
             'perPage' => ['sometimes', 'integer', 'min:1', 'max:100'],
             'page' => ['sometimes', 'integer', 'min:1'],
             'filter.status' => ['sometimes', 'string', Rule::in($statuses)],
+            'recurringOnly' => ['sometimes', 'boolean'],
             'filter.scheduledDate' => ['sometimes', 'date'],
             'filter.propertyType' => ['sometimes', 'string', Rule::in(UserCleaningOrderEstimationService::PROPERTY_TYPES)],
             'sort' => ['sometimes', 'string', 'in:scheduledDate,-scheduledDate,createdAt,-createdAt,status,-status,totalPrice,-totalPrice'],

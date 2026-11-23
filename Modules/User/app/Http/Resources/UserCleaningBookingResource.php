@@ -23,6 +23,9 @@ final class UserCleaningBookingResource extends JsonResource
     public function toArray(Request $request): array
     {
         $payload = (new CleaningBookingResource($this->resource))->toArray($request);
+        $payload['isRecurringOrMultiVisit'] = app(
+            \Modules\Cleaning\Services\CleaningRecurringBookingIdentityService::class
+        )->isRecurringOrMultiVisit($this->resource);
 
         $discountAmount = max(0.0, (float) ($this->discount_amount ?? 0));
         $extensionFeeTotal = max(0.0, (float) ($this->extension_fee_total ?? 0));
