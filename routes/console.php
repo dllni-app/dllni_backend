@@ -16,6 +16,13 @@ use Modules\Supermarket\Services\OpenFoodFactsMasterProductImportService;
 use Modules\User\Jobs\ProcessExpiredRestaurantGroupOrdersJob;
 use Modules\User\Models\UserAddress;
 
+// Expiry protection is mandatory even when collection is disabled; matching
+// reconciliation runs only when both its rollout flags are enabled.
+Schedule::command('cleaning:purge-compliance-samples')
+    ->dailyAt('03:15')->withoutOverlapping();
+Schedule::command('cleaning:reconcile-worker-compliance-samples')
+    ->everyFiveMinutes()->withoutOverlapping();
+
 // V3 dispatch escalation writes only durable notice intentions. Delivery
 // must be retried through an audited outbox adapter; no cancellation occurs.
 Artisan::command('cleaning:v3-escalate-incomplete-visits', function (
