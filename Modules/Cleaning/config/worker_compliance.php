@@ -2,14 +2,20 @@
 
 declare(strict_types=1);
 
+// The dev pilot is available only on explicitly non-production Laravel
+// environments. A configured HTTPS notice, individual enrollment and device
+// consent are still required before a single sample can be collected.
+// Environment variables always override these safe staging defaults.
+$devPilotDefaults = in_array((string) env('APP_ENV', 'production'), ['local', 'development', 'staging'], true);
+
 return [
-    'enabled' => (bool) env('CLEANING_WORKER_COMPLIANCE_ENABLED', false),
-    'matching_enabled' => (bool) env('CLEANING_WORKER_COMPLIANCE_MATCHING_ENABLED', false),
+    'enabled' => (bool) env('CLEANING_WORKER_COMPLIANCE_ENABLED', $devPilotDefaults),
+    'matching_enabled' => (bool) env('CLEANING_WORKER_COMPLIANCE_MATCHING_ENABLED', $devPilotDefaults),
     // Staff notification rollout is independent of collection and matching.
-    'notifications_enabled' => (bool) env('CLEANING_WORKER_COMPLIANCE_NOTIFICATIONS_ENABLED', false),
+    'notifications_enabled' => (bool) env('CLEANING_WORKER_COMPLIANCE_NOTIFICATIONS_ENABLED', $devPilotDefaults),
     'enabled_platforms' => array_values(array_filter(array_map(
         static fn (string $platform): string => mb_strtolower(mb_trim($platform)),
-        explode(',', (string) env('CLEANING_WORKER_COMPLIANCE_ENABLED_PLATFORMS', '')),
+        explode(',', (string) env('CLEANING_WORKER_COMPLIANCE_ENABLED_PLATFORMS', $devPilotDefaults ? 'android' : '')),
     ))),
     'notice_version' => (string) env('CLEANING_WORKER_COMPLIANCE_NOTICE_VERSION', '2026-11-23-v2'),
     'minimum_supported_build' => (string) env('CLEANING_WORKER_COMPLIANCE_MINIMUM_BUILD', '0'),
