@@ -32,6 +32,7 @@ use Modules\Cleaning\Http\Controllers\API\CleaningV3VisitDispatchController;
 use Modules\Cleaning\Http\Controllers\API\CleaningV3VisitPlanPreviewController;
 use Modules\Cleaning\Http\Controllers\API\CleaningV3WorkClockCommandController;
 use Modules\Cleaning\Http\Controllers\API\CleaningV3WorkClockController;
+use Modules\Cleaning\Http\Controllers\API\CleaningWorkerApkUpdateManifestController;
 use Modules\Cleaning\Http\Controllers\API\DashboardOverviewController;
 use Modules\Cleaning\Http\Controllers\API\DepositManagementController;
 use Modules\Cleaning\Http\Controllers\API\EventBookingController;
@@ -150,6 +151,9 @@ Route::prefix('v1')->group(function () {
             Route::put("pass\x77ord", [WorkerAccountProfileController::class, 'updatePassword']);
             Route::get('work-areas', [WorkerWorkAreasController::class, 'show']);
             Route::put('work-areas', [WorkerWorkAreasController::class, 'update']);
+            // Private worker APK update metadata; never advertises unsigned builds.
+            Route::get('apk-update/manifest', CleaningWorkerApkUpdateManifestController::class)
+                ->middleware('throttle:30,1');
             Route::get('notifications', [UserNotificationController::class, 'index']);
             Route::patch('notifications/read-all', [UserNotificationController::class, 'markAllAsRead']);
             Route::delete('notifications/all', [UserNotificationController::class, 'destroyAll']);
