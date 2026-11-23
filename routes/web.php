@@ -158,6 +158,7 @@ Route::view('/legal/user-app/terms', 'user-app-terms')->name('legal.user-app.ter
 Route::view('/legal/merchant-app', 'merchant-app')->name('legal.merchant-app');
 Route::view('/legal/delivery-app', 'delivery-app')->name('legal.delivery-app');
 Route::view('/legal/cleaning-worker-app', 'cleaning-worker-app')->name('legal.cleaning-worker-app');
+Route::view('/legal/cleaning-worker-monitoring', 'worker-compliance-privacy')->name('legal.cleaning-worker-monitoring');
 Route::get('/qa/firebase/browser-token', function (): View {
     return view('qa.firebase-browser-token', [
         'firebaseDebugConfig' => [
