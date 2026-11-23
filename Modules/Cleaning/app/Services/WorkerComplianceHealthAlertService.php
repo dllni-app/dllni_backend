@@ -29,7 +29,7 @@ final class WorkerComplianceHealthAlertService
             ->whereNull('revoked_at')
             ->where(static function ($query): void {
                 $query->where('last_contact_at', '<', now()->subMinutes(20))
-                    ->orWhere('last_reported_permission_state', 'denied')
+                    ->orWhereIn('last_reported_permission_state', ['denied', 'while_in_use', 'restricted'])
                     ->orWhere('last_reported_location_services_enabled', false);
             })
             ->count();
