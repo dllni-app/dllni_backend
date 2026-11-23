@@ -9,6 +9,7 @@ use Illuminate\Support\Collection;
 use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
+use Throwable;
 
 final class CleaningBookingWorkerScheduleService
 {
@@ -45,6 +46,9 @@ final class CleaningBookingWorkerScheduleService
         );
 
         $scoped = $this->scopeToWorker($schedule, $visibleSessions);
+        // Version is only a capability hint. Visit-level access remains
+        // enforced on every work-clock read and command.
+        $scoped['contractVersion'] = (string) ($booking->contract_version ?? '') === 'v3' ? 3 : 2;
         $previews = [];
         $acceptable = [];
         foreach ($visibleSessions as $session) {
@@ -70,7 +74,7 @@ final class CleaningBookingWorkerScheduleService
                     'travelFee' => $quote['travelFee'],
                     'currency' => $quote['currency'],
                 ];
-            } catch (\Throwable) {
+            } catch (Throwable) {
                 // No estimate is safer than displaying a stale or invented amount.
             }
         }
@@ -119,6 +123,16 @@ final class CleaningBookingWorkerScheduleService
         return $this->sanitize($scoped, $worker);
     }
 
+    /** @return array{wait: array<int>, replace: array<int>, cancel: array<int>} */
+    private static function emptyActionWorkerIds(): array
+    {
+        return [
+            CleaningBookingSessionAttendanceService::ACTION_WAIT => [],
+            CleaningBookingSessionAttendanceService::ACTION_REPLACE => [],
+            CleaningBookingSessionAttendanceService::ACTION_CANCEL => [],
+        ];
+    }
+
     /**
      * Mutation responses must contain the session that was just changed so the
      * worker client can reconcile the authoritative post-mutation state even
@@ -162,16 +176,6 @@ final class CleaningBookingWorkerScheduleService
             ->unique(static fn (CleaningBookingSession $item): int => (int) $item->id)
             ->sortBy(static fn (CleaningBookingSession $item): int => (int) $item->sequence)
             ->values();
-    }
-
-    /** @return array{wait: array<int>, replace: array<int>, cancel: array<int>} */
-    private static function emptyActionWorkerIds(): array
-    {
-        return [
-            CleaningBookingSessionAttendanceService::ACTION_WAIT => [],
-            CleaningBookingSessionAttendanceService::ACTION_REPLACE => [],
-            CleaningBookingSessionAttendanceService::ACTION_CANCEL => [],
-        ];
     }
 
     /**

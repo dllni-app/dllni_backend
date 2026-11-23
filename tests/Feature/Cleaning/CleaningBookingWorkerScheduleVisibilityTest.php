@@ -525,3 +525,29 @@ it('advertises V3 schedule contract identity to the owning customer without expo
     Sanctum::actingAs(User::factory()->create(['is_active' => true]));
     $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/schedule")->assertForbidden();
 });
+
+it('gives an accepted worker a V3 capability hint without exposing other visits', function (): void {
+    $customer = User::factory()->create(['is_active' => true]);
+    $worker = makeVisibilityWorker();
+    $anotherWorker = makeVisibilityWorker();
+    $booking = makeVisibilityBooking($customer, CleaningBookingStatus::WorkerAssigned);
+    $booking->forceFill(['contract_version' => 'v3'])->save();
+
+    $assigned = makeVisibilitySession($booking, 1, now()->addDay()->toDateString());
+    $hidden = makeVisibilitySession($booking, 2, now()->addDays(2)->toDateString());
+    makeVisibilityAssignment($assigned, $worker, workerAmount: 3000);
+    makeVisibilityAssignment($hidden, $anotherWorker, workerAmount: 5000);
+
+    Sanctum::actingAs($worker->user);
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/schedule")
+        ->assertOk()
+        ->assertJsonPath('data.schedule.contractVersion', 3)
+        ->assertJsonPath('data.schedule.sessions.0.sessionId', $assigned->id)
+        ->assertJsonCount(1, 'data.schedule.sessions')
+        ->assertJsonMissing(['sessionId' => $hidden->id]);
+
+    $booking->forceFill(['contract_version' => 'v2'])->save();
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/schedule")
+        ->assertOk()
+        ->assertJsonPath('data.schedule.contractVersion', 2);
+});
