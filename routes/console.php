@@ -23,6 +23,20 @@ Schedule::command('cleaning:purge-compliance-samples')
 Schedule::command('cleaning:reconcile-worker-compliance-samples')
     ->everyFiveMinutes()->withoutOverlapping();
 
+// A generic status alert is not evidence of wrongdoing and never includes
+// worker identities, customer addresses, or coordinates.
+Artisan::command('cleaning:notify-stale-compliance-workers', function (
+    Modules\Cleaning\Services\WorkerComplianceHealthAlertService $alerts
+): int {
+    $count = $alerts->notifyIfNeeded();
+    $this->info('Compliance health accounts requiring review: '.$count);
+
+    return 0;
+})->purpose('Notify authorized cleaning administrators of pilot location outages');
+
+Schedule::command('cleaning:notify-stale-compliance-workers')
+    ->everyThirtyMinutes()->withoutOverlapping();
+
 // V3 dispatch escalation writes only durable notice intentions. Delivery
 // must be retried through an audited outbox adapter; no cancellation occurs.
 Artisan::command('cleaning:v3-escalate-incomplete-visits', function (
