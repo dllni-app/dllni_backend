@@ -155,7 +155,8 @@ final class WorkerComplianceController
                     continue;
                 }
 
-                $quality = (float) $sample['accuracyM'] <= 50 ? 'usable' : 'poor_accuracy';
+                $maxAccuracy = max(1.0, (float) config('cleaning.worker_compliance.maximum_accuracy_m', 50));
+                $quality = (float) $sample['accuracyM'] <= $maxAccuracy ? 'usable' : 'poor_accuracy';
                 $inserted = DB::table('worker_compliance_samples')->insertOrIgnore([
                     'worker_id' => $worker->id,
                     'epoch' => $validated['epoch'],
