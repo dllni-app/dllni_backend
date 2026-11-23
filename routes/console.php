@@ -16,12 +16,8 @@ use Modules\Supermarket\Services\OpenFoodFactsMasterProductImportService;
 use Modules\User\Jobs\ProcessExpiredRestaurantGroupOrdersJob;
 use Modules\User\Models\UserAddress;
 
-// Expiry protection is mandatory even when collection is disabled; matching
-// reconciliation runs only when both its rollout flags are enabled.
-Schedule::command('cleaning:purge-compliance-samples')
-    ->dailyAt('03:15')->withoutOverlapping();
-Schedule::command('cleaning:reconcile-worker-compliance-samples')
-    ->everyFiveMinutes()->withoutOverlapping();
+// Sample purging and matching reconciliation are scheduled centrally by
+// CleaningServiceProvider; do not duplicate those jobs here.
 
 // A generic status alert is not evidence of wrongdoing and never includes
 // worker identities, customer addresses, or coordinates.
