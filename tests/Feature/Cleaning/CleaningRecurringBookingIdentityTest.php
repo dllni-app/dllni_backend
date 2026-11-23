@@ -186,3 +186,19 @@ test('V3 recurrence server-side query requires more than one visit, with V2 one-
         ->assertJsonPath('data.0.id', $multi->id)
         ->assertJsonPath('data.0.isRecurringOrMultiVisit', true);
 });
+
+test('historical V1 schedules marked recurring are included without a V2 quote group', function (): void {
+    $customer = User::factory()->create(['is_active' => true]);
+    $booking = CleaningBooking::factory()->create(['customer_id' => $customer->id]);
+    $booking->forceFill(['property_details' => ['schedule' => ['mode' => 'recurring']]])->save();
+
+    expect(app(CleaningRecurringBookingIdentityService::class)
+        ->isRecurringOrMultiVisit($booking->fresh()))->toBeTrue();
+
+    Sanctum::actingAs($customer);
+    $this->getJson('/api/v1/user/cleaning/orders?recurringOnly=1')
+        ->assertOk()
+        ->assertJsonPath('meta.total', 1)
+        ->assertJsonPath('data.0.id', $booking->id)
+        ->assertJsonPath('data.0.isRecurringOrMultiVisit', true);
+});
