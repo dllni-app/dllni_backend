@@ -56,6 +56,20 @@ it('notifies authorized active staff only once about a continuing location outag
     expect(DB::table('notifications')->where('notifiable_id', $unauthorized->id)->count())->toBe(0);
 });
 
+it('flags downgraded background permission even when the worker sends recent heartbeats', function (): void {
+    $reviewer = User::factory()->create(['is_active' => true, 'module_type' => null]);
+    $reviewer->givePermissionTo(Permission::findOrCreate('cleaning.worker_compliance.overview.view', 'web'));
+    $worker = enrolledPilotSession();
+
+    DB::table('worker_compliance_states')->where('worker_id', $worker->id)->update([
+        'last_contact_at' => now(),
+        'last_reported_permission_state' => 'while_in_use',
+    ]);
+
+    expect(app(WorkerComplianceHealthAlertService::class)->notifyIfNeeded())->toBe(1);
+    expect(DB::table('notifications')->where('notifiable_id', $reviewer->id)->count())->toBe(1);
+});
+
 it('does not notify for declined, disabled, or recovered telemetry', function (): void {
     enrolledPilotSession(activeSession: false);
     $service = app(WorkerComplianceHealthAlertService::class);
