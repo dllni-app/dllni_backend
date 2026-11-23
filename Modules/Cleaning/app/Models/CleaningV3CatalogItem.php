@@ -33,6 +33,11 @@ final class CleaningV3CatalogItem extends Model
         return $this->hasMany(CleaningV3CatalogSizePreset::class, 'catalog_item_id');
     }
 
+    public function tariffRules(): HasMany
+    {
+        return $this->hasMany(CleaningV3CatalogTariffRule::class, 'catalog_item_id');
+    }
+
     protected static function booted(): void
     {
         self::saving(static function (self $item): void {

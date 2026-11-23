@@ -73,6 +73,30 @@ final class ItemsRelationManager extends RelationManager
                 ])
                 ->columns(3)
                 ->defaultItems(0),
+            Repeater::make('tariffRules')
+                ->label('قواعد السعر والجهد (مسودة — غير قابلة للتحصيل)')
+                ->relationship('tariffRules')
+                ->schema([
+                    TextInput::make('rule_key')->label('المعرّف الثابت للقاعدة')
+                        ->required()->regex('/^[a-z][a-z0-9_.-]{0,99}$/')->maxLength(100),
+                    Select::make('cleaning_mode')->label('نمط التنظيف')->required()->options([
+                        'regular' => 'حوسة',
+                        'deep' => 'تعزيل',
+                    ]),
+                    TextInput::make('scope_key')->label('رمز النطاق (whole أو جزء محدد)')
+                        ->required()->regex('/^[a-z][a-z0-9_.-]{0,99}$/')->default('whole')->maxLength(100),
+                    TextInput::make('quantity_min')->label('الكمية من')
+                        ->numeric()->minValue(0)->required(),
+                    TextInput::make('quantity_max')->label('الكمية إلى')
+                        ->numeric()->gt('quantity_min')->required(),
+                    TextInput::make('unit_price')->label('سعر الوحدة (ل.س)')
+                        ->numeric()->minValue(0.01)->required(),
+                    TextInput::make('unit_effort_minutes')->label('جهد الوحدة (دقيقة عمل)')
+                        ->numeric()->minValue(0.01)->maxValue(480)->required(),
+                    Toggle::make('is_enabled')->label('مفعّل في المسودة')->default(true),
+                ])
+                ->columns(3)
+                ->defaultItems(0),
         ]);
     }
 
@@ -86,6 +110,7 @@ final class ItemsRelationManager extends RelationManager
                 TextColumn::make('source_type')->label('المصدر')->badge(),
                 TextColumn::make('measurement_mode')->label('وحدة القياس'),
                 TextColumn::make('presets_count')->counts('presets')->label('الأحجام'),
+                TextColumn::make('tariff_rules_count')->counts('tariffRules')->label('قواعد السعر والجهد'),
             ])
             ->headerActions([
                 CreateAction::make()->label('إضافة عنصر')->visible(fn (): bool => $this->editable()),

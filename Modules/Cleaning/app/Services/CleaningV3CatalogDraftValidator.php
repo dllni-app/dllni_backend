@@ -45,7 +45,7 @@ final class CleaningV3CatalogDraftValidator
     public function review(CleaningV3CatalogVersion $version): array
     {
         $problems = [];
-        $items = $version->items()->with('presets')->orderBy('sort_order')->get();
+        $items = $version->items()->with(['presets', 'tariffRules'])->orderBy('sort_order')->get();
 
         if ($items->isEmpty()) {
             $problems[] = 'CATALOG_EMPTY';
@@ -68,6 +68,42 @@ final class CleaningV3CatalogDraftValidator
                     $problems[] = 'OVERLAPPING_PRESETS:'.$item->item_key;
                 }
                 $lastMaximum = (float) $preset->maximum_value;
+            }
+
+            if (! $item->is_enabled) {
+                continue;
+            }
+
+            $rules = $item->tariffRules->where('is_enabled', true);
+            if ($rules->isEmpty()) {
+                $problems[] = 'TARIFF_MISSING:'.$item->item_key;
+            }
+
+            // Overlapping (mode, scope, quantity) rules would let the same
+            // client answer match two different prices or effort estimates.
+            // Gaps are equally unsafe and must be resolved before publishing.
+            foreach ($rules->groupBy(
+                static fn ($rule): string => $rule->cleaning_mode.'|'.$rule->scope_key
+            ) as $group) {
+                $previousMax = null;
+                foreach ($group->sortBy('quantity_min', SORT_NUMERIC) as $rule) {
+                    $min = (float) $rule->quantity_min;
+                    $max = (float) $rule->quantity_max;
+                    $price = (float) $rule->unit_price;
+                    $effort = (float) $rule->unit_effort_minutes;
+                    if ($min < 0 || $max <= $min || $price <= 0
+                        || $effort <= 0 || $effort > 480 || $rule->currency !== 'SYP') {
+                        $problems[] = 'INVALID_TARIFF:'.$item->item_key;
+                    }
+                    if ($previousMax !== null) {
+                        if ($min < $previousMax) {
+                            $problems[] = 'OVERLAPPING_TARIFFS:'.$item->item_key;
+                        } elseif ($min > $previousMax) {
+                            $problems[] = 'TARIFF_GAP:'.$item->item_key;
+                        }
+                    }
+                    $previousMax = max($previousMax ?? 0.0, $max);
+                }
             }
         }
 
