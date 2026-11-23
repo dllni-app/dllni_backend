@@ -6,6 +6,9 @@ namespace App\Filament\Resources\Workers\Tables;
 
 use App\Filament\Resources\SystemUsers\Support\ResetAccountPasswordAction;
 use App\Filament\Resources\Workers\Support\WorkerSuspensionActions;
+use App\Models\Worker;
+use Modules\Cleaning\Services\WorkerCompliancePilotEnrollmentService;
+use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\IconColumn;
@@ -85,6 +88,28 @@ final class WorkersTable
                     ->label(__('cleaning_admin.workers.view'))
                     ->modal(),
                 ...WorkerSuspensionActions::make(),
+                Action::make('enableCompliancePilot')
+                    ->label(__('worker_compliance.settings.enroll_worker'))
+                    ->icon('heroicon-o-map-pin')
+                    ->color('warning')
+                    ->visible(static fn (Worker $record): bool =>
+                        (auth()->user()?->can('cleaning.worker_compliance.configure') ?? false)
+                        && ! app(WorkerCompliancePilotEnrollmentService::class)->isEnrolled($record))
+                    ->requiresConfirmation()
+                    ->modalDescription(__('worker_compliance.settings.enroll_confirm'))
+                    ->action(static fn (Worker $record) => app(WorkerCompliancePilotEnrollmentService::class)
+                        ->setEnrollment($record, auth()->user(), true)),
+                Action::make('disableCompliancePilot')
+                    ->label(__('worker_compliance.settings.unenroll_worker'))
+                    ->icon('heroicon-o-x-circle')
+                    ->color('danger')
+                    ->visible(static fn (Worker $record): bool =>
+                        (auth()->user()?->can('cleaning.worker_compliance.configure') ?? false)
+                        && app(WorkerCompliancePilotEnrollmentService::class)->isEnrolled($record))
+                    ->requiresConfirmation()
+                    ->modalDescription(__('worker_compliance.settings.unenroll_confirm'))
+                    ->action(static fn (Worker $record) => app(WorkerCompliancePilotEnrollmentService::class)
+                        ->setEnrollment($record, auth()->user(), false)),
                 ResetAccountPasswordAction::make(),
                 EditAction::make()
                     ->label(__('cleaning_admin.workers.edit'))
