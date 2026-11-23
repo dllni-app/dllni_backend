@@ -7,14 +7,14 @@ use App\Models\CleaningFinancialSetting;
 use App\Models\CleaningWorkerDeposit;
 use App\Models\User;
 use App\Models\Worker;
-use Modules\Cleaning\Models\CleaningBookingSpecialService;
-use Modules\Cleaning\Models\CleaningSpecialService;
-use Modules\Cleaning\Models\CleaningSpecialServiceEquipment;
-use Modules\Cleaning\Models\CleaningEquipmentReservation;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
+use Modules\Cleaning\Models\CleaningBookingSpecialService;
+use Modules\Cleaning\Models\CleaningEquipmentReservation;
+use Modules\Cleaning\Models\CleaningSpecialService;
+use Modules\Cleaning\Models\CleaningSpecialServiceEquipment;
 use Modules\Cleaning\Services\CleaningBookingSessionAcceptanceService;
 
 beforeEach(function (): void {
@@ -99,7 +99,7 @@ it('accepts only the explicitly selected sessions and keeps the others available
     $second = makeExecutionSession($booking, 2, now()->addDays(2)->toDateString(), '10:00', 1.0);
     $third = makeExecutionSession($booking, 3, now()->addDays(3)->toDateString(), '10:00', 1.0);
 
-    $scheduleService = app(\Modules\Cleaning\Services\CleaningBookingWorkerScheduleService::class);
+    $scheduleService = app(Modules\Cleaning\Services\CleaningBookingWorkerScheduleService::class);
     expect($scheduleService->present($booking, $worker)['myConfirmedWorkerAmount'])->toBeNull();
     expect($scheduleService->present($booking, $worker)['myConfirmedWorkerHours'])->toBeNull();
 
@@ -139,7 +139,6 @@ it('accepts an independently selected event day through the public API', functio
     expect($first->workerAssignments()->count())->toBe(1)
         ->and($second->workerAssignments()->count())->toBe(0);
 });
-
 
 it('reports session acceptance as the current worker order status while the parent stays pending', function (): void {
     $worker = makeSessionWorker();
@@ -279,7 +278,8 @@ function makeSessionWorker(): Worker
         'home_address' => 'Worker Home',
         'home_latitude' => 36.20,
         'home_longitude' => 37.15,
-        'default_working_hours' => $workingHours,
+        // Worker model stores this legacy JSON column as a string in SQLite.
+        'default_working_hours' => json_encode($workingHours, JSON_THROW_ON_ERROR),
         'security_deposit_status' => 'active',
     ]);
 

@@ -53,6 +53,7 @@ use Modules\Cleaning\Http\Controllers\API\WorkerWorkAreasController;
 use Modules\Cleaning\Http\Middleware\EnsureCleaningDepositAdmin;
 use Modules\Cleaning\Http\Middleware\EnsureSupervisor;
 use Modules\Cleaning\Http\Middleware\RejectSupervisedWorkerLifecycle;
+use Modules\Cleaning\Http\Middleware\RejectUnapprovedV3WorkerLifecycle;
 use Modules\Cleaning\Http\Middleware\RequireSessionScopedCleaningLifecycle;
 
 Route::prefix('v1')->group(function () {
@@ -180,18 +181,18 @@ Route::prefix('v1')->group(function () {
         });
 
         Route::post('cleaning-bookings/{cleaning_booking}/delivery-fee', CleaningBookingDeliveryFeeController::class)->name('cleaning-bookings.delivery-fee')->middleware(RejectSupervisedWorkerLifecycle::class);
-        Route::post('cleaning-bookings/{cleaning_booking}/accept', [CleaningBookingController::class, 'accept'])->name('cleaning-bookings.accept')->middleware(RejectSupervisedWorkerLifecycle::class);
-        Route::post('cleaning-bookings/{cleaning_booking}/reject', [CleaningBookingController::class, 'reject'])->name('cleaning-bookings.reject')->middleware(RejectSupervisedWorkerLifecycle::class);
+        Route::post('cleaning-bookings/{cleaning_booking}/accept', [CleaningBookingController::class, 'accept'])->name('cleaning-bookings.accept')->middleware(RejectSupervisedWorkerLifecycle::class)->middleware(RejectUnapprovedV3WorkerLifecycle::class);
+        Route::post('cleaning-bookings/{cleaning_booking}/reject', [CleaningBookingController::class, 'reject'])->name('cleaning-bookings.reject')->middleware(RejectSupervisedWorkerLifecycle::class)->middleware(RejectUnapprovedV3WorkerLifecycle::class);
         Route::get('cleaning-bookings/{cleaning_booking}/security-code', CleaningBookingSecurityCodeController::class)->name('cleaning-bookings.security-code')->middleware(RejectSupervisedWorkerLifecycle::class);
         Route::post('cleaning-bookings/{cleaning_booking}/sos', [CleaningBookingController::class, 'sos'])->name('cleaning-bookings.sos');
-        Route::post('cleaning-bookings/{cleaning_booking}/start-travel', CleaningBookingStartTravelController::class)->name('cleaning-bookings.start-travel');
-        Route::post('cleaning-bookings/{cleaning_booking}/location', CleaningBookingLocationController::class)->name('cleaning-bookings.location');
+        Route::post('cleaning-bookings/{cleaning_booking}/start-travel', CleaningBookingStartTravelController::class)->name('cleaning-bookings.start-travel')->middleware(RejectUnapprovedV3WorkerLifecycle::class);
+        Route::post('cleaning-bookings/{cleaning_booking}/location', CleaningBookingLocationController::class)->name('cleaning-bookings.location')->middleware(RejectUnapprovedV3WorkerLifecycle::class);
         Route::get('cleaning-bookings/{cleaning_booking}/worker-locations', CleaningBookingWorkerLocationsController::class)->name('cleaning-bookings.worker-locations');
-        Route::post('cleaning-bookings/{cleaning_booking}/arrive', CleaningBookingArriveController::class)->name('cleaning-bookings.arrive');
+        Route::post('cleaning-bookings/{cleaning_booking}/arrive', CleaningBookingArriveController::class)->name('cleaning-bookings.arrive')->middleware(RejectUnapprovedV3WorkerLifecycle::class);
         Route::post('cleaning-bookings/{cleaning_booking}/price-adjustment-requests', [CleaningBookingPriceAdjustmentRequestController::class, 'store'])->name('cleaning-bookings.price-adjustment-requests.store')->middleware(RejectSupervisedWorkerLifecycle::class);
-        Route::post('cleaning-bookings/{cleaning_booking}/start-work', CleaningBookingStartWorkController::class)->name('cleaning-bookings.start-work')->middleware(RejectSupervisedWorkerLifecycle::class);
-        Route::post('cleaning-bookings/{cleaning_booking}/complete', CleaningBookingCompleteController::class)->name('cleaning-bookings.complete')->middleware(RejectSupervisedWorkerLifecycle::class);
-        Route::post('cleaning-bookings/{cleaning_booking}/finish', [CleaningBookingController::class, 'finish'])->name('cleaning-bookings.finish')->middleware(RejectSupervisedWorkerLifecycle::class);
+        Route::post('cleaning-bookings/{cleaning_booking}/start-work', CleaningBookingStartWorkController::class)->name('cleaning-bookings.start-work')->middleware(RejectSupervisedWorkerLifecycle::class)->middleware(RejectUnapprovedV3WorkerLifecycle::class);
+        Route::post('cleaning-bookings/{cleaning_booking}/complete', CleaningBookingCompleteController::class)->name('cleaning-bookings.complete')->middleware(RejectSupervisedWorkerLifecycle::class)->middleware(RejectUnapprovedV3WorkerLifecycle::class);
+        Route::post('cleaning-bookings/{cleaning_booking}/finish', [CleaningBookingController::class, 'finish'])->name('cleaning-bookings.finish')->middleware(RejectSupervisedWorkerLifecycle::class)->middleware(RejectUnapprovedV3WorkerLifecycle::class);
         Route::post('cleaning-bookings/{cleaning_booking}/cancel', [CleaningBookingController::class, 'cancel'])->name('cleaning-bookings.cancel')->middleware(RejectSupervisedWorkerLifecycle::class);
         Route::get('cleaning/supervised-worker/bookings/{booking}', SupervisedWorkerBookingController::class)->whereNumber('booking');
         Route::get('cleaning-bookings/{cleaning_booking}', CleaningBookingShowController::class)->name('cleaning-bookings.show');

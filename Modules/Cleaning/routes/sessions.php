@@ -10,6 +10,7 @@ use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionLifecycleControl
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionLocationController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionScheduleController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionWorkerChangeController;
+use Modules\Cleaning\Http\Middleware\RejectUnapprovedV3WorkerLifecycle;
 use Modules\Cleaning\Http\Middleware\RequireSessionScopedCleaningLifecycle;
 
 Route::prefix('v1')
@@ -23,12 +24,12 @@ Route::prefix('v1')
         Route::post(
             'cleaning-bookings/{cleaning_booking}/sessions/accept-all',
             [CleaningBookingSessionAcceptanceController::class, 'acceptAll'],
-        )->name('cleaning-bookings.sessions.accept-all');
+        )->name('cleaning-bookings.sessions.accept-all')->middleware(RejectUnapprovedV3WorkerLifecycle::class);
 
         Route::post(
             'cleaning-bookings/{cleaning_booking}/sessions/accept-selected',
             [CleaningBookingSessionAcceptanceController::class, 'acceptSelected'],
-        )->name('cleaning-bookings.sessions.accept-selected');
+        )->name('cleaning-bookings.sessions.accept-selected')->middleware(RejectUnapprovedV3WorkerLifecycle::class);
 
         Route::post(
             'cleaning-bookings/{cleaning_booking}/sessions/change-workers',
@@ -43,17 +44,17 @@ Route::prefix('v1')
         Route::post(
             'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/start-travel',
             [CleaningBookingSessionLifecycleController::class, 'startTravel'],
-        )->name('cleaning-bookings.sessions.start-travel');
+        )->name('cleaning-bookings.sessions.start-travel')->middleware(RejectUnapprovedV3WorkerLifecycle::class);
 
         Route::post(
             'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/location',
             CleaningBookingSessionLocationController::class,
-        )->name('cleaning-bookings.sessions.location');
+        )->name('cleaning-bookings.sessions.location')->middleware(RejectUnapprovedV3WorkerLifecycle::class);
 
         Route::post(
             'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/arrive',
             [CleaningBookingSessionLifecycleController::class, 'arrive'],
-        )->name('cleaning-bookings.sessions.arrive');
+        )->name('cleaning-bookings.sessions.arrive')->middleware(RejectUnapprovedV3WorkerLifecycle::class);
 
         Route::get(
             'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/security-code',
@@ -68,12 +69,12 @@ Route::prefix('v1')
         Route::post(
             'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/start-work',
             [CleaningBookingSessionLifecycleController::class, 'startWork'],
-        )->name('cleaning-bookings.sessions.start-work');
+        )->name('cleaning-bookings.sessions.start-work')->middleware(RejectUnapprovedV3WorkerLifecycle::class);
 
         Route::post(
             'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/complete',
             [CleaningBookingSessionLifecycleController::class, 'complete'],
-        )->name('cleaning-bookings.sessions.complete');
+        )->name('cleaning-bookings.sessions.complete')->middleware(RejectUnapprovedV3WorkerLifecycle::class);
 
         Route::post(
             'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/completion/confirm',

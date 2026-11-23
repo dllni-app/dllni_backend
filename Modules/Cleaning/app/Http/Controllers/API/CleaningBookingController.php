@@ -57,6 +57,13 @@ final class CleaningBookingController
         $query = CleaningBooking::getQuery();
         $authenticatedWorker = $request->user()?->worker;
         if ($authenticatedWorker instanceof Worker) {
+            // Do not advertise unfunded V3 offers to any worker APK before
+            // the signed capability rollout and finance admission are ready.
+            // V2 discovery and accepted historical work remain unchanged.
+            $query->where(static function ($contracts): void {
+                $contracts->whereNull('contract_version')
+                    ->orWhere('contract_version', '!=', 'v3');
+            });
             $query->forCurrentWorker(true);
             // The fourth service is never an open invitation. Only assigned
             // workers may discover a supervisor-managed booking.
