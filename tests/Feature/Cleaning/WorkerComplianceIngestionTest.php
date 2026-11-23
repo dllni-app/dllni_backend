@@ -12,6 +12,7 @@ beforeEach(function (): void {
     config()->set('cleaning.worker_compliance.enabled', true);
     config()->set('cleaning.worker_compliance.enabled_platforms', ['android', 'ios']);
     config()->set('cleaning.worker_compliance.notice_version', 'notice-v1');
+    config()->set('cleaning.worker_compliance.privacy_policy_url', 'https://example.test/worker-location-privacy');
     $this->worker = Worker::factory()->create();
     Sanctum::actingAs($this->worker->user);
 });
@@ -25,6 +26,27 @@ function enrollWorkerForCompliance(Worker $worker): void
         'updated_at' => now(),
     ]);
 }
+
+it('rejects location collection without a secure privacy policy link', function (): void {
+    enrollWorkerForCompliance($this->worker);
+
+    foreach (['', 'http://example.test/worker-location-privacy', 'not-a-url'] as $policyUrl) {
+        config()->set('cleaning.worker_compliance.privacy_policy_url', $policyUrl);
+
+        $this->getJson('/api/v1/cleaning/worker/compliance/config?platform=android&build=1.0.0')
+            ->assertOk()
+            ->assertJsonPath('featureEnabled', false);
+
+        $this->postJson('/api/v1/cleaning/worker/compliance/session', [
+            'installationId' => Str::random(32),
+            'platform' => 'android',
+            'build' => '1.0.0',
+            'noticeVersion' => 'notice-v1',
+        ])->assertForbidden();
+    }
+
+    expect(DB::table('worker_compliance_states')->where('worker_id', $this->worker->id)->value('epoch'))->toBeNull();
+});
 
 it('keeps compliance collection disabled by default', function (): void {
     config()->set('cleaning.worker_compliance.enabled', false);
