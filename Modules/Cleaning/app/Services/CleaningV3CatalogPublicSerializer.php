@@ -55,7 +55,7 @@ final class CleaningV3CatalogPublicSerializer
         $component = (string) ($rules['componentId'] ?? $defaultComponent);
         // Unknown/conditional rules must NOT silently disappear from a public
         // schema and turn a mandatory control into an unvalidated answer.
-        $knownRuleKeys = ['componentId', 'descriptionAr', 'descriptionEn', 'min', 'max', 'step', 'maxSelections', 'scopeLabels'];
+        $knownRuleKeys = ['componentId', 'descriptionAr', 'descriptionEn', 'min', 'max', 'step', 'maxSelections', 'scopeLabels', 'propertyKeys'];
         $scopeCatalog = app(CleaningV3DeepScopeCatalog::class);
         $unsupportedRules = array_diff(array_keys($rules), $knownRuleKeys) !== []
             || ! $scopeCatalog->validLabels($rules['scopeLabels'] ?? []);
@@ -91,6 +91,9 @@ final class CleaningV3CatalogPublicSerializer
             'description' => is_string($description) ? $description : null,
             'sourceType' => (string) $item->source_type,
             'sourceId' => (int) $item->source_id,
+            'propertyScopeConfigured' => array_key_exists('propertyKeys', $rules),
+            'propertyKeys' => app(CleaningV3PropertyFormSelector::class)->validKeys($rules['propertyKeys'] ?? null)
+                ? $rules['propertyKeys'] : [],
             'required' => (bool) $item->required,
             'measurementMode' => (string) $item->measurement_mode,
             'constraints' => $constraints,

@@ -53,7 +53,7 @@ final class CleaningV3CatalogDraftValidator
 
         foreach ($items as $item) {
             $inputRules = is_array($item->input_rules) ? $item->input_rules : [];
-            $allowedInputRules = ['componentId', 'descriptionAr', 'descriptionEn', 'min', 'max', 'step', 'maxSelections', 'scopeLabels'];
+            $allowedInputRules = ['componentId', 'descriptionAr', 'descriptionEn', 'min', 'max', 'step', 'maxSelections', 'scopeLabels', 'propertyKeys'];
             if (array_diff(array_keys($inputRules), $allowedInputRules) !== []) {
                 $problems[] = 'UNSUPPORTED_INPUT_RULES:'.$item->item_key;
             }
@@ -155,6 +155,9 @@ final class CleaningV3CatalogDraftValidator
                 }
             }
         }
+
+        $publicFields = app(CleaningV3CatalogPublicSerializer::class)->serialize($version, 'ar')['items'];
+        $problems = [...$problems, ...app(CleaningV3PropertyFormSelector::class)->issues($publicFields)];
 
         // An approved tariff and funding contract must be imported explicitly.
         $problems[] = 'APPROVED_CATALOG_COVERAGE_MATRIX_MISSING';

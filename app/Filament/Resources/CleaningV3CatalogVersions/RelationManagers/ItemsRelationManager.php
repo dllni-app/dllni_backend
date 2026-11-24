@@ -12,6 +12,7 @@ use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Components\Utilities\Get;
@@ -75,6 +76,12 @@ final class ItemsRelationManager extends RelationManager
                 ])
                 ->columns(3)
                 ->defaultItems(0),
+            TagsInput::make('input_rules.propertyKeys')
+                ->label('المنشآت التي يظهر فيها البند (رموز الكتالوج)')
+                ->helperText('اتركه فارغاً للبند المشترك. استخدم رموز بنود المنشآت الموجودة في المسودة.')
+                ->dehydrateStateUsing(static fn ($state) => array_values($state ?? []))
+                ->visible(static fn (Get $get): bool => $get('source_type') !== 'property')
+                ->columnSpanFull(),
             KeyValue::make('input_rules.scopeLabels')
                 ->label('أسماء نطاقات التعزيل المخصصة')
                 ->keyLabel('رمز النطاق المطابق للتعرفة')
@@ -121,7 +128,12 @@ final class ItemsRelationManager extends RelationManager
                 TextColumn::make('tariff_rules_count')->counts('tariffRules')->label('قواعد السعر والجهد'),
             ])
             ->headerActions([
-                CreateAction::make()->label('إضافة عنصر')->visible(fn (): bool => $this->editable()),
+                CreateAction::make()->label('إضافة عنصر')->mutateDataUsing(static function (array $data): array {
+                    if (empty($data['input_rules']['propertyKeys'])) {
+                        unset($data['input_rules']['propertyKeys']);
+                    }
+                    return $data;
+                })->visible(fn (): bool => $this->editable()),
             ])
             ->recordActions([
                 EditAction::make()->visible(fn (): bool => $this->editable())
@@ -129,6 +141,9 @@ final class ItemsRelationManager extends RelationManager
                         // Editing scope labels must preserve existing input constraints.
                         if (array_key_exists('input_rules', $data)) {
                             $data['input_rules'] = array_replace($record->input_rules ?? [], $data['input_rules'] ?? []);
+                        }
+                        if (empty($data['input_rules']['propertyKeys'])) {
+                            unset($data['input_rules']['propertyKeys']);
                         }
                         $record->update($data);
                     }),

@@ -55,7 +55,7 @@ final class CleaningV3WorkloadPricePreviewController
         $payload = $request->all();
         $formMode = array_key_exists('answers', $payload) || array_key_exists('cleaningMode', $payload);
         $allowed = $formMode
-            ? ['catalogVersionKey', 'catalogRevision', 'answers', 'cleaningMode', 'scopeSelections']
+            ? ['catalogVersionKey', 'catalogRevision', 'answers', 'cleaningMode', 'scopeSelections', 'propertyKey']
             : ['catalogVersionKey', 'catalogRevision', 'lines'];
         if (array_diff(array_keys($payload), $allowed) !== []
             || ! is_array($payload[$formMode ? 'answers' : 'lines'] ?? null)) {
@@ -70,7 +70,7 @@ final class CleaningV3WorkloadPricePreviewController
             // The server derives all prices/effort from immutable tariff
             // records, never accepting monetary or worker-count overrides.
             $result = $formMode
-                ? $preview->previewForm($catalog, $digest, $payload['answers'], $payload['cleaningMode'] ?? null, (array_key_exists('scopeSelections', $payload) ? $payload['scopeSelections'] : []))
+                ? $preview->previewForm($catalog, $digest, $payload['answers'], $payload['cleaningMode'] ?? null, (array_key_exists('scopeSelections', $payload) ? $payload['scopeSelections'] : []), $payload['propertyKey'] ?? null)
                 : $preview->preview($catalog, $digest, $payload['lines']);
         } catch (CleaningV3CapacityException $exception) {
             return response()->json([

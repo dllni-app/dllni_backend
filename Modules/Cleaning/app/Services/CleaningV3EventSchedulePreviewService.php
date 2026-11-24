@@ -26,7 +26,7 @@ final class CleaningV3EventSchedulePreviewService
     public function preview(CleaningV3CatalogVersion $catalog, array $input, ?DateTimeImmutable $now = null): array
     {
         $allowed = ['appointmentKey', 'catalogVersionKey', 'catalogRevision', 'eventItemKey',
-            'startDate', 'startTime', 'durationMinutes', 'requiredWorkers'];
+            'startDate', 'startTime', 'durationMinutes', 'requiredWorkers', 'propertyKey'];
         if (array_is_list($input) || array_diff(array_keys($input), $allowed) !== []
             || ! is_string($input['appointmentKey'] ?? null)
             || preg_match('/^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,49}$/D', $input['appointmentKey']) !== 1
@@ -48,8 +48,10 @@ final class CleaningV3EventSchedulePreviewService
             throw new DomainException('INVALID_V3_EVENT_SCHEDULE');
         }
 
-        if (! $catalog->items()->where('item_key', $input['eventItemKey'])
-            ->where('source_type', 'event_type')->where('is_enabled', true)->exists()) {
+        $fields = app(CleaningV3CatalogPublicSerializer::class)->serialize($catalog, 'ar')['items'];
+        $fields = app(CleaningV3PropertyFormSelector::class)->select($fields, $input['propertyKey'] ?? null);
+        if (! collect($fields)->contains(static fn ($field) => $field['key'] === $input['eventItemKey']
+            && $field['sourceType'] === 'event_type')) {
             throw new DomainException('V3_EVENT_ITEM_UNAVAILABLE');
         }
 
@@ -90,6 +92,7 @@ final class CleaningV3EventSchedulePreviewService
             ...$plan,
             'event' => [
                 'eventItemKey' => $input['eventItemKey'],
+                'propertyKey' => $input['propertyKey'] ?? null,
                 'durationMinutes' => $input['durationMinutes'],
                 'distinctCrewsRequired' => count($segments) > 1,
                 'minimumDistinctWorkers' => count($segments) * $input['requiredWorkers'],

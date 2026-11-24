@@ -97,6 +97,7 @@ final class CleaningV3PublishedWorkloadPreviewService
         array $answers,
         mixed $mode,
         mixed $scopeSelections = [],
+        mixed $propertyKey = null,
     ): array {
         if (! in_array($mode, ['regular', 'deep'], true)) {
             throw new \DomainException('V3_CLEANING_MODE_REQUIRED');
@@ -106,6 +107,7 @@ final class CleaningV3PublishedWorkloadPreviewService
             throw new \DomainException('INVALID_V3_SCOPE_SELECTIONS');
         }
         $fields = $this->serializer->serialize($catalog, 'ar')['items'];
+        $fields = app(CleaningV3PropertyFormSelector::class)->select($fields, $propertyKey);
         $normalized = $this->forms->normalize($fields, $answers);
         $items = $catalog->items->keyBy('item_key');
         $lines = [];
@@ -170,12 +172,14 @@ final class CleaningV3PublishedWorkloadPreviewService
         return [
             ...$result,
             'cleaningMode' => $mode,
+            'propertyKey' => $propertyKey,
             'pricedItemKeys' => array_values(array_unique(array_column($lines, 'itemKey'))),
             'scopeSelections' => $resolvedScopes,
             'formFingerprint' => hash('sha256', json_encode([
                 'catalogVersionKey' => $catalog->version_key,
                 'catalogRevision' => $digest,
                 'cleaningMode' => $mode,
+                'propertyKey' => $propertyKey,
                 'answers' => $normalized,
                 'scopeSelections' => $resolvedScopes,
             ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)),

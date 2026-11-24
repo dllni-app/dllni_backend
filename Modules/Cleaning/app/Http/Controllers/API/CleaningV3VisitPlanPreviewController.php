@@ -69,7 +69,9 @@ final class CleaningV3VisitPlanPreviewController
                 throw new CleaningV3VisitPlanException('answers', 'ANSWERS_OBJECT_REQUIRED');
             }
             $catalog = $serializer->serialize($version, $locale);
-            $answers = $forms->normalize($catalog['items'], $rawAnswers);
+            $propertyKey = $request->input('propertyKey');
+            $fields = app(\Modules\Cleaning\Services\CleaningV3PropertyFormSelector::class)->select($catalog['items'], $propertyKey);
+            $answers = $forms->normalize($fields, $rawAnswers);
             $plan = $planner->plan($request->all());
         } catch (CleaningV3VisitPlanException $exception) {
             return response()->json([
@@ -82,7 +84,7 @@ final class CleaningV3VisitPlanPreviewController
         // Bind both validated customer answers and the normalized schedule.
         // The resulting digest is NOT a quote signature and cannot be submitted.
         $draftFingerprint = hash('sha256', $plan['draftFingerprint'].'|'.json_encode(
-            $answers, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
+            ['propertyKey' => $propertyKey, 'answers' => $answers], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
         ));
         unset($plan['draftFingerprint']);
 

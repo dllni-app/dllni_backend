@@ -51,7 +51,7 @@ final class CleaningV3VisitPlanner
             $this->invalid('pricing', 'CLIENT_FINANCIAL_INPUT_FORBIDDEN');
         }
 
-        if (array_diff(array_keys($input), ['contractVersion', 'catalogVersionKey', 'catalogRevision', 'answers', 'appointments']) !== []) {
+        if (array_diff(array_keys($input), ['contractVersion', 'catalogVersionKey', 'catalogRevision', 'answers', 'appointments', 'propertyKey']) !== []) {
             $this->invalid('appointments', 'INVALID_V3_PLAN_FIELDS');
         }
 
