@@ -90,6 +90,19 @@ final class CleaningV3PublishedTariffEvaluator
                     throw new DomainException('V3_PUBLISHED_MEASUREMENT_INVALID');
                 }
             }
+            if (array_key_exists('step', $inputRules)) {
+                $stepValue = $inputRules['step'];
+                $step = (is_int($stepValue) || is_float($stepValue) || is_string($stepValue))
+                    ? (string) $stepValue : '';
+                if (preg_match('/^(?:0|[1-9][0-9]{0,9})(?:\.[0-9]{1,2})?$/D', $step) !== 1
+                    || bccomp($step, '0', 2) <= 0) {
+                    throw new DomainException('V3_PUBLISHED_MEASUREMENT_INVALID');
+                }
+                $base = (string) ($inputRules['min'] ?? '0');
+                if (bccomp(bcmod(bcsub($line['quantity'], $base, 2), $step, 2), '0', 2) !== 0) {
+                    throw new DomainException('V3_PUBLISHED_MEASUREMENT_INVALID');
+                }
+            }
             // Count and piece are indivisible units. A fixed line is exactly
             // one unit. Do not let a decimal quantity create fractional tasks.
             if ((in_array($item->measurement_mode, ['count', 'piece'], true)

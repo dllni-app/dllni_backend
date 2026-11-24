@@ -179,3 +179,25 @@ test('published tariff refuses quantities outside approved form bounds even with
     expect($inside['estimatedBaseAmountSyp'])->toBe('800.00')
         ->and($inside['canQuote'])->toBeFalse();
 });
+
+test('published tariff checks allowed quantity increments without float rounding', function (): void {
+    [$version, $digest] = v3PublishedTariffFixture();
+    $item = $version->items()->firstOrFail();
+    DB::table('cleaning_v3_catalog_items')->where('id', $item->id)
+        ->update(['input_rules' => json_encode(['min' => 2, 'max' => 8, 'step' => '0.50'], JSON_THROW_ON_ERROR)]);
+
+    $evaluator = app(CleaningV3PublishedTariffEvaluator::class);
+    $line = [
+        'itemKey' => 'restaurant.kitchen',
+        'cleaningMode' => 'regular',
+        'scopeKey' => 'whole',
+        'quantity' => '3.25',
+    ];
+    expect(fn () => $evaluator->evaluate($version->fresh(), $digest, [$line]))
+        ->toThrow(DomainException::class, 'V3_PUBLISHED_MEASUREMENT_INVALID');
+
+    $valid = $evaluator->evaluate($version->fresh(), $digest, [
+        [...$line, 'quantity' => '3.50'],
+    ]);
+    expect($valid['estimatedBaseAmountSyp'])->toBe('350.00');
+});
