@@ -129,3 +129,24 @@ test('V3 rejects scientific notation, excess decimal places, leading zeros and i
     expect($validator->normalize(publishedV3Fields(), [...$valid, 'property.area' => '70.25'])['property.area'])
         ->toBe(70.25);
 });
+
+
+test('V3 required text cannot be bypassed using whitespace and optional blank text is omitted', function (): void {
+    $validator = new CleaningV3PublishedFormValidator;
+    $required = [
+        'key' => 'customer.notes', 'componentId' => 'text',
+        'required' => true, 'supportedByServer' => true,
+        'constraints' => [], 'choices' => [],
+    ];
+
+    foreach (["   ", "\t\n", "\u{00A0}\u{2003}"] as $blank) {
+        expect(fn () => $validator->normalize([$required], ['customer.notes' => $blank]))
+            ->toThrow(CleaningV3VisitPlanException::class, 'REQUIRED_PUBLISHED_FIELD_MISSING');
+
+        expect($validator->normalize([[...$required, 'required' => false]], ['customer.notes' => $blank]))
+            ->toBe([]);
+    }
+
+    expect($validator->normalize([$required], ['customer.notes' => '  test note  ']))
+        ->toBe(['customer.notes' => 'test note']);
+});

@@ -52,6 +52,11 @@ final class CleaningV3PublishedFormValidator
 
             $constraints = is_array($item['constraints'] ?? null) ? $item['constraints'] : [];
             $choices = is_array($item['choices'] ?? null) ? $item['choices'] : [];
+            // Text is normalized before testing presence, so whitespace-only
+            // required answers cannot bypass validation or alter the fingerprint.
+            if ($component === 'text' && is_string($value)) {
+                $value = mb_trim($value);
+            }
             $empty = $value === null || $value === ''
                 || (is_array($value) && $value === []);
             if ($empty) {
