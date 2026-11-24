@@ -37,6 +37,9 @@ final class CleaningV3QuoteBookingAdmissionService
         if (DB::transactionLevel() < 1) {
             throw new DomainException('V3_BOOKING_TRANSACTION_REQUIRED');
         }
+        if (! config('cleaning_v3_catalog.new_booking_admission_enabled', false)) {
+            throw new DomainException('V3_NEW_BOOKINGS_PAUSED');
+        }
         if ($customerId < 1 || ! Str::isUuid($quoteId) || ! Str::isUuid($idempotencyKey)
             || preg_match('/^[a-f0-9]{64}$/D', $requestHash) !== 1) {
             throw new DomainException('INVALID_V3_BOOKING_QUOTE_REFERENCE');

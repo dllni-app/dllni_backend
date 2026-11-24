@@ -28,6 +28,8 @@ function v3ArchiveFixture(): array
     $catalog = $catalog->fresh();
     config()->set('cleaning_v3_catalog.read_enabled', true);
     config()->set('cleaning_v3_catalog.approved_publication_digest', str_repeat('a', 64));
+    config()->set('cleaning_v3_catalog.new_quote_archive_enabled', true);
+    config()->set('cleaning_v3_catalog.new_booking_admission_enabled', true);
     $priced = app(CleaningV3VisitDiscountAllocator::class)->allocate([
         ['visitKey' => 'visit-01', 'pricedWorkers' => 2, 'eligibleNetBeforeDiscount' => '650000.00'],
     ], ['type' => 'fixed', 'amount' => '50000.00']);
@@ -242,4 +244,35 @@ test('booking admission rejects expiry, rolled back catalog and edited persisted
     expect(fn () => DB::transaction(fn () => $admission->assertStoredQuote(
         $customer->id, $signed['quoteId'], $key, $hash, $now,
     )))->toThrow(DomainException::class, 'V3_BOOKING_QUOTE_STORAGE_MISMATCH');
+});
+
+test('independent V3 rollback flags prevent new commercial work without deleting an archived quote', function (): void {
+    [$customer, $catalog, $signed, $now] = v3ArchiveFixture();
+    $key = (string) Str::uuid();
+    $hash = str_repeat('c', 64);
+    $archive = app(CleaningV3QuoteArchiveService::class);
+    $archive->archive($customer->id, $catalog->id, $key, $hash, $signed, $now);
+
+    config()->set('cleaning_v3_catalog.new_quote_archive_enabled', false);
+    $freshEnvelope = app(CleaningV3SignedQuoteEnvelope::class)
+        ->seal($customer->id, $signed['snapshot'], 15, $now);
+
+    expect(fn () => $archive->archive(
+        $customer->id, $catalog->id, (string) Str::uuid(), $hash, $freshEnvelope, $now,
+    ))->toThrow(DomainException::class, 'V3_NEW_QUOTES_PAUSED');
+
+    // Existing quote remains intact, but a NEW commercial booking is blocked.
+    $replay = $archive->archive($customer->id, $catalog->id, $key, $hash, $signed, $now);
+    expect($replay['replayed'])->toBeTrue()
+        ->and(DB::table('cleaning_booking_quotes')->count())->toBe(1);
+
+    config()->set('cleaning_v3_catalog.new_booking_admission_enabled', false);
+    expect(fn () => DB::transaction(fn () => app(
+        Modules\Cleaning\Services\CleaningV3QuoteBookingAdmissionService::class,
+    )->assertStoredQuote($customer->id, $signed['quoteId'], $key, $hash, $now)))
+        ->toThrow(DomainException::class, 'V3_NEW_BOOKINGS_PAUSED');
+
+    // Neither the archive nor the rollback touched a financial booking.
+    expect(DB::table('cleaning_booking_quotes')->where('id', $signed['quoteId'])
+        ->value('cleaning_booking_id'))->toBeNull();
 });

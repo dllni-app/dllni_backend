@@ -84,6 +84,10 @@ final class CleaningV3QuoteArchiveService
                 ];
             }
 
+            if (! config('cleaning_v3_catalog.new_quote_archive_enabled', false)) {
+                throw new DomainException('V3_NEW_QUOTES_PAUSED');
+            }
+
             $approvedDigest = config('cleaning_v3_catalog.approved_publication_digest');
             $catalog = CleaningV3CatalogVersion::query()->whereKey($catalogVersionId)
                 ->where('status', CleaningV3CatalogVersion::PUBLISHED)
