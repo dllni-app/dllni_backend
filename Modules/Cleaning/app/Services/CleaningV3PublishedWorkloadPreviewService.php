@@ -98,6 +98,8 @@ final class CleaningV3PublishedWorkloadPreviewService
         mixed $mode,
         mixed $scopeSelections = [],
         mixed $propertyKey = null,
+        int $maximumWorkers = 20,
+        int $windowMinutes = 480,
     ): array {
         if (! in_array($mode, ['regular', 'deep'], true)) {
             throw new \DomainException('V3_CLEANING_MODE_REQUIRED');
@@ -167,7 +169,7 @@ final class CleaningV3PublishedWorkloadPreviewService
             throw new \DomainException('V3_FORM_HAS_NO_PRICED_ITEMS');
         }
 
-        $result = $this->preview($catalog, $digest, $lines);
+        $result = $this->preview($catalog, $digest, $lines, $maximumWorkers, $windowMinutes);
 
         return [
             ...$result,

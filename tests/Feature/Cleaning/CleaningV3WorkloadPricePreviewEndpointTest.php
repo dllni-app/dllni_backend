@@ -228,3 +228,43 @@ test('custom deep scope pricing uses published components once and rejects inval
     $this->postJson($url, [...$form, 'scopeSelections' => ['extra' => ['whole']]])->assertStatus(422);
     $this->postJson($url, [...$form, 'cleaningMode' => 'regular', 'scopeSelections' => ['room' => ['floors']]])->assertStatus(422);
 });
+
+
+test('scheduled form preview rejects under-staffed or short visits using real indivisible tasks', function (): void {
+    [$version, $payload] = v3PriceEndpointFixture();
+    config()->set('cleaning_v3_catalog.read_enabled', true);
+    config()->set('cleaning_v3_catalog.approved_publication_digest', str_repeat('a', 64));
+    Sanctum::actingAs(User::factory()->create(['is_active' => true]));
+    $form = [
+        'contractVersion' => 3, 'catalogVersionKey' => $version->version_key,
+        'catalogRevision' => str_repeat('a', 64), 'cleaningMode' => 'regular',
+        'answers' => ['restaurant.furnace' => 3],
+        'appointments' => [[
+            'appointmentKey' => 'first',
+            'visits' => [[
+                'occurrenceKey' => 'visit-first', 'scheduledDate' => now('Asia/Damascus')->addDay()->toDateString(),
+                'scheduledTime' => '08:00', 'durationMinutes' => 480, 'requiredWorkers' => 3,
+            ]],
+        ]],
+    ];
+    $url = '/api/v1/cleaning/v3/visit-plan/preview';
+    $this->postJson($url, $form)->assertOk()
+        ->assertJsonPath('data.capacityCheck.checked', true)
+        ->assertJsonPath('data.capacityCheck.visits.0.minimumWorkers', 3)
+        ->assertJsonPath('data.capacityCheck.requiresActualWorkerConflictCheck', true)
+        ->assertJsonPath('data.canCreateBooking', false);
+    $bad = $form;
+    $bad['appointments'][0]['visits'][0]['requiredWorkers'] = 2;
+    $this->postJson($url, $bad)->assertStatus(422)->assertJsonPath('code', 'CAPACITY_INFEASIBLE');
+    $bad = $form;
+    $bad['appointments'][0]['visits'][0]['durationMinutes'] = 240;
+    $this->postJson($url, $bad)->assertStatus(422)->assertJsonPath('code', 'CAPACITY_INFEASIBLE');
+    $split = $form;
+    $split['appointments'][0]['visits'][] = [
+        ...$form['appointments'][0]['visits'][0], 'occurrenceKey' => 'visit-second',
+        'scheduledTime' => '16:00', 'durationMinutes' => 120,
+    ];
+    $this->postJson($url, $split)->assertStatus(422)->assertJsonPath('code', 'V3_SPLIT_TASK_ALLOCATION_REQUIRED');
+    unset($form['cleaningMode']);
+    $this->postJson($url, $form)->assertOk()->assertJsonPath('data.capacityCheck.checked', false);
+});
