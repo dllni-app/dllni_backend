@@ -29,6 +29,7 @@ use Modules\Cleaning\Http\Controllers\API\CleaningTimeWarningController;
 use Modules\Cleaning\Http\Controllers\API\CleaningV3CatalogController;
 use Modules\Cleaning\Http\Controllers\API\CleaningV3FinancialHoldController;
 use Modules\Cleaning\Http\Controllers\API\CleaningV3RecurringPreviewController;
+use Modules\Cleaning\Http\Controllers\API\CleaningV3EventSchedulePreviewController;
 use Modules\Cleaning\Http\Controllers\API\CleaningV3VisitDispatchController;
 use Modules\Cleaning\Http\Controllers\API\CleaningV3VisitPlanPreviewController;
 use Modules\Cleaning\Http\Controllers\API\CleaningV3WorkClockCommandController;
@@ -123,6 +124,7 @@ Route::prefix('v1')->group(function () {
         // V3 quote and booking writes stay explicitly fail-closed.
         Route::post('cleaning/v3/visit-plan/preview', CleaningV3VisitPlanPreviewController::class)->middleware('throttle:30,1');
         Route::post('cleaning/v3/recurrence/preview', CleaningV3RecurringPreviewController::class)->middleware('throttle:20,1');
+        Route::post('cleaning/v3/event-schedule/preview', CleaningV3EventSchedulePreviewController::class)->middleware('throttle:20,1');
         Route::post('cleaning/v3/workload/preview', CleaningV3WorkloadPricePreviewController::class)->middleware('throttle:20,1');
         Route::post('cleaning/v3/quotes', CleaningV3FinancialHoldController::class)->middleware('throttle:20,1');
         Route::post('cleaning/v3/bookings', CleaningV3FinancialHoldController::class)->middleware('throttle:20,1');
