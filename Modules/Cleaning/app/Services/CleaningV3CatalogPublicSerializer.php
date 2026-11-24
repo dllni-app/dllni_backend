@@ -19,7 +19,7 @@ final class CleaningV3CatalogPublicSerializer
 
     public function serialize(CleaningV3CatalogVersion $version, string $locale): array
     {
-        $version->loadMissing('items.presets');
+        $version->loadMissing('items.presets', 'items.tariffRules');
         $items = $version->items
             ->where('is_enabled', true)
             ->sortBy([['sort_order', 'asc'], ['id', 'asc']])
@@ -93,6 +93,11 @@ final class CleaningV3CatalogPublicSerializer
             'measurementMode' => (string) $item->measurement_mode,
             'constraints' => $constraints,
             'choices' => $options,
+            'wholePreviewModes' => ! $unsupportedRules && in_array($component, ['numeric', 'stepper'], true)
+                ? $item->tariffRules->where('is_enabled', true)->where('scope_key', 'whole')
+                    ->pluck('cleaning_mode')->filter(fn ($mode) => in_array($mode, ['regular', 'deep'], true))
+                    ->unique()->sort()->values()->all()
+                : [],
             'mediaUrl' => null,
             'supportedByServer' => in_array($component, self::SUPPORTED_COMPONENT_IDS, true) && ! $unsupportedRules,
             'unsupportedRules' => $unsupportedRules,

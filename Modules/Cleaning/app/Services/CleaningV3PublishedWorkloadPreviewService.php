@@ -19,6 +19,8 @@ final class CleaningV3PublishedWorkloadPreviewService
     public function __construct(
         private readonly CleaningV3PublishedTariffEvaluator $tariffs,
         private readonly CleaningV3WorkloadCapacityPlanner $capacity,
+        private readonly CleaningV3CatalogPublicSerializer $serializer,
+        private readonly CleaningV3PublishedFormValidator $forms,
     ) {}
 
     /**
@@ -81,6 +83,67 @@ final class CleaningV3PublishedWorkloadPreviewService
             'canQuote' => false,
             'canBook' => false,
             'canSettle' => false,
+        ];
+    }
+
+    /**
+     * Price the actual validated draft, not a client-selected subset of its
+     * payable fields. Only whole-scope numeric tariffs are supported here.
+     * Unsupported advanced priced controls must not produce a partial total.
+     */
+    public function previewForm(
+        CleaningV3CatalogVersion $catalog,
+        string $digest,
+        array $answers,
+        mixed $mode,
+    ): array {
+        if (! in_array($mode, ['regular', 'deep'], true)) {
+            throw new \DomainException('V3_CLEANING_MODE_REQUIRED');
+        }
+        $fields = $this->serializer->serialize($catalog, 'ar')['items'];
+        $normalized = $this->forms->normalize($fields, $answers);
+        $items = $catalog->items->keyBy('item_key');
+        $lines = [];
+        foreach ($fields as $field) {
+            $key = $field['key'];
+            if (! array_key_exists($key, $normalized)) {
+                continue;
+            }
+            $item = $items->get($key);
+            if ($item === null) {
+                throw new \DomainException('V3_PUBLISHED_TARIFF_ITEM_UNAVAILABLE');
+            }
+            // Non-payable metadata is validated above, not included in costs.
+            if ($item->tariffRules->where('is_enabled', true)->isEmpty()) {
+                if (in_array($field['componentId'], ['numeric', 'stepper'], true)) {
+                    throw new \DomainException('V3_PUBLISHED_TARIFF_COVERAGE_MISSING');
+                }
+                continue;
+            }
+            if (! in_array($field['componentId'], ['numeric', 'stepper'], true)
+                || ! in_array($mode, $field['wholePreviewModes'], true)) {
+                throw new \DomainException('V3_FORM_PRICING_RULE_UNSUPPORTED');
+            }
+            $quantity = (string) $normalized[$key];
+            $lines[] = ['itemKey' => $key, 'cleaningMode' => $mode,
+                'scopeKey' => 'whole', 'quantity' => $quantity];
+        }
+        if ($lines === []) {
+            throw new \DomainException('V3_FORM_HAS_NO_PRICED_ITEMS');
+        }
+
+        $result = $this->preview($catalog, $digest, $lines);
+
+        return [
+            ...$result,
+            'cleaningMode' => $mode,
+            'pricedItemKeys' => array_column($lines, 'itemKey'),
+            'formFingerprint' => hash('sha256', json_encode([
+                'catalogVersionKey' => $catalog->version_key,
+                'catalogRevision' => $digest,
+                'cleaningMode' => $mode,
+                'answers' => $normalized,
+            ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)),
         ];
     }
 

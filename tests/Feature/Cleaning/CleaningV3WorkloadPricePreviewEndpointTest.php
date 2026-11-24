@@ -132,3 +132,41 @@ test('public quote and V3 booking routes stay guarded even with an accepted prev
     $this->postJson('/api/v1/cleaning/v3/bookings', [])->assertStatus(503)
         ->assertJsonPath('code', 'V3_FINANCIAL_APPROVAL_REQUIRED');
 });
+
+
+test('form-based workload preview derives lines from required answers and the chosen cleaning mode', function (): void {
+    [$version, $payload] = v3PriceEndpointFixture();
+    config()->set('cleaning_v3_catalog.read_enabled', true);
+    config()->set('cleaning_v3_catalog.approved_publication_digest', str_repeat('a', 64));
+    Sanctum::actingAs(User::factory()->create(['is_active' => true]));
+    $url = '/api/v1/cleaning/v3/workload/preview';
+    $form = [
+        'catalogVersionKey' => $version->version_key,
+        'catalogRevision' => str_repeat('a', 64),
+        'answers' => ['restaurant.furnace' => 3],
+        'cleaningMode' => 'regular',
+    ];
+    $this->getJson('/api/v1/cleaning/catalog/v3')->assertOk()
+        ->assertJsonPath('data.items.0.wholePreviewModes', ['regular'])
+        ->assertDontSee('unit_price')->assertDontSee('250.00');
+    $response = $this->postJson($url, $form)->assertOk()
+        ->assertJsonPath('data.estimatedBaseAmountSyp', '150000.00')
+        ->assertJsonPath('data.capacity.estimatedWorkers', 3)
+        ->assertJsonPath('data.cleaningMode', 'regular')
+        ->assertJsonPath('data.pricedItemKeys', ['restaurant.furnace'])
+        ->assertJsonPath('data.quoteId', null);
+    expect($response->json('data.formFingerprint'))->toMatch('/^[a-f0-9]{64}$/');
+    $changed = $this->postJson($url, [...$form, 'answers' => ['restaurant.furnace' => '2']])
+        ->assertOk()->assertJsonPath('data.capacity.estimatedWorkers', 2);
+    expect($changed->json('data.formFingerprint'))->not->toBe($response->json('data.formFingerprint'));
+    $this->postJson($url, [...$form, 'answers' => []])
+        ->assertStatus(422)->assertJsonPath('code', 'REQUIRED_PUBLISHED_FIELD_MISSING');
+    $this->postJson($url, [...$form, 'answers' => ['restaurant.furnace' => '2.5']])
+        ->assertStatus(422)->assertJsonPath('code', 'NUMBER_OUT_OF_RANGE');
+    $this->postJson($url, [...$form, 'cleaningMode' => 'deep'])
+        ->assertStatus(422)->assertJsonPath('code', 'V3_FORM_PRICING_RULE_UNSUPPORTED');
+    $this->postJson($url, [...$form, 'cleaningMode' => null])
+        ->assertStatus(422)->assertJsonPath('code', 'V3_CLEANING_MODE_REQUIRED');
+    $this->postJson($url, [...$form, 'lines' => $payload['lines']])
+        ->assertStatus(422)->assertJsonPath('code', 'INVALID_V3_PREVIEW_FIELDS');
+});

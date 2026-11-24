@@ -53,8 +53,12 @@ final class CleaningV3WorkloadPricePreviewController
         }
 
         $payload = $request->all();
-        if (array_diff(array_keys($payload), ['catalogVersionKey', 'catalogRevision', 'lines']) !== []
-            || ! is_array($payload['lines'] ?? null)) {
+        $formMode = array_key_exists('answers', $payload) || array_key_exists('cleaningMode', $payload);
+        $allowed = $formMode
+            ? ['catalogVersionKey', 'catalogRevision', 'answers', 'cleaningMode']
+            : ['catalogVersionKey', 'catalogRevision', 'lines'];
+        if (array_diff(array_keys($payload), $allowed) !== []
+            || ! is_array($payload[$formMode ? 'answers' : 'lines'] ?? null)) {
             return response()->json([
                 'success' => false,
                 'code' => 'INVALID_V3_PREVIEW_FIELDS',
@@ -65,7 +69,9 @@ final class CleaningV3WorkloadPricePreviewController
         try {
             // The server derives all prices/effort from immutable tariff
             // records, never accepting monetary or worker-count overrides.
-            $result = $preview->preview($catalog, $digest, $payload['lines']);
+            $result = $formMode
+                ? $preview->previewForm($catalog, $digest, $payload['answers'], $payload['cleaningMode'] ?? null)
+                : $preview->preview($catalog, $digest, $payload['lines']);
         } catch (CleaningV3CapacityException $exception) {
             return response()->json([
                 'success' => false,
