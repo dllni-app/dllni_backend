@@ -16,7 +16,7 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
 {
     use ValidatesWorkerRoomAssignments;
 
-    private const INCOMPLETE_ADDRESS_MESSAGE = 'يرجى تحديث العنوان المختار وإضافة الحي والإحداثيات قبل إنشاء الطلب.';
+    private const INCOMPLETE_ADDRESS_MESSAGE = 'العنوان المختار غير مكتمل. يرجى تحديد الموقع على الخريطة وإدخال عنوان واضح من صفحة العناوين.';
 
     public function authorize(): bool
     {
@@ -189,11 +189,10 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
     private function isCompleteServiceAddress(UserAddress $address): bool
     {
         $hasAddressText = mb_trim($this->formatUserAddress($address)) !== '';
-        $hasNeighborhood = $address->neighborhood_id !== null
-            || mb_trim((string) $address->neighborhood) !== '';
-        $hasCoordinates = $address->latitude !== null && $address->longitude !== null;
+        $hasCoordinates = $address->latitude !== null && $address->longitude !== null
+            && abs((float) $address->latitude) <= 90 && abs((float) $address->longitude) <= 180;
 
-        return $hasAddressText && $hasNeighborhood && $hasCoordinates;
+        return $hasAddressText && $hasCoordinates;
     }
 
     private function formatUserAddress(UserAddress $address): string
