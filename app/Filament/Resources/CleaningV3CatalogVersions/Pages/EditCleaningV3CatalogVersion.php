@@ -13,6 +13,7 @@ use Filament\Resources\Pages\EditRecord;
 use Modules\Cleaning\Models\CleaningV3CatalogVersion;
 use Modules\Cleaning\Services\CleaningV3CatalogDraftEstimateService;
 use Modules\Cleaning\Services\CleaningV3CatalogDraftValidator;
+use Modules\Cleaning\Services\CleaningV3CatalogReviewManifestService;
 use Throwable;
 
 final class EditCleaningV3CatalogVersion extends EditRecord
@@ -22,6 +23,22 @@ final class EditCleaningV3CatalogVersion extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('reviewDraftManifest')
+                ->label('بصمة مراجعة الكتالوج')
+                ->icon('heroicon-o-finger-print')
+                ->color('gray')
+                ->visible(fn (): bool => CleaningV3CatalogVersionResource::canEdit($this->record))
+                ->authorize(fn (): bool => CleaningV3CatalogVersionResource::canEdit($this->record))
+                ->action(function (): void {
+                    $manifest = app(CleaningV3CatalogReviewManifestService::class)->inspect($this->record);
+                    Notification::make()
+                        ->title('بصمة المسودة للمراجعة فقط')
+                        ->body('SHA-256: '.$manifest['fingerprint'].' — البنود: '.$manifest['itemCount']
+                            .' — قواعد السعر والجهد: '.$manifest['tariffRuleCount']
+                            .' — عوائق الاعتماد: '.count($manifest['issueCodes'])
+                            .'. لا تسمح هذه البصمة بالنشر أو الحجز أو التحصيل.')
+                        ->warning()->persistent()->send();
+                }),
             Action::make('reviewDraftReadiness')
                 ->label('فحص جاهزية نشر الكتالوج')
                 ->icon('heroicon-o-clipboard-document-check')
