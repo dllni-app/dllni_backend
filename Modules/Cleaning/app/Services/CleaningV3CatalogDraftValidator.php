@@ -13,6 +13,7 @@ use Modules\Cleaning\Models\CleaningMaterialType;
 use Modules\Cleaning\Models\CleaningRoomType;
 use Modules\Cleaning\Models\CleaningService;
 use Modules\Cleaning\Models\CleaningSpecialService;
+use Modules\Cleaning\Models\CleaningSpecialServiceEquipment;
 use Modules\Cleaning\Models\CleaningV3CatalogVersion;
 
 final class CleaningV3CatalogDraftValidator
@@ -24,6 +25,7 @@ final class CleaningV3CatalogDraftValidator
         'service' => CleaningService::class,
         'special_service' => CleaningSpecialService::class,
         'material' => CleaningMaterialType::class,
+        'equipment' => CleaningSpecialServiceEquipment::class,
         'event_type' => CleaningEventType::class,
     ];
 
@@ -51,9 +53,10 @@ final class CleaningV3CatalogDraftValidator
             $problems[] = 'CATALOG_EMPTY';
         }
 
+        $equipmentIds = [];
         foreach ($items as $item) {
             $inputRules = is_array($item->input_rules) ? $item->input_rules : [];
-            $allowedInputRules = ['componentId', 'descriptionAr', 'descriptionEn', 'min', 'max', 'step', 'maxSelections', 'scopeLabels', 'propertyKeys'];
+            $allowedInputRules = ['componentId', 'descriptionAr', 'descriptionEn', 'min', 'max', 'step', 'maxSelections', 'scopeLabels', 'propertyKeys', 'equipmentAssetIds', 'equipmentUnitPriceSyp', 'splitUnitQuantity'];
             if (array_diff(array_keys($inputRules), $allowedInputRules) !== []) {
                 $problems[] = 'UNSUPPORTED_INPUT_RULES:'.$item->item_key;
             }
@@ -100,6 +103,29 @@ final class CleaningV3CatalogDraftValidator
                 continue;
             }
 
+            if (! app(CleaningV3TaskSplitPolicy::class)->valid($item)) {
+                $problems[] = 'INVALID_TASK_SPLIT_POLICY:'.$item->item_key;
+            }
+            if ($item->source_type === 'equipment') {
+                $config = app(CleaningV3EquipmentPreviewService::class)->configuration($item);
+                if ($config === null) {
+                    $problems[] = 'INVALID_EQUIPMENT_CONFIGURATION:'.$item->item_key;
+                } else {
+                    foreach ($config['assetIds'] as $assetId) {
+                        if (isset($equipmentIds[$assetId])) {
+                            $problems[] = 'OVERLAPPING_EQUIPMENT_POOL:'.$item->item_key;
+                        }
+                        $equipmentIds[$assetId] = true;
+                    }
+                    if (CleaningSpecialServiceEquipment::query()->whereIn('id', $config['assetIds'])->where('is_active', true)->count() !== count($config['assetIds'])) {
+                        $problems[] = 'INVALID_EQUIPMENT_ASSET:'.$item->item_key;
+                    }
+                }
+                continue;
+            }
+            if (array_intersect(array_keys($inputRules), ['equipmentAssetIds', 'equipmentUnitPriceSyp']) !== []) {
+                $problems[] = 'INVALID_EQUIPMENT_CONFIGURATION:'.$item->item_key;
+            }
             $rules = $item->tariffRules->where('is_enabled', true);
             $scopeCatalog = app(CleaningV3DeepScopeCatalog::class);
             if (! $scopeCatalog->validLabels($inputRules['scopeLabels'] ?? [])) {

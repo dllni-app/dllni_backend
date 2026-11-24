@@ -37,7 +37,7 @@ final class CleaningV3VisitPlanner
      * @param  array<string, mixed>  $input
      * @return array<string, mixed>
      */
-    public function plan(array $input, ?DateTimeImmutable $now = null): array
+    public function plan(array $input, ?DateTimeImmutable $now = null, bool $allowMultipleLocalDates = false): array
     {
         if (($input['contractVersion'] ?? null) !== 3) {
             $this->invalid('contractVersion', 'V3_CONTRACT_REQUIRED');
@@ -121,7 +121,7 @@ final class CleaningV3VisitPlanner
                     || $start <= $now) {
                     $this->invalid("$path.scheduledDate", 'VISIT_MUST_BE_FUTURE');
                 }
-                if ($appointmentDate !== null && $date !== $appointmentDate) {
+                if (! $allowMultipleLocalDates && $appointmentDate !== null && $date !== $appointmentDate) {
                     $this->invalid("$path.scheduledDate", 'APPOINTMENT_MUST_USE_ONE_LOCAL_DATE');
                 }
                 $appointmentDate ??= $date;
@@ -175,7 +175,7 @@ final class CleaningV3VisitPlanner
 
             $normalized[] = [
                 'appointmentKey' => $appointmentKey,
-                'date' => $appointmentDate,
+                'date' => $planned[0]['scheduledDate'],
                 'startAt' => $planned[0]['startAt'],
                 'endAt' => $latestEnd,
                 'sameDayOverlapRequiresCrewResolution' => $overlap,

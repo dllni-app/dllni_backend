@@ -55,10 +55,11 @@ final class CleaningV3CatalogPublicSerializer
         $component = (string) ($rules['componentId'] ?? $defaultComponent);
         // Unknown/conditional rules must NOT silently disappear from a public
         // schema and turn a mandatory control into an unvalidated answer.
-        $knownRuleKeys = ['componentId', 'descriptionAr', 'descriptionEn', 'min', 'max', 'step', 'maxSelections', 'scopeLabels', 'propertyKeys'];
+        $knownRuleKeys = ['componentId', 'descriptionAr', 'descriptionEn', 'min', 'max', 'step', 'maxSelections', 'scopeLabels', 'propertyKeys', 'equipmentAssetIds', 'equipmentUnitPriceSyp', 'splitUnitQuantity'];
         $scopeCatalog = app(CleaningV3DeepScopeCatalog::class);
         $unsupportedRules = array_diff(array_keys($rules), $knownRuleKeys) !== []
-            || ! $scopeCatalog->validLabels($rules['scopeLabels'] ?? []);
+            || ! $scopeCatalog->validLabels($rules['scopeLabels'] ?? [])
+            || ! app(CleaningV3TaskSplitPolicy::class)->valid($item);
         $label = $locale === 'en' && filled($item->label_en)
             ? (string) $item->label_en : (string) $item->label_ar;
         $description = $rules[$locale === 'en' ? 'descriptionEn' : 'descriptionAr']
@@ -73,6 +74,15 @@ final class CleaningV3CatalogPublicSerializer
         }
         if (isset($rules['maxSelections']) && is_int($rules['maxSelections'])) {
             $constraints['maxSelections'] = max(0, $rules['maxSelections']);
+        }
+
+        $isEquipment = $item->source_type === 'equipment';
+        if ($isEquipment) {
+            $equipment = app(CleaningV3EquipmentPreviewService::class)->configuration($item);
+            $unsupportedRules = $unsupportedRules || $equipment === null;
+            $constraints = ['min' => $item->required ? 1 : 0, 'max' => count($equipment['assetIds'] ?? []), 'step' => 1];
+        } elseif (array_intersect(array_keys($rules), ['equipmentAssetIds', 'equipmentUnitPriceSyp']) !== []) {
+            $unsupportedRules = true;
         }
 
         $options = $item->presets->sortBy([['sort_order', 'asc'], ['id', 'asc']])
@@ -90,7 +100,7 @@ final class CleaningV3CatalogPublicSerializer
             'label' => $label,
             'description' => is_string($description) ? $description : null,
             'sourceType' => (string) $item->source_type,
-            'sourceId' => (int) $item->source_id,
+            'sourceId' => $isEquipment ? null : (int) $item->source_id,
             'propertyScopeConfigured' => array_key_exists('propertyKeys', $rules),
             'propertyKeys' => app(CleaningV3PropertyFormSelector::class)->validKeys($rules['propertyKeys'] ?? null)
                 ? $rules['propertyKeys'] : [],
@@ -98,12 +108,12 @@ final class CleaningV3CatalogPublicSerializer
             'measurementMode' => (string) $item->measurement_mode,
             'constraints' => $constraints,
             'choices' => $options,
-            'wholePreviewModes' => ! $unsupportedRules && in_array($component, ['numeric', 'stepper'], true)
+            'wholePreviewModes' => ! $isEquipment && ! $unsupportedRules && in_array($component, ['numeric', 'stepper'], true)
                 ? $item->tariffRules->where('is_enabled', true)->where('scope_key', 'whole')
                     ->pluck('cleaning_mode')->filter(fn ($mode) => in_array($mode, ['regular', 'deep'], true))
                     ->unique()->sort()->values()->all()
                 : [],
-            'deepScopeChoices' => ! $unsupportedRules && in_array($component, ['numeric', 'stepper'], true)
+            'deepScopeChoices' => ! $isEquipment && ! $unsupportedRules && in_array($component, ['numeric', 'stepper'], true)
                 ? $scopeCatalog->choices($item) : [],
             'mediaUrl' => null,
             'supportedByServer' => in_array($component, self::SUPPORTED_COMPONENT_IDS, true) && ! $unsupportedRules,

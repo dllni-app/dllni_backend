@@ -160,6 +160,7 @@ test('due scanner detects coverage without a previous reconciliation and does no
 
 test('the V3 progress API is owner-only and does not reveal a sibling customer or V2 visit', function (): void {
     [$visit, $customer, $start] = v3DispatchTestVisit();
+    $this->travelTo($start);
     $service = app(CleaningV3VisitDispatchService::class);
     $service->openSearch($visit, $start);
     $url = "/api/v1/cleaning-bookings/{$visit->cleaning_booking_id}/sessions/{$visit->id}/dispatch";

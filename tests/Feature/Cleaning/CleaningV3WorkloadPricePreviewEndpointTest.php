@@ -264,7 +264,97 @@ test('scheduled form preview rejects under-staffed or short visits using real in
         ...$form['appointments'][0]['visits'][0], 'occurrenceKey' => 'visit-second',
         'scheduledTime' => '16:00', 'durationMinutes' => 120,
     ];
-    $this->postJson($url, $split)->assertStatus(422)->assertJsonPath('code', 'V3_SPLIT_TASK_ALLOCATION_REQUIRED');
+    $this->postJson($url, $split)->assertStatus(422)->assertJsonPath('code', 'CAPACITY_INFEASIBLE');
     unset($form['cleaningMode']);
     $this->postJson($url, $form)->assertOk()->assertJsonPath('data.capacityCheck.checked', false);
+});
+
+
+test('one split service distributes all three indivisible units once across multiple days with conserved tariffs', function (): void {
+    [$version, $payload] = v3PriceEndpointFixture();
+    config()->set('cleaning_v3_catalog.read_enabled', true);
+    config()->set('cleaning_v3_catalog.approved_publication_digest', str_repeat('a', 64));
+    Sanctum::actingAs(User::factory()->create(['is_active' => true]));
+    $date = now('Asia/Damascus')->addDay()->toDateString();
+    $later = now('Asia/Damascus')->addDays(2)->toDateString();
+    $form = [
+        'contractVersion' => 3, 'catalogVersionKey' => $version->version_key,
+        'catalogRevision' => str_repeat('a', 64), 'cleaningMode' => 'regular',
+        'answers' => ['restaurant.furnace' => 3],
+        'appointments' => [[
+            'appointmentKey' => 'job',
+            'visits' => [
+                ['occurrenceKey' => 'first', 'scheduledDate' => $date, 'scheduledTime' => '08:00', 'durationMinutes' => 300, 'requiredWorkers' => 2],
+                ['occurrenceKey' => 'second', 'scheduledDate' => $later, 'scheduledTime' => '08:00', 'durationMinutes' => 300, 'requiredWorkers' => 1],
+            ],
+        ]],
+    ];
+    $url = '/api/v1/cleaning/v3/visit-plan/preview';
+    $result = $this->postJson($url, $form)->assertOk()
+        ->assertJsonPath('data.capacityCheck.totalEstimatedBaseAmountSyp', '150000.00')
+        ->assertJsonPath('data.capacityCheck.visits.0.estimatedBaseAmountSyp', '100000.00')
+        ->assertJsonPath('data.capacityCheck.visits.1.estimatedBaseAmountSyp', '50000.00')
+        ->assertJsonPath('data.capacityCheck.visits.0.taskGroups.0.quantity', '2.00')
+        ->assertJsonPath('data.capacityCheck.visits.1.taskGroups.0.quantity', '1.00')
+        ->assertJsonPath('data.capacityCheck.visits.0.effortMinutes', 500)
+        ->assertJsonPath('data.capacityCheck.visits.1.effortMinutes', 250)
+        ->assertJsonPath('data.canCreateBooking', false);
+    $this->postJson($url, $form)->assertOk()->assertJsonPath('data.draftFingerprint', $result->json('data.draftFingerprint'));
+    $repeat = $form;
+    $repeat['appointments'][] = ['appointmentKey' => 'repeat', 'visits' => [
+        ['occurrenceKey' => 'third', 'scheduledDate' => $later, 'scheduledTime' => '14:00', 'durationMinutes' => 300, 'requiredWorkers' => 3],
+    ]];
+    $this->postJson($url, $repeat)->assertOk()->assertJsonPath('data.capacityCheck.totalEstimatedBaseAmountSyp', '300000.00');
+    $bad = $form;
+    $bad['appointments'][0]['visits'][0]['requiredWorkers'] = 1;
+    $this->postJson($url, $bad)->assertStatus(422)->assertJsonPath('code', 'CAPACITY_INFEASIBLE');
+    $bad = $form;
+    unset($bad['cleaningMode']);
+    $this->postJson($url, $bad)->assertStatus(422)->assertJsonPath('code', 'APPOINTMENT_MUST_USE_ONE_LOCAL_DATE');
+});
+
+test('approved continuous split conserves full-tier quantity and rounded money across visits', function (): void {
+    $source = CleaningHomeType::query()->create([
+        'section' => CleaningHomeType::SECTION_PROPERTY,
+        'code' => 'qa_split_surface', 'booking_value' => 'qa_split_surface',
+        'title' => 'Test surface', 'is_active' => true,
+    ]);
+    $catalog = CleaningV3CatalogVersion::query()->create(['title' => 'Split surface']);
+    $item = $catalog->items()->create([
+        'item_key' => 'surface', 'source_type' => 'property', 'source_id' => $source->id,
+        'label_ar' => 'Surface', 'measurement_mode' => 'sqm',
+        'required' => true, 'is_enabled' => true,
+        'input_rules' => ['splitUnitQuantity' => '1.00'],
+    ]);
+    $item->tariffRules()->create([
+        'rule_key' => 'surface-tier', 'cleaning_mode' => 'regular', 'scope_key' => 'whole',
+        'quantity_min' => '2.00', 'quantity_max' => '10.00',
+        'unit_price' => '10.01', 'unit_effort_minutes' => '300.00', 'is_enabled' => true,
+    ]);
+    DB::table('cleaning_v3_catalog_versions')->where('id', $catalog->id)->update([
+        'status' => 'published', 'published_at' => now(), 'published_digest' => str_repeat('a', 64),
+    ]);
+    config()->set('cleaning_v3_catalog.read_enabled', true);
+    config()->set('cleaning_v3_catalog.approved_publication_digest', str_repeat('a', 64));
+    Sanctum::actingAs(User::factory()->create(['is_active' => true]));
+    $form = [
+        'contractVersion' => 3, 'catalogVersionKey' => $catalog->version_key,
+        'catalogRevision' => str_repeat('a', 64), 'cleaningMode' => 'regular',
+        'answers' => ['surface' => 2.35],
+        'appointments' => [['appointmentKey' => 'job', 'visits' => [
+            ['occurrenceKey' => 'first', 'scheduledDate' => now('Asia/Damascus')->addDay()->toDateString(), 'scheduledTime' => '08:00', 'durationMinutes' => 480, 'requiredWorkers' => 1],
+            ['occurrenceKey' => 'second', 'scheduledDate' => now('Asia/Damascus')->addDays(2)->toDateString(), 'scheduledTime' => '08:00', 'durationMinutes' => 480, 'requiredWorkers' => 1],
+        ]]],
+    ];
+    $response = $this->postJson('/api/v1/cleaning/v3/visit-plan/preview', $form)
+        ->assertOk()->assertJsonPath('data.capacityCheck.totalEstimatedBaseAmountSyp', '23.52');
+    $quantity = '0.00'; $amount = '0.00'; $effort = 0;
+    foreach ($response->json('data.capacityCheck.visits') as $visit) {
+        foreach ($visit['taskGroups'] as $group) {
+            $quantity = bcadd($quantity, $group['quantity'], 2);
+            $amount = bcadd($amount, $group['estimatedBaseAmountSyp'], 2);
+            $effort += $group['effortMinutes'];
+        }
+    }
+    expect($quantity)->toBe('2.35')->and($amount)->toBe('23.52')->and($effort)->toBe(705);
 });

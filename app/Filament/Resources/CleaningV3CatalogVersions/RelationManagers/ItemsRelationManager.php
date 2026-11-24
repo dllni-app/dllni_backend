@@ -25,6 +25,7 @@ use Modules\Cleaning\Models\CleaningMaterialType;
 use Modules\Cleaning\Models\CleaningRoomType;
 use Modules\Cleaning\Models\CleaningService;
 use Modules\Cleaning\Models\CleaningSpecialService;
+use Modules\Cleaning\Models\CleaningSpecialServiceEquipment;
 use Modules\Cleaning\Models\CleaningV3CatalogItem;
 use Modules\Cleaning\Models\CleaningV3CatalogVersion;
 
@@ -48,11 +49,12 @@ final class ItemsRelationManager extends RelationManager
                 'service' => 'خدمة',
                 'special_service' => 'خدمة تخصصية',
                 'material' => 'مواد مطلوبة',
+                'equipment' => 'معدات تنظيف من المنصة (قابلة للإرجاع)',
                 'event_type' => 'نوع مناسبة',
             ])->live(),
-            Select::make('source_id')->label('العنصر من الكتالوج الحالي')->required()->searchable()
+            Select::make('source_id')->live()->label('العنصر من الكتالوج الحالي')->required()->searchable()
                 ->options(static fn (Get $get): array => self::sourceChoices((string) $get('source_type'))),
-            Select::make('measurement_mode')->label('وحدة القياس')->required()->options([
+            Select::make('measurement_mode')->live()->label('وحدة القياس')->required()->options([
                 'count' => 'عدد',
                 'sqm' => 'متر مربع',
                 'linear_meter' => 'متر طولي',
@@ -82,13 +84,33 @@ final class ItemsRelationManager extends RelationManager
                 ->dehydrateStateUsing(static fn ($state) => array_values($state ?? []))
                 ->visible(static fn (Get $get): bool => $get('source_type') !== 'property')
                 ->columnSpanFull(),
+            TextInput::make('input_rules.splitUnitQuantity')
+                ->label('أقصى كمية للمهمة الواحدة القابلة للتوزيع')
+                ->helperText('اتركها فارغة إذا كان البند لا يقبل التقسيم. تطبق على الكمية وليس على السعر.')
+                ->numeric()->minValue(0.01)->maxValue(9999999999)
+                ->visible(static fn (Get $get): bool => $get('source_type') !== 'equipment'
+                    && in_array($get('measurement_mode'), ['sqm', 'linear_meter', 'hour'], true)),
+            Select::make('input_rules.equipmentAssetIds')
+                ->label('معدات إضافية مماثلة في المخزون')
+                ->multiple()->searchable()
+                ->options(static fn (Get $get): array => self::equipmentChoices((int) $get('source_id')))
+                ->helperText('اختر الأصول المتطابقة فقط. الأصل الرئيسي محسوب تلقائياً.')
+                ->visible(static fn (Get $get): bool => $get('source_type') === 'equipment')
+                ->columnSpanFull(),
+            TextInput::make('input_rules.equipmentUnitPriceSyp')
+                ->label('سعر طلب قطعة من المعدات لكل زيارة (ل.س)')
+                ->numeric()->minValue(0.01)->maxValue(9999999999)
+                ->required(static fn (Get $get): bool => $get('source_type') === 'equipment')
+                ->visible(static fn (Get $get): bool => $get('source_type') === 'equipment'),
             KeyValue::make('input_rules.scopeLabels')
+                ->visible(static fn (Get $get): bool => $get('source_type') !== 'equipment')
                 ->label('أسماء نطاقات التعزيل المخصصة')
                 ->keyLabel('رمز النطاق المطابق للتعرفة')
                 ->valueLabel('الاسم الظاهر للعميل')
                 ->helperText('النطاقات الشائعة لها أسماء عربية افتراضية. أضف اسماً لكل نطاق جديد غير معروف.')
                 ->columnSpanFull(),
             Repeater::make('tariffRules')
+                ->visible(static fn (Get $get): bool => $get('source_type') !== 'equipment')
                 ->label('قواعد السعر والجهد (مسودة — غير قابلة للتحصيل)')
                 ->relationship('tariffRules')
                 ->schema([
@@ -132,7 +154,7 @@ final class ItemsRelationManager extends RelationManager
                     if (empty($data['input_rules']['propertyKeys'])) {
                         unset($data['input_rules']['propertyKeys']);
                     }
-                    return $data;
+                    return self::normalizeItemRules($data);
                 })->visible(fn (): bool => $this->editable()),
             ])
             ->recordActions([
@@ -145,7 +167,7 @@ final class ItemsRelationManager extends RelationManager
                         if (empty($data['input_rules']['propertyKeys'])) {
                             unset($data['input_rules']['propertyKeys']);
                         }
-                        $record->update($data);
+                        $record->update(self::normalizeItemRules($data));
                     }),
                 DeleteAction::make()->requiresConfirmation()->visible(fn (): bool => $this->editable()),
             ]);
@@ -159,9 +181,39 @@ final class ItemsRelationManager extends RelationManager
             'service' => CleaningService::query()->where('is_active', true)->pluck('name', 'id')->all(),
             'special_service' => CleaningSpecialService::query()->where('is_active', true)->pluck('name', 'id')->all(),
             'material' => CleaningMaterialType::query()->where('is_active', true)->pluck('name', 'id')->all(),
+            'equipment' => self::equipmentChoices(),
             'event_type' => CleaningEventType::query()->where('is_active', true)->pluck('name', 'id')->all(),
             default => [],
         };
+    }
+
+    private static function equipmentChoices(int $except = 0): array
+    {
+        return CleaningSpecialServiceEquipment::query()->where('is_active', true)
+            ->when($except > 0, fn ($query) => $query->whereKeyNot($except))
+            ->orderBy('name')->get()->mapWithKeys(static fn ($asset) => [
+                $asset->id => $asset->name.' ('.($asset->asset_code ?? $asset->id).')',
+            ])->all();
+    }
+
+    private static function normalizeItemRules(array $data): array
+    {
+        if (blank($data['input_rules']['splitUnitQuantity'] ?? null)
+            || ! in_array($data['measurement_mode'] ?? null, ['sqm', 'linear_meter', 'hour'], true)
+            || ($data['source_type'] ?? null) === 'equipment') {
+            unset($data['input_rules']['splitUnitQuantity']);
+        }
+        if (($data['source_type'] ?? null) === 'equipment') {
+            $data['measurement_mode'] = 'piece';
+            foreach (['scopeLabels', 'min', 'max', 'step', 'maxSelections'] as $key) {
+                unset($data['input_rules'][$key]);
+            }
+            $data['input_rules']['componentId'] = 'stepper';
+        } else {
+            unset($data['input_rules']['equipmentAssetIds'], $data['input_rules']['equipmentUnitPriceSyp']);
+        }
+
+        return $data;
     }
 
     private function editable(): bool

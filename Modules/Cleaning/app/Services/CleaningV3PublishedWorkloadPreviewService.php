@@ -34,10 +34,30 @@ final class CleaningV3PublishedWorkloadPreviewService
         int $maximumWorkers = 20,
         int $windowMinutes = 480,
     ): array {
+        $prepared = $this->prepare($catalog, $publishedDigest, $lines);
+
+        return $this->withCapacity($prepared, $maximumWorkers, $windowMinutes);
+    }
+
+    /** Build atomic tasks once from the full approved tariff tier, without requiring one visit to fit. */
+    private function prepare(CleaningV3CatalogVersion $catalog, string $publishedDigest, array $lines): array
+    {
         $priced = $this->tariffs->evaluate($catalog, $publishedDigest, $lines);
         $tasks = [];
+        $items = $catalog->items->keyBy('item_key');
         foreach ($priced['lines'] as $row) {
+            if (! app(CleaningV3TaskSplitPolicy::class)->valid($items->get($row['itemKey']))) {
+                throw new \DomainException('V3_TASK_SPLIT_POLICY_INVALID');
+            }
             $taskPrefix = $row['itemKey'].':'.$row['cleaningMode'].':'.$row['scopeKey'];
+            if (strlen($taskPrefix) > 80) {
+                $taskPrefix = 'task-'.hash('sha256', $taskPrefix);
+            }
+            $metadata = [
+                'itemKey' => $row['itemKey'],
+                'scopeKey' => $row['scopeKey'],
+                'measurementMode' => $row['measurementMode'],
+            ];
             if (in_array($row['measurementMode'], ['count', 'piece'], true)) {
                 $units = (int) $row['quantity'];
                 if ($units > 40) {
@@ -49,14 +69,30 @@ final class CleaningV3PublishedWorkloadPreviewService
                         'taskKey' => $taskPrefix.':'.$i,
                         'durationMinutes' => $unitMinutes,
                         'splittable' => false,
+                        ...$metadata,
+                        'quantity' => '1.00',
+                        'amountSyp' => $row['unitPriceSyp'],
                     ];
                 }
             } else {
-                $tasks[] = [
-                    'taskKey' => $taskPrefix.':line',
-                    'durationMinutes' => $this->roundMinutes($row['lineEffortMinutes']),
-                    'splittable' => false,
-                ];
+                $quantities = app(CleaningV3TaskSplitPolicy::class)->quantities($items->get($row['itemKey']), $row['quantity']);
+                $cumulativeQuantity = '0.00';
+                $cumulativeAmount = '0.00';
+                foreach ($quantities as $index => $quantity) {
+                    $cumulativeQuantity = bcadd($cumulativeQuantity, $quantity, 2);
+                    // Round cumulative money once at each boundary; the
+                    // difference telescopes to the original full-tier price.
+                    $nextAmount = bcdiv(bcadd(bcmul($row['unitPriceSyp'], $cumulativeQuantity, 4), '0.0050', 4), '1', 2);
+                    $tasks[] = [
+                        'taskKey' => $taskPrefix.':line'.($index + 1),
+                        'durationMinutes' => $this->roundMinutes(bcmul($row['unitEffortMinutes'], $quantity, 4)),
+                        'splittable' => false,
+                        ...$metadata,
+                        'quantity' => $quantity,
+                        'amountSyp' => bcsub($nextAmount, $cumulativeAmount, 2),
+                    ];
+                    $cumulativeAmount = $nextAmount;
+                }
             }
 
             if (count($tasks) > 40) {
@@ -64,25 +100,37 @@ final class CleaningV3PublishedWorkloadPreviewService
             }
         }
 
-        $result = $this->capacity->estimate(
-            $tasks,
-            $maximumWorkers,
-            $windowMinutes,
-        );
-
         return [
+            'tasks' => $tasks,
             'catalogVersionKey' => $priced['catalogVersionKey'],
             'catalogRevision' => $priced['catalogRevision'],
             'currency' => 'SYP',
             'estimatedBaseAmountSyp' => $priced['estimatedBaseAmountSyp'],
             'estimatedEffortMinutes' => $priced['estimatedEffortMinutes'],
-            'capacity' => $result,
+
             'requiresActualWorkerConflictCheck' => true,
             'requiresGeographicCheck' => true,
             'requiresApprovedCommercialPricing' => true,
             'canQuote' => false,
             'canBook' => false,
             'canSettle' => false,
+        ];
+    }
+
+    private function withCapacity(array $prepared, int $maximumWorkers, int $windowMinutes): array
+    {
+        $tasks = array_map(static fn (array $task): array => [
+            'taskKey' => $task['taskKey'], 'durationMinutes' => $task['durationMinutes'],
+            'splittable' => false,
+        ], $prepared['tasks']);
+        unset($prepared['tasks']);
+        if (array_key_exists('equipmentRequests', $prepared)) {
+            $prepared['equipmentPreview'] = app(CleaningV3EquipmentPreviewService::class)->unscheduled($prepared['equipmentRequests']);
+            unset($prepared['equipmentRequests']);
+        }
+        return [
+            ...$prepared,
+            'capacity' => $this->capacity->estimate($tasks, $maximumWorkers, $windowMinutes),
         ];
     }
 
@@ -101,6 +149,21 @@ final class CleaningV3PublishedWorkloadPreviewService
         int $maximumWorkers = 20,
         int $windowMinutes = 480,
     ): array {
+        return $this->withCapacity(
+            $this->prepareForm($catalog, $digest, $answers, $mode, $scopeSelections, $propertyKey),
+            $maximumWorkers, $windowMinutes,
+        );
+    }
+
+    /** Server-only task set, not an independently accepted price or assignment. */
+    public function prepareForm(
+        CleaningV3CatalogVersion $catalog,
+        string $digest,
+        array $answers,
+        mixed $mode,
+        mixed $scopeSelections = [],
+        mixed $propertyKey = null,
+    ): array {
         if (! in_array($mode, ['regular', 'deep'], true)) {
             throw new \DomainException('V3_CLEANING_MODE_REQUIRED');
         }
@@ -112,6 +175,7 @@ final class CleaningV3PublishedWorkloadPreviewService
         $fields = app(CleaningV3PropertyFormSelector::class)->select($fields, $propertyKey);
         $normalized = $this->forms->normalize($fields, $answers);
         $items = $catalog->items->keyBy('item_key');
+        $equipmentRequests = app(CleaningV3EquipmentPreviewService::class)->requests($items, $normalized);
         $lines = [];
         $resolvedScopes = [];
         foreach ($fields as $field) {
@@ -122,6 +186,9 @@ final class CleaningV3PublishedWorkloadPreviewService
             $item = $items->get($key);
             if ($item === null) {
                 throw new \DomainException('V3_PUBLISHED_TARIFF_ITEM_UNAVAILABLE');
+            }
+            if ($item->source_type === 'equipment') {
+                continue;
             }
             // Non-payable metadata is validated above, not included in costs.
             if ($item->tariffRules->where('is_enabled', true)->isEmpty()) {
@@ -169,10 +236,11 @@ final class CleaningV3PublishedWorkloadPreviewService
             throw new \DomainException('V3_FORM_HAS_NO_PRICED_ITEMS');
         }
 
-        $result = $this->preview($catalog, $digest, $lines, $maximumWorkers, $windowMinutes);
+        $result = $this->prepare($catalog, $digest, $lines);
 
         return [
             ...$result,
+            'equipmentRequests' => $equipmentRequests,
             'cleaningMode' => $mode,
             'propertyKey' => $propertyKey,
             'pricedItemKeys' => array_values(array_unique(array_column($lines, 'itemKey'))),
@@ -191,14 +259,14 @@ final class CleaningV3PublishedWorkloadPreviewService
     private function roundMinutes(string $decimal): int
     {
         if (! extension_loaded('bcmath')
-            || bccomp($decimal, '0', 2) <= 0
-            || bccomp($decimal, '480', 2) > 0) {
+            || bccomp($decimal, '0', 4) <= 0
+            || bccomp($decimal, '480', 4) > 0) {
             throw new CleaningV3CapacityException('CAPACITY_INFEASIBLE');
         }
 
         $rounded = bcadd($decimal, '0', 0);
 
-        return (int) (bccomp($decimal, $rounded, 2) > 0
+        return (int) (bccomp($decimal, $rounded, 4) > 0
             ? bcadd($rounded, '1', 0)
             : $rounded);
     }

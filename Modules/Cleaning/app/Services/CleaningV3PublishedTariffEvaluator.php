@@ -66,7 +66,7 @@ final class CleaningV3PublishedTariffEvaluator
             $seen[$identity] = true;
 
             $item = $items->get($line['itemKey']);
-            if ($item === null) {
+            if ($item === null || $item->source_type === 'equipment') {
                 throw new DomainException('V3_PUBLISHED_TARIFF_ITEM_UNAVAILABLE');
             }
             // A tariff tier can be wider than the form's approved quantity

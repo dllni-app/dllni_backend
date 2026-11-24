@@ -80,7 +80,7 @@ final class CleaningV3VisitPlanPreviewController
             $scopes = array_key_exists('scopeSelections', $payload) ? $payload['scopeSelections'] : [];
             $checkRequested = array_key_exists('cleaningMode', $payload) || array_key_exists('scopeSelections', $payload);
             unset($payload['cleaningMode'], $payload['scopeSelections']);
-            $plan = $planner->plan($payload);
+            $plan = $planner->plan($payload, allowMultipleLocalDates: $checkRequested);
             $capacityCheck = $checkRequested
                 ? app(CleaningV3ScheduledWorkloadPreviewService::class)->check(
                     $version, $digest, $rawAnswers, $mode, $scopes, $propertyKey, $plan['appointments'],
@@ -90,6 +90,9 @@ final class CleaningV3VisitPlanPreviewController
             return response()->json([
                 'success' => false,
                 'code' => $exception->reasonCode,
+                'message' => $exception->reasonCode === 'V3_EQUIPMENT_UNAVAILABLE'
+                    ? 'المعدات المطلوبة غير متوفرة لكل الزيارات المحددة. عدّل العدد أو المواعيد.'
+                    : 'تحقق من بيانات التنظيف والمواعيد المطلوبة.',
                 'errors' => [$exception->field => [$exception->reasonCode]],
             ], 422, $noStore);
         } catch (CleaningV3CapacityException $exception) {
@@ -108,7 +111,7 @@ final class CleaningV3VisitPlanPreviewController
         // Bind both validated customer answers and the normalized schedule.
         // The resulting digest is NOT a quote signature and cannot be submitted.
         $draftFingerprint = hash('sha256', $plan['draftFingerprint'].'|'.json_encode(
-            ['propertyKey' => $propertyKey, 'answers' => $answers, 'cleaningMode' => $mode, 'scopeSelections' => $scopes], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
+            ['propertyKey' => $propertyKey, 'answers' => $answers, 'cleaningMode' => $mode, 'scopeSelections' => $scopes, 'capacityCheck' => $capacityCheck], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
         ));
         unset($plan['draftFingerprint']);
 
