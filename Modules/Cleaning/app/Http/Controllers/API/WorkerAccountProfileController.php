@@ -65,7 +65,7 @@ final class WorkerAccountProfileController
             $worker->update($workerUpdates);
         }
 
-        return WorkerResource::make($worker->fresh()->load(['user', 'zones', 'availability', 'media']));
+        return WorkerResource::make($worker->fresh()->load(['user', 'zones', 'media']));
     }
 
     public function updatePassword(WorkerAccountPasswordUpdateRequest $request): JsonResponse

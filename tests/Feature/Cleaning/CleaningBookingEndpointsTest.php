@@ -580,13 +580,14 @@ it('returns worker profile when user has worker', function () {
     $response->assertOk();
     expect($response->json('data.id'))->toBe($worker->id);
     expect($response->json('data.firstName'))->toBe('Ahmed');
-    expect($response->json('data'))->not->toHaveKey('preferred_work_type')
-        ->not->toHaveKey('preferredWorkTypes');
+    expect($response->json('data'))->not->toHaveKey('preferred_work_type');
+    expect($response->json('data.preferredWorkTypes'))->toBe(['cleaning', 'events', 'hourly']);
+    expect($response->json('data.preferred_work_types'))->toBe(['cleaning', 'events', 'hourly']);
     expect($response->json('data.user.id'))->toBe($workerUser->id);
     expect($response->json('data.user.phone'))->toBe('+963991234567');
 });
 
-it('does not expose deleted worker work-type preferences for new records', function () {
+it('defaults newly registered workers to all three restored work types', function () {
     $workerUser = User::factory()->create(['email' => 'profile-worker-default-preference@example.com']);
     $worker = Worker::query()->create([
         'user_id' => $workerUser->id,
@@ -598,8 +599,9 @@ it('does not expose deleted worker work-type preferences for new records', funct
 
     $response->assertOk();
     expect($response->json('data.id'))->toBe($worker->id);
-    expect($response->json('data'))->not->toHaveKey('preferred_work_type')
-        ->not->toHaveKey('preferredWorkTypes');
+    expect($response->json('data'))->not->toHaveKey('preferred_work_type');
+    expect($response->json('data.preferredWorkTypes'))->toBe(['cleaning', 'events', 'hourly']);
+    expect($response->json('data.preferred_work_types'))->toBe(['cleaning', 'events', 'hourly']);
 });
 
 it('returns 403 for worker profile when user has no worker', function () {
@@ -679,7 +681,7 @@ it('ignores old single-value work preference updates without storing them', func
     expect($response->json('data'))->not->toHaveKey('preferred_work_type');
 });
 
-it('ignores old multi-value work preference updates without storing them', function () {
+it('persists restored multi-value worker work type preferences', function () {
     $workerUser = User::factory()->create(['email' => 'worker-profile-multi-preference@example.com']);
     $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
@@ -696,7 +698,9 @@ it('ignores old multi-value work preference updates without storing them', funct
 
     $response->assertOk();
     expect($response->json('data.id'))->toBe($worker->id);
-    expect($response->json('data'))->not->toHaveKey('preferredWorkTypes');
+    expect($response->json('data.preferredWorkTypes'))->toBe(['cleaning', 'hourly']);
+    expect($response->json('data.preferred_work_types'))->toBe(['cleaning', 'hourly']);
+    expect($worker->fresh()->preferredWorkTypes())->toBe(['cleaning', 'hourly']);
 });
 
 it('ignores obsolete work preference payloads even if they are invalid', function () {
@@ -774,9 +778,9 @@ it('finalizes provisional pricing when worker accepts booking', function () {
     expect($assignment?->status?->value)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value);
 });
 
-it('fails booking accept when worker home location is missing', function () {
+it('accepts a booking without the retired worker mission-start location', function () {
     $workerUser = User::factory()->create(['email' => 'worker-accept-missing-home@example.com']);
-    Worker::factory()->financiallyEligible()->create([
+    $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'home_address' => null,
         'home_latitude' => null,
@@ -788,6 +792,7 @@ it('fails booking accept when worker home location is missing', function () {
     $booking = CleaningBooking::factory()->create([
         'worker_id' => null,
         'status' => CleaningBookingStatus::Pending,
+        'gender_preference' => 'any',
         'address_latitude' => 33.5,
         'address_longitude' => 36.3,
         'is_pricing_final' => false,
@@ -795,7 +800,8 @@ it('fails booking accept when worker home location is missing', function () {
 
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/accept");
 
-    $response->assertUnprocessable()->assertJsonValidationErrors(['worker']);
+    $response->assertOk()->assertJsonPath('data.status', CleaningBookingStatus::WorkerAssigned->value);
+    expect($booking->fresh()->worker_id)->toBe($worker->id);
 });
 
 it('returns worker homepage stats for authenticated worker', function () {
