@@ -223,3 +223,41 @@ test('Filament readiness action reviews actual draft issues without publishing o
         ->and($version->fresh()->published_digest)->toBeNull()
         ->and($item->tariffRules()->firstOrFail()->unit_price)->toBe('150000.00');
 });
+
+test('draft tariff review catches unpriced lower and inclusive upper form boundaries', function (): void {
+    [$version, $item] = tariffDraftFixture();
+    $item->update(['input_rules' => ['componentId' => 'numeric', 'min' => 0, 'max' => 50]]);
+    tariffDraftRule($item, 'middle-only', '5', '50');
+
+    $problems = app(CleaningV3CatalogDraftValidator::class)->review($version);
+    expect($problems)->toContain(
+        'TARIFF_START_GAP:restaurant.kitchen',
+        'TARIFF_END_GAP:restaurant.kitchen',
+    );
+
+    tariffDraftRule($item, 'lower-bound', '0', '5');
+    tariffDraftRule($item, 'upper-bound', '50', '51');
+
+    $fixed = app(CleaningV3CatalogDraftValidator::class)->review($version);
+    expect($fixed)->not->toContain(
+        'TARIFF_START_GAP:restaurant.kitchen',
+        'TARIFF_END_GAP:restaurant.kitchen',
+        'TARIFF_GAP:restaurant.kitchen',
+        'OVERLAPPING_TARIFFS:restaurant.kitchen',
+    );
+
+    // Structural coverage does not imply financial authorization.
+    expect($fixed)->toContain('APPROVED_V3_PRICING_AND_FUNDING_PROOF_MISSING');
+    expect($version->fresh()->status)->toBe('draft');
+});
+
+test('draft tariff edge checks do not invent form bounds when none were configured', function (): void {
+    [$version, $item] = tariffDraftFixture();
+    tariffDraftRule($item, 'unbounded-preview', '5', '50');
+
+    $problems = app(CleaningV3CatalogDraftValidator::class)->review($version);
+    expect($problems)->not->toContain(
+        'TARIFF_START_GAP:restaurant.kitchen',
+        'TARIFF_END_GAP:restaurant.kitchen',
+    );
+});

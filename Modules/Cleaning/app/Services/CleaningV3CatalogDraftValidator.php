@@ -120,7 +120,22 @@ final class CleaningV3CatalogDraftValidator
                 static fn ($rule): string => $rule->cleaning_mode.'|'.$rule->scope_key
             ) as $group) {
                 $previousMax = null;
-                foreach ($group->sortBy('quantity_min', SORT_NUMERIC) as $rule) {
+                // Client constraints are inclusive, while tariff upper bounds
+                // are exclusive. Verify BOTH edges, not just gaps in between.
+                $sorted = $group->sortBy('quantity_min', SORT_NUMERIC)->values();
+                $minimum = $inputRules['min'] ?? null;
+                $maximum = $inputRules['max'] ?? null;
+                $hasMinimum = is_numeric($minimum) && is_finite((float) $minimum)
+                    && (float) $minimum >= 0;
+                $hasMaximum = is_numeric($maximum) && is_finite((float) $maximum)
+                    && (float) $maximum > 0;
+                if ($hasMinimum && (float) $sorted->first()->quantity_min > (float) $minimum) {
+                    $problems[] = 'TARIFF_START_GAP:'.$item->item_key;
+                }
+                if ($hasMaximum && (float) $sorted->max('quantity_max') <= (float) $maximum) {
+                    $problems[] = 'TARIFF_END_GAP:'.$item->item_key;
+                }
+                foreach ($sorted as $rule) {
                     $min = (float) $rule->quantity_min;
                     $max = (float) $rule->quantity_max;
                     $price = (float) $rule->unit_price;

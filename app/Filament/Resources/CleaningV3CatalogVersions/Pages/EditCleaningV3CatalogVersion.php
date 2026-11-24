@@ -139,6 +139,8 @@ final class EditCleaningV3CatalogVersion extends EditRecord
             'INVALID_TARIFF' => 'سعر أو جهد غير صالح',
             'OVERLAPPING_TARIFFS' => 'شرائح أسعار متداخلة',
             'TARIFF_GAP' => 'فجوة بين شرائح الأسعار',
+            'TARIFF_START_GAP' => 'شرائح الأسعار لا تغطي أقل كمية مسموحة',
+            'TARIFF_END_GAP' => 'شرائح الأسعار لا تغطي أعلى كمية مسموحة',
             'APPROVED_CATALOG_COVERAGE_MATRIX_MISSING' => 'مصفوفة تغطية الكتالوج غير معتمدة',
             'APPROVED_V3_PRICING_AND_FUNDING_PROOF_MISSING' => 'اعتماد التسعير والتمويل لم يكتمل',
             default => 'حالة تتطلب مراجعة فنية: '.$code,
