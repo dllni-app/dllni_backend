@@ -182,3 +182,64 @@ test('a quote replay after expiry refuses the old record and never refreshes it'
         ->value('expires_at'))->toBe($expiresBefore)
         ->and(DB::table('cleaning_booking_quotes')->count())->toBe(1);
 });
+
+test('booking admission verifies the exact stored signed quote inside a locked transaction', function (): void {
+    [$customer, $catalog, $signed, $now] = v3ArchiveFixture();
+    $key = (string) Str::uuid();
+    $hash = str_repeat('a', 64);
+    app(CleaningV3QuoteArchiveService::class)->archive($customer->id, $catalog->id, $key, $hash, $signed, $now);
+    $admission = app(Modules\Cleaning\Services\CleaningV3QuoteBookingAdmissionService::class);
+
+    // RefreshDatabase wraps tests in a transaction; a call outside an
+    // explicit nested transaction would still be inside that test transaction.
+    expect(DB::transactionLevel())->toBeGreaterThan(0);
+
+    $snapshot = DB::transaction(fn (): array => $admission->assertStoredQuote(
+        $customer->id, $signed['quoteId'], $key, $hash, $now,
+    ));
+    expect($snapshot)->toEqual($signed['snapshot'])
+        ->and(DB::table('cleaning_booking_quotes')->where('id', $signed['quoteId'])
+            ->value('cleaning_booking_id'))->toBeNull();
+
+    foreach ([
+        [$customer->id + 1, $key, $hash],
+        [$customer->id, (string) Str::uuid(), $hash],
+        [$customer->id, $key, str_repeat('e', 64)],
+    ] as [$id, $retryKey, $retryHash]) {
+        expect(fn () => DB::transaction(fn () => $admission->assertStoredQuote(
+            $id, $signed['quoteId'], $retryKey, $retryHash, $now,
+        )))->toThrow(DomainException::class, 'V3_BOOKING_QUOTE_NOT_FOUND');
+    }
+
+    $booking = Modules\Cleaning\Models\CleaningBooking::factory()->create(['customer_id' => $customer->id]);
+    DB::table('cleaning_booking_quotes')->where('id', $signed['quoteId'])
+        ->update(['cleaning_booking_id' => $booking->id]);
+
+    expect(fn () => DB::transaction(fn () => $admission->assertStoredQuote(
+        $customer->id, $signed['quoteId'], $key, $hash, $now,
+    )))->toThrow(DomainException::class, 'V3_BOOKING_QUOTE_ALREADY_CONSUMED');
+});
+
+test('booking admission rejects expiry, rolled back catalog and edited persisted signature', function (): void {
+    [$customer, $catalog, $signed, $now] = v3ArchiveFixture();
+    $key = (string) Str::uuid();
+    $hash = str_repeat('f', 64);
+    app(CleaningV3QuoteArchiveService::class)->archive($customer->id, $catalog->id, $key, $hash, $signed, $now);
+    $admission = app(Modules\Cleaning\Services\CleaningV3QuoteBookingAdmissionService::class);
+
+    expect(fn () => DB::transaction(fn () => $admission->assertStoredQuote(
+        $customer->id, $signed['quoteId'], $key, $hash, $now->addMinutes(16),
+    )))->toThrow(DomainException::class, 'V3_QUOTE_EXPIRED_OR_MISMATCHED');
+
+    config()->set('cleaning_v3_catalog.read_enabled', false);
+    expect(fn () => DB::transaction(fn () => $admission->assertStoredQuote(
+        $customer->id, $signed['quoteId'], $key, $hash, $now,
+    )))->toThrow(DomainException::class, 'V3_BOOKING_CATALOG_NOT_APPROVED');
+
+    config()->set('cleaning_v3_catalog.read_enabled', true);
+    DB::table('cleaning_booking_quotes')->where('id', $signed['quoteId'])
+        ->update(['signature' => str_repeat('0', 64)]);
+    expect(fn () => DB::transaction(fn () => $admission->assertStoredQuote(
+        $customer->id, $signed['quoteId'], $key, $hash, $now,
+    )))->toThrow(DomainException::class, 'V3_BOOKING_QUOTE_STORAGE_MISMATCH');
+});
