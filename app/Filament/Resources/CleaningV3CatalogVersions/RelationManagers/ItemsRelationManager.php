@@ -8,6 +8,7 @@ use App\Filament\Resources\CleaningV3CatalogVersions\CleaningV3CatalogVersionRes
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -23,6 +24,7 @@ use Modules\Cleaning\Models\CleaningMaterialType;
 use Modules\Cleaning\Models\CleaningRoomType;
 use Modules\Cleaning\Models\CleaningService;
 use Modules\Cleaning\Models\CleaningSpecialService;
+use Modules\Cleaning\Models\CleaningV3CatalogItem;
 use Modules\Cleaning\Models\CleaningV3CatalogVersion;
 
 final class ItemsRelationManager extends RelationManager
@@ -73,6 +75,12 @@ final class ItemsRelationManager extends RelationManager
                 ])
                 ->columns(3)
                 ->defaultItems(0),
+            KeyValue::make('input_rules.scopeLabels')
+                ->label('أسماء نطاقات التعزيل المخصصة')
+                ->keyLabel('رمز النطاق المطابق للتعرفة')
+                ->valueLabel('الاسم الظاهر للعميل')
+                ->helperText('النطاقات الشائعة لها أسماء عربية افتراضية. أضف اسماً لكل نطاق جديد غير معروف.')
+                ->columnSpanFull(),
             Repeater::make('tariffRules')
                 ->label('قواعد السعر والجهد (مسودة — غير قابلة للتحصيل)')
                 ->relationship('tariffRules')
@@ -116,7 +124,14 @@ final class ItemsRelationManager extends RelationManager
                 CreateAction::make()->label('إضافة عنصر')->visible(fn (): bool => $this->editable()),
             ])
             ->recordActions([
-                EditAction::make()->visible(fn (): bool => $this->editable()),
+                EditAction::make()->visible(fn (): bool => $this->editable())
+                    ->using(static function (CleaningV3CatalogItem $record, array $data): void {
+                        // Editing scope labels must preserve existing input constraints.
+                        if (array_key_exists('input_rules', $data)) {
+                            $data['input_rules'] = array_replace($record->input_rules ?? [], $data['input_rules'] ?? []);
+                        }
+                        $record->update($data);
+                    }),
                 DeleteAction::make()->requiresConfirmation()->visible(fn (): bool => $this->editable()),
             ]);
     }

@@ -53,7 +53,7 @@ final class CleaningV3CatalogDraftValidator
 
         foreach ($items as $item) {
             $inputRules = is_array($item->input_rules) ? $item->input_rules : [];
-            $allowedInputRules = ['componentId', 'descriptionAr', 'descriptionEn', 'min', 'max', 'step', 'maxSelections'];
+            $allowedInputRules = ['componentId', 'descriptionAr', 'descriptionEn', 'min', 'max', 'step', 'maxSelections', 'scopeLabels'];
             if (array_diff(array_keys($inputRules), $allowedInputRules) !== []) {
                 $problems[] = 'UNSUPPORTED_INPUT_RULES:'.$item->item_key;
             }
@@ -101,6 +101,14 @@ final class CleaningV3CatalogDraftValidator
             }
 
             $rules = $item->tariffRules->where('is_enabled', true);
+            $scopeCatalog = app(CleaningV3DeepScopeCatalog::class);
+            if (! $scopeCatalog->validLabels($inputRules['scopeLabels'] ?? [])) {
+                $problems[] = 'INVALID_SCOPE_LABELS:'.$item->item_key;
+            }
+            $visibleScopes = array_column($scopeCatalog->choices($item), 'key');
+            if ($rules->where('cleaning_mode', 'deep')->whereNotIn('scope_key', $visibleScopes)->isNotEmpty()) {
+                $problems[] = 'DEEP_SCOPE_LABEL_MISSING:'.$item->item_key;
+            }
             if ($rules->isEmpty()) {
                 $problems[] = 'TARIFF_MISSING:'.$item->item_key;
             }

@@ -170,3 +170,61 @@ test('form-based workload preview derives lines from required answers and the ch
     $this->postJson($url, [...$form, 'lines' => $payload['lines']])
         ->assertStatus(422)->assertJsonPath('code', 'INVALID_V3_PREVIEW_FIELDS');
 });
+
+
+test('custom deep scope pricing uses published components once and rejects invalid mixtures', function (): void {
+    $source = CleaningHomeType::query()->create([
+        'section' => CleaningHomeType::SECTION_PROPERTY,
+        'code' => 'qa_v3_deep_scope', 'booking_value' => 'qa_v3_deep_scope',
+        'title' => 'QA custom scope', 'is_active' => true,
+    ]);
+    $catalog = CleaningV3CatalogVersion::query()->create(['title' => 'QA custom deep scopes']);
+    $item = $catalog->items()->create([
+        'item_key' => 'room', 'source_type' => 'property', 'source_id' => $source->id,
+        'label_ar' => 'Room', 'measurement_mode' => 'count', 'required' => true,
+        'is_enabled' => true, 'input_rules' => ['scopeLabels' => ['fixtures' => 'التجهيزات']],
+    ]);
+    foreach ([
+        ['whole', '100000', '120'], ['floors', '30000', '30'],
+        ['walls', '40000', '50'], ['fixtures', '5000', '10'],
+    ] as [$scope, $price, $effort]) {
+        $item->tariffRules()->create([
+            'rule_key' => 'deep-'.$scope, 'cleaning_mode' => 'deep', 'scope_key' => $scope,
+            'quantity_min' => '0', 'quantity_max' => '10', 'unit_price' => $price,
+            'unit_effort_minutes' => $effort, 'is_enabled' => true,
+        ]);
+    }
+    DB::table('cleaning_v3_catalog_versions')->where('id', $catalog->id)->update([
+        'status' => 'published', 'published_at' => now(), 'published_digest' => str_repeat('a', 64),
+    ]);
+    config()->set('cleaning_v3_catalog.read_enabled', true);
+    config()->set('cleaning_v3_catalog.approved_publication_digest', str_repeat('a', 64));
+    Sanctum::actingAs(User::factory()->create(['is_active' => true]));
+    $this->getJson('/api/v1/cleaning/catalog/v3')->assertOk()
+        ->assertJsonPath('data.items.0.deepScopeChoices.0', ['key' => 'fixtures', 'label' => 'التجهيزات'])
+        ->assertJsonPath('data.items.0.deepScopeChoices.1.key', 'floors')
+        ->assertJsonPath('data.items.0.deepScopeChoices.3.key', 'whole')
+        ->assertDontSee('unit_price');
+    $url = '/api/v1/cleaning/v3/workload/preview';
+    $form = [
+        'catalogVersionKey' => $catalog->version_key, 'catalogRevision' => str_repeat('a', 64),
+        'cleaningMode' => 'deep', 'answers' => ['room' => 2],
+    ];
+    $whole = $this->postJson($url, [...$form, 'scopeSelections' => ['room' => ['whole']]])
+        ->assertOk()->assertJsonPath('data.estimatedBaseAmountSyp', '200000.00')
+        ->assertJsonPath('data.estimatedEffortMinutes', '240.00');
+    $custom = $this->postJson($url, [...$form, 'scopeSelections' => ['room' => ['walls', 'floors']]])
+        ->assertOk()->assertJsonPath('data.estimatedBaseAmountSyp', '140000.00')
+        ->assertJsonPath('data.estimatedEffortMinutes', '160.00')
+        ->assertJsonPath('data.pricedItemKeys', ['room'])
+        ->assertJsonPath('data.scopeSelections.room', ['floors', 'walls'])
+        ->assertJsonPath('data.canBook', false);
+    expect($custom->json('data.formFingerprint'))->not->toBe($whole->json('data.formFingerprint'));
+    $again = $this->postJson($url, [...$form, 'scopeSelections' => ['room' => ['floors', 'walls']]])->assertOk();
+    expect($again->json('data.formFingerprint'))->toBe($custom->json('data.formFingerprint'));
+    foreach ([[], ['whole', 'floors'], ['floors', 'floors'], ['unknown'], null] as $bad) {
+        $this->postJson($url, [...$form, 'scopeSelections' => ['room' => $bad]])->assertStatus(422);
+    }
+    $this->postJson($url, [...$form, 'scopeSelections' => ['extra' => ['whole']]])->assertStatus(422);
+    $this->postJson($url, [...$form, 'cleaningMode' => 'regular', 'scopeSelections' => ['room' => ['floors']]])->assertStatus(422);
+});

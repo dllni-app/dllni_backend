@@ -55,8 +55,10 @@ final class CleaningV3CatalogPublicSerializer
         $component = (string) ($rules['componentId'] ?? $defaultComponent);
         // Unknown/conditional rules must NOT silently disappear from a public
         // schema and turn a mandatory control into an unvalidated answer.
-        $knownRuleKeys = ['componentId', 'descriptionAr', 'descriptionEn', 'min', 'max', 'step', 'maxSelections'];
-        $unsupportedRules = array_diff(array_keys($rules), $knownRuleKeys) !== [];
+        $knownRuleKeys = ['componentId', 'descriptionAr', 'descriptionEn', 'min', 'max', 'step', 'maxSelections', 'scopeLabels'];
+        $scopeCatalog = app(CleaningV3DeepScopeCatalog::class);
+        $unsupportedRules = array_diff(array_keys($rules), $knownRuleKeys) !== []
+            || ! $scopeCatalog->validLabels($rules['scopeLabels'] ?? []);
         $label = $locale === 'en' && filled($item->label_en)
             ? (string) $item->label_en : (string) $item->label_ar;
         $description = $rules[$locale === 'en' ? 'descriptionEn' : 'descriptionAr']
@@ -98,6 +100,8 @@ final class CleaningV3CatalogPublicSerializer
                     ->pluck('cleaning_mode')->filter(fn ($mode) => in_array($mode, ['regular', 'deep'], true))
                     ->unique()->sort()->values()->all()
                 : [],
+            'deepScopeChoices' => ! $unsupportedRules && in_array($component, ['numeric', 'stepper'], true)
+                ? $scopeCatalog->choices($item) : [],
             'mediaUrl' => null,
             'supportedByServer' => in_array($component, self::SUPPORTED_COMPONENT_IDS, true) && ! $unsupportedRules,
             'unsupportedRules' => $unsupportedRules,

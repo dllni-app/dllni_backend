@@ -88,7 +88,7 @@ final class CleaningV3PublishedWorkloadPreviewService
 
     /**
      * Price the actual validated draft, not a client-selected subset of its
-     * payable fields. Only whole-scope numeric tariffs are supported here.
+     * payable fields. Numeric tariffs support whole and published deep scopes.
      * Unsupported advanced priced controls must not produce a partial total.
      */
     public function previewForm(
@@ -96,14 +96,20 @@ final class CleaningV3PublishedWorkloadPreviewService
         string $digest,
         array $answers,
         mixed $mode,
+        mixed $scopeSelections = [],
     ): array {
         if (! in_array($mode, ['regular', 'deep'], true)) {
             throw new \DomainException('V3_CLEANING_MODE_REQUIRED');
+        }
+        if (! is_array($scopeSelections) || ($scopeSelections !== [] && array_is_list($scopeSelections))
+            || count($scopeSelections) > 100 || ($mode !== 'deep' && $scopeSelections !== [])) {
+            throw new \DomainException('INVALID_V3_SCOPE_SELECTIONS');
         }
         $fields = $this->serializer->serialize($catalog, 'ar')['items'];
         $normalized = $this->forms->normalize($fields, $answers);
         $items = $catalog->items->keyBy('item_key');
         $lines = [];
+        $resolvedScopes = [];
         foreach ($fields as $field) {
             $key = $field['key'];
             if (! array_key_exists($key, $normalized)) {
@@ -120,14 +126,41 @@ final class CleaningV3PublishedWorkloadPreviewService
                 }
                 continue;
             }
-            if (! in_array($field['componentId'], ['numeric', 'stepper'], true)
-                || ! in_array($mode, $field['wholePreviewModes'], true)) {
+            if (! in_array($field['componentId'], ['numeric', 'stepper'], true)) {
+                throw new \DomainException('V3_FORM_PRICING_RULE_UNSUPPORTED');
+            }
+            $scopes = ['whole'];
+            if ($mode === 'deep') {
+                $allowed = array_column($field['deepScopeChoices'], 'key');
+                $scopes = array_key_exists($key, $scopeSelections) ? $scopeSelections[$key] : ['whole'];
+                if (! is_array($scopes) || ! array_is_list($scopes)
+                    || $scopes === [] || count($scopes) > 30) {
+                    throw new \DomainException('INVALID_V3_SCOPE_SELECTIONS');
+                }
+                foreach ($scopes as $scope) {
+                    if (! is_string($scope) || ! in_array($scope, $allowed, true)) {
+                        throw new \DomainException('V3_FORM_PRICING_RULE_UNSUPPORTED');
+                    }
+                }
+                if (count(array_unique($scopes)) !== count($scopes)
+                    || (in_array('whole', $scopes, true) && count($scopes) !== 1)) {
+                    throw new \DomainException('INVALID_V3_SCOPE_SELECTIONS');
+                }
+                sort($scopes, SORT_STRING);
+                $resolvedScopes[$key] = $scopes;
+            } elseif (! in_array($mode, $field['wholePreviewModes'], true)) {
                 throw new \DomainException('V3_FORM_PRICING_RULE_UNSUPPORTED');
             }
             $quantity = (string) $normalized[$key];
-            $lines[] = ['itemKey' => $key, 'cleaningMode' => $mode,
-                'scopeKey' => 'whole', 'quantity' => $quantity];
+            foreach ($scopes as $scope) {
+                $lines[] = ['itemKey' => $key, 'cleaningMode' => $mode,
+                    'scopeKey' => $scope, 'quantity' => $quantity];
+            }
         }
+        if (array_diff_key($scopeSelections, $resolvedScopes) !== []) {
+            throw new \DomainException('INVALID_V3_SCOPE_SELECTIONS');
+        }
+        ksort($resolvedScopes);
         if ($lines === []) {
             throw new \DomainException('V3_FORM_HAS_NO_PRICED_ITEMS');
         }
@@ -137,12 +170,14 @@ final class CleaningV3PublishedWorkloadPreviewService
         return [
             ...$result,
             'cleaningMode' => $mode,
-            'pricedItemKeys' => array_column($lines, 'itemKey'),
+            'pricedItemKeys' => array_values(array_unique(array_column($lines, 'itemKey'))),
+            'scopeSelections' => $resolvedScopes,
             'formFingerprint' => hash('sha256', json_encode([
                 'catalogVersionKey' => $catalog->version_key,
                 'catalogRevision' => $digest,
                 'cleaningMode' => $mode,
                 'answers' => $normalized,
+                'scopeSelections' => $resolvedScopes,
             ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)),
         ];
     }
