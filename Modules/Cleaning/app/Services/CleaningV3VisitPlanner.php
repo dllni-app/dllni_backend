@@ -51,6 +51,10 @@ final class CleaningV3VisitPlanner
             $this->invalid('pricing', 'CLIENT_FINANCIAL_INPUT_FORBIDDEN');
         }
 
+        if (array_diff(array_keys($input), ['contractVersion', 'catalogVersionKey', 'catalogRevision', 'answers', 'appointments']) !== []) {
+            $this->invalid('appointments', 'INVALID_V3_PLAN_FIELDS');
+        }
+
         $appointments = $input['appointments'] ?? null;
         if (! is_array($appointments) || ! array_is_list($appointments)
             || count($appointments) < 1 || count($appointments) > 30) {
@@ -69,6 +73,12 @@ final class CleaningV3VisitPlanner
         foreach ($appointments as $groupIndex => $group) {
             if (! is_array($group) || array_is_list($group)) {
                 $this->invalid("appointments.$groupIndex", 'INVALID_APPOINTMENT');
+            }
+            if ($this->containsFinancialFields($group)) {
+                $this->invalid("appointments.$groupIndex.pricing", 'CLIENT_FINANCIAL_INPUT_FORBIDDEN');
+            }
+            if (array_diff(array_keys($group), ['appointmentKey', 'visits']) !== []) {
+                $this->invalid("appointments.$groupIndex", 'INVALID_V3_PLAN_FIELDS');
             }
             $appointmentKey = $this->key($group['appointmentKey'] ?? null, "appointments.$groupIndex.appointmentKey");
             if (isset($seenAppointments[$appointmentKey])) {
@@ -90,6 +100,9 @@ final class CleaningV3VisitPlanner
                 }
                 if ($this->containsFinancialFields($visit)) {
                     $this->invalid("$path.pricing", 'CLIENT_FINANCIAL_INPUT_FORBIDDEN');
+                }
+                if (array_diff(array_keys($visit), ['occurrenceKey', 'scheduledDate', 'scheduledTime', 'durationMinutes', 'requiredWorkers']) !== []) {
+                    $this->invalid($path, 'INVALID_V3_PLAN_FIELDS');
                 }
                 $occurrenceKey = $this->key($visit['occurrenceKey'] ?? null, "$path.occurrenceKey");
                 if (isset($seenOccurrences[$occurrenceKey])) {
