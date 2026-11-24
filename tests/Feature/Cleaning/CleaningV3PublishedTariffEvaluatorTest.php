@@ -153,3 +153,29 @@ test('ambiguous approved published tariff rules fail rather than guessing a pric
         [['itemKey' => 'restaurant.kitchen', 'cleaningMode' => 'regular', 'scopeKey' => 'whole', 'quantity' => '5']],
     ))->toThrow(DomainException::class, 'V3_PUBLISHED_TARIFF_AMBIGUOUS');
 });
+
+test('published tariff refuses quantities outside approved form bounds even within a price tier', function (): void {
+    [$version, $digest] = v3PublishedTariffFixture();
+    $item = $version->items()->firstOrFail();
+    DB::table('cleaning_v3_catalog_items')->where('id', $item->id)
+        ->update(['input_rules' => json_encode(['min' => 2, 'max' => 8], JSON_THROW_ON_ERROR)]);
+    $evaluator = app(CleaningV3PublishedTariffEvaluator::class);
+    $line = [
+        'itemKey' => 'restaurant.kitchen',
+        'cleaningMode' => 'regular',
+        'scopeKey' => 'whole',
+        'quantity' => '3',
+    ];
+
+    foreach (['1.99', '8.01'] as $outside) {
+        expect(fn () => $evaluator->evaluate($version->fresh(), $digest, [
+            [...$line, 'quantity' => $outside],
+        ]))->toThrow(DomainException::class, 'V3_PUBLISHED_MEASUREMENT_INVALID');
+    }
+
+    $inside = $evaluator->evaluate($version->fresh(), $digest, [
+        [...$line, 'quantity' => '8'],
+    ]);
+    expect($inside['estimatedBaseAmountSyp'])->toBe('800.00')
+        ->and($inside['canQuote'])->toBeFalse();
+});

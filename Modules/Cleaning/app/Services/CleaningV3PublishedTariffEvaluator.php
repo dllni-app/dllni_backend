@@ -69,6 +69,27 @@ final class CleaningV3PublishedTariffEvaluator
             if ($item === null) {
                 throw new DomainException('V3_PUBLISHED_TARIFF_ITEM_UNAVAILABLE');
             }
+            // A tariff tier can be wider than the form's approved quantity
+            // bounds. Direct pricing callers may not bypass those bounds.
+            $inputRules = is_array($item->input_rules) ? $item->input_rules : [];
+            foreach (['min', 'max'] as $boundName) {
+                if (! array_key_exists($boundName, $inputRules)) {
+                    continue;
+                }
+                $bound = $inputRules[$boundName];
+                if (! is_string($bound) && ! is_int($bound) && ! is_float($bound)) {
+                    throw new DomainException('V3_PUBLISHED_MEASUREMENT_INVALID');
+                }
+                $decimalBound = (string) $bound;
+                if (preg_match('/^(?:0|[1-9][0-9]{0,9})(?:\.[0-9]{1,2})?$/D', $decimalBound) !== 1) {
+                    throw new DomainException('V3_PUBLISHED_MEASUREMENT_INVALID');
+                }
+                $comparison = bccomp($line['quantity'], $decimalBound, 2);
+                if (($boundName === 'min' && $comparison < 0)
+                    || ($boundName === 'max' && $comparison > 0)) {
+                    throw new DomainException('V3_PUBLISHED_MEASUREMENT_INVALID');
+                }
+            }
             // Count and piece are indivisible units. A fixed line is exactly
             // one unit. Do not let a decimal quantity create fractional tasks.
             if ((in_array($item->measurement_mode, ['count', 'piece'], true)
