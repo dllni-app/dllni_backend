@@ -103,6 +103,11 @@ final class CleaningBookingTeamService
                 ->firstOrFail();
 
             $this->ensureAcceptableBooking($booking, $worker);
+            if (! $worker->acceptsBookingType($booking)) {
+                throw ValidationException::withMessages([
+                    'worker' => ['نوع الطلب غير مفعّل ضمن تفضيلات العمل الخاصة بك.'],
+                ]);
+            }
             $this->solvencyService->assertWorkerCanAcceptBooking($worker, $booking);
 
             if (! $this->depositService->isWorkerEligibleForDispatch($worker)) {

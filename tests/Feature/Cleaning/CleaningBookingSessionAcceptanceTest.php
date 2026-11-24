@@ -343,3 +343,33 @@ function makeExecutionSession(
         'is_pricing_final' => false,
     ]);
 }
+
+
+it('enforces saved work type preferences for all and selected session acceptance', function (): void {
+    $worker = makeSessionWorker();
+    $worker->update(['preferred_work_types' => ['cleaning']]);
+    $booking = makeSessionBooking('event_assistance');
+    $session = makeExecutionSession($booking, 1, now()->addDay()->toDateString(), '10:00', 1.0);
+    $service = app(CleaningBookingSessionAcceptanceService::class);
+
+    expect($service->canAcceptSession($booking, $session, $worker))->toBeFalse()
+        ->and($service->canAcceptAllAvailableSessions($booking, $worker))->toBeFalse();
+
+    foreach ([
+        $service->acceptAllAvailableSessions($booking, $worker),
+        $service->acceptSelectedSessions($booking, $worker, [$session->id]),
+    ] as $result) {
+        expect($result['acceptedSessionIds'])->toBe([])
+            ->and(collect($result['rejected'])->pluck('reasonCode')->all())->toContain('work_type_not_selected');
+    }
+    expect($session->workerAssignments()->count())->toBe(0);
+
+    $worker->update(['preferred_work_types' => ['events']]);
+    $result = $service->acceptSelectedSessions($booking, $worker, [$session->id]);
+    expect($result['acceptedSessionIds'])->toBe([(int) $session->id]);
+
+    // Changing preferences must not erase or invalidate already accepted work.
+    $worker->update(['preferred_work_types' => ['cleaning']]);
+    expect($service->canAcceptSession($booking, $session, $worker))->toBeTrue()
+        ->and($session->workerAssignments()->count())->toBe(1);
+});

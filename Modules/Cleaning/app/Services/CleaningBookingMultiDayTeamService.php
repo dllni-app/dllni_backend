@@ -39,6 +39,12 @@ final class CleaningBookingMultiDayTeamService
                 ->firstOrFail();
             $worker = Worker::query()->whereKey($worker->id)->lockForUpdate()->firstOrFail();
 
+            if (! $worker->acceptsBookingType($booking)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'worker' => ['نوع الطلب غير مفعّل ضمن تفضيلات العمل الخاصة بك.'],
+                ]);
+            }
+
             if ($booking->remainingSessionsCount() <= 0) {
                 throw new InvalidArgumentException('Booking has no remaining event sessions.');
             }

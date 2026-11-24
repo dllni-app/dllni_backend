@@ -33,6 +33,13 @@ final class CleaningBookingSessionWorkerEligibilityService
             );
         }
 
+        if (! $worker->acceptsBookingType($booking)) {
+            return $this->blocked(
+                'work_type_not_selected',
+                'نوع الطلب غير مفعّل ضمن تفضيلات العمل الخاصة بك.',
+            );
+        }
+
         $worker->loadMissing(['user', 'deposit']);
 
         if (! (bool) $worker->is_active) {

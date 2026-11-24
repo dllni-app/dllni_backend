@@ -1363,3 +1363,32 @@ describe('cleaning booking work timer', function () {
         expect($response->json('data.workTimer.overdueWorkSeconds'))->toBe(0);
     });
 });
+
+
+it('rejects direct acceptance of a new order outside the worker saved preferences', function (): void {
+    $workerUser = User::factory()->create(['is_active' => true]);
+    $worker = Worker::factory()->financiallyEligible()->create([
+        'user_id' => $workerUser->id,
+        'preferred_work_types' => ['events'],
+    ]);
+    enableEligibleCleaningOfferWorker($worker);
+    Sanctum::actingAs($workerUser);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => null,
+        'status' => CleaningBookingStatus::Pending,
+        'property_type' => 'apartment',
+        'booking_kind' => 'standard',
+        'gender_preference' => 'any',
+        'scheduled_date' => now()->addDay()->toDateString(),
+        'scheduled_time' => '10:00',
+        'is_pricing_final' => false,
+    ]);
+
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/accept")
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['worker']);
+
+    expect($booking->fresh()->worker_id)->toBeNull()
+        ->and($booking->workerAssignments()->count())->toBe(0);
+});
