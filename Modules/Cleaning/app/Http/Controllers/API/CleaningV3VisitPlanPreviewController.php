@@ -94,6 +94,7 @@ final class CleaningV3VisitPlanPreviewController
                 ...$plan,
                 'draftFingerprint' => $draftFingerprint,
                 'validatedAnswerCount' => count($answers),
+                'additionalWorkerFeePreview' => app(\Modules\Cleaning\Services\CleaningV3AdditionalWorkerFeeCalculator::class)->previewPlan($plan['appointments']),
                 'quoteId' => null,
                 'quoteSignature' => null,
                 'currency' => 'SYP',

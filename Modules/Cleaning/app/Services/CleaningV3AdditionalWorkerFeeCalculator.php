@@ -87,6 +87,37 @@ final class CleaningV3AdditionalWorkerFeeCalculator
         ];
     }
 
+    /** Fee-only, non-binding estimate from a validated proposed visit plan. */
+    public function previewPlan(array $appointments): array
+    {
+        $visits = [];
+        foreach ($appointments as $appointment) {
+            foreach ($appointment['visits'] as $visit) {
+                $visits[] = [
+                    'visitKey' => $visit['occurrenceKey'],
+                    'pricedWorkers' => $visit['requiredWorkers'],
+                    // Zero is only a placeholder for fee calculation; no base
+                    // price or financial approval is inferred or returned.
+                    'netBeforeAdditionalWorkerFee' => '0.00',
+                ];
+            }
+        }
+        $calculated = $this->calculate($visits);
+
+        return [
+            'currency' => 'SYP',
+            'perAdditionalWorkerSyp' => $this->money(self::FEE_CENTS_PER_ADDITIONAL_WORKER),
+            'totalEstimatedFeeSyp' => $calculated['additionalWorkerFees'],
+            'visits' => array_map(static fn (array $row): array => [
+                'occurrenceKey' => $row['visitKey'],
+                'requestedWorkers' => $row['pricedWorkers'],
+                'estimatedFeeSyp' => $row['additionalWorkerFee'],
+            ], $calculated['visits']),
+            'previewOnly' => true,
+            'canCharge' => false,
+        ];
+    }
+
     private function parseAmount(mixed $amount): int
     {
         if (! is_string($amount)

@@ -97,6 +97,7 @@ final class CleaningV3EventSchedulePreviewService
                 'distinctCrewsRequired' => count($segments) > 1,
                 'minimumDistinctWorkers' => count($segments) * $input['requiredWorkers'],
             ],
+            'additionalWorkerFeePreview' => app(CleaningV3AdditionalWorkerFeeCalculator::class)->previewPlan($plan['appointments']),
             'quoteId' => null,
             'quoteSignature' => null,
         ];
