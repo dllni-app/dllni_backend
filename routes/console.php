@@ -33,6 +33,23 @@ Artisan::command('cleaning:notify-stale-compliance-workers', function (
 Schedule::command('cleaning:notify-stale-compliance-workers')
     ->everyThirtyMinutes()->withoutOverlapping();
 
+// Read-only V3 launch readiness: never changes configuration or lifts financial guards.
+Artisan::command('cleaning:v3-readiness {--json : Output machine-readable preflight}', function (
+    Modules\Cleaning\Services\CleaningV3ReleaseReadinessAuditService $audit
+): int {
+    $result = $audit->audit();
+    if ($this->option('json')) {
+        $this->line(json_encode($result, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
+    } else {
+        foreach ($result['checks'] as $check) {
+            $this->line(($check['pass'] ? 'PASS' : 'BLOCKED').' '.$check['code'].': '.$check['explanation']);
+        }
+        $this->info('Checked: '.$result['counts']['total'].'; blocked: '.$result['counts']['blocked']);
+    }
+
+    return $result['readyForCommercialLaunch'] ? 0 : 2;
+})->purpose('Read-only structural and financial readiness audit for Cleaning V3');
+
 // V3 dispatch escalation writes only durable notice intentions. Delivery
 // must be retried through an audited outbox adapter; no cancellation occurs.
 Artisan::command('cleaning:v3-escalate-incomplete-visits', function (
