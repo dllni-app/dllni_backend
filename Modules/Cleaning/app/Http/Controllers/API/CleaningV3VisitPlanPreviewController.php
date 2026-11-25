@@ -89,10 +89,34 @@ final class CleaningV3VisitPlanPreviewController
                 }
                 $recurrence = app(\Modules\Cleaning\Services\CleaningV3WeeklyRecurrencePreviewService::class)->preview($rule);
             }
-            unset($payload['cleaningMode'], $payload['scopeSelections'], $payload['preferences'], $payload['recurrenceRule']);
+            $event = null;
+            if (array_key_exists('eventRule', $payload)) {
+                $rule = $payload['eventRule'];
+                if (! is_array($rule) || $recurrence !== null || $checkRequested
+                    || ($rule['catalogVersionKey'] ?? null) !== $versionKey
+                    || ($rule['catalogRevision'] ?? null) !== $digest
+                    || ($rule['propertyKey'] ?? null) !== $propertyKey) {
+                    throw new DomainException('INVALID_V3_EVENT_SCHEDULE');
+                }
+                $event = app(\Modules\Cleaning\Services\CleaningV3EventSchedulePreviewService::class)->preview($version, $rule);
+            }
+            $pricingRequested = array_key_exists('pricingPreviewRequested', $payload);
+            $couponCode = $payload['couponCode'] ?? null;
+            $expectedPricing = $payload['expectedPricingFingerprint'] ?? null;
+            if (($pricingRequested && $payload['pricingPreviewRequested'] !== true)
+                || (! $pricingRequested && (array_key_exists('couponCode', $payload) || array_key_exists('expectedPricingFingerprint', $payload)))
+                || ($expectedPricing !== null && (! is_string($expectedPricing) || preg_match('/^[a-f0-9]{64}$/D', $expectedPricing) !== 1))
+                || ($pricingRequested && ($preferences === null || (! $checkRequested && $event === null)))) {
+                throw new DomainException('INVALID_V3_PRICING_REVIEW_REQUEST');
+            }
+            unset($payload['cleaningMode'], $payload['scopeSelections'], $payload['preferences'], $payload['recurrenceRule'],
+                $payload['pricingPreviewRequested'], $payload['couponCode'], $payload['expectedPricingFingerprint'], $payload['eventRule']);
             $plan = $planner->plan($payload, allowMultipleLocalDates: $checkRequested);
             if ($recurrence !== null && $recurrence['appointments'] !== $plan['appointments']) {
                 throw new DomainException('V3_RECURRENCE_PLAN_MISMATCH');
+            }
+            if ($event !== null && $event['appointments'] !== $plan['appointments']) {
+                throw new DomainException('V3_EVENT_PLAN_MISMATCH');
             }
             $capacityCheck = $checkRequested
                 ? app(CleaningV3ScheduledWorkloadPreviewService::class)->check(
@@ -124,8 +148,27 @@ final class CleaningV3VisitPlanPreviewController
         // Bind both validated customer answers and the normalized schedule.
         // The resulting digest is NOT a quote signature and cannot be submitted.
         $draftFingerprint = hash('sha256', $plan['draftFingerprint'].'|'.json_encode(
-            ['propertyKey' => $propertyKey, 'answers' => $answers, 'cleaningMode' => $mode, 'scopeSelections' => $scopes, 'capacityCheck' => $capacityCheck, 'preferences' => $preferences, 'recurrenceRule' => $recurrence['recurrenceRule'] ?? null], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
+            ['propertyKey' => $propertyKey, 'answers' => $answers, 'cleaningMode' => $mode, 'scopeSelections' => $scopes, 'capacityCheck' => $capacityCheck, 'preferences' => $preferences, 'recurrenceRule' => $recurrence['recurrenceRule'] ?? null, 'event' => $event['event'] ?? null], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
         ));
+        $commercialPrice = null;
+        if ($pricingRequested) {
+            try {
+                $commercialPrice = app(\Modules\Cleaning\Services\CleaningV3CommercialPricePreviewService::class)->preview(
+                    $version, $plan, $capacityCheck, (int) $request->user()->id, $propertyKey, $mode, $couponCode, $draftFingerprint, $event['event'] ?? null, $answers, $fields,
+                );
+            } catch (DomainException $exception) {
+                return response()->json([
+                    'success' => false, 'code' => $exception->getMessage(),
+                    'message' => 'تعذر حساب التقدير المالي. تحقق من إعدادات السعر أو رمز الخصم.',
+                ], $exception->getMessage() === 'V3_FINANCIAL_SETTINGS_UNAVAILABLE' ? 503 : 422, $noStore);
+            }
+            if ($expectedPricing !== null && ! hash_equals($expectedPricing, $commercialPrice['pricingFingerprint'])) {
+                return response()->json([
+                    'success' => false, 'code' => 'REQUOTE_REQUIRED',
+                    'message' => 'تغير التقدير المالي. راجع الإجمالي الجديد قبل المتابعة.',
+                ], 409, $noStore);
+            }
+        }
         unset($plan['draftFingerprint']);
 
         return response()->json([
@@ -136,6 +179,8 @@ final class CleaningV3VisitPlanPreviewController
                 'validatedAnswerCount' => count($answers),
                 'capacityCheck' => $capacityCheck,
                 'preferencesCheck' => $preferences,
+                'commercialPricePreview' => $commercialPrice,
+                'event' => $event['event'] ?? null,
                 'recurrenceRule' => $recurrence['recurrenceRule'] ?? null,
                 'skippedOccurrences' => $recurrence['skippedOccurrences'] ?? [],
                 'additionalWorkerFeePreview' => app(\Modules\Cleaning\Services\CleaningV3AdditionalWorkerFeeCalculator::class)->previewPlan($plan['appointments']),

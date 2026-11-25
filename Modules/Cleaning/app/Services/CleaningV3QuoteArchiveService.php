@@ -28,6 +28,59 @@ final class CleaningV3QuoteArchiveService
      * @param  array<string,mixed>  $signedEnvelope
      * @return array{quoteId:string,replayed:bool,expiresAt:string}
      */
+    /**
+     * Recover the original signed envelope before generating any replacement
+     * quote after a lost response. Lock the same customer row as archive().
+     * The request hash must be server-derived, not arbitrary client data.
+     */
+    public function findReplay(int $customerId, int $catalogVersionId, string $idempotencyKey,
+        string $requestHash, ?CarbonImmutable $now = null): ?array
+    {
+        if ($customerId < 1 || $catalogVersionId < 1 || ! Str::isUuid($idempotencyKey)
+            || preg_match('/^[a-f0-9]{64}$/D', $requestHash) !== 1) {
+            throw new DomainException('INVALID_V3_QUOTE_ARCHIVE_INPUT');
+        }
+        $at = ($now ?? CarbonImmutable::now('UTC'))->utc();
+        return DB::transaction(function () use ($customerId, $catalogVersionId, $idempotencyKey, $requestHash, $at): ?array {
+            $customer = DB::table('users')->where('id', $customerId)->lockForUpdate()->first();
+            if ($customer === null) {
+                throw new DomainException('V3_QUOTE_CUSTOMER_NOT_FOUND');
+            }
+            $row = DB::table('cleaning_booking_quotes')->where('customer_id', $customerId)
+                ->where('idempotency_key', $idempotencyKey)->lockForUpdate()->first();
+            if ($row === null) {
+                return null;
+            }
+            if ($row->contract_version !== 'v3' || (int) $row->catalog_version_id !== $catalogVersionId
+                || ! hash_equals((string) $row->request_hash, $requestHash)) {
+                throw new DomainException('V3_QUOTE_IDEMPOTENCY_CONFLICT');
+            }
+            if (CarbonImmutable::parse((string) $row->expires_at, 'UTC') <= $at) {
+                throw new DomainException('V3_QUOTE_EXPIRED');
+            }
+            $digest = config('cleaning_v3_catalog.approved_publication_digest');
+            $catalog = CleaningV3CatalogVersion::query()->whereKey($catalogVersionId)
+                ->where('status', CleaningV3CatalogVersion::PUBLISHED)->whereNotNull('published_at')->first();
+            if (! config('cleaning_v3_catalog.read_enabled', false) || ! is_string($digest)
+                || $catalog === null || ! is_string($catalog->published_digest)
+                || ! hash_equals($digest, $catalog->published_digest)) {
+                throw new DomainException('V3_QUOTE_CATALOG_NOT_APPROVED');
+            }
+            $envelope = json_decode((string) $row->snapshot, true);
+            if (! is_array($envelope) || ($envelope['quoteId'] ?? null) !== (string) $row->id
+                || ! is_string($envelope['signature'] ?? null) || ! hash_equals((string) $row->signature, $envelope['signature'])) {
+                throw new DomainException('V3_BOOKING_QUOTE_STORAGE_MISMATCH');
+            }
+            $this->signer->verify($envelope, $customerId, (string) $catalog->version_key, $digest, $at);
+            if (! hash_equals(CarbonImmutable::parse((string) $row->expires_at, 'UTC')->toIso8601String(),
+                CarbonImmutable::parse($envelope['expiresAt'], 'UTC')->toIso8601String())) {
+                throw new DomainException('V3_QUOTE_EXPIRED_OR_MISMATCHED');
+            }
+            return $envelope;
+        }, 3);
+    }
+
+
     public function archive(
         int $customerId,
         int $catalogVersionId,

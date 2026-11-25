@@ -88,3 +88,46 @@ test('V3 event preview rejects past time, invalid step, unknown event, stale rev
     config()->set('cleaning_v3_catalog.read_enabled', false);
     $this->postJson($url, $input)->assertStatus(503);
 });
+
+test('commercial event review preserves server segments and separate crew fees', function (): void {
+    $input = v3EventScheduleFixture();
+    $customer = User::factory()->create(['is_active' => true]);
+    Sanctum::actingAs($customer);
+    $address = \Modules\User\Models\UserAddress::factory()->create([
+        'user_id' => $customer->id, 'street' => 'QA street', 'latitude' => '36.20', 'longitude' => '37.15',
+    ]);
+    $revision = $this->getJson('/api/v1/cleaning/v3/customer-preferences')->assertOk()->json('data.addresses.0.revision');
+    DB::table('cleaning_financial_settings')->delete();
+    \App\Models\CleaningFinancialSetting::query()->create([
+        ...\Modules\Cleaning\Support\CleaningRuntimeSettings::financialDefaults(),
+        'travel_markup_value' => 1000, 'cleaning_minimum_order_price' => 999999,
+        'supervisor_hourly_rate' => 5000, 'extension_rate_per_30_minutes' => 10000,
+    ]);
+    $schedule = $this->postJson('/api/v1/cleaning/v3/event-schedule/preview', $input)->assertOk();
+    $form = [
+        'contractVersion' => 3, 'catalogVersionKey' => $input['catalogVersionKey'],
+        'catalogRevision' => $input['catalogRevision'], 'answers' => [], 'eventRule' => $input,
+        'pricingPreviewRequested' => true,
+        'preferences' => ['addressId' => $address->id, 'addressRevision' => $revision,
+            'genderPreference' => 'any', 'excludedWorkerIds' => []],
+        'appointments' => array_map(fn ($a) => ['appointmentKey' => $a['appointmentKey'],
+            'visits' => array_map(fn ($v) => array_intersect_key($v, array_flip([
+                'occurrenceKey', 'scheduledDate', 'scheduledTime', 'durationMinutes', 'requiredWorkers',
+            ])), $a['visits'])], $schedule->json('data.appointments')),
+    ];
+    $url = '/api/v1/cleaning/v3/visit-plan/preview';
+    $this->postJson($url, $form)->assertOk()
+        ->assertJsonPath('data.event.minimumDistinctWorkers', 4)
+        ->assertJsonPath('data.commercialPricePreview.visits.0.baseAmountSyp', '320000.00')
+        ->assertJsonPath('data.commercialPricePreview.visits.1.baseAmountSyp', '160000.00')
+        ->assertJsonPath('data.commercialPricePreview.totals.travelAmountSyp', '4000.00')
+        ->assertJsonPath('data.commercialPricePreview.totals.additionalWorkerFeeSyp', '300000.00')
+        ->assertJsonPath('data.commercialPricePreview.totals.minimumTopUpSyp', '0.00')
+        ->assertJsonPath('data.commercialPricePreview.totals.supervisorAmountSyp', '0.00')
+        ->assertJsonPath('data.commercialPricePreview.totals.totalAmountSyp', '784000.00')
+        ->assertJsonPath('data.quoteId', null);
+    $tampered = $form;
+    $tampered['appointments'][0]['visits'][1]['scheduledTime'] = '16:30';
+    $this->postJson($url, $tampered)->assertStatus(422)->assertJsonPath('code', 'V3_EVENT_PLAN_MISMATCH');
+    $this->postJson($url, [...$form, 'answers' => ['event.qa' => 12]])->assertStatus(422);
+});

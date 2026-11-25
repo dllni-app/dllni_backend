@@ -115,7 +115,7 @@ final class CleaningV3SignedQuoteEnvelope
             'draftFingerprint', 'pricingRevision', 'currency',
             'visits', 'eligibleBaseTotal', 'discountTotal',
             'netBeforeAdditionalWorkerFees', 'additionalWorkerFees',
-            'totalWithAdditionalWorkerFees',
+            'totalWithAdditionalWorkerFees', 'commercialReview',
         ]) !== [] || ($snapshot['contractVersion'] ?? null) !== 3) {
             throw new DomainException('INVALID_V3_QUOTE_SNAPSHOT');
         }
@@ -132,6 +132,7 @@ final class CleaningV3SignedQuoteEnvelope
             throw new DomainException('INVALID_V3_QUOTE_SNAPSHOT');
         }
 
+        $commercial = array_key_exists('commercialReview', $snapshot);
         $totals = [
             'base' => 0,
             'discount' => 0,
@@ -158,7 +159,7 @@ final class CleaningV3SignedQuoteEnvelope
                 || ! $this->key($visit['appointmentKey'] ?? null)
                 || isset($keys[$key]) || isset($occurrences[$occurrence])
                 || ! is_int($visit['priceRevision'] ?? null)
-                || $visit['priceRevision'] < 1
+                || $visit['priceRevision'] !== $snapshot['pricingRevision']
                 || ! is_int($visit['pricedWorkers'] ?? null)
                 || $visit['pricedWorkers'] < 1 || $visit['pricedWorkers'] > 20) {
                 throw new DomainException('INVALID_V3_QUOTE_VISIT');
@@ -171,7 +172,7 @@ final class CleaningV3SignedQuoteEnvelope
             $net = $this->cents($visit['netBeforeAdditionalWorkerFee'] ?? null);
             $fee = $this->cents($visit['additionalWorkerFee'] ?? null);
             $total = $this->cents($visit['totalWithAdditionalWorkerFee'] ?? null);
-            if ($discount > $base || $net !== $base - $discount
+            if ($discount > $base || (! $commercial && $net !== $base - $discount)
                 || $fee !== ($visit['pricedWorkers'] - 1) * 15000000
                 || $total !== $net + $fee) {
                 throw new DomainException('INVALID_V3_QUOTE_VISIT_TOTALS');
@@ -194,6 +195,9 @@ final class CleaningV3SignedQuoteEnvelope
             if ($this->cents($snapshot[$field] ?? null) !== $totals[$name]) {
                 throw new DomainException('INVALID_V3_QUOTE_TOTALS');
             }
+        }
+        if ($commercial) {
+            app(CleaningV3CommercialQuoteSnapshot::class)->assertMatches($snapshot);
         }
         if ($totals['total'] > 99999999999999) {
             throw new DomainException('INVALID_V3_QUOTE_TOTALS');

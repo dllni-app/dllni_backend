@@ -276,3 +276,77 @@ test('independent V3 rollback flags prevent new commercial work without deleting
     expect(DB::table('cleaning_booking_quotes')->where('id', $signed['quoteId'])
         ->value('cleaning_booking_id'))->toBeNull();
 });
+
+test('commercial review is signed with transport and full breakdown, and explicit confirmation requires the current exact price', function (): void {
+    [$customer, $catalog, $legacy, $now] = v3ArchiveFixture();
+    $plan = app(\Modules\Cleaning\Services\CleaningV3VisitPlanner::class)->plan([
+        'contractVersion' => 3, 'catalogVersionKey' => $catalog->version_key,
+        'catalogRevision' => str_repeat('a', 64),
+        'appointments' => [[
+            'appointmentKey' => 'appointment-01',
+            'visits' => [['occurrenceKey' => 'visit-01', 'scheduledDate' => '2026-12-15',
+                'scheduledTime' => '09:00', 'durationMinutes' => 120, 'requiredWorkers' => 2]],
+        ]],
+    ], new DateTimeImmutable('2026-11-24 12:05:00', new DateTimeZone('Asia/Damascus')));
+    $parts = [
+        'baseAmountSyp' => '650000.00', 'addonsAmountSyp' => '20000.00', 'equipmentAmountSyp' => '10000.00',
+        'supervisorAmountSyp' => '30000.00', 'minimumTopUpSyp' => '0.00', 'travelAmountSyp' => '4000.00',
+        'discountAmountSyp' => '50000.00', 'additionalWorkerFeeSyp' => '150000.00', 'totalAmountSyp' => '814000.00',
+    ];
+    $review = ['pricingFingerprint' => str_repeat('c', 64), 'couponCode' => 'QA',
+        'totals' => $parts, 'visits' => [[
+            'appointmentKey' => 'appointment-01', 'occurrenceKey' => 'visit-01', 'pricedWorkers' => 2,
+            'eligibleBeforeDiscountSyp' => '710000.00', ...$parts,
+        ]]];
+    $draft = str_repeat('d', 64);
+    $assembler = app(\Modules\Cleaning\Services\CleaningV3CommercialQuoteSnapshot::class);
+    $snapshot = $assembler->assemble($plan, $review, $draft, 1);
+    expect($snapshot['netBeforeAdditionalWorkerFees'])->toBe('664000.00')
+        ->and($snapshot['totalWithAdditionalWorkerFees'])->toBe('814000.00')
+        ->and($snapshot['commercialReview']['totals']['travelAmountSyp'])->toBe('4000.00');
+    $signer = app(CleaningV3SignedQuoteEnvelope::class);
+    $signed = $signer->seal($customer->id, $snapshot, 15, $now);
+    expect($signer->verify($signed, $customer->id, $catalog->version_key, str_repeat('a', 64), $now))->toEqual($snapshot);
+    $tampered = $snapshot;
+    $tampered['commercialReview']['visits'][0]['travelAmountSyp'] = '3000.00';
+    expect(fn () => $signer->seal($customer->id, $tampered, 15, $now))->toThrow(DomainException::class);
+    $tampered = $snapshot;
+    $tampered['commercialReview']['visits'][0]['baseAmountSyp'] = '600000.00';
+    expect(fn () => $signer->seal($customer->id, $tampered, 15, $now))->toThrow(DomainException::class);
+
+    $key = (string) Str::uuid();
+    $hash = str_repeat('f', 64);
+    $archive = app(CleaningV3QuoteArchiveService::class);
+    expect($archive->findReplay($customer->id, $catalog->id, $key, $hash, $now))->toBeNull();
+    $archive->archive($customer->id, $catalog->id, $key, $hash, $signed, $now);
+    expect($archive->findReplay($customer->id, $catalog->id, $key, $hash, $now->addMinute()))->toEqual($signed)
+        ->and($archive->findReplay(User::factory()->create()->id, $catalog->id, $key, $hash, $now))->toBeNull();
+    expect(fn () => $archive->findReplay($customer->id, $catalog->id, $key, str_repeat('e', 64), $now))
+        ->toThrow(DomainException::class, 'V3_QUOTE_IDEMPOTENCY_CONFLICT');
+    expect(fn () => $archive->findReplay($customer->id, $catalog->id, $key, $hash, $now->addMinutes(15)))
+        ->toThrow(DomainException::class, 'V3_QUOTE_EXPIRED');
+
+    $confirmation = [
+        'quoteId' => $signed['quoteId'], 'idempotencyKey' => $key, 'requestHash' => $hash,
+        'quoteSignature' => $signed['signature'], 'acceptedTotalSyp' => '814000.00',
+        'pricingRevision' => 1, 'pricingFingerprint' => $review['pricingFingerprint'], 'draftFingerprint' => $draft,
+    ];
+    $admission = app(\Modules\Cleaning\Services\CleaningV3QuoteBookingAdmissionService::class);
+    $confirm = fn ($input, $price = null, $draftHash = null, $at = null) => DB::transaction(fn () => $admission->assertCustomerConfirmation(
+        $customer->id, $input, $price ?? $review['pricingFingerprint'], $draftHash ?? $draft, $at ?? $now,
+    ));
+    expect($confirm($confirmation))->toEqual($snapshot);
+    foreach ([
+        ['acceptedTotalSyp' => '813999.99'], ['pricingRevision' => 2],
+        ['pricingFingerprint' => str_repeat('e', 64)], ['draftFingerprint' => str_repeat('e', 64)],
+    ] as $change) {
+        expect(fn () => $confirm([...$confirmation, ...$change]))->toThrow(DomainException::class, 'REQUOTE_REQUIRED');
+    }
+    expect(fn () => $confirm($confirmation, str_repeat('e', 64)))->toThrow(DomainException::class, 'REQUOTE_REQUIRED');
+    expect(fn () => $confirm($confirmation, null, str_repeat('e', 64)))->toThrow(DomainException::class, 'REQUOTE_REQUIRED');
+    expect(fn () => $confirm([...$confirmation, 'quoteSignature' => str_repeat('0', 64)]))->toThrow(DomainException::class, 'V3_QUOTE_SIGNATURE_MISMATCH');
+    expect(fn () => $confirm($confirmation, null, null, $now->addMinutes(15)))->toThrow(DomainException::class, 'V3_QUOTE_EXPIRED_OR_MISMATCHED');
+    expect(DB::table('cleaning_booking_quotes')->count())->toBe(1)
+        ->and(DB::table('cleaning_booking_quotes')->first()->cleaning_booking_id)->toBeNull()
+        ->and(DB::table('cleaning_visit_funding_reservations')->count())->toBe(0);
+});

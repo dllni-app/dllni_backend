@@ -27,6 +27,41 @@ final class CleaningV3QuoteBookingAdmissionService
     /**
      * @return array<string,mixed> Verified immutable quote snapshot.
      */
+    /**
+     * Explicit customer confirmation of a previously issued commercial quote.
+     * Caller must recompute the current price/draft fingerprint under the same
+     * booking transaction; this method never reserves funds or creates orders.
+     */
+    public function assertCustomerConfirmation(int $customerId, array $confirmation, string $currentPricingFingerprint,
+        string $currentDraftFingerprint, ?CarbonImmutable $now = null): array
+    {
+        $fields = ['quoteId', 'idempotencyKey', 'requestHash', 'quoteSignature', 'acceptedTotalSyp', 'pricingRevision', 'pricingFingerprint', 'draftFingerprint'];
+        if (array_diff(array_keys($confirmation), $fields) !== [] || count($confirmation) !== count($fields)
+            || ! is_int($confirmation['pricingRevision'] ?? null)) {
+            throw new DomainException('INVALID_V3_CUSTOMER_QUOTE_CONFIRMATION');
+        }
+        foreach (array_diff($fields, ['pricingRevision']) as $field) {
+            if (! is_string($confirmation[$field] ?? null)) {
+                throw new DomainException('INVALID_V3_CUSTOMER_QUOTE_CONFIRMATION');
+            }
+        }
+        $snapshot = $this->assertStoredQuote($customerId, $confirmation['quoteId'], $confirmation['idempotencyKey'], $confirmation['requestHash'], $now);
+        $signature = DB::table('cleaning_booking_quotes')->where('id', $confirmation['quoteId'])->value('signature');
+        if (! is_string($signature) || ! hash_equals($signature, $confirmation['quoteSignature'])) {
+            throw new DomainException('V3_QUOTE_SIGNATURE_MISMATCH');
+        }
+        $review = $snapshot['commercialReview'] ?? null;
+        if (! is_array($review) || ! hash_equals($review['pricingFingerprint'], $confirmation['pricingFingerprint'])
+            || ! hash_equals($review['draftFingerprint'], $confirmation['draftFingerprint'])
+            || ! hash_equals($review['pricingFingerprint'], $currentPricingFingerprint)
+            || ! hash_equals($review['draftFingerprint'], $currentDraftFingerprint)
+            || $snapshot['pricingRevision'] !== $confirmation['pricingRevision']
+            || ! hash_equals($snapshot['totalWithAdditionalWorkerFees'], $confirmation['acceptedTotalSyp'])) {
+            throw new DomainException('REQUOTE_REQUIRED');
+        }
+        return $snapshot;
+    }
+
     public function assertStoredQuote(
         int $customerId,
         string $quoteId,

@@ -358,3 +358,77 @@ test('approved continuous split conserves full-tier quantity and rounded money a
     }
     expect($quantity)->toBe('2.35')->and($amount)->toBe('23.52')->and($effort)->toBe(705);
 });
+
+test('commercial price preview uses persisted transport and minimum once per appointment, protects fees and rechecks changes', function (): void {
+    [$catalog] = v3PriceEndpointFixture();
+    config()->set('cleaning_v3_catalog.read_enabled', true);
+    config()->set('cleaning_v3_catalog.approved_publication_digest', str_repeat('a', 64));
+    $customer = User::factory()->create(['is_active' => true]);
+    Sanctum::actingAs($customer);
+    $address = \Modules\User\Models\UserAddress::factory()->create([
+        'user_id' => $customer->id, 'street' => 'QA street', 'latitude' => '36.20', 'longitude' => '37.15',
+    ]);
+    $addressRevision = $this->getJson('/api/v1/cleaning/v3/customer-preferences')->assertOk()->json('data.addresses.0.revision');
+    DB::table('cleaning_financial_settings')->delete();
+    $settings = \App\Models\CleaningFinancialSetting::query()->create([
+        ...\Modules\Cleaning\Support\CleaningRuntimeSettings::financialDefaults(),
+        'travel_markup_value' => 1000, 'cleaning_minimum_order_price' => 180000,
+        'supervisor_hourly_rate' => 2000,
+    ]);
+    $coupon = \App\Models\PlatformCoupon::query()->create([
+        'code' => 'V3PRICE', 'title_ar' => 'QA coupon', 'description_ar' => 'QA coupon description', 'section' => 'cleaning',
+        'discount_type' => 'fixed', 'discount_value' => 20000,
+        'audience_type' => 'all_users', 'is_active' => true,
+    ]);
+    $form = [
+        'contractVersion' => 3, 'catalogVersionKey' => $catalog->version_key,
+        'catalogRevision' => str_repeat('a', 64), 'cleaningMode' => 'regular',
+        'answers' => ['restaurant.furnace' => 3],
+        'pricingPreviewRequested' => true, 'couponCode' => 'V3PRICE',
+        'preferences' => ['addressId' => $address->id, 'addressRevision' => $addressRevision,
+            'genderPreference' => 'any', 'excludedWorkerIds' => []],
+        'appointments' => [[
+            'appointmentKey' => 'job',
+            'visits' => [
+                ['occurrenceKey' => 'first', 'scheduledDate' => now('Asia/Damascus')->addDay()->toDateString(), 'scheduledTime' => '08:00', 'durationMinutes' => 300, 'requiredWorkers' => 2],
+                ['occurrenceKey' => 'second', 'scheduledDate' => now('Asia/Damascus')->addDays(2)->toDateString(), 'scheduledTime' => '08:00', 'durationMinutes' => 300, 'requiredWorkers' => 1],
+            ],
+        ]],
+    ];
+    $url = '/api/v1/cleaning/v3/visit-plan/preview';
+    $before = DB::table('cleaning_booking_quotes')->count();
+    $preview = $this->postJson($url, $form)->assertOk()
+        ->assertJsonPath('data.commercialPricePreview.totals.baseAmountSyp', '150000.00')
+        ->assertJsonPath('data.commercialPricePreview.totals.travelAmountSyp', '3000.00')
+        ->assertJsonPath('data.commercialPricePreview.totals.supervisorAmountSyp', '10000.00')
+        ->assertJsonPath('data.commercialPricePreview.totals.minimumTopUpSyp', '17000.00')
+        ->assertJsonPath('data.commercialPricePreview.totals.discountAmountSyp', '20000.00')
+        ->assertJsonPath('data.commercialPricePreview.totals.additionalWorkerFeeSyp', '150000.00')
+        ->assertJsonPath('data.commercialPricePreview.totals.totalAmountSyp', '310000.00')
+        ->assertJsonPath('data.commercialPricePreview.canQuote', false)
+        ->assertJsonPath('data.quoteId', null);
+    $fingerprint = $preview->json('data.commercialPricePreview.pricingFingerprint');
+    $this->postJson($url, [...$form, 'expectedPricingFingerprint' => $fingerprint])->assertOk()
+        ->assertJsonPath('data.commercialPricePreview.pricingFingerprint', $fingerprint);
+    $settings->update(['travel_markup_value' => 1100]);
+    // Minimum can keep customer total unchanged while a component changes.
+    $this->postJson($url, [...$form, 'expectedPricingFingerprint' => $fingerprint])->assertStatus(409)
+        ->assertJsonPath('code', 'REQUOTE_REQUIRED');
+    $coupon->update(['discount_type' => 'percentage', 'discount_value' => 100, 'max_discount_amount' => 30000]);
+    $this->postJson($url, $form)->assertOk()
+        ->assertJsonPath('data.commercialPricePreview.totals.discountAmountSyp', '30000.00')
+        ->assertJsonPath('data.commercialPricePreview.totals.totalAmountSyp', '300000.00');
+    $coupon->update(['discount_type' => 'fixed', 'discount_value' => 9999999]);
+    $this->postJson($url, $form)->assertOk()
+        ->assertJsonPath('data.commercialPricePreview.totals.totalAmountSyp', '153300.00');
+    $coupon->update(['is_active' => false]);
+    $this->postJson($url, $form)->assertStatus(422)->assertJsonPath('code', 'V3_COUPON_NOT_ELIGIBLE');
+    $this->postJson($url, [...$form, 'preferences' => null])->assertStatus(422);
+    $this->postJson($url, [...$form, 'totalAmountSyp' => '1.00'])->assertStatus(422);
+    DB::table('cleaning_financial_settings')->delete();
+    $this->postJson($url, [...$form, 'couponCode' => null])->assertStatus(503)
+        ->assertJsonPath('code', 'V3_FINANCIAL_SETTINGS_UNAVAILABLE');
+    expect(DB::table('cleaning_booking_quotes')->count())->toBe($before)
+        ->and($coupon->fresh()->used_count)->toBe(0)
+        ->and($coupon->redemptions()->count())->toBe(0);
+});
