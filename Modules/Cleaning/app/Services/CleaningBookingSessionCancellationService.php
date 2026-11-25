@@ -406,6 +406,9 @@ final class CleaningBookingSessionCancellationService
 
     private function assertCustomerCanSkipRecurring(CleaningBookingSession $session): void
     {
+        if ((string) ($session->booking->contract_version ?? '') === 'v3') {
+            throw new InvalidArgumentException('V3_FINANCIAL_APPROVAL_REQUIRED');
+        }
         if ((string) $session->session_type !== 'recurring_cleaning') {
             throw new InvalidArgumentException('Only recurring cleaning sessions can be skipped.');
         }

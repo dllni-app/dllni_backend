@@ -33,6 +33,10 @@ final class CleaningBookingSessionWorkerEligibilityService
             );
         }
 
+        if ($booking->excludesWorker((int) $worker->id)) {
+            return $this->blocked('worker_excluded_by_customer', 'Worker is not eligible for this booking.');
+        }
+
         if (! $worker->acceptsBookingType($booking)) {
             return $this->blocked(
                 'work_type_not_selected',

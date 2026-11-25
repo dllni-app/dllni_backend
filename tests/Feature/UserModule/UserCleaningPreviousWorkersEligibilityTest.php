@@ -144,14 +144,14 @@ it('returns a worker after the customer confirms that worker while the team book
         'home_address' => 'Worker Home',
         'home_latitude' => 36.1795,
         'home_longitude' => 37.1082,
-        'default_working_hours' => $workingHours,
+        'default_working_hours' => json_encode($workingHours, JSON_THROW_ON_ERROR),
     ]);
     $otherWorker = Worker::factory()->create([
         'trust_score' => 80,
         'home_address' => 'Other Worker Home',
         'home_latitude' => 36.1800,
         'home_longitude' => 37.1090,
-        'default_working_hours' => $workingHours,
+        'default_working_hours' => json_encode($workingHours, JSON_THROW_ON_ERROR),
     ]);
     seedPreviousWorkerDeposit($worker, 1000000);
     seedPreviousWorkerDeposit($otherWorker, 1000000);
@@ -285,17 +285,17 @@ it('ignores retired working hours for previous workers while retaining schedule 
 
     $availableWorker = Worker::factory()->create([
         'trust_score' => 80,
-        'default_working_hours' => [
+        'default_working_hours' => json_encode([
             $dayKey => ['available' => true, 'data' => [['09:00' => '18:00']]],
-        ],
+        ], JSON_THROW_ON_ERROR),
     ]);
     seedPreviousWorkerDeposit($availableWorker);
 
     $unavailableWorker = Worker::factory()->create([
         'trust_score' => 80,
-        'default_working_hours' => [
+        'default_working_hours' => json_encode([
             $dayKey => ['available' => true, 'data' => [['06:00' => '08:00']]],
-        ],
+        ], JSON_THROW_ON_ERROR),
     ]);
     seedPreviousWorkerDeposit($unavailableWorker);
 
@@ -332,11 +332,11 @@ it('excludes a previous worker whose accepted booking overlaps the requested int
 
     $conflictingWorker = Worker::factory()->create([
         'trust_score' => 80,
-        'default_working_hours' => $workingHours,
+        'default_working_hours' => json_encode($workingHours, JSON_THROW_ON_ERROR),
     ]);
     $availableWorker = Worker::factory()->create([
         'trust_score' => 80,
-        'default_working_hours' => $workingHours,
+        'default_working_hours' => json_encode($workingHours, JSON_THROW_ON_ERROR),
     ]);
 
     foreach ([$conflictingWorker, $availableWorker] as $worker) {

@@ -215,6 +215,7 @@ final class CleaningBookingSchedulePresenter
                 && $assignment->started_travel_at !== null,
         );
         $canSkip = $isCustomerView
+            && (string) ($session->booking->contract_version ?? '') !== 'v3'
             && (string) $session->session_type === 'recurring_cleaning'
             && in_array($status, [
                 CleaningBookingSessionStatus::Scheduled->value,

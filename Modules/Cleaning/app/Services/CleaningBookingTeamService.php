@@ -499,6 +499,9 @@ final class CleaningBookingTeamService
 
     private function ensureAcceptableBooking(CleaningBooking $booking, Worker $worker): void
     {
+        if ($booking->excludesWorker((int) $worker->id)) {
+            throw new InvalidArgumentException('Worker is not eligible for this booking.');
+        }
         if ($booking->status === CleaningBookingStatus::Cancelled || $booking->status === CleaningBookingStatus::Completed) {
             throw new InvalidArgumentException('Booking cannot be accepted in current status.');
         }

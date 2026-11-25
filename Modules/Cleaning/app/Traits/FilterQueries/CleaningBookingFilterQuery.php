@@ -128,7 +128,7 @@ trait CleaningBookingFilterQuery
                         return;
                     }
 
-                    $preferred->where('status', CleaningBookingStatus::Pending)
+                    $preferred->withoutExcludedWorker((int) $worker->id)->where('status', CleaningBookingStatus::Pending)
                         ->whereNull('worker_id')
                         ->where('preferred_worker_id', $worker->id)
                         ->whereDoesntHave('rejections', fn (Builder $rejections) => $rejections->where('worker_id', $worker->id));

@@ -31,7 +31,7 @@ final class CleaningV3WeeklyRecurrencePreviewService
         $allowed = [
             'seriesKey', 'catalogVersionKey', 'catalogRevision',
             'startDate', 'startTime', 'weekdays', 'intervalWeeks',
-            'occurrenceCount', 'durationMinutes', 'requiredWorkers',
+            'occurrenceCount', 'durationMinutes', 'requiredWorkers', 'exceptions',
         ];
         if (array_is_list($input)
             || array_diff(array_keys($input), $allowed) !== []
@@ -128,6 +128,59 @@ final class CleaningV3WeeklyRecurrencePreviewService
             throw new DomainException('V3_RECURRENCE_HORIZON_EXCEEDED');
         }
 
+        // Exceptions refer to original sequence identities, never a new generated series.
+        $exceptions = $input['exceptions'] ?? [];
+        if (! is_array($exceptions) || ! array_is_list($exceptions) || count($exceptions) > 30) {
+            throw new DomainException('INVALID_V3_RECURRENCE_EXCEPTION');
+        }
+        $byKey = array_column(array_map(fn ($a) => $a['visits'][0], $appointments), null, 'occurrenceKey');
+        $edits = [];
+        foreach ($exceptions as $edit) {
+            if (! is_array($edit) || ! is_string($edit['occurrenceKey'] ?? null)
+                || ! isset($byKey[$edit['occurrenceKey']]) || isset($edits[$edit['occurrenceKey']])) {
+                throw new DomainException('INVALID_V3_RECURRENCE_EXCEPTION');
+            }
+            $action = $edit['action'] ?? null;
+            if ($action === 'skip') {
+                if (array_diff(array_keys($edit), ['occurrenceKey', 'action']) !== []) {
+                    throw new DomainException('INVALID_V3_RECURRENCE_EXCEPTION');
+                }
+            } elseif ($action === 'reschedule') {
+                if (array_diff(array_keys($edit), ['occurrenceKey', 'action', 'scheduledDate', 'scheduledTime']) !== []
+                    || ! is_string($edit['scheduledDate'] ?? null) || ! is_string($edit['scheduledTime'] ?? null)) {
+                    throw new DomainException('INVALID_V3_RECURRENCE_EXCEPTION');
+                }
+                $dateTime = DateTimeImmutable::createFromFormat('!Y-m-d H:i', $edit['scheduledDate'].' '.$edit['scheduledTime'], $tz);
+                if ($dateTime === false || $dateTime->format('Y-m-d H:i') !== $edit['scheduledDate'].' '.$edit['scheduledTime']
+                    || $dateTime <= $now || $dateTime > $maximumEnd) {
+                    throw new DomainException('INVALID_V3_RECURRENCE_RESCHEDULE');
+                }
+            } else {
+                throw new DomainException('INVALID_V3_RECURRENCE_EXCEPTION');
+            }
+            $edits[$edit['occurrenceKey']] = $edit;
+        }
+        ksort($edits, SORT_STRING);
+        $original = $appointments;
+        $appointments = [];
+        $skipped = [];
+        foreach ($original as $group) {
+            $visit = $group['visits'][0];
+            $edit = $edits[$visit['occurrenceKey']] ?? null;
+            if (($edit['action'] ?? null) === 'skip') {
+                $skipped[] = ['appointmentKey' => $group['appointmentKey'], ...$visit];
+                continue;
+            }
+            if (($edit['action'] ?? null) === 'reschedule') {
+                $group['visits'][0]['scheduledDate'] = $edit['scheduledDate'];
+                $group['visits'][0]['scheduledTime'] = $edit['scheduledTime'];
+            }
+            $appointments[] = $group;
+        }
+        if ($appointments === []) {
+            throw new DomainException('V3_RECURRENCE_ALL_SKIPPED');
+        }
+
         $plan = $this->visits->plan([
             'contractVersion' => 3,
             'catalogVersionKey' => $input['catalogVersionKey'],
@@ -135,8 +188,21 @@ final class CleaningV3WeeklyRecurrencePreviewService
             'appointments' => $appointments,
         ], $now);
 
+        $lastEnd = null;
+        foreach ($plan['appointments'] as $group) {
+            if ($lastEnd !== null && $group['startAt'] < $lastEnd) {
+                throw new DomainException('V3_RECURRENCE_OVERLAP');
+            }
+            $lastEnd = $group['endAt'];
+        }
+        $rule = $input;
+        $rule['weekdays'] = $days;
+        $rule['exceptions'] = array_values($edits);
+        $plan['draftFingerprint'] = hash('sha256', $plan['draftFingerprint'].'|'.json_encode($rule, JSON_THROW_ON_ERROR));
         return [
             ...$plan,
+            'recurrenceRule' => $rule,
+            'skippedOccurrences' => $skipped,
             'recurrence' => [
                 'seriesKey' => $input['seriesKey'],
                 'frequency' => 'weekly',

@@ -66,7 +66,7 @@ final class CleaningScheduleChangeApprovalService
 
         $eligible = $workers->filter(function (Worker $worker) use ($definitions, $booking): bool {
             $this->conflicts->forgetWorker($worker);
-            return ! $this->conflicts->hasConflictForDefinitions($worker, $definitions, (int) $booking->id);
+            return ! $booking->excludesWorker((int) $worker->id) && ! $this->conflicts->hasConflictForDefinitions($worker, $definitions, (int) $booking->id);
         });
         $ordered = $services->isNotEmpty()
             ? $this->fairnessRanking->rank($eligible)

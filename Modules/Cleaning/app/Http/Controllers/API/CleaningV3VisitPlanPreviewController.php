@@ -79,8 +79,21 @@ final class CleaningV3VisitPlanPreviewController
             $mode = $payload['cleaningMode'] ?? null;
             $scopes = array_key_exists('scopeSelections', $payload) ? $payload['scopeSelections'] : [];
             $checkRequested = array_key_exists('cleaningMode', $payload) || array_key_exists('scopeSelections', $payload);
-            unset($payload['cleaningMode'], $payload['scopeSelections']);
+            $preferences = array_key_exists('preferences', $payload)
+                ? app(\Modules\Cleaning\Services\CleaningV3CustomerPreferences::class)->resolve((int) $request->user()->id, $payload['preferences']) : null;
+            $recurrence = null;
+            if (array_key_exists('recurrenceRule', $payload)) {
+                $rule = $payload['recurrenceRule'];
+                if (! is_array($rule) || ($rule['catalogVersionKey'] ?? null) !== $versionKey || ($rule['catalogRevision'] ?? null) !== $digest) {
+                    throw new DomainException('INVALID_V3_RECURRENCE_RULE');
+                }
+                $recurrence = app(\Modules\Cleaning\Services\CleaningV3WeeklyRecurrencePreviewService::class)->preview($rule);
+            }
+            unset($payload['cleaningMode'], $payload['scopeSelections'], $payload['preferences'], $payload['recurrenceRule']);
             $plan = $planner->plan($payload, allowMultipleLocalDates: $checkRequested);
+            if ($recurrence !== null && $recurrence['appointments'] !== $plan['appointments']) {
+                throw new DomainException('V3_RECURRENCE_PLAN_MISMATCH');
+            }
             $capacityCheck = $checkRequested
                 ? app(CleaningV3ScheduledWorkloadPreviewService::class)->check(
                     $version, $digest, $rawAnswers, $mode, $scopes, $propertyKey, $plan['appointments'],
@@ -111,7 +124,7 @@ final class CleaningV3VisitPlanPreviewController
         // Bind both validated customer answers and the normalized schedule.
         // The resulting digest is NOT a quote signature and cannot be submitted.
         $draftFingerprint = hash('sha256', $plan['draftFingerprint'].'|'.json_encode(
-            ['propertyKey' => $propertyKey, 'answers' => $answers, 'cleaningMode' => $mode, 'scopeSelections' => $scopes, 'capacityCheck' => $capacityCheck], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
+            ['propertyKey' => $propertyKey, 'answers' => $answers, 'cleaningMode' => $mode, 'scopeSelections' => $scopes, 'capacityCheck' => $capacityCheck, 'preferences' => $preferences, 'recurrenceRule' => $recurrence['recurrenceRule'] ?? null], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
         ));
         unset($plan['draftFingerprint']);
 
@@ -122,6 +135,9 @@ final class CleaningV3VisitPlanPreviewController
                 'draftFingerprint' => $draftFingerprint,
                 'validatedAnswerCount' => count($answers),
                 'capacityCheck' => $capacityCheck,
+                'preferencesCheck' => $preferences,
+                'recurrenceRule' => $recurrence['recurrenceRule'] ?? null,
+                'skippedOccurrences' => $recurrence['skippedOccurrences'] ?? [],
                 'additionalWorkerFeePreview' => app(\Modules\Cleaning\Services\CleaningV3AdditionalWorkerFeeCalculator::class)->previewPlan($plan['appointments']),
                 'quoteId' => null,
                 'quoteSignature' => null,

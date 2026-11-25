@@ -110,6 +110,9 @@ final class CleaningGeographicDispatchService
             })
             ->get()
             ->filter(function (CleaningBooking $booking) use ($worker): bool {
+                if ($booking->excludesWorker((int) $worker->id)) {
+                    return false;
+                }
                 if (! $this->hasRequiredLocations($worker, $booking) || ! $this->hasOpenWorkerSlots($booking)) {
                     return false;
                 }
@@ -143,7 +146,7 @@ final class CleaningGeographicDispatchService
 
     public function isWithinRadius(Worker $worker, CleaningBooking $booking): bool
     {
-        if (! $this->hasRequiredLocations($worker, $booking)) {
+        if ($booking->excludesWorker((int) $worker->id) || ! $this->hasRequiredLocations($worker, $booking)) {
             return false;
         }
 

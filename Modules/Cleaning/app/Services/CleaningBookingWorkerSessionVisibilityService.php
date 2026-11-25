@@ -211,7 +211,8 @@ final class CleaningBookingWorkerSessionVisibilityService
             return true;
         }
 
-        if ((int) ($booking->preferred_worker_id ?? 0) === (int) $worker->id) {
+        if (! $booking->excludesWorker((int) $worker->id)
+            && (int) ($booking->preferred_worker_id ?? 0) === (int) $worker->id) {
             return true;
         }
 

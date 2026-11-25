@@ -18,7 +18,8 @@ final class CleaningBookingSessionCapabilityService
         ?CarbonImmutable $clock = null,
     ): bool {
         if (
-            ! $booking->isEventAssistanceBooking()
+            (string) ($booking->contract_version ?? '') === 'v3'
+            || ! $booking->isEventAssistanceBooking()
             || (int) $session->cleaning_booking_id !== (int) $booking->id
         ) {
             return false;

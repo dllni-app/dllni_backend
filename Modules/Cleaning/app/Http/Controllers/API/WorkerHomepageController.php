@@ -288,6 +288,7 @@ final class WorkerHomepageController
         return CleaningBooking::query()
             ->where('status', CleaningBookingStatus::Pending)
             ->whereDate('scheduled_date', '>=', $today)
+            ->withoutExcludedWorker((int) $worker->id)
             ->matchesWorkTypePreferences($worker)
             ->where(fn ($q) => $q->whereNull('worker_id')->orWhere('worker_id', $worker->id))
             ->whereDoesntHave('workerAssignments', fn (Builder $assignments) => $assignments

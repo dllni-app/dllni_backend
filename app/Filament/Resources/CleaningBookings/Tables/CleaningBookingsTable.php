@@ -974,6 +974,9 @@ final class CleaningBookingsTable
         bool $isPreferredWorkerBooking,
     ): array {
         $issues = [];
+        if ($record->excludesWorker((int) $worker->id)) {
+            $issues[] = 'العامل مستبعد من هذا الطلب';
+        }
 
         if (! (bool) $worker->is_active) {
             $issues[] = 'العامل غير نشط';

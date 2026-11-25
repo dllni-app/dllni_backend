@@ -407,6 +407,19 @@ final class CleaningBooking extends Model
     }
 
     /** @return array<int, int> */
+    public function excludesWorker(int $workerId): bool
+    {
+        return (string) ($this->contract_version ?? '') === 'v3'
+            && in_array($workerId, (array) data_get($this->property_details, 'v3_excluded_worker_ids', []), true);
+    }
+
+    public function scopeWithoutExcludedWorker(Builder $query, int $workerId): Builder
+    {
+        return $query->where(fn ($q) => $q->whereNull('contract_version')->orWhere('contract_version', '!=', 'v3')
+            ->orWhereNull('property_details->v3_excluded_worker_ids')
+            ->orWhereJsonDoesntContain('property_details->v3_excluded_worker_ids', $workerId));
+    }
+
     public function specificWorkerIds(): array
     {
         $ids = [];
