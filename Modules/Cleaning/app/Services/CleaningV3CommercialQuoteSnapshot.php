@@ -58,13 +58,17 @@ final class CleaningV3CommercialQuoteSnapshot
     private function derive(array $snapshot): array
     {
         $review = $snapshot['commercialReview'] ?? null;
+        $fields = self::FIELDS;
+        if (is_array($review['totals'] ?? null) && array_key_exists('commissionAmountSyp', $review['totals'])) {
+            $fields[] = 'commissionAmountSyp';
+        }
         if (! is_array($review) || array_diff(array_keys($review), ['draftFingerprint', 'pricingFingerprint', 'couponCode', 'totals', 'visits']) !== []
             || ! $this->digest($review['draftFingerprint'] ?? null)
             || ! $this->digest($review['pricingFingerprint'] ?? null)
             || ! array_key_exists('couponCode', $review)
             || ($review['couponCode'] !== null && (! is_string($review['couponCode']) || mb_strlen($review['couponCode']) > 50 || trim($review['couponCode']) === ''))
             || ! is_array($review['visits'] ?? null) || ! array_is_list($review['visits'])
-            || ! is_array($review['totals'] ?? null) || array_diff(array_keys($review['totals']), self::FIELDS) !== []
+            || ! is_array($review['totals'] ?? null) || array_diff(array_keys($review['totals']), $fields) !== []
             || count($review['visits']) !== count($snapshot['visits'] ?? [])) {
             throw new DomainException('INVALID_V3_COMMERCIAL_QUOTE_REVIEW');
         }
@@ -77,12 +81,12 @@ final class CleaningV3CommercialQuoteSnapshot
             }
             $expected[$key] = $identity;
         }
-        $sums = array_fill_keys(self::FIELDS, 0);
+        $sums = array_fill_keys($fields, 0);
         $derived = [];
         $totalBase = 0;
         $net = 0;
         foreach ($review['visits'] as $row) {
-            if (! is_array($row) || array_diff(array_keys($row), [...self::FIELDS, 'appointmentKey', 'occurrenceKey', 'pricedWorkers', 'eligibleBeforeDiscountSyp']) !== []
+            if (! is_array($row) || array_diff(array_keys($row), [...$fields, 'appointmentKey', 'occurrenceKey', 'pricedWorkers', 'eligibleBeforeDiscountSyp']) !== []
                 || ! is_string($row['occurrenceKey'] ?? null) || ! isset($expected[$row['occurrenceKey']])) {
                 throw new DomainException('INVALID_V3_COMMERCIAL_QUOTE_REVIEW');
             }
@@ -93,12 +97,12 @@ final class CleaningV3CommercialQuoteSnapshot
                 throw new DomainException('INVALID_V3_COMMERCIAL_QUOTE_REVIEW');
             }
             $amounts = [];
-            foreach (self::FIELDS as $field) {
+            foreach ($fields as $field) {
                 $amounts[$field] = $this->cents($row[$field] ?? null);
                 $sums[$field] += $amounts[$field];
             }
             $eligible = $amounts['baseAmountSyp'] + $amounts['addonsAmountSyp'] + $amounts['equipmentAmountSyp']
-                + $amounts['supervisorAmountSyp'] + $amounts['minimumTopUpSyp'];
+                + $amounts['supervisorAmountSyp'] + $amounts['minimumTopUpSyp'] + ($amounts['commissionAmountSyp'] ?? 0);
             $discount = $amounts['discountAmountSyp'];
             $fee = $amounts['additionalWorkerFeeSyp'];
             $beforeFee = $eligible + $amounts['travelAmountSyp'] - $discount;
@@ -123,7 +127,7 @@ final class CleaningV3CommercialQuoteSnapshot
                 'totalWithAdditionalWorkerFee' => $this->money($amounts['totalAmountSyp']),
             ];
         }
-        foreach (self::FIELDS as $field) {
+        foreach ($fields as $field) {
             if ($this->cents($review['totals'][$field] ?? null) !== $sums[$field]) {
                 throw new DomainException('V3_COMMERCIAL_QUOTE_TOTAL_MISMATCH');
             }

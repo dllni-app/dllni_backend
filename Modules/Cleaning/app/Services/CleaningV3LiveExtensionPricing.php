@@ -42,6 +42,9 @@ final class CleaningV3LiveExtensionPricing
             ? (int) bcdiv(bcadd(bcmul((string) $cents($verifiedSnapshot['settlementBasis']['supervisorHourlyCompensation']),
                 (string) $visit['plannedMinutes'], 0), '59', 0), '60', 0)
             : 0;
+        if (($visit['commissionAdded'] ?? false) === true) {
+            $supervisor = $cents($visit['supervisorVisitCompensation']);
+        }
         $worker = $newBase + $cents($row['addonsAmountSyp']) - $cents($visit['materialAmountSyp']) + $cents($row['travelAmountSyp']);
         return [
             'oldMinutes' => $oldMinutes, 'newMinutes' => $visit['plannedMinutes'],

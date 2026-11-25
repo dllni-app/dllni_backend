@@ -171,7 +171,7 @@ final class CleaningV3CreateBookingController
                     'estimated_hours' => $visits->sum('durationMinutes') / 60,
                     'base_price' => $totals['baseAmountSyp'],
                     'addons_total' => bcadd(bcadd($totals['addonsAmountSyp'], $totals['equipmentAmountSyp'], 2),
-                        bcadd($totals['supervisorAmountSyp'], $totals['minimumTopUpSyp'], 2), 2),
+                        bcadd(bcadd($totals['supervisorAmountSyp'], $totals['minimumTopUpSyp'], 2), $totals['commissionAmountSyp'] ?? '0.00', 2), 2),
                     'travel_fee' => $totals['travelAmountSyp'], 'total_price' => $totals['totalAmountSyp'],
                     'is_pricing_final' => true, 'terms_accepted' => true,
                 ]);
@@ -216,7 +216,7 @@ final class CleaningV3CreateBookingController
                         'status' => 'scheduled', 'coverage_status' => 'searching', 'payment_status' => 'pending',
                         'is_pricing_final' => true, 'base_price' => $row['baseAmountSyp'],
                         'addons_total' => bcadd(bcadd($row['addonsAmountSyp'], $row['equipmentAmountSyp'], 2),
-                            bcadd($row['supervisorAmountSyp'], $row['minimumTopUpSyp'], 2), 2),
+                            bcadd(bcadd($row['supervisorAmountSyp'], $row['minimumTopUpSyp'], 2), $row['commissionAmountSyp'] ?? '0.00', 2), 2),
                         'materials_total' => $basis['materialAmountSyp'],
                         'special_services_total' => bcsub($row['addonsAmountSyp'], $basis['materialAmountSyp'], 2),
                         'travel_fee' => $row['travelAmountSyp'], 'total_price' => $row['totalAmountSyp'],

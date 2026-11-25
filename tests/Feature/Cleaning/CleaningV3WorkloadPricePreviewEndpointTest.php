@@ -429,6 +429,14 @@ test('commercial price preview uses persisted transport and minimum once per app
     $settings->update(['default_commission_rate' => 10]);
     $coupon->update(['funding_type' => 'merchant']);
     $this->postJson($url, $form)->assertStatus(422)->assertJsonPath('code', 'V3_COUPON_FUNDING_POLICY_REVIEW_REQUIRED');
+    $coupon->update(['funding_type' => 'platform', 'max_platform_funding_amount' => null, 'discount_value' => 999999]);
+    $settings->update(['v3_supervisor_visit_compensation' => 12000]);
+    $team = $this->postJson($url, $form)->assertOk()
+        ->assertJsonPath('data.commercialPricePreview.totals.supervisorAmountSyp', '12000.00')
+        ->assertJsonPath('data.commercialPricePreview.visits.0.commissionAmountSyp', '10000.00')
+        ->assertJsonPath('data.commercialPricePreview.visits.1.commissionAmountSyp', '0.00')
+        ->assertJsonPath('data.commercialPricePreview.settlementBasis.visits.first.supervisorVisitCompensation', '12000.00')
+        ->assertJsonPath('data.commercialPricePreview.totals.discountAmountSyp', '15000.00');
     $coupon->update(['is_active' => false]);
     $this->postJson($url, $form)->assertStatus(422)->assertJsonPath('code', 'V3_COUPON_NOT_ELIGIBLE');
     $this->postJson($url, [...$form, 'preferences' => null])->assertStatus(422);

@@ -38,6 +38,20 @@ final class CleaningV3CashSettlementBasis
                 || self::cents($visit['materialAmountSyp'] ?? null) > self::cents($row['addonsAmountSyp'])) {
                 throw new DomainException('INVALID_V3_SETTLEMENT_BASIS');
             }
+            if (array_key_exists('commissionAdded', $visit) && $visit['commissionAdded'] !== true) {
+                throw new DomainException('INVALID_V3_TEAM_CASH_POLICY');
+            }
+            $manualTeam = ($visit['commissionAdded'] ?? false) === true;
+            if ($manualTeam) {
+                if ($visit['billingMode'] !== 'task' || $row['pricedWorkers'] < 2
+                    || self::cents($visit['supervisorVisitCompensation'] ?? null) !== self::cents($row['supervisorAmountSyp'])
+                    || self::cents($row['commissionAmountSyp'] ?? null) !== self::commissionCents(
+                        self::cents($row['baseAmountSyp']) + self::cents($row['addonsAmountSyp']), $basis['commissionType'], $commission)) {
+                    throw new DomainException('INVALID_V3_TEAM_CASH_POLICY');
+                }
+            } elseif (array_key_exists('supervisorVisitCompensation', $visit) || self::cents($row['commissionAmountSyp'] ?? '0.00') !== 0) {
+                throw new DomainException('INVALID_V3_TEAM_CASH_POLICY');
+            }
             if ($visit['billingMode'] === 'event') {
                 if ($visit['plannedMinutes'] < 60 || $visit['plannedMinutes'] % 30 !== 0
                     || self::cents($visit['eventRateSyp'] ?? null) <= 0

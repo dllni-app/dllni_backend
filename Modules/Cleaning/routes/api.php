@@ -73,6 +73,11 @@ Route::prefix('v1')->group(function () {
             Route::patch('notifications/{id}/read', [UserNotificationController::class, 'markAsRead']);
             Route::put('notifications/token', RegisterFcmTokenController::class);
             Route::get('home', [SupervisorAppController::class, 'home']);
+            Route::get('cash-accounting', [\Modules\Cleaning\Http\Controllers\API\SupervisorCashAccountingController::class, 'index']);
+            Route::get('bookings/{booking}/visits/{visit}/cash-accounting', [\Modules\Cleaning\Http\Controllers\API\SupervisorCashAccountingController::class, 'show'])
+                ->whereNumber('booking')->whereNumber('visit')->middleware('throttle:30,1');
+            Route::post('bookings/{booking}/visits/{visit}/cash-accounting', [\Modules\Cleaning\Http\Controllers\API\SupervisorCashAccountingController::class, 'report'])
+                ->whereNumber('booking')->whereNumber('visit')->middleware('throttle:20,1');
             Route::get('bookings', [SupervisorAppController::class, 'index']);
             Route::get('schedule', [SupervisorAppController::class, 'schedule']);
             Route::get('bookings/{booking}', [SupervisorAppController::class, 'show'])->whereNumber('booking');

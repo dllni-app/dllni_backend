@@ -63,6 +63,8 @@ final class FinancialSettings extends Page
 
     public float $supervisorCompensationHourlyRate = 0.0;
 
+    public ?float $v3SupervisorVisitCompensation = null;
+
     public float $userCancellationFee = 0.0;
 
     /**
@@ -152,6 +154,7 @@ final class FinancialSettings extends Page
             $this->cleaningDeepMultiplier = (float) ($setting->cleaning_deep_multiplier ?? CleaningFinancialDefaults::DEEP_CLEANING_MULTIPLIER);
             $this->supervisorHourlyRate = max(0.0, (float) ($setting->supervisor_hourly_rate ?? 0));
             $this->supervisorCompensationHourlyRate = max(0.0, (float) ($setting->supervisor_compensation_hourly_rate ?? 0));
+            $this->v3SupervisorVisitCompensation = $setting->v3_supervisor_visit_compensation === null ? null : (float) $setting->v3_supervisor_visit_compensation;
             $this->userCancellationFee = (float) ($setting->user_cancellation_fee ?? 0.0);
         }
 
@@ -191,6 +194,7 @@ final class FinancialSettings extends Page
             'cleaningDeepMultiplier' => ['required', 'numeric', 'min:1'],
             'supervisorHourlyRate' => ['required', 'numeric', 'min:0'],
             'supervisorCompensationHourlyRate' => ['required', 'numeric', 'min:0'],
+            'v3SupervisorVisitCompensation' => ['nullable', 'numeric', 'min:0', 'max:9999999999.99', 'decimal:0,2'],
             'userCancellationFee' => ['required', 'numeric', 'min:0'],
             'roomPricingSettings' => ['required', 'array'],
             'roomPricingSettings.*' => ['required', 'array'],
@@ -229,6 +233,7 @@ final class FinancialSettings extends Page
                 'cleaning_deep_multiplier' => $this->cleaningDeepMultiplier,
                 'supervisor_hourly_rate' => $this->supervisorHourlyRate,
                 'supervisor_compensation_hourly_rate' => $this->supervisorCompensationHourlyRate,
+                'v3_supervisor_visit_compensation' => $this->v3SupervisorVisitCompensation,
                 'user_cancellation_fee' => $this->userCancellationFee,
                 'cleaning_room_pricing_units' => $roomPricingUnits,
                 'cleaning_room_deep_multipliers' => $roomDeepMultipliers,

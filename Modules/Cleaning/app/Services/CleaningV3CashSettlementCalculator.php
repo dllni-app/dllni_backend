@@ -62,7 +62,8 @@ final class CleaningV3CashSettlementCalculator
         $travel = $cents($row['travelAmountSyp']);
         $fee = $cents($row['additionalWorkerFeeSyp']);
         $eligible = $base + $addons + $equipment + $supervisorFee + $topUp;
-        $discount = min($eligible, $cents($row['discountAmountSyp']));
+        $manualTeam = ($visit['commissionAdded'] ?? false) === true;
+        $discount = min($eligible + ($manualTeam ? $cents($row['commissionAmountSyp']) : 0), $cents($row['discountAmountSyp']));
         $labor = $base + $addons - $material;
         // Legacy commission is a separate worker debt, not a second charge
         // to the customer or an increase based on the extra-worker surcharge.
@@ -72,7 +73,7 @@ final class CleaningV3CashSettlementCalculator
         if (($basis['couponCommissionCapped'] ?? false) === true) {
             $discount = min($discount, $commission);
         }
-        $total = $eligible + $travel + $fee - $discount;
+        $total = $eligible + $travel + $fee - $discount + ($manualTeam ? $commission : 0);
         $supervised = $visit['billingMode'] === 'task' && $workers > 1;
         if ($supervised && ($supervisorActiveSeconds === null || $supervisorActiveSeconds < 1 || $supervisorActiveSeconds > $activeSeconds)) {
             throw new DomainException('V3_SUPERVISOR_ATTENDANCE_PROOF_REQUIRED');
@@ -80,6 +81,9 @@ final class CleaningV3CashSettlementCalculator
         $supervisor = $supervised
             ? (int) bcdiv(bcadd(bcmul((string) $cents($basis['supervisorHourlyCompensation']), (string) $supervisorActiveSeconds, 0), '1800', 0), '3600', 0)
             : 0;
+        if ($manualTeam) {
+            $supervisor = $cents($visit['supervisorVisitCompensation']);
+        }
         $entries = [];
         usort($attendance, static fn ($a, $b) => $a['workerId'] <=> $b['workerId']);
         // Fixed task labor is a fixed pool distributed by actual verified
@@ -105,7 +109,7 @@ final class CleaningV3CashSettlementCalculator
                 'workerId' => $entry['workerId'], 'activeSeconds' => $entry['activeSeconds'],
                 'serviceShareSyp' => $money($share), 'travelSyp' => $money($travelShare),
                 'grossPayableSyp' => $money($share + $travelShare),
-                'commissionReceivableSyp' => $money($commissionShare),
+                'commissionReceivableSyp' => $money($manualTeam ? 0 : $commissionShare),
             ];
         }
         $obligations = $paidLabor + $paidTravel + $supervisor;
@@ -117,10 +121,16 @@ final class CleaningV3CashSettlementCalculator
             'baseAmountSyp' => $money($base), 'discountAmountSyp' => $money($discount),
             'additionalWorkerFeeSyp' => $money($fee), 'totalDueSyp' => $money($total),
             'workerPayables' => $entries, 'supervisorRequired' => $supervised,
-            'supervisorPayableSyp' => $money($supervisor), 'supervisorActiveSeconds' => $supervised ? $supervisorActiveSeconds : 0, 'commissionReceivableSyp' => $money($paidCommission),
+            'supervisorPayableSyp' => $money($supervisor), 'supervisorActiveSeconds' => $supervised ? $supervisorActiveSeconds : 0, 'commissionReceivableSyp' => $money($manualTeam ? 0 : $paidCommission),
             'totalObligationsSyp' => $money($obligations),
             'ordinaryCashRequiredSyp' => $money($obligations),
             'unfundedSyp' => $money(max(0, $obligations - $ordinary)),
+            ...($manualTeam ? [
+                'cashCollectionMode' => 'supervisor_manual',
+                'companyCommissionSyp' => $money($commission),
+                'companyNetCommissionSyp' => $money($commission - $discount),
+                'companyCashDueSyp' => $money(max(0, $total - $obligations)),
+            ] : []),
             'canSettle' => false,
         ];
     }

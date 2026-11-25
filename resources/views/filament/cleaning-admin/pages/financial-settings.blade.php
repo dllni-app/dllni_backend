@@ -78,6 +78,12 @@
                 <span class="text-xs text-gray-500 dark:text-gray-400">هذا أجر المشرف، وهو مستقل عن تكلفة الإشراف المفوترة للعميل. يُثبّت سعر الساعة وقت إسناد المشرف للزيارة، ولا تضرب الأجرة بعدد العمال.</span>
                 @error('supervisorCompensationHourlyRate') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
             </label>
+            <label class="flex flex-col gap-1">
+                <span class="text-sm font-medium">أجرة المشرف الثابتة لكل زيارة V3 (ل.س)</span>
+                <input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="v3SupervisorVisitCompensation">
+                <span class="text-xs text-gray-500 dark:text-gray-400">تطبق على عروض الفريق الجديدة عند تحديدها، دون تغيير الأجرة عند التمديد. لا تغير الحجوزات السابقة.</span>
+                @error('v3SupervisorVisitCompensation') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
+            </label>
         </div>
     </x-filament::section>
 

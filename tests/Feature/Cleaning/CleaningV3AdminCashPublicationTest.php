@@ -154,7 +154,7 @@ test('Filament administrator can approve and publish a reviewed version', functi
 });
 
 
-test('cash reconciliation requires linked signed price, closed work, distinct verifier and actual receipt before payout', function (int $workers, bool $replacement): void {
+test('cash reconciliation requires linked signed price, closed work, distinct verifier and actual receipt before payout', function (int $workers, bool $replacement, bool $manualTeam = false): void {
     [$admin, $draft] = adminCashCatalogFixture();
     config()->set('cleaning_v3_catalog.cash_settlement_enabled', true);
     $version = app(CleaningV3AdminCatalogPublication::class)->publish($draft,
@@ -173,6 +173,7 @@ test('cash reconciliation requires linked signed price, closed work, distinct ve
         ...\Modules\Cleaning\Support\CleaningRuntimeSettings::financialDefaults(),
         'travel_markup_value' => 1000, 'cleaning_minimum_order_price' => 1000,
         'commission_type' => 'percent', 'default_commission_rate' => 10, 'supervisor_hourly_rate' => 5000, 'supervisor_compensation_hourly_rate' => $replacement ? 20000 : 3000,
+        'v3_supervisor_visit_compensation' => $manualTeam ? 15000 : null,
     ]);
     $form = [
         'contractVersion' => 3, 'catalogVersionKey' => $version->version_key,
@@ -275,6 +276,55 @@ test('cash reconciliation requires linked signed price, closed work, distinct ve
         }
     }
     $state = $service->review($booking->id, $visit->id);
+    if ($manualTeam) {
+        $accounting = app(\Modules\Cleaning\Services\CleaningV3SupervisorCashAccountingService::class);
+        $supervisor->assignRole(Role::findOrCreate(\Modules\Cleaning\Services\SupervisedTeamService::ROLE, 'web'));
+        $supervisor->forceFill(['is_active' => true])->save();
+        $visit->forceFill(['pricing_snapshot' => ['settlementBasis' => $quote['snapshot']['settlementBasis']['visits']['visit']]])->saveQuietly();
+        expect($state['customerAmountSyp'])->toBe('387000.00')
+            ->and($state['workerAmountSyp'])->toBe('202000.00')
+            ->and($state['supervisorAmountSyp'])->toBe('15000.00')
+            ->and($state['companyAmountSyp'])->toBe('170000.00')
+            ->and($state['status'])->toBe('awaiting_report');
+        expect(fn () => $service->record($booking->id, $visit->id, 'collection', 'treasury', $due, 'QA-no-treasury', $evidence))
+            ->toThrow(DomainException::class, 'V3_SUPERVISOR_CASH_ACCOUNTING_REQUIRED');
+        expect(fn () => $accounting->receive($booking->id, $visit->id, '170000.00', 'QA-early-receipt', $evidence))
+            ->toThrow(DomainException::class);
+        Sanctum::actingAs($supervisor, ['supervisor']);
+        $this->getJson('/api/v1/supervisor/cash-accounting')->assertOk()->assertJsonPath('data.unreportedVisits.0.visitId', $visit->id);
+        $url = '/api/v1/supervisor/bookings/'.$booking->id.'/visits/'.$visit->id.'/cash-accounting';
+        $this->getJson($url)->assertOk()->assertJsonPath('data.companyAmountSyp', '170000.00')
+            ->assertJsonCount(2, 'data.workerPayments')->assertJsonPath('data.workerPayments.0.amountSyp', '101000.00');
+        $data = ['collectedAmountSyp' => $due, 'reference' => 'QA-supervisor-report', 'evidence' => $evidence, 'cashReceivedAndPayablesPaid' => true];
+        $this->postJson($url, [...$data, 'collectedAmountSyp' => '1.00'])->assertStatus(409);
+        $this->postJson($url, [...$data, 'cashReceivedAndPayablesPaid' => false])->assertStatus(422);
+        $this->postJson($url, $data)->assertOk()->assertJsonPath('data.status', 'reported');
+        $this->postJson($url, $data)->assertOk()->assertJsonPath('data.status', 'reported');
+        $this->getJson('/api/v1/supervisor/cash-accounting')->assertOk()->assertJsonPath('data.companyOutstandingSyp', '170000.00')
+            ->assertJsonPath('data.ownReportedEarningsSyp', '15000.00')->assertJsonPath('data.companyDeliveredSyp', '0.00');
+        expect($visit->fresh()->payment_status)->toBe('pending');
+        $intruder = User::factory()->create(['is_active' => true]);
+        $intruder->assignRole(Role::findOrCreate(\Modules\Cleaning\Services\SupervisedTeamService::ROLE, 'web'));
+        Sanctum::actingAs($intruder, ['supervisor']);
+        $this->getJson($url)->assertNotFound();
+        $this->getJson('/api/v1/supervisor/cash-accounting')->assertOk()->assertJsonPath('data.companyOutstandingSyp', '0.00');
+        Sanctum::actingAs($admin);
+        $this->actingAs($admin);
+        expect(fn () => $accounting->receive($booking->id, $visit->id, '1.00', 'QA-admin-receipt', $evidence))
+            ->toThrow(DomainException::class, 'V3_SUPERVISOR_CASH_RECEIPT_MISMATCH');
+        expect($accounting->adminSummary()[0]['companyOutstandingSyp'])->toBe('170000.00');
+        $accounting->receive($booking->id, $visit->id, '170000.00', 'QA-admin-receipt', $evidence);
+        expect($accounting->adminSummary()[0]['companyDeliveredSyp'])->toBe('170000.00');
+        $accounting->receive($booking->id, $visit->id, '170000.00', 'QA-admin-receipt', $evidence);
+        expect($visit->fresh()->payment_status)->toBe('settled')
+            ->and(DB::table('cleaning_v3_supervisor_cash_accounts')->count())->toBe(1)
+            ->and(DB::table('cleaning_v3_cash_movements')->count())->toBe(0);
+        expect($service->customerSummary($booking->id, $customer->id)[0]['collectedAmountSyp'])->toBe($due);
+        Sanctum::actingAs($supervisor, ['supervisor']);
+        $this->getJson('/api/v1/supervisor/cash-accounting')->assertOk()->assertJsonPath('data.companyOutstandingSyp', '0.00')
+            ->assertJsonPath('data.companyDeliveredSyp', '170000.00')->assertJsonPath('data.ownConfirmedEarningsSyp', '15000.00');
+        return;
+    }
     expect($state['activeSeconds'])->toBe(3600)->and($state['totalDueSyp'])->toBe($due)
         ->and($state['workerPayables'][0]['grossPayableSyp'])->toBe($replacement ? '51000.00' : ($workers === 1 ? '201000.00' : '101000.00'))
         ->and($state['supervisorPayableSyp'])->toBe($replacement ? '15000.00' : ($workers === 1 ? '0.00' : '2250.00'))
@@ -332,7 +382,7 @@ test('cash reconciliation requires linked signed price, closed work, distinct ve
     }
         $this->actingAs($customer);
     expect(fn () => $service->review($booking->id, $visit->id))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
-})->with([[1, false], [2, false], [2, true]]);
+})->with([[1, false], [2, false], [2, true], [2, false, true]]);
 
 test('published catalog refuses deactivated sources and readiness reports valid publication separately', function (): void {
     [, $draft, $item] = adminCashCatalogFixture();

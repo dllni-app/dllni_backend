@@ -331,6 +331,16 @@ final class ViewCleaningBooking extends ViewRecord
                     try {
                         $state = app(\Modules\Cleaning\Services\CleaningV3CashSettlementService::class)
                             ->review((int) $this->record->id, (int) $data['visitId']);
+                        if (array_key_exists('collectorUserId', $state)) {
+                            $name = User::query()->whereKey($state['collectorUserId'])->value('name');
+                            Notification::make()->title('المحاسبة النقدية للمشرف')
+                                ->body('المشرف: '.$name.' | المبلغ من العميل: '.$state['customerAmountSyp']
+                                    .' | أجور العمال: '.$state['workerAmountSyp'].' | أجور الإشراف: '.$state['supervisorAmountSyp']
+                                    .' | مستحق الشركة: '.$state['companyAmountSyp'].' | الحالة: '.match ($state['status']) {
+                                        'reported' => 'بانتظار التسليم', 'received' => 'تم التسليم', default => 'بانتظار تصريح المشرف',
+                                    })->persistent()->send();
+                            return;
+                        }
                         $body = 'المستحق: '.$state['totalDueSyp'].' ل.س — العجز: '.$state['remainingFundingGapSyp']
                             .' — وقت العمل الفعلي: '.$state['activeSeconds'].' ثانية';
                         foreach ($state['workerPayables'] as $worker) {
@@ -345,6 +355,34 @@ final class ViewCleaningBooking extends ViewRecord
                         Notification::make()->title('مراجعة النقد والمستحقات')->body($body)->persistent()->send();
                     } catch (\DomainException $e) {
                         Notification::make()->title('التسوية غير متاحة')->body($e->getMessage())->danger()->send();
+                    }
+                }),
+            Action::make('receiveV3SupervisorCash')
+                ->label('تسجيل استلام نقدي من المشرف')
+                ->visible(fn (): bool => $this->record->contract_version === 'v3'
+                    && config('cleaning_v3_catalog.cash_settlement_enabled', false)
+                    && \Modules\Cleaning\Services\CleaningV3CashSettlementService::authorized())
+                ->authorize(fn (): bool => \Modules\Cleaning\Services\CleaningV3CashSettlementService::authorized())
+                ->modalDescription('يسجل هذا الإجراء المال الذي تسلمته الإدارة فعلياً بعد تصريح المشرف وسداد الأجور. لا ينفذ أي تحويل مالي.')
+                ->form([
+                    Select::make('visitId')->label('الزيارة المكتملة')->options(fn (): array => $this->record->sessions()
+                        ->where('status', 'completed')->where('supervision_mode', 'supervisor')
+                        ->pluck('sequence', 'id')->map(fn ($sequence) => 'زيارة '.$sequence)->all())->required(),
+                    \Filament\Forms\Components\TextInput::make('amount')->label('المبلغ المستلم فعلياً (ل.س)')->numeric()->minValue(0)->required(),
+                    \Filament\Forms\Components\TextInput::make('reference')->label('رقم سند القبض')->required()->maxLength(128),
+                    Textarea::make('evidence')->label('إثبات الاستلام والمحاسبة الفعلية')->required()->minLength(10)->maxLength(500),
+                ])
+                ->action(function (array $data): void {
+                    try {
+                        $amount = bcadd((string) $data['amount'], '0', 2);
+                        if (bccomp((string) $data['amount'], $amount, 6) !== 0) {
+                            throw new \DomainException('V3_SUPERVISOR_CASH_RECEIPT_MISMATCH');
+                        }
+                        app(\Modules\Cleaning\Services\CleaningV3SupervisorCashAccountingService::class)
+                            ->receive((int) $this->record->id, (int) $data['visitId'], $amount, $data['reference'], $data['evidence']);
+                        Notification::make()->title('تم تسجيل استلام المبلغ الفعلي')->success()->send();
+                    } catch (\DomainException $e) {
+                        Notification::make()->title('تعذرت المحاسبة')->body($e->getMessage())->danger()->send();
                     }
                 }),
             Action::make('recordV3SupervisorPresence')

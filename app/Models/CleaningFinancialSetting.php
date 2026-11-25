@@ -38,6 +38,7 @@ final class CleaningFinancialSetting extends Model
         'cleaning_room_time_minutes',
         'supervisor_hourly_rate',
         'supervisor_compensation_hourly_rate',
+        'v3_supervisor_visit_compensation',
     ];
 
     public static function currentCancellationFee(): float
@@ -73,6 +74,7 @@ final class CleaningFinancialSetting extends Model
             'cleaning_room_time_minutes' => 'array',
             'supervisor_hourly_rate' => 'decimal:2',
             'supervisor_compensation_hourly_rate' => 'decimal:2',
+            'v3_supervisor_visit_compensation' => 'decimal:2',
         ];
     }
 

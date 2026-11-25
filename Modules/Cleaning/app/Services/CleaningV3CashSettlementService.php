@@ -37,8 +37,27 @@ final class CleaningV3CashSettlementService
         return DB::transaction(function () use ($bookingId, $visitId) {
             [$booking, $visit] = $this->lockVisit($bookingId, $visitId);
             [$quote, $calc, $digest] = $this->calculation($booking, $visit);
+            if (($calc['cashCollectionMode'] ?? null) === 'supervisor_manual') {
+                return app(CleaningV3SupervisorCashAccountingService::class)->project($visit, $calc, $digest);
+            }
             return $this->state($visit, $quote, $calc, $digest);
         }, 3);
+    }
+
+    /** Internal locked calculation for the separate physical-supervisor accounting ledger. */
+    public function manualTeamCalculation(CleaningBooking $booking, CleaningBookingSession $visit): array
+    {
+        if (DB::transactionLevel() < 1 || $booking->contract_version !== 'v3'
+            || (int) $visit->cleaning_booking_id !== (int) $booking->id
+            || $visit->status !== CleaningBookingSessionStatus::Completed || $visit->customer_completed_at === null
+            || ! $visit->is_pricing_final || DB::table(self::TABLE)->where('cleaning_booking_session_id', $visit->id)->exists()) {
+            throw new DomainException('V3_SUPERVISOR_CASH_COMPLETED_VISIT_REQUIRED');
+        }
+        [$quote, $calc, $digest] = $this->calculation($booking, $visit);
+        if (($calc['cashCollectionMode'] ?? null) !== 'supervisor_manual' || ! is_int($calc['collectorUserId'] ?? null)) {
+            throw new DomainException('V3_SUPERVISOR_CASH_POLICY_REQUIRED');
+        }
+        return [$quote, $calc, $digest];
     }
 
     /** Customer-safe projection: never expose payroll, evidence or treasury references. */
@@ -59,6 +78,15 @@ final class CleaningV3CashSettlementService
                 } elseif ($visit->status === CleaningBookingSessionStatus::Completed) {
                     try {
                         [$quote, $calc, $digest] = $this->calculation($booking, $visit);
+                        if (($calc['cashCollectionMode'] ?? null) === 'supervisor_manual') {
+                            $manual = app(CleaningV3SupervisorCashAccountingService::class)->project($visit, $calc, $digest);
+                            $row = array_replace($row, ['status' => $manual['status'] === 'received' ? 'settled' : 'awaiting_collection',
+                                'finalAmountSyp' => $calc['totalDueSyp'],
+                                'collectedAmountSyp' => $manual['status'] === 'received' ? $calc['totalDueSyp'] : null,
+                                'refundedAmountSyp' => '0.00']);
+                            $result[] = $row;
+                            continue;
+                        }
                         $state = $this->state($visit, $quote, $calc, $digest);
                         $row = array_replace($row, [
                             'status' => $state['paymentStatus'] === 'settled' ? 'settled' : ($state['collectedCents'] > 0 ? 'collected_pending_settlement' : 'awaiting_collection'),
@@ -89,6 +117,9 @@ final class CleaningV3CashSettlementService
         return DB::transaction(function () use ($bookingId, $visitId, $kind, $beneficiary, $amount, $reference, $evidence, $actor) {
             [$booking, $visit] = $this->lockVisit($bookingId, $visitId);
             [$quote, $calc, $digest] = $this->calculation($booking, $visit);
+            if (($calc['cashCollectionMode'] ?? null) === 'supervisor_manual') {
+                throw new DomainException('V3_SUPERVISOR_CASH_ACCOUNTING_REQUIRED');
+            }
             $existing = DB::table(self::TABLE)->where('reference', $reference)->lockForUpdate()->first();
             if ($existing !== null) {
                 if ((int) $existing->cleaning_booking_session_id !== $visitId || $existing->quote_id !== $quote->id
@@ -124,6 +155,9 @@ final class CleaningV3CashSettlementService
         return DB::transaction(function () use ($bookingId, $visitId, $reference, $amount, $actor) {
             [$booking, $visit] = $this->lockVisit($bookingId, $visitId);
             [$quote, $calc, $digest] = $this->calculation($booking, $visit);
+            if (($calc['cashCollectionMode'] ?? null) === 'supervisor_manual') {
+                throw new DomainException('V3_SUPERVISOR_CASH_ACCOUNTING_REQUIRED');
+            }
             $row = DB::table(self::TABLE)->where('reference', $reference)
                 ->where('cleaning_booking_session_id', $visitId)->lockForUpdate()->first();
             if ($row === null || $row->quote_id !== $quote->id || ! hash_equals($row->calculation_digest, $digest)
@@ -306,11 +340,17 @@ final class CleaningV3CashSettlementService
         foreach ($proofs as $proof) {
             $cursor += $proof['active_seconds'];
             $next = (int) bcdiv(bcadd(bcmul((string) $rate, (string) $cursor, 0), '1800', 0), '3600', 0);
+            if (($calc['cashCollectionMode'] ?? null) === 'supervisor_manual') {
+                $next = (int) bcdiv(bcmul((string) CleaningV3CashSettlementBasis::cents($calc['supervisorPayableSyp']), (string) $cursor, 0), (string) $seconds, 0);
+            }
             $key = 'supervisor:'.$proof['supervisor_user_id'];
             $supervisorPayables[$key] = ($supervisorPayables[$key] ?? 0) + $next - $previous;
             $previous = $next;
         }
         $calc['supervisorPayables'] = array_map(CleaningV3CashSettlementBasis::money(...), $supervisorPayables);
+        if (($calc['cashCollectionMode'] ?? null) === 'supervisor_manual') {
+            $calc['collectorUserId'] = (int) end($proofs)['supervisor_user_id'];
+        }
         $calc['supervisorProofReferences'] = array_column($proofs, 'proofReference');
         $calc['supervisorUserId'] = count($proofs) === 1 ? $proofs[0]['supervisor_user_id'] : null;
         $digest = hash('sha256', json_encode([$quote->id, $visit->id, $snapshot['pricingRevision'], $clock['revision'], $calc], JSON_THROW_ON_ERROR));

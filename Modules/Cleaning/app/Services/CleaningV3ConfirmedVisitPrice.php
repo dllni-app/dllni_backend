@@ -76,6 +76,9 @@ final class CleaningV3ConfirmedVisitPrice
         $supervisor = $basis['billingMode'] === 'task' && $row['pricedWorkers'] > 1
             ? (int) bcdiv(bcadd(bcmul((string) $cents($snapshot['settlementBasis']['supervisorHourlyCompensation']),
                 (string) $basis['plannedMinutes'], 0), '59', 0), '60', 0) : 0;
+        if (($basis['commissionAdded'] ?? false) === true) {
+            $supervisor = $cents($basis['supervisorVisitCompensation']);
+        }
         return ['workerObligationSyp' => $money($worker), 'supervisorObligationSyp' => $money($supervisor),
             'requiredFundingSyp' => $money($worker + $supervisor)];
     }

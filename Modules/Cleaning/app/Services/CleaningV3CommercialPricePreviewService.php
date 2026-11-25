@@ -87,6 +87,8 @@ final class CleaningV3CommercialPricePreviewService
         $rows = [];
         $settlementVisits = [];
         $supervisorCompensation = $this->money((string) $setting->supervisor_compensation_hourly_rate);
+        $fixedVisitCompensation = $setting->v3_supervisor_visit_compensation === null ? null
+            : $this->money((string) $setting->v3_supervisor_visit_compensation);
         $totalEligible = '0.00';
         $totalBeforeDiscount = '0.00';
         foreach ($plan['appointments'] as $appointment) {
@@ -125,15 +127,24 @@ final class CleaningV3CommercialPricePreviewService
                 $eq = $this->money($e['estimatedEquipmentAmountSyp']);
                 $workers = $visit['requiredWorkers'];
                 $supervisor = $event === null && $workers > 1 ? $this->ceil(bcdiv(bcmul($supervisorRate, (string) $visit['durationMinutes'], 2), '60', 6)) : '0.00';
+                $manualTeam = $fixedVisitCompensation !== null && $event === null && $workers > 1;
+                $companyCommission = $manualTeam ? CleaningV3CashSettlementBasis::money(CleaningV3CashSettlementBasis::commissionCents(
+                    CleaningV3CashSettlementBasis::cents($base) + CleaningV3CashSettlementBasis::cents($addons),
+                    $commissionType, CleaningV3CashSettlementBasis::cents($commission)
+                )) : '0.00';
+                if ($manualTeam) {
+                    $supervisor = $fixedVisitCompensation;
+                }
                 $travel = $this->ceil(bcmul($transport, (string) $workers, 2));
                 // Preserve exact published tariff amounts; legacy whole-lira
                 // rounding applies to transport and scheduled supervisor fee.
-                $eligible = bcadd(bcadd($base, $addons, 2), bcadd($eq, $supervisor, 2), 2);
+                $eligible = bcadd(bcadd(bcadd($base, $addons, 2), bcadd($eq, $supervisor, 2), 2), $companyCommission, 2);
                 $gross = bcadd($eligible, $travel, 2);
                 $rows[$key] = [
                     'appointmentKey' => $appointment['appointmentKey'], 'occurrenceKey' => $key,
                     'pricedWorkers' => $workers, 'baseAmountSyp' => $base, 'addonsAmountSyp' => $addons,
                     'equipmentAmountSyp' => $eq, 'supervisorAmountSyp' => $supervisor,
+                    ...($fixedVisitCompensation === null ? [] : ['commissionAmountSyp' => $companyCommission]),
                     'minimumTopUpSyp' => '0.00', 'travelAmountSyp' => $travel,
                     'eligibleBeforeDiscountSyp' => $eligible,
                 ];
@@ -141,6 +152,7 @@ final class CleaningV3CommercialPricePreviewService
                     'billingMode' => $event === null ? 'task' : 'event',
                     'plannedMinutes' => $visit['durationMinutes'],
                     'materialAmountSyp' => $material,
+                    ...($manualTeam ? ['supervisorVisitCompensation' => $fixedVisitCompensation, 'commissionAdded' => true] : []),
                     'eventRateSyp' => $eventTariff['unitPriceSyp'] ?? $eventRate,
                     'eventRateMinutes' => $eventTariff !== null ? 60 : ($eventRate !== null ? 30 : null),
                 ];
@@ -217,6 +229,9 @@ final class CleaningV3CommercialPricePreviewService
         }
         $totals = array_fill_keys(['baseAmountSyp', 'addonsAmountSyp', 'equipmentAmountSyp', 'supervisorAmountSyp',
             'minimumTopUpSyp', 'travelAmountSyp', 'discountAmountSyp', 'additionalWorkerFeeSyp', 'totalAmountSyp'], '0.00');
+        if ($fixedVisitCompensation !== null) {
+            $totals['commissionAmountSyp'] = '0.00';
+        }
         foreach ($allocated['visits'] as $allocatedRow) {
             $key = $allocatedRow['visitKey'];
             $row = &$rows[$key];

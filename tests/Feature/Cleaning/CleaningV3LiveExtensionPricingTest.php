@@ -78,3 +78,38 @@ test('shortened event coupon remains limited by the final company commission', f
     expect(fn () => app(\Modules\Cleaning\Services\CleaningV3CashSettlementBasis::class)->assertValid($snapshot))
         ->toThrow(DomainException::class, 'V3_COUPON_EXCEEDS_COMMISSION');
 });
+
+test('team visit adds company commission above wages and freezes one supervisor fee through extension', function (): void {
+    $snapshot = extensionPricingFixture(false);
+    $snapshot['settlementBasis']['couponCommissionCapped'] = true;
+    $snapshot['settlementBasis']['visits']['visit-a']['commissionAdded'] = true;
+    $snapshot['settlementBasis']['visits']['visit-a']['supervisorVisitCompensation'] = '15000.00';
+    $row = &$snapshot['commercialReview']['visits'][0];
+    $row['supervisorAmountSyp'] = '15000.00';
+    $row['commissionAmountSyp'] = '20000.00';
+    $row['eligibleBeforeDiscountSyp'] = '235000.00';
+    $row['totalAmountSyp'] = '377000.00';
+    unset($row);
+    $calculator = app(\Modules\Cleaning\Services\CleaningV3CashSettlementCalculator::class);
+    $calc = $calculator->calculate($snapshot, 'visit-a', 3600, [
+        ['workerId' => 1, 'activeSeconds' => 3600],
+        ['workerId' => 2, 'activeSeconds' => 3600],
+    ], 3600);
+    expect($calc['totalDueSyp'])->toBe('377000.00')
+        ->and($calc['supervisorPayableSyp'])->toBe('15000.00')
+        ->and($calc['companyCommissionSyp'])->toBe('20000.00')
+        ->and($calc['companyNetCommissionSyp'])->toBe('10000.00')
+        ->and($calc['companyCashDueSyp'])->toBe('160000.00')
+        ->and($calc['commissionReceivableSyp'])->toBe('0.00')
+        ->and(array_column($calc['workerPayables'], 'grossPayableSyp'))->toBe(['101000.00', '101000.00'])
+        ->and(array_column($calc['workerPayables'], 'commissionReceivableSyp'))->toBe(['0.00', '0.00']);
+    $extension = app(CleaningV3LiveExtensionPricing::class)->revise($snapshot, 'visit-a', 30);
+    expect($extension['newTotalSyp'])->toBe('377000.00')
+        ->and($extension['supervisorObligationSyp'])->toBe('15000.00')
+        ->and($extension['requiredFundingSyp'])->toBe('217000.00');
+    $snapshot['commercialReview']['visits'][0]['commissionAmountSyp'] = '1.00';
+    expect(fn () => $calculator->calculate($snapshot, 'visit-a', 3600, [
+        ['workerId' => 1, 'activeSeconds' => 3600],
+        ['workerId' => 2, 'activeSeconds' => 3600],
+    ], 3600))->toThrow(DomainException::class, 'INVALID_V3_TEAM_CASH_POLICY');
+});
