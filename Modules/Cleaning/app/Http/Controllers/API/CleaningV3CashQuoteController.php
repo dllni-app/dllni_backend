@@ -90,7 +90,6 @@ final class CleaningV3CashQuoteController
                 if ($review['couponCode'] !== null && config('cleaning_v3_catalog.new_booking_admission_enabled', false)) {
                     $coupon = \App\Models\PlatformCoupon::query()->where('code', $review['couponCode'])->lockForUpdate()->firstOrFail();
                     if ($coupon->funding_type !== \App\Models\PlatformCoupon::FUNDING_PLATFORM
-                        || $coupon->cap_platform_funding_to_revenue
                         || ($coupon->max_platform_funding_amount !== null && bccomp($review['totals']['discountAmountSyp'], (string) $coupon->max_platform_funding_amount, 2) > 0)) {
                         throw new DomainException('V3_COUPON_FUNDING_POLICY_REVIEW_REQUIRED');
                     }

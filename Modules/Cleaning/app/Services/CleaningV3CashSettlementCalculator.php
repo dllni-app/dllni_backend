@@ -63,13 +63,16 @@ final class CleaningV3CashSettlementCalculator
         $fee = $cents($row['additionalWorkerFeeSyp']);
         $eligible = $base + $addons + $equipment + $supervisorFee + $topUp;
         $discount = min($eligible, $cents($row['discountAmountSyp']));
-        $total = $eligible + $travel + $fee - $discount;
         $labor = $base + $addons - $material;
         // Legacy commission is a separate worker debt, not a second charge
         // to the customer or an increase based on the extra-worker surcharge.
-        $commissionRate = $cents($basis['commission']);
-        $commission = $basis['commissionType'] === 'fixed' ? $commissionRate
-            : (int) bcdiv(bcadd(bcmul((string) ($base + $addons), (string) $commissionRate, 0), '999999', 0), '1000000', 0) * 100;
+        $commission = CleaningV3CashSettlementBasis::commissionCents($base + $addons, $basis['commissionType'], $cents($basis['commission']));
+        // New signed quotes cap the company-funded discount at the final
+        // commission too, including shortened time-based services.
+        if (($basis['couponCommissionCapped'] ?? false) === true) {
+            $discount = min($discount, $commission);
+        }
+        $total = $eligible + $travel + $fee - $discount;
         $supervised = $visit['billingMode'] === 'task' && $workers > 1;
         if ($supervised && ($supervisorActiveSeconds === null || $supervisorActiveSeconds < 1 || $supervisorActiveSeconds > $activeSeconds)) {
             throw new DomainException('V3_SUPERVISOR_ATTENDANCE_PROOF_REQUIRED');

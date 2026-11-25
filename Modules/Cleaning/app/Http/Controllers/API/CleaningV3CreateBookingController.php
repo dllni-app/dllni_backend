@@ -106,7 +106,6 @@ final class CleaningV3CreateBookingController
                 $coupon = $review['couponCode'] === null ? null : PlatformCoupon::query()
                     ->where('code', $review['couponCode'])->lockForUpdate()->firstOrFail();
                 if ($coupon !== null && ($coupon->funding_type !== PlatformCoupon::FUNDING_PLATFORM
-                    || $coupon->cap_platform_funding_to_revenue
                     || ($coupon->max_platform_funding_amount !== null
                         && bccomp($review['totals']['discountAmountSyp'], (string) $coupon->max_platform_funding_amount, 2) > 0))) {
                     throw new DomainException('V3_COUPON_FUNDING_POLICY_REVIEW_REQUIRED');
@@ -185,10 +184,14 @@ final class CleaningV3CreateBookingController
                     // use limits. Suppress legacy repricing/dispatch observers.
                     $subtotal = bcsub(bcadd($totals['totalAmountSyp'], $totals['discountAmountSyp'], 2),
                         $totals['additionalWorkerFeeSyp'], 2);
-                    CleaningBooking::withoutEvents(fn () => app(\App\Services\Coupons\PlatformCouponRedemptionService::class)->record(
+                    $redemption = CleaningBooking::withoutEvents(fn () => app(\App\Services\Coupons\PlatformCouponRedemptionService::class)->record(
                         $coupon, $customerId, PlatformCoupon::SECTION_CLEANING,
                         (float) $subtotal, (float) $totals['discountAmountSyp'], $booking,
                     ));
+                    $redemption->forceFill(['funding_type' => PlatformCoupon::FUNDING_PLATFORM,
+                        'platform_funded_amount' => $totals['discountAmountSyp'], 'merchant_funded_amount' => '0.00',
+                        'funding_snapshot' => ['version' => 1, 'source' => 'v3_company_commission_cap', 'quoteId' => $quote->id],
+                    ])->save();
                     $booking->forceFill(['discount_amount' => $totals['discountAmountSyp'],
                         'subtotal_before_discount' => $subtotal])->saveQuietly();
                 }

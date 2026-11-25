@@ -402,9 +402,9 @@ test('commercial price preview uses persisted transport and minimum once per app
         ->assertJsonPath('data.commercialPricePreview.totals.travelAmountSyp', '3000.00')
         ->assertJsonPath('data.commercialPricePreview.totals.supervisorAmountSyp', '10000.00')
         ->assertJsonPath('data.commercialPricePreview.totals.minimumTopUpSyp', '17000.00')
-        ->assertJsonPath('data.commercialPricePreview.totals.discountAmountSyp', '20000.00')
+        ->assertJsonPath('data.commercialPricePreview.totals.discountAmountSyp', '15000.00')
         ->assertJsonPath('data.commercialPricePreview.totals.additionalWorkerFeeSyp', '150000.00')
-        ->assertJsonPath('data.commercialPricePreview.totals.totalAmountSyp', '310000.00')
+        ->assertJsonPath('data.commercialPricePreview.totals.totalAmountSyp', '315000.00')
         ->assertJsonPath('data.commercialPricePreview.canQuote', false)
         ->assertJsonPath('data.quoteId', null);
     $fingerprint = $preview->json('data.commercialPricePreview.pricingFingerprint');
@@ -416,11 +416,19 @@ test('commercial price preview uses persisted transport and minimum once per app
         ->assertJsonPath('code', 'REQUOTE_REQUIRED');
     $coupon->update(['discount_type' => 'percentage', 'discount_value' => 100, 'max_discount_amount' => 30000]);
     $this->postJson($url, $form)->assertOk()
-        ->assertJsonPath('data.commercialPricePreview.totals.discountAmountSyp', '30000.00')
-        ->assertJsonPath('data.commercialPricePreview.totals.totalAmountSyp', '300000.00');
+        ->assertJsonPath('data.commercialPricePreview.totals.discountAmountSyp', '15000.00')
+        ->assertJsonPath('data.commercialPricePreview.totals.totalAmountSyp', '315000.00');
     $coupon->update(['discount_type' => 'fixed', 'discount_value' => 9999999]);
     $this->postJson($url, $form)->assertOk()
-        ->assertJsonPath('data.commercialPricePreview.totals.totalAmountSyp', '153300.00');
+        ->assertJsonPath('data.commercialPricePreview.totals.totalAmountSyp', '315000.00');
+    $coupon->update(['max_platform_funding_amount' => 5000]);
+    $this->postJson($url, $form)->assertOk()
+        ->assertJsonPath('data.commercialPricePreview.totals.discountAmountSyp', '5000.00');
+    $settings->update(['default_commission_rate' => 0]);
+    $this->postJson($url, $form)->assertStatus(422)->assertJsonPath('code', 'V3_COUPON_NO_COMMISSION_AVAILABLE');
+    $settings->update(['default_commission_rate' => 10]);
+    $coupon->update(['funding_type' => 'merchant']);
+    $this->postJson($url, $form)->assertStatus(422)->assertJsonPath('code', 'V3_COUPON_FUNDING_POLICY_REVIEW_REQUIRED');
     $coupon->update(['is_active' => false]);
     $this->postJson($url, $form)->assertStatus(422)->assertJsonPath('code', 'V3_COUPON_NOT_ELIGIBLE');
     $this->postJson($url, [...$form, 'preferences' => null])->assertStatus(422);

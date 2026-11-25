@@ -23,7 +23,15 @@ final class CleaningV3CashSettlementBasis
             throw new DomainException('INVALID_V3_SETTLEMENT_BASIS');
         }
         self::cents($basis['supervisorHourlyCompensation'] ?? null);
+        if (array_key_exists('couponCommissionCapped', $basis) && $basis['couponCommissionCapped'] !== true) {
+            throw new DomainException('INVALID_V3_SETTLEMENT_BASIS');
+        }
         foreach ($snapshot['commercialReview']['visits'] as $row) {
+            if (($basis['couponCommissionCapped'] ?? false) === true
+                && self::cents($row['discountAmountSyp']) > self::commissionCents(
+                    self::cents($row['baseAmountSyp']) + self::cents($row['addonsAmountSyp']), $basis['commissionType'], $commission)) {
+                throw new DomainException('V3_COUPON_EXCEEDS_COMMISSION');
+            }
             $visit = $basis['visits'][$row['occurrenceKey']] ?? null;
             if (! is_array($visit) || ! in_array($visit['billingMode'] ?? null, ['task', 'event'], true)
                 || ! is_int($visit['plannedMinutes'] ?? null) || $visit['plannedMinutes'] < 1 || $visit['plannedMinutes'] > 480
@@ -64,6 +72,17 @@ final class CleaningV3CashSettlementBasis
             throw new DomainException('V3_SETTLEMENT_AMOUNT_OVERFLOW');
         }
         return (int) $amount;
+    }
+
+    /** Match the existing commission policy exactly (whole-lira ceiling for a percentage). */
+    public static function commissionCents(int $serviceCents, string $type, int $rateCents): int
+    {
+        if ($serviceCents < 0 || $rateCents < 0 || ! in_array($type, ['fixed', 'percent'], true)
+            || ($type === 'percent' && $rateCents > 10000)) {
+            throw new DomainException('INVALID_V3_SETTLEMENT_BASIS');
+        }
+        return $type === 'fixed' ? $rateCents
+            : (int) bcdiv(bcadd(bcmul((string) $serviceCents, (string) $rateCents, 0), '999999', 0), '1000000', 0) * 100;
     }
 
     public static function cents(mixed $value): int

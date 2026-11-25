@@ -136,3 +136,17 @@ test('percent above 100, coupon float amounts and unsupported types are rejected
         'type' => 'fixed', 'amount' => '5.00', 'workerFeeIncluded' => true,
     ]))->toThrow(DomainException::class, 'INVALID_V3_COUPON');
 });
+
+test('company coupon is capped separately by each visit commission regardless of fee or eligible base', function (): void {
+    $allocator = app(CleaningV3VisitDiscountAllocator::class);
+    $visits = [discountVisit('a', '500000.00', 3), discountVisit('b', '100000.00', 1), discountVisit('c', '400000.00', 2)];
+    $caps = ['a' => '1000.00', 'b' => '9000.00', 'c' => '0.00'];
+    $result = $allocator->allocate($visits, ['type' => 'fixed', 'amount' => '100000.00'], $caps);
+    expect($result['discountTotal'])->toBe('10000.00')
+        ->and(array_column($result['visits'], 'discountAllocated'))->toBe(['1000.00', '9000.00', '0.00'])
+        ->and($result['additionalWorkerFees'])->toBe('450000.00');
+    $result = $allocator->allocate($visits, ['type' => 'percent', 'amount' => '0.50'], $caps);
+    expect(array_column($result['visits'], 'discountAllocated'))->toBe(['500.00', '4500.00', '0.00']);
+    expect(fn () => $allocator->allocate($visits, ['type' => 'fixed', 'amount' => '1.00'], ['a' => '1.00']))
+        ->toThrow(DomainException::class, 'INVALID_V3_COMMISSION_CAPS');
+});

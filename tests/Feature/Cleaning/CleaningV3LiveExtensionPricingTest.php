@@ -58,3 +58,23 @@ test('unconfigured independent treasury cannot authorize any allocation', functi
     expect(fn () => app(CleaningV3TreasuryAllocationVerifier::class)->verify([]))
         ->toThrow(DomainException::class, 'V3_TREASURY_VERIFIER_NOT_CONFIGURED');
 });
+
+test('shortened event coupon remains limited by the final company commission', function (): void {
+    $snapshot = extensionPricingFixture(true);
+    $snapshot['settlementBasis']['couponCommissionCapped'] = true;
+    $snapshot['commercialReview']['visits'][0]['discountAmountSyp'] = '20000.00';
+    $snapshot['commercialReview']['visits'][0]['totalAmountSyp'] = '332000.00';
+    $calc = app(\Modules\Cleaning\Services\CleaningV3CashSettlementCalculator::class)->calculate(
+        $snapshot, 'visit-a', 3600, [
+            ['workerId' => 1, 'activeSeconds' => 3600],
+            ['workerId' => 2, 'activeSeconds' => 3600],
+        ],
+    );
+    expect($calc['discountAmountSyp'])->toBe('10000.00')
+        ->and($calc['commissionReceivableSyp'])->toBe('10000.00')
+        ->and($calc['additionalWorkerFeeSyp'])->toBe('150000.00')
+        ->and($calc['totalDueSyp'])->toBe('242000.00');
+    $snapshot['commercialReview']['visits'][0]['discountAmountSyp'] = '20000.01';
+    expect(fn () => app(\Modules\Cleaning\Services\CleaningV3CashSettlementBasis::class)->assertValid($snapshot))
+        ->toThrow(DomainException::class, 'V3_COUPON_EXCEEDS_COMMISSION');
+});

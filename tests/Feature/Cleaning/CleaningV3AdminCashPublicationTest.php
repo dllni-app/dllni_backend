@@ -391,7 +391,7 @@ test('confirmed cash booking persists one unpaid held order and exact visits, wi
             'discount_type' => 'fixed', 'discount_value' => 20000,
             'audience_type' => 'all_users', 'is_active' => true, 'total_usage_limit' => 1,
             'per_user_usage_limit' => 1, 'funding_type' => 'platform',
-            'cap_platform_funding_to_revenue' => false,
+            'cap_platform_funding_to_revenue' => true,
         ]);
         $form['couponCode'] = $coupon->code;
     }
@@ -428,6 +428,7 @@ test('confirmed cash booking persists one unpaid held order and exact visits, wi
     if ($withCoupon) {
         expect((int) $coupon->fresh()->used_count)->toBe(1)
             ->and(\App\Models\PlatformCouponRedemption::query()->count())->toBe(1)
+            ->and(\App\Models\PlatformCouponRedemption::query()->first()->platform_funded_amount)->toBe('20000.00')
             ->and($booking->fresh()->total_price)->toEqual(188500.50);
         $this->postJson('/api/v1/cleaning/v3/visit-plan/preview', $form)->assertStatus(422);
     }

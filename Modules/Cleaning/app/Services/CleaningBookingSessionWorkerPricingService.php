@@ -85,8 +85,7 @@ final class CleaningBookingSessionWorkerPricingService
         $travel = $cents($row['travelAmountSyp']);
         $policy = $snapshot['settlementBasis'];
         $rate = $cents($policy['commission']);
-        $commission = $policy['commissionType'] === 'fixed' ? $rate
-            : (int) bcdiv(bcadd(bcmul((string) $base, (string) $rate, 0), '999999', 0), '1000000', 0) * 100;
+        $commission = CleaningV3CashSettlementBasis::commissionCents($base, $policy['commissionType'], $rate);
         $share = static fn (int $pool): int => intdiv($pool * ($acceptedBefore + 1), $workers)
             - intdiv($pool * $acceptedBefore, $workers);
         $service = $share($labor);

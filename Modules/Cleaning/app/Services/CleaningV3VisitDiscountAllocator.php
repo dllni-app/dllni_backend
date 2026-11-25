@@ -28,7 +28,7 @@ final class CleaningV3VisitDiscountAllocator
      * @param  array<string, mixed>|null  $coupon
      * @return array<string, mixed>
      */
-    public function allocate(array $visits, ?array $coupon = null): array
+    public function allocate(array $visits, ?array $coupon = null, ?array $commissionCaps = null): array
     {
         if (! array_is_list($visits) || $visits === [] || count($visits) > 90) {
             throw new DomainException('INVALID_V3_VISIT_DISCOUNT_INPUT');
@@ -65,18 +65,31 @@ final class CleaningV3VisitDiscountAllocator
             $totalBase += $base;
         }
 
-        $discountTotal = $this->discount($coupon, $totalBase);
+        // When commission caps are supplied, each visit can spend only its
+        // own company commission. Keep existing discount math for older callers.
+        $weights = array_column($bases, 'base');
+        $weights = array_combine(array_keys($bases), $weights);
+        if ($commissionCaps !== null) {
+            if (count($commissionCaps) !== count($bases) || array_diff_key($bases, $commissionCaps) !== []) {
+                throw new DomainException('INVALID_V3_COMMISSION_CAPS');
+            }
+            foreach ($bases as $key => $entry) {
+                $weights[$key] = min($entry['base'], $this->cents($commissionCaps[$key]));
+            }
+        }
+        $weightTotal = array_sum($weights);
+        $discountTotal = min($weightTotal, $this->discount($coupon, $totalBase));
         $allocated = array_fill_keys(array_keys($bases), 0);
 
-        if ($discountTotal > 0 && $totalBase > 0) {
+        if ($discountTotal > 0 && $weightTotal > 0) {
             $distributed = 0;
             $remainders = [];
             foreach ($bases as $key => $entry) {
                 // PHP integer multiplication can overflow for valid SYP
                 // amounts. Keep the whole numerator in exact decimal math.
-                $numerator = bcmul((string) $entry['base'], (string) $discountTotal, 0);
-                $allocated[$key] = (int) bcdiv($numerator, (string) $totalBase, 0);
-                $remainders[$key] = (int) bcmod($numerator, (string) $totalBase);
+                $numerator = bcmul((string) $weights[$key], (string) $discountTotal, 0);
+                $allocated[$key] = (int) bcdiv($numerator, (string) $weightTotal, 0);
+                $remainders[$key] = (int) bcmod($numerator, (string) $weightTotal);
                 $distributed += $allocated[$key];
             }
             $remaining = $discountTotal - $distributed;

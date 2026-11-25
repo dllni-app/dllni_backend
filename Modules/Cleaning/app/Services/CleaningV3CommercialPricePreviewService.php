@@ -192,12 +192,29 @@ final class CleaningV3CommercialPricePreviewService
             } else {
                 throw new DomainException('V3_COUPON_INVALID');
             }
+            if ($coupon->funding_type !== PlatformCoupon::FUNDING_PLATFORM) {
+                throw new DomainException('V3_COUPON_FUNDING_POLICY_REVIEW_REQUIRED');
+            }
+            if ($coupon->max_platform_funding_amount !== null) {
+                $cap = $this->money((string) $coupon->max_platform_funding_amount);
+                $amount = bccomp($amount, $cap, 2) > 0 ? $cap : $amount;
+            }
             $approvedDiscount = ['type' => 'fixed', 'amount' => $amount];
+        }
+        $commissionCaps = [];
+        foreach ($rows as $key => $row) {
+            $commissionCaps[$key] = CleaningV3CashSettlementBasis::money(CleaningV3CashSettlementBasis::commissionCents(
+                CleaningV3CashSettlementBasis::cents($row['baseAmountSyp']) + CleaningV3CashSettlementBasis::cents($row['addonsAmountSyp']),
+                $commissionType, CleaningV3CashSettlementBasis::cents($commission),
+            ));
         }
         $allocated = $this->discounts->allocate(array_map(static fn ($row) => [
             'visitKey' => $row['occurrenceKey'], 'pricedWorkers' => $row['pricedWorkers'],
             'eligibleNetBeforeDiscount' => $row['eligibleBeforeDiscountSyp'],
-        ], array_values($rows)), $approvedDiscount);
+        ], array_values($rows)), $approvedDiscount, $commissionCaps);
+        if ($coupon !== null && $allocated['discountTotal'] === '0.00') {
+            throw new DomainException('V3_COUPON_NO_COMMISSION_AVAILABLE');
+        }
         $totals = array_fill_keys(['baseAmountSyp', 'addonsAmountSyp', 'equipmentAmountSyp', 'supervisorAmountSyp',
             'minimumTopUpSyp', 'travelAmountSyp', 'discountAmountSyp', 'additionalWorkerFeeSyp', 'totalAmountSyp'], '0.00');
         foreach ($allocated['visits'] as $allocatedRow) {
@@ -225,6 +242,7 @@ final class CleaningV3CommercialPricePreviewService
             'couponCode' => $coupon?->code, 'totals' => $totals, 'visits' => array_values($rows),
             'settlementBasis' => ['version' => 1, 'commissionType' => $commissionType,
                 'commission' => $commission, 'supervisorHourlyCompensation' => $supervisorCompensation,
+                'couponCommissionCapped' => true,
                 'visits' => $settlementVisits],
         ];
         return [...$result, 'pricingFingerprint' => hash('sha256', json_encode([
