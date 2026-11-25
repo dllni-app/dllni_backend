@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Services;
 
 use App\Models\Worker;
+use DomainException;
+use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
 
@@ -25,6 +27,17 @@ final class CleaningBookingSessionWorkerPricingService
         $booking = $session->relationLoaded('booking')
             ? $session->booking
             : $session->booking()->firstOrFail();
+
+        if ($booking->contract_version === 'v3') {
+            return DB::transaction(function () use ($booking, $session, $acceptedBefore): array {
+                $lockedBooking = CleaningBooking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
+                $visit = $lockedBooking->sessions()->whereKey($session->id)->lockForUpdate()->firstOrFail();
+                [, $snapshot, $row, $basis, $revision] = app(CleaningV3LiveExtensionService::class)->effectivePrice($lockedBooking, $visit);
+                app(CleaningV3ConfirmedVisitPrice::class)->assertPersisted($visit, $row, $basis, $revision);
+
+                return $this->signedSeat($snapshot, $row, $basis, $acceptedBefore);
+            }, 3);
+        }
 
         $requiredWorkers = max(1, (int) ($session->required_workers ?? 1));
         $slot = min($requiredWorkers, max(1, $acceptedBefore + 1));
@@ -55,6 +68,36 @@ final class CleaningBookingSessionWorkerPricingService
             // a second time from the worker's service + travel entitlement.
             'workerAmount' => round(max(0.0, $serviceShare + $travel), 2),
             'currency' => (string) config('app.currency', 'SYP'),
+        ];
+    }
+
+    /** Estimate an offered seat from the signed terms, not actual attendance or a payout. */
+    private function signedSeat(array $snapshot, array $row, array $basis, int $acceptedBefore): array
+    {
+        app(CleaningV3CashSettlementBasis::class)->assertValid($snapshot);
+        $workers = $row['pricedWorkers'];
+        if ($acceptedBefore < 0 || $acceptedBefore >= $workers) {
+            throw new DomainException('V3_WORKER_SEAT_UNAVAILABLE');
+        }
+        $cents = CleaningV3CashSettlementBasis::cents(...);
+        $base = $cents($row['baseAmountSyp']) + $cents($row['addonsAmountSyp']);
+        $labor = $base - $cents($basis['materialAmountSyp']);
+        $travel = $cents($row['travelAmountSyp']);
+        $policy = $snapshot['settlementBasis'];
+        $rate = $cents($policy['commission']);
+        $commission = $policy['commissionType'] === 'fixed' ? $rate
+            : (int) bcdiv(bcadd(bcmul((string) $base, (string) $rate, 0), '999999', 0), '1000000', 0) * 100;
+        $share = static fn (int $pool): int => intdiv($pool * ($acceptedBefore + 1), $workers)
+            - intdiv($pool * $acceptedBefore, $workers);
+        $service = $share($labor);
+        $transport = $share($travel);
+
+        return [
+            'serviceShareAmount' => $service / 100.0,
+            'travelFee' => $transport / 100.0,
+            'adminMarginAmount' => $share($commission) / 100.0,
+            'workerAmount' => ($service + $transport) / 100.0,
+            'currency' => 'SYP',
         ];
     }
 

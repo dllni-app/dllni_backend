@@ -37,6 +37,11 @@ final class CleaningV3PendingRevisionService
         }
         $visits = $booking->sessions()->orderBy('id')->lockForUpdate()->get();
         $ids = $visits->pluck('id');
+        // A new price cannot orphan independently reserved funds. Require
+        // external reconciliation before replacing an already funded quote.
+        if (DB::table('cleaning_visit_funding_reservations')->whereIn('active_visit_id', $ids)->exists()) {
+            throw new DomainException('V3_REVISION_FUNDING_RECONCILIATION_REQUIRED');
+        }
         if ($visits->isEmpty() || $visits->contains(fn ($v) => $v->status->value !== 'scheduled'
             || (int) $v->price_revision !== $expectedRevision || $v->workerAssignments()->exists())
             || DB::table('cleaning_v3_visit_dispatches')->whereIn('cleaning_booking_session_id', $ids)->exists()

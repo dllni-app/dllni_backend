@@ -559,6 +559,22 @@ test('pending signed revision updates the same visit, preserves historical quote
     $review = app(\Modules\Cleaning\Services\CleaningV3OperationalAdmissionReview::class)->review($booking->id);
     expect($review['fundingVerified'])->toBeTrue()->and($review['canDispatch'])->toBeFalse();
 
+    // The worker offer must use the same frozen signed commercial terms as
+    // the funding requirement, even after the runtime settings change.
+    $pricing = app(\Modules\Cleaning\Services\CleaningBookingSessionWorkerPricingService::class);
+    $worker = \App\Models\Worker::factory()->create();
+    $before = $pricing->quoteForNextSeat($visit->fresh(), $worker, 0);
+    $other = $pricing->quoteForNextSeat($visit->fresh(), $worker, 1);
+    expect(round($before['workerAmount'] + $other['workerAmount'], 2))
+        ->toBe((float) $requirement['workerObligationSyp']);
+    DB::table('cleaning_financial_settings')->update(['travel_markup_value' => 80000]);
+    expect($pricing->quoteForNextSeat($visit->fresh(), $worker, 0))->toBe($before);
+    expect(fn () => $pricing->quoteForNextSeat($visit->fresh(), $worker, 2))
+        ->toThrow(\DomainException::class, 'V3_WORKER_SEAT_UNAVAILABLE');
+    expect(fn () => DB::transaction(fn () => app(\Modules\Cleaning\Services\CleaningV3PendingRevisionService::class)
+        ->lock($customer->id, $booking->id, 2)))
+        ->toThrow(\DomainException::class, 'V3_REVISION_FUNDING_RECONCILIATION_REQUIRED');
+
     // Simulate an already admitted visit solely in this isolated integration test.
     $booking->refresh();
     $visit->refresh();

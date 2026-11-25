@@ -80,6 +80,9 @@ final class CleaningBookingSessionAcceptanceService
     public function acceptAllAvailableSessions(CleaningBooking $booking, Worker $worker): array
     {
         return DB::transaction(function () use ($booking, $worker): array {
+            if ($booking->contract_version === 'v3') {
+                $booking = CleaningBooking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
+            }
             $this->lockWorkerFinancialRow($worker);
 
             $sessions = CleaningBookingSession::query()
@@ -142,6 +145,9 @@ final class CleaningBookingSessionAcceptanceService
         }
 
         return DB::transaction(function () use ($booking, $worker, $requestedIds): array {
+            if ($booking->contract_version === 'v3') {
+                $booking = CleaningBooking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
+            }
             $this->lockWorkerFinancialRow($worker);
 
             /** @var Collection<int, CleaningBookingSession> $sessions */
