@@ -329,6 +329,10 @@ final class CleaningV3CashSettlementService
             throw new DomainException('V3_SETTLEMENT_SUPERVISION_MISMATCH');
         }
         $proofs = $supervised ? app(CleaningV3SupervisorAttendanceProofService::class)->verified($visit) : [];
+        $manualTeam = ($snapshot['settlementBasis']['visits'][$visit->occurrence_key]['commissionAdded'] ?? false) === true;
+        if ($manualTeam && count($proofs) !== 1) {
+            throw new DomainException('V3_SUPERVISOR_REPLACEMENT_NOT_ALLOWED');
+        }
         $seconds = array_sum(array_column($proofs, 'active_seconds'));
         $calc = app(CleaningV3CashSettlementCalculator::class)->calculate(
             $snapshot, $visit->occurrence_key, $clock['activeSeconds'], $attendance, $supervised ? $seconds : null,
@@ -341,7 +345,7 @@ final class CleaningV3CashSettlementService
             $cursor += $proof['active_seconds'];
             $next = (int) bcdiv(bcadd(bcmul((string) $rate, (string) $cursor, 0), '1800', 0), '3600', 0);
             if (($calc['cashCollectionMode'] ?? null) === 'supervisor_manual') {
-                $next = (int) bcdiv(bcmul((string) CleaningV3CashSettlementBasis::cents($calc['supervisorPayableSyp']), (string) $cursor, 0), (string) $seconds, 0);
+                $next = CleaningV3CashSettlementBasis::cents($calc['supervisorPayableSyp']);
             }
             $key = 'supervisor:'.$proof['supervisor_user_id'];
             $supervisorPayables[$key] = ($supervisorPayables[$key] ?? 0) + $next - $previous;

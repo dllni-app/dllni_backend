@@ -461,8 +461,13 @@ final class CleaningV3WorkClockCommandService
                 [$quote, $snapshot, $row, $basis, $revision] = app(CleaningV3LiveExtensionService::class)->effectivePrice($booking, $visit);
                 app(CleaningV3ConfirmedVisitPrice::class)->assertPersisted($visit, $row, $basis, $revision);
                 $digest = app(CleaningV3LiveExtensionPricing::class)->digest($quote->id, (int) $booking->id, (int) $visit->id, $revision, $row, $basis);
-                app(CleaningV3VerifiedTreasuryReservationService::class)->assertVerified($booking, $visit, $quote->id, $revision, $digest,
-                    app(CleaningV3ConfirmedVisitPrice::class)->obligations($snapshot, $row, $basis));
+                $obligations = app(CleaningV3ConfirmedVisitPrice::class)->obligations($snapshot, $row, $basis);
+                $cashPolicy = app(CleaningV3SupervisorCashPolicy::class);
+                if ($cashPolicy->applies($basis)) {
+                    $cashPolicy->assertPayable($booking, $visit, $row, $basis, $obligations);
+                } else {
+                    app(CleaningV3VerifiedTreasuryReservationService::class)->assertVerified($booking, $visit, $quote->id, $revision, $digest, $obligations);
+                }
             }
         } catch (\DomainException $exception) {
             $this->fail($exception->getMessage());

@@ -74,24 +74,30 @@ final class CleaningV3OperationalAdmissionReview
             }
             $fundingRequests = [];
             $fundingVerified = $valid && $visits->isNotEmpty();
+            $paymentPolicyReady = $fundingVerified;
             foreach ($visits as $visit) {
                 try {
                     $request = app(CleaningV3OperationalFundingService::class)->requirement($booking, $visit);
                     $fundingRequests[] = $request;
                     $fundingVerified = $fundingVerified && $request['verified'];
+                    $paymentPolicyReady = $paymentPolicyReady && ($request['verified'] || ($request['cashPricePayable'] ?? false));
                 } catch (DomainException $e) {
                     $fundingVerified = false;
+                    $paymentPolicyReady = false;
                     $fundingRequests[] = ['visitId' => (int) $visit->id, 'verified' => false, 'blocker' => $e->getMessage()];
                 }
             }
-            if (! $fundingVerified) {
-                $issues[] = 'CLEARED_FUNDING_SOURCE_INTEGRATION_REQUIRED';
+            if (! $paymentPolicyReady) {
+                $issues[] = 'VISIT_PAYMENT_POLICY_REVIEW_REQUIRED';
+                if (collect($fundingRequests)->contains(fn ($r) => ($r['collectionMode'] ?? null) !== 'supervisor_manual')) {
+                    $issues[] = 'CLEARED_FUNDING_SOURCE_INTEGRATION_REQUIRED';
+                }
             }
             // Never convert signed proof or APK metadata into proof of a
             // compatible deployed worker/supervisor execution contract.
             $issues[] = 'SIGNED_APK_ROLLOUT_AND_VISIT_EXECUTION_QA_REQUIRED';
             return ['bookingId' => $bookingId, 'signedPriceVerified' => $valid,
-                'visitCount' => $visits->count(), 'fundingVerified' => $fundingVerified, 'fundingRequests' => $fundingRequests,
+                'visitCount' => $visits->count(), 'fundingVerified' => $fundingVerified, 'paymentPolicyReady' => $paymentPolicyReady, 'fundingRequests' => $fundingRequests,
                 'canDispatch' => false, 'blockers' => array_values(array_unique($issues))];
         }, 3);
     }

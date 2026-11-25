@@ -40,8 +40,11 @@ final class CleaningSupervisorBookingScheduleService
     public function intervals(CleaningBooking $booking): array
     {
         $windows = [];
-        if ((string) $booking->booking_kind === 'open_time') {
+        if ($booking->contract_version === 'v3' || (string) $booking->booking_kind === 'open_time') {
             foreach ($booking->sessions()->get() as $session) {
+                if ($booking->contract_version === 'v3' && ($session->isTerminal() || $session->supervision_mode !== CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR)) {
+                    continue;
+                }
                 $start = $session->startsAt();
                 $end = $session->endsAt();
                 if ($start !== null && $end !== null && $end->greaterThan($start)) {

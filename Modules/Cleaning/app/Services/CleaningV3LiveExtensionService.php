@@ -43,8 +43,13 @@ final class CleaningV3LiveExtensionService
             [$quote, $snapshot, $row, $basis, $revision] = $this->effectivePrice($booking, $visit);
             app(CleaningV3ConfirmedVisitPrice::class)->assertPersisted($visit, $row, $basis, $revision);
             $digest = app(CleaningV3LiveExtensionPricing::class)->digest($quote->id, $bookingId, $visitId, $revision, $row, $basis);
-            app(CleaningV3VerifiedTreasuryReservationService::class)->assertVerified($booking, $visit, $quote->id, $revision, $digest,
-                app(CleaningV3ConfirmedVisitPrice::class)->obligations($snapshot, $row, $basis));
+            $obligations = app(CleaningV3ConfirmedVisitPrice::class)->obligations($snapshot, $row, $basis);
+            $cashPolicy = app(CleaningV3SupervisorCashPolicy::class);
+            if ($cashPolicy->applies($basis)) {
+                $cashPolicy->assertPayable($booking, $visit, $row, $basis, $obligations);
+            } else {
+                app(CleaningV3VerifiedTreasuryReservationService::class)->assertVerified($booking, $visit, $quote->id, $revision, $digest, $obligations);
+            }
             $price = app(CleaningV3LiveExtensionPricing::class)->revise($snapshot, $visit->occurrence_key, $minutes);
             $clock = app(CleaningV3WorkClockProjectionService::class)->project($visit);
             $this->assertWindow($visit, $price['newMinutes'], $clock['activeSeconds']);
@@ -173,6 +178,9 @@ final class CleaningV3LiveExtensionService
                 'decision_mac' => $this->mac('crew', [$row->customer_confirmation_mac, (int) $actor->id, $status, $at]),
                 'updated_at' => now(),
             ]);
+            if ($status === 'crew_approved' && ($p['price']['basis']['commissionAdded'] ?? false) === true) {
+                return $this->applyApproved($bookingId, $visitId, $id, null);
+            }
             return $this->present($this->find($visitId, $id));
         }, 3);
     }
@@ -210,6 +218,11 @@ final class CleaningV3LiveExtensionService
     public function apply(int $bookingId, int $visitId, string $id, array $proof): array
     {
         abort_unless(CleaningV3CashSettlementService::authorized(), 403);
+        return $this->applyApproved($bookingId, $visitId, $id, $proof);
+    }
+
+    private function applyApproved(int $bookingId, int $visitId, string $id, ?array $proof): array
+    {
         return DB::transaction(function () use ($bookingId, $visitId, $id, $proof) {
             [$booking, $visit] = $this->lock($bookingId, $visitId);
             $row = $this->find($visitId, $id);
@@ -235,12 +248,25 @@ final class CleaningV3LiveExtensionService
             app(CleaningV3EquipmentResumeGuard::class)->extend($visit, $end);
             $oldDigest = $pricing->digest($original->id, $bookingId, $visitId, $revision, $currentRow, $currentBasis);
             $funding = app(CleaningV3VerifiedTreasuryReservationService::class);
-            $funding->assertVerified($booking, $visit, $original->id, $revision, $oldDigest,
-                app(CleaningV3ConfirmedVisitPrice::class)->obligations($snapshot, $currentRow, $currentBasis));
+            $oldObligations = app(CleaningV3ConfirmedVisitPrice::class)->obligations($snapshot, $currentRow, $currentBasis);
             $obligations = array_intersect_key($price, array_flip(['workerObligationSyp', 'supervisorObligationSyp', 'requiredFundingSyp']));
-            $digest = $pricing->digest($original->id, $bookingId, $visitId, $revision + 1, $price['row'], $price['basis']);
-            $funding->reserve($booking, $visit, $original->id, $revision + 1, $digest, $obligations, $proof, (int) auth()->id());
-            $allocation = app(CleaningV3TreasuryAllocationVerifier::class)->verify($proof);
+            $cashPolicy = app(CleaningV3SupervisorCashPolicy::class);
+            $allocationId = null;
+            if ($cashPolicy->applies($currentBasis)) {
+                $cashPolicy->assertPayable($booking, $visit, $currentRow, $currentBasis, $oldObligations);
+                $cashPolicy->assertPayable($booking, $visit, $price['row'], $price['basis'], $obligations);
+                if ($proof !== null) {
+                    throw new DomainException('V3_SUPERVISOR_CASH_EXTERNAL_FUNDING_NOT_REQUIRED');
+                }
+            } else {
+                if ($proof === null) {
+                    throw new DomainException('V3_VERIFIED_TREASURY_RESERVATION_REQUIRED');
+                }
+                $funding->assertVerified($booking, $visit, $original->id, $revision, $oldDigest, $oldObligations);
+                $digest = $pricing->digest($original->id, $bookingId, $visitId, $revision + 1, $price['row'], $price['basis']);
+                $funding->reserve($booking, $visit, $original->id, $revision + 1, $digest, $obligations, $proof, (int) auth()->id());
+                $allocationId = app(CleaningV3TreasuryAllocationVerifier::class)->verify($proof)['allocationId'];
+            }
             $at = CarbonImmutable::now('UTC')->toDateTimeString();
             $parentTotal = bcadd((string) $booking->getRawOriginal('total_price'), $price['additionalAmountSyp'], 2);
             if (bccomp($parentTotal, '99999999.99', 2) > 0 || bccomp($price['newTotalSyp'], '99999999.99', 2) > 0) {
@@ -264,8 +290,8 @@ final class CleaningV3LiveExtensionService
             ])->saveQuietly();
             DB::table(self::TABLE)->where('id', $id)->update([
                 'status' => 'applied', 'applied_revision' => $revision + 1, 'applied_at' => $at,
-                'applied_allocation_id' => $allocation['allocationId'],
-                'applied_mac' => $this->mac('applied', [$row->decision_mac, $allocation['allocationId'], $at, $revision + 1]), 'updated_at' => now(),
+                'applied_allocation_id' => $allocationId,
+                'applied_mac' => $this->mac($allocationId === null ? 'applied-cash' : 'applied', [$row->decision_mac, $allocationId, $at, $revision + 1]), 'updated_at' => now(),
             ]);
             return $this->present($this->find($visitId, $id));
         }, 3);
@@ -407,9 +433,10 @@ final class CleaningV3LiveExtensionService
     {
         $this->assertCustomerConsent($row);
         $this->assertCrewConsent($row, 'crew_approved');
-        if ($row->status !== 'applied' || $row->applied_at === null || $row->applied_allocation_id === null
+        $manual = ($this->payload($row)['price']['basis']['commissionAdded'] ?? false) === true;
+        if ($row->status !== 'applied' || $row->applied_at === null || ($row->applied_allocation_id === null && ! $manual)
             || (int) $row->applied_revision !== (int) $row->next_revision || ! hash_equals((string) $row->applied_mac,
-                $this->mac('applied', [$row->decision_mac, $row->applied_allocation_id, (string) $row->applied_at, (int) $row->applied_revision]))) {
+                $this->mac($row->applied_allocation_id === null ? 'applied-cash' : 'applied', [$row->decision_mac, $row->applied_allocation_id, (string) $row->applied_at, (int) $row->applied_revision]))) {
             throw new DomainException('V3_EXTENSION_HISTORY_MISMATCH');
         }
     }

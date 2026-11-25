@@ -49,6 +49,24 @@ final class CleaningSupervisorAssignmentService
         return $booking->isSupervisedTeam() || $this->schedule->isEligible($booking);
     }
 
+    /** A booking keeps its supervisor once execution has begun, including pauses and handover. */
+    public function isExecutionLocked(CleaningBooking $booking): bool
+    {
+        if ($booking->work_started_at !== null || $booking->started_travel_at !== null || in_array($booking->status->value, [
+            'awaiting_start_verification', 'awaiting_worker_start_confirmation', 'in_progress',
+            'awaiting_customer_completion', 'time_extension_requested', 'under_dispute',
+            'partially_completed', 'completed', 'cancelled',
+        ], true) || in_array($booking->supervised_state, ['verification_pending', 'in_progress'], true)) {
+            return true;
+        }
+        return $booking->sessions()->where(function ($query): void {
+            $query->whereNotNull('work_started_at')->orWhereNotNull('started_travel_at')->orWhereIn('status', [
+                'awaiting_start_verification', 'awaiting_worker_start_confirmation', 'in_progress',
+                'paused', 'awaiting_customer_completion', 'time_extension_requested', 'under_dispute', 'completed',
+            ])->orWhereHas('workerAssignments', fn ($a) => $a->whereNotNull('work_started_at')->orWhereNotNull('start_approved_at'));
+        })->exists();
+    }
+
     public function activeSupervisorId(CleaningBooking $booking): ?int
     {
         $id = $booking->supervisorAssignments()->where('active_slot', 1)
@@ -82,6 +100,8 @@ final class CleaningSupervisorAssignmentService
             if ($existing && (int) $existing->supervisor_user_id === (int) $supervisor->id) {
                 return ['id' => (int) $existing->id, 'supervisorUserId' => (int) $supervisor->id, 'unchanged' => true];
             }
+
+            abort_if($this->isExecutionLocked($order), 409, 'لا يمكن تغيير المشرف بعد بدء تنفيذ الطلب.');
 
             $reason = $reason !== null ? mb_trim($reason) : null;
             if ($existing && ($reason === null || mb_strlen($reason) < 10 || mb_strlen($reason) > 500)) {

@@ -1202,6 +1202,12 @@ final class CleaningBookingSessionLifecycleService
         CleaningBooking $booking,
         CleaningBookingSession $session,
     ): CleaningBookingSession {
+        // Match the supervisor assignment and V3 acceptance lock order.
+        // Execution and a supervisor change must never race past one another.
+        if ($booking->contract_version === 'v3') {
+            CleaningBooking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
+        }
+
         $locked = CleaningBookingSession::query()
             ->whereKey($session->id)
             ->where('cleaning_booking_id', $booking->id)

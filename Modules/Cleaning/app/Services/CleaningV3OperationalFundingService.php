@@ -20,6 +20,20 @@ final class CleaningV3OperationalFundingService
         $digest = app(CleaningV3LiveExtensionPricing::class)->digest($quote->id, (int) $booking->id, (int) $visit->id, $revision, $row, $basis);
         $verified = false;
         $reason = null;
+        $cashPolicy = app(CleaningV3SupervisorCashPolicy::class);
+        if ($cashPolicy->applies($basis)) {
+            $payable = false;
+            try {
+                $cashPolicy->assertPayable($booking, $visit, $row, $basis, $obligations);
+                $payable = true;
+            } catch (DomainException $e) {
+                $reason = $e->getMessage();
+            }
+            return ['bookingId' => (int) $booking->id, 'visitId' => (int) $visit->id, 'quoteId' => $quote->id,
+                'pricingRevision' => $revision, 'pricingDigest' => $digest, 'currency' => 'SYP', ...$obligations,
+                'collectionMode' => 'supervisor_manual', 'verified' => false, 'cashPricePayable' => $payable,
+                'blocker' => $reason];
+        }
         try {
             app(CleaningV3VerifiedTreasuryReservationService::class)->assertVerified($booking, $visit, $quote->id, $revision, $digest, $obligations);
             $verified = true;
@@ -49,6 +63,9 @@ final class CleaningV3OperationalFundingService
                 throw new DomainException('V3_TREASURY_VISIT_NOT_ACTIVE');
             }
             $request = $this->requirement($booking, $visit);
+            if (($request['collectionMode'] ?? null) === 'supervisor_manual') {
+                throw new DomainException('V3_SUPERVISOR_CASH_EXTERNAL_FUNDING_NOT_REQUIRED');
+            }
             $obligations = array_intersect_key($request, array_flip(['workerObligationSyp', 'supervisorObligationSyp', 'requiredFundingSyp']));
             app(CleaningV3VerifiedTreasuryReservationService::class)->reserve($booking, $visit, $request['quoteId'],
                 $request['pricingRevision'], $request['pricingDigest'], $obligations, $proof, (int) auth()->id());

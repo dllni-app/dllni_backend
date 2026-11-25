@@ -275,6 +275,11 @@ test('cash reconciliation requires linked signed price, closed work, distinct ve
             $this->actingAs($admin);
         }
     }
+    if ($manualTeam && $replacement) {
+        expect(fn () => $service->review($booking->id, $visit->id))->toThrow(DomainException::class, 'V3_SUPERVISOR_REPLACEMENT_NOT_ALLOWED');
+        expect(DB::table('cleaning_v3_supervisor_cash_accounts')->count())->toBe(0);
+        return;
+    }
     $state = $service->review($booking->id, $visit->id);
     if ($manualTeam) {
         $accounting = app(\Modules\Cleaning\Services\CleaningV3SupervisorCashAccountingService::class);
@@ -382,7 +387,7 @@ test('cash reconciliation requires linked signed price, closed work, distinct ve
     }
         $this->actingAs($customer);
     expect(fn () => $service->review($booking->id, $visit->id))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
-})->with([[1, false], [2, false], [2, true], [2, false, true]]);
+})->with([[1, false], [2, false], [2, true], [2, false, true], [2, true, true]]);
 
 test('published catalog refuses deactivated sources and readiness reports valid publication separately', function (): void {
     [, $draft, $item] = adminCashCatalogFixture();
@@ -505,7 +510,7 @@ test('confirmed cash booking persists one unpaid held order and exact visits, wi
 })->with([false, true]);
 
 
-test('pending signed revision updates the same visit, preserves historical quote and rejects stale revisions', function (): void {
+test('pending signed revision updates the same visit, preserves historical quote and rejects stale revisions', function (bool $manual = false): void {
     [$admin, $draft] = adminCashCatalogFixture();
     config()->set('cleaning_v3_catalog.new_booking_admission_enabled', true);
     $version = app(CleaningV3AdminCatalogPublication::class)->publish($draft,
@@ -520,6 +525,7 @@ test('pending signed revision updates the same visit, preserves historical quote
     \App\Models\CleaningFinancialSetting::query()->create([
         ...\Modules\Cleaning\Support\CleaningRuntimeSettings::financialDefaults(),
         'travel_markup_value' => 1000, 'cleaning_minimum_order_price' => 1000,
+        'v3_supervisor_visit_compensation' => $manual ? 15000 : null,
     ]);
     $form = [
         'contractVersion' => 3, 'catalogVersionKey' => $version->version_key,
@@ -575,14 +581,23 @@ test('pending signed revision updates the same visit, preserves historical quote
     $this->getJson($draftUrl)->assertNotFound();
     $this->actingAs($admin);
     $review = app(\Modules\Cleaning\Services\CleaningV3OperationalAdmissionReview::class)->review($booking->id);
-    expect($review['signedPriceVerified'])->toBeTrue()->and($review['canDispatch'])->toBeFalse()
-        ->and($review['blockers'])->toContain('CLEARED_FUNDING_SOURCE_INTEGRATION_REQUIRED');
+    expect($review['signedPriceVerified'])->toBeTrue()->and($review['canDispatch'])->toBeFalse();
+    expect($review['paymentPolicyReady'])->toBe($manual);
+    if ($manual) {
+        expect($review['blockers'])->not->toContain('CLEARED_FUNDING_SOURCE_INTEGRATION_REQUIRED');
+    } else {
+        expect($review['blockers'])->toContain('CLEARED_FUNDING_SOURCE_INTEGRATION_REQUIRED');
+    }
 
     // Test-only isolated provider signature fixture; never a production credit.
     $fundingUrl = "/api/v1/cleaning-bookings/{$booking->id}/sessions/{$visit->id}";
     Sanctum::actingAs($admin);
     $requirement = $this->getJson($fundingUrl.'/funding-requirement')->assertOk()->assertJsonPath('data.verified', false)->json('data');
     $this->postJson($fundingUrl.'/funding-reservation', ['proof' => ['payload' => [], 'signature' => 'invalid']])->assertStatus(409);
+    if ($manual) {
+        expect($requirement['cashPricePayable'])->toBeTrue()->and($requirement['collectionMode'])->toBe('supervisor_manual');
+        expect(DB::table('cleaning_visit_funding_reservations')->count())->toBe(0);
+    } else {
     $pair = sodium_crypto_sign_keypair();
     config()->set('cleaning_v3_catalog.treasury_provider', 'isolated-test-custodian');
     config()->set('cleaning_v3_catalog.treasury_public_key', base64_encode(sodium_crypto_sign_publickey($pair)));
@@ -609,6 +624,7 @@ test('pending signed revision updates the same visit, preserves historical quote
     expect(DB::table('cleaning_visit_funding_reservations')->count())->toBe(1);
     $review = app(\Modules\Cleaning\Services\CleaningV3OperationalAdmissionReview::class)->review($booking->id);
     expect($review['fundingVerified'])->toBeTrue()->and($review['canDispatch'])->toBeFalse();
+    }
 
     // The worker offer must use the same frozen signed commercial terms as
     // the funding requirement, even after the runtime settings change.
@@ -622,9 +638,11 @@ test('pending signed revision updates the same visit, preserves historical quote
     expect($pricing->quoteForNextSeat($visit->fresh(), $worker, 0))->toBe($before);
     expect(fn () => $pricing->quoteForNextSeat($visit->fresh(), $worker, 2))
         ->toThrow(\DomainException::class, 'V3_WORKER_SEAT_UNAVAILABLE');
-    expect(fn () => DB::transaction(fn () => app(\Modules\Cleaning\Services\CleaningV3PendingRevisionService::class)
-        ->lock($customer->id, $booking->id, 2)))
-        ->toThrow(\DomainException::class, 'V3_REVISION_FUNDING_RECONCILIATION_REQUIRED');
+    if (! $manual) {
+        expect(fn () => DB::transaction(fn () => app(\Modules\Cleaning\Services\CleaningV3PendingRevisionService::class)
+            ->lock($customer->id, $booking->id, 2)))
+            ->toThrow(\DomainException::class, 'V3_REVISION_FUNDING_RECONCILIATION_REQUIRED');
+    }
 
     // Simulate an already admitted visit solely in this isolated integration test.
     $booking->refresh();
@@ -654,6 +672,14 @@ test('pending signed revision updates the same visit, preserves historical quote
     Sanctum::actingAs($supervisor);
     $this->postJson($fundingUrl.'/pause-requests/'.$pause.'/decision', ['commandKey' => 'pause-ok', 'expectedRevision' => 2, 'decision' => 'approve'])
         ->assertOk()->assertJsonPath('data.state', 'paused');
+    // A paused visit remains in execution: never replace its supervisor.
+    $replacementSupervisor = User::factory()->create(['is_active' => true]);
+    $replacementSupervisor->assignRole('Cleaning Supervisor');
+    $assignments = app(\Modules\Cleaning\Services\CleaningSupervisorAssignmentService::class);
+    expect($assignments->isExecutionLocked($booking->fresh()))->toBeTrue();
+    expect(fn () => $assignments->assign($admin, $booking->id, $replacementSupervisor->id, 'QA replacement reason', true))
+        ->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+    expect($assignments->activeSupervisorId($booking))->toBe($supervisor->id);
     $ext = $fundingUrl.'/live-extensions';
     Sanctum::actingAs($customer);
     $this->getJson($ext.'/context')->assertOk()->assertJsonPath('data.canQuote', true)
@@ -671,7 +697,12 @@ test('pending signed revision updates the same visit, preserves historical quote
     Sanctum::actingAs($supervisor);
     $this->getJson($ext.'/context')->assertOk()->assertJsonPath('data.canDecide', true)
         ->assertJsonPath('data.canConfirm', false);
-    $this->postJson($path.'/decision', ['decision' => 'approve'])->assertOk()->assertJsonPath('data.status', 'crew_approved');
+    $this->postJson($path.'/decision', ['decision' => 'approve'])->assertOk()->assertJsonPath('data.status', $manual ? 'applied' : 'crew_approved');
+    if ($manual) {
+        $this->postJson($path.'/decision', ['decision' => 'approve'])->assertOk()->assertJsonPath('data.status', 'applied');
+        expect(DB::table('cleaning_v3_live_extension_quotes')->where('id', $offer['extensionId'])->value('applied_allocation_id'))->toBeNull();
+        expect(DB::table('cleaning_v3_cash_movements')->count())->toBe(0);
+    } else {
     Sanctum::actingAs($admin);
     $next = $this->getJson($path.'/funding-requirement')->assertOk()->json('data');
     $replacement = $sign([...$allocation, 'allocationId' => (string) \Illuminate\Support\Str::uuid(),
@@ -680,11 +711,12 @@ test('pending signed revision updates the same visit, preserves historical quote
     $this->postJson($path.'/apply-funding', ['proof' => $proof])->assertStatus(409);
     $this->postJson($path.'/apply-funding', ['proof' => $replacement])->assertOk()->assertJsonPath('data.status', 'applied');
     $this->postJson($path.'/apply-funding', ['proof' => $replacement])->assertOk()->assertJsonPath('data.status', 'applied');
+    }
     expect((int) $visit->fresh()->price_revision)->toBe(3)->and((float) $visit->fresh()->duration_hours)->toBe(3.0)
-        ->and(DB::table('cleaning_visit_funding_reservations')->whereNotNull('active_visit_id')->count())->toBe(1)
-        ->and(DB::table('cleaning_visit_funding_reservations')->whereNotNull('released_at')->count())->toBe(1);
+        ->and(DB::table('cleaning_visit_funding_reservations')->whereNotNull('active_visit_id')->count())->toBe($manual ? 0 : 1)
+        ->and(DB::table('cleaning_visit_funding_reservations')->whereNotNull('released_at')->count())->toBe($manual ? 0 : 1);
     Sanctum::actingAs($supervisor);
     $this->postJson($fundingUrl.'/resume', ['commandKey' => 'stale-resume', 'expectedRevision' => 3])->assertStatus(409);
     $this->postJson($fundingUrl.'/resume', ['commandKey' => 'resume-extension', 'expectedRevision' => 4])
         ->assertOk()->assertJsonPath('data.state', 'running')->assertJsonPath('data.activeSeconds', 1200);
-});
+})->with([false, true]);

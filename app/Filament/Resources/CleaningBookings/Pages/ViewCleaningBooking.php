@@ -913,6 +913,7 @@ final class ViewCleaningBooking extends ViewRecord
             && $assignments->canAssign($user, fromDashboard: true)
             && CleaningBookingResource::canEdit($this->record)
             && $assignments->isEligible($this->record)
+            && ! $assignments->isExecutionLocked($this->record)
             && ! in_array($this->record->status, [CleaningBookingStatus::Completed, CleaningBookingStatus::Cancelled], true);
     }
 
