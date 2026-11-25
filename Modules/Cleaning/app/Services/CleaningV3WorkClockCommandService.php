@@ -455,6 +455,18 @@ final class CleaningV3WorkClockCommandService
                 $this->fail('V3_VISIT_RESCHEDULE_REQUIRED');
             }
         }
+        try {
+            app(CleaningV3EquipmentResumeGuard::class)->extend($visit, $endsAt);
+            if (data_get($booking->property_details, 'v3_admission_hold') === false) {
+                [$quote, $snapshot, $row, $basis, $revision] = app(CleaningV3LiveExtensionService::class)->effectivePrice($booking, $visit);
+                app(CleaningV3ConfirmedVisitPrice::class)->assertPersisted($visit, $row, $basis, $revision);
+                $digest = app(CleaningV3LiveExtensionPricing::class)->digest($quote->id, (int) $booking->id, (int) $visit->id, $revision, $row, $basis);
+                app(CleaningV3VerifiedTreasuryReservationService::class)->assertVerified($booking, $visit, $quote->id, $revision, $digest,
+                    app(CleaningV3ConfirmedVisitPrice::class)->obligations($snapshot, $row, $basis));
+            }
+        } catch (\DomainException $exception) {
+            $this->fail($exception->getMessage());
+        }
     }
 
     /** @return array{clock:array<string,mixed>,replayed:bool,pauseRequestId:?int} */

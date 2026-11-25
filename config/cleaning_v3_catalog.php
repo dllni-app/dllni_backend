@@ -11,6 +11,9 @@ return [
     'approved_publication_digest' => env('CLEANING_V3_APPROVED_PUBLICATION_DIGEST'),
     'admin_publication_enabled' => (bool) env('CLEANING_V3_ADMIN_PUBLICATION_ENABLED', false),
     'cash_quote_enabled' => (bool) env('CLEANING_V3_CASH_QUOTE_ENABLED', false),
+    // Independent cash custodian's Ed25519 public key; no private key here.
+    'treasury_provider' => env('CLEANING_V3_TREASURY_PROVIDER'),
+    'treasury_public_key' => env('CLEANING_V3_TREASURY_PUBLIC_KEY'),
     'cash_settlement_enabled' => (bool) env('CLEANING_V3_CASH_SETTLEMENT_ENABLED', false),
     'renderer_schema_version' => 3,
     'min_renderer_revision' => 1,

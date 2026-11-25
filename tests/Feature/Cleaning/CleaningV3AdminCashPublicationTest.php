@@ -526,4 +526,92 @@ test('pending signed revision updates the same visit, preserves historical quote
     $review = app(\Modules\Cleaning\Services\CleaningV3OperationalAdmissionReview::class)->review($booking->id);
     expect($review['signedPriceVerified'])->toBeTrue()->and($review['canDispatch'])->toBeFalse()
         ->and($review['blockers'])->toContain('CLEARED_FUNDING_SOURCE_INTEGRATION_REQUIRED');
+
+    // Test-only isolated provider signature fixture; never a production credit.
+    $fundingUrl = "/api/v1/cleaning-bookings/{$booking->id}/sessions/{$visit->id}";
+    Sanctum::actingAs($admin);
+    $requirement = $this->getJson($fundingUrl.'/funding-requirement')->assertOk()->assertJsonPath('data.verified', false)->json('data');
+    $this->postJson($fundingUrl.'/funding-reservation', ['proof' => ['payload' => [], 'signature' => 'invalid']])->assertStatus(409);
+    $pair = sodium_crypto_sign_keypair();
+    config()->set('cleaning_v3_catalog.treasury_provider', 'isolated-test-custodian');
+    config()->set('cleaning_v3_catalog.treasury_public_key', base64_encode(sodium_crypto_sign_publickey($pair)));
+    $sign = static function (array $data) use ($pair): array {
+        ksort($data);
+        return ['payload' => $data, 'signature' => base64_encode(sodium_crypto_sign_detached(
+            json_encode($data, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), sodium_crypto_sign_secretkey($pair)))];
+    };
+    $allocation = [
+        'schemaVersion' => 1, 'provider' => 'isolated-test-custodian', 'owner' => 'cleaning_platform', 'currency' => 'SYP',
+        'creditId' => 'isolated-test-credit', 'allocationId' => (string) \Illuminate\Support\Str::uuid(),
+        'bookingId' => $booking->id, 'visitId' => $visit->id, 'quoteId' => $requirement['quoteId'],
+        'pricingRevision' => $requirement['pricingRevision'], 'pricingDigest' => $requirement['pricingDigest'],
+        'grossCreditSyp' => '10000000.00', 'reservedSyp' => $requirement['requiredFundingSyp'],
+        'issuedAt' => now('UTC')->format('Y-m-d\TH:i:s\Z'), 'expiresAt' => now('UTC')->addHour()->format('Y-m-d\TH:i:s\Z'),
+        'state' => 'reserved', 'supersedesAllocationId' => null,
+    ];
+    $proof = $sign($allocation);
+    $wrong = $proof;
+    $wrong['payload']['grossCreditSyp'] = '20000000.00';
+    $this->postJson($fundingUrl.'/funding-reservation', ['proof' => $wrong])->assertStatus(409);
+    $this->postJson($fundingUrl.'/funding-reservation', ['proof' => $proof])->assertOk()->assertJsonPath('data.verified', true);
+    $this->postJson($fundingUrl.'/funding-reservation', ['proof' => $proof])->assertOk()->assertJsonPath('data.verified', true);
+    expect(DB::table('cleaning_visit_funding_reservations')->count())->toBe(1);
+    $review = app(\Modules\Cleaning\Services\CleaningV3OperationalAdmissionReview::class)->review($booking->id);
+    expect($review['fundingVerified'])->toBeTrue()->and($review['canDispatch'])->toBeFalse();
+
+    // Simulate an already admitted visit solely in this isolated integration test.
+    $booking->refresh();
+    $visit->refresh();
+    $booking->forceFill(['property_details' => [...$booking->property_details, 'v3_admission_hold' => false]])->saveQuietly();
+    $visit->forceFill(['status' => 'in_progress', 'work_started_at' => now()])->saveQuietly();
+    for ($i = 0; $i < 2; $i++) {
+        $workerUser = User::factory()->create(['is_active' => true]);
+        $worker = \App\Models\Worker::factory()->create(['user_id' => $workerUser->id]);
+        $visit->workerAssignments()->create([
+            'worker_id' => $worker->id, 'status' => 'in_progress',
+            'accepted_at' => now()->subMinutes(2 - $i), 'work_started_at' => now(),
+        ]);
+    }
+    \Spatie\Permission\Models\Role::findOrCreate('Cleaning Supervisor', 'web');
+    $supervisor = User::factory()->create(['is_active' => true]);
+    $supervisor->assignRole('Cleaning Supervisor');
+    DB::table('cleaning_supervisor_assignments')->insert([
+        'cleaning_booking_id' => $booking->id, 'supervisor_user_id' => $supervisor->id,
+        'active_slot' => 1, 'assigned_at' => now(), 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    app(\Modules\Cleaning\Services\CleaningV3WorkClockCommandService::class)->initializeApprovedVisit($booking->id, $visit->id);
+    $this->travel(20)->minutes();
+    Sanctum::actingAs($customer);
+    $pause = $this->postJson($fundingUrl.'/pause-requests', ['commandKey' => 'pause-extension', 'expectedRevision' => 1])
+        ->assertOk()->json('pauseRequestId');
+    Sanctum::actingAs($supervisor);
+    $this->postJson($fundingUrl.'/pause-requests/'.$pause.'/decision', ['commandKey' => 'pause-ok', 'expectedRevision' => 2, 'decision' => 'approve'])
+        ->assertOk()->assertJsonPath('data.state', 'paused');
+    $ext = $fundingUrl.'/live-extensions';
+    Sanctum::actingAs($customer);
+    $offer = $this->postJson($ext.'/quote', ['additionalMinutes' => 30, 'expectedPriceRevision' => 2, 'expectedClockRevision' => 3, 'commandKey' => 'extend-30'])
+        ->assertOk()->assertJsonPath('data.newMinutes', 180)->assertJsonPath('data.additionalAmountSyp', '0.00')->json('data');
+    $path = $ext.'/'.$offer['extensionId'];
+    $this->postJson($path.'/confirm', ['signature' => $offer['signature'], 'acceptedTotalSyp' => '1.00', 'accepted' => true])->assertStatus(409);
+    $this->postJson($path.'/confirm', ['signature' => $offer['signature'], 'acceptedTotalSyp' => $offer['newTotalSyp'], 'accepted' => true])
+        ->assertOk()->assertJsonPath('data.status', 'customer_confirmed');
+    expect((int) $visit->fresh()->price_revision)->toBe(2);
+    $this->postJson($path.'/decision', ['decision' => 'approve'])->assertNotFound();
+    Sanctum::actingAs($supervisor);
+    $this->postJson($path.'/decision', ['decision' => 'approve'])->assertOk()->assertJsonPath('data.status', 'crew_approved');
+    Sanctum::actingAs($admin);
+    $next = $this->getJson($path.'/funding-requirement')->assertOk()->json('data');
+    $replacement = $sign([...$allocation, 'allocationId' => (string) \Illuminate\Support\Str::uuid(),
+        'pricingRevision' => $next['pricingRevision'], 'pricingDigest' => $next['pricingDigest'],
+        'reservedSyp' => $next['requiredFundingSyp'], 'supersedesAllocationId' => $allocation['allocationId']]);
+    $this->postJson($path.'/apply-funding', ['proof' => $proof])->assertStatus(409);
+    $this->postJson($path.'/apply-funding', ['proof' => $replacement])->assertOk()->assertJsonPath('data.status', 'applied');
+    $this->postJson($path.'/apply-funding', ['proof' => $replacement])->assertOk()->assertJsonPath('data.status', 'applied');
+    expect((int) $visit->fresh()->price_revision)->toBe(3)->and((float) $visit->fresh()->duration_hours)->toBe(3.0)
+        ->and(DB::table('cleaning_visit_funding_reservations')->whereNotNull('active_visit_id')->count())->toBe(1)
+        ->and(DB::table('cleaning_visit_funding_reservations')->whereNotNull('released_at')->count())->toBe(1);
+    Sanctum::actingAs($supervisor);
+    $this->postJson($fundingUrl.'/resume', ['commandKey' => 'stale-resume', 'expectedRevision' => 3])->assertStatus(409);
+    $this->postJson($fundingUrl.'/resume', ['commandKey' => 'resume-extension', 'expectedRevision' => 4])
+        ->assertOk()->assertJsonPath('data.state', 'running')->assertJsonPath('data.activeSeconds', 1200);
 });

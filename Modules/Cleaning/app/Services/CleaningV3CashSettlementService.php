@@ -221,7 +221,14 @@ final class CleaningV3CashSettlementService
         $acceptedAt = is_string($accepted) ? CarbonImmutable::parse($accepted)->utc() : CarbonImmutable::instance($booking->created_at)->utc();
         $snapshot = app(CleaningV3SignedQuoteEnvelope::class)->verify($envelope, (int) $booking->customer_id,
             $catalog->version_key, $catalog->published_digest, $acceptedAt);
-        $row = collect($snapshot['commercialReview']['visits'] ?? [])->firstWhere('occurrenceKey', $visit->occurrence_key);
+        // Each applied live extension is a separate signed consent chain.
+        // The original quote remains immutable, and unrelated visits retain
+        // their original price revisions.
+        [$effectiveQuote, $snapshot, $row, $basis, $revision] = app(CleaningV3LiveExtensionService::class)->effectivePrice($booking, $visit);
+        if ($effectiveQuote->id !== $quote->id) {
+            throw new DomainException('V3_SETTLEMENT_VISIT_PRICE_MISMATCH');
+        }
+        app(CleaningV3ConfirmedVisitPrice::class)->assertPersisted($visit, $row, $basis, $revision);
         if (($snapshot['paymentMethod'] ?? null) !== 'cash_on_delivery' || $row === null
             || $row['appointmentKey'] !== $visit->appointment_key || $row['pricedWorkers'] !== $visit->requiredWorkerCount()
             || $snapshot['pricingRevision'] !== (int) $visit->price_revision

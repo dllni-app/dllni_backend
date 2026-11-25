@@ -146,6 +146,20 @@ Route::prefix('v1')->group(function () {
         Route::post('cleaning-bookings/{booking}/sessions/{session}/resume', [CleaningV3WorkClockCommandController::class, 'resume'])
             ->whereNumber('booking')->whereNumber('session')->middleware('throttle:20,1');
 
+        Route::get('cleaning-bookings/{booking}/sessions/{session}/funding-requirement', [\Modules\Cleaning\Http\Controllers\API\CleaningV3OperationalFundingController::class, 'show'])
+            ->whereNumber('booking')->whereNumber('session')->middleware('throttle:20,1');
+        Route::post('cleaning-bookings/{booking}/sessions/{session}/funding-reservation', [\Modules\Cleaning\Http\Controllers\API\CleaningV3OperationalFundingController::class, 'store'])
+            ->whereNumber('booking')->whereNumber('session')->middleware('throttle:20,1');
+        Route::prefix('cleaning-bookings/{booking}/sessions/{session}/live-extensions')
+            ->whereNumber('booking')->whereNumber('session')->middleware('throttle:20,1')->group(function (): void {
+                Route::get('current', [\Modules\Cleaning\Http\Controllers\API\CleaningV3LiveExtensionController::class, 'current']);
+                Route::post('quote', [\Modules\Cleaning\Http\Controllers\API\CleaningV3LiveExtensionController::class, 'quote']);
+                Route::post('{extension}/confirm', [\Modules\Cleaning\Http\Controllers\API\CleaningV3LiveExtensionController::class, 'confirm'])->whereUuid('extension');
+                Route::post('{extension}/decision', [\Modules\Cleaning\Http\Controllers\API\CleaningV3LiveExtensionController::class, 'decide'])->whereUuid('extension');
+                Route::get('{extension}/funding-requirement', [\Modules\Cleaning\Http\Controllers\API\CleaningV3LiveExtensionController::class, 'fundingRequirement'])->whereUuid('extension');
+                Route::post('{extension}/apply-funding', [\Modules\Cleaning\Http\Controllers\API\CleaningV3LiveExtensionController::class, 'apply'])->whereUuid('extension');
+            });
+
         Route::get('cleaning/dashboard/overview', DashboardOverviewController::class);
         Route::post('cleaning/worker/current-location', WorkerCurrentLocationController::class);
         Route::get('cleaning/worker/homepage', WorkerHomepageEligibilityController::class);
