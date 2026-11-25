@@ -16,6 +16,11 @@ final class CleaningV3LiveExtensionController
         return $this->respond(fn () => $service->current($booking, $session, $request->user()));
     }
 
+    public function context(Request $request, int $booking, int $session, CleaningV3LiveExtensionService $service): JsonResponse
+    {
+        return $this->respond(fn () => $service->context($booking, $session, $request->user()));
+    }
+
     public function quote(Request $request, int $booking, int $session, CleaningV3LiveExtensionService $service): JsonResponse
     {
         $data = $request->validate([

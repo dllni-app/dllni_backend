@@ -153,6 +153,7 @@ Route::prefix('v1')->group(function () {
         Route::prefix('cleaning-bookings/{booking}/sessions/{session}/live-extensions')
             ->whereNumber('booking')->whereNumber('session')->middleware('throttle:20,1')->group(function (): void {
                 Route::get('current', [\Modules\Cleaning\Http\Controllers\API\CleaningV3LiveExtensionController::class, 'current']);
+                Route::get('context', [\Modules\Cleaning\Http\Controllers\API\CleaningV3LiveExtensionController::class, 'context']);
                 Route::post('quote', [\Modules\Cleaning\Http\Controllers\API\CleaningV3LiveExtensionController::class, 'quote']);
                 Route::post('{extension}/confirm', [\Modules\Cleaning\Http\Controllers\API\CleaningV3LiveExtensionController::class, 'confirm'])->whereUuid('extension');
                 Route::post('{extension}/decision', [\Modules\Cleaning\Http\Controllers\API\CleaningV3LiveExtensionController::class, 'decide'])->whereUuid('extension');

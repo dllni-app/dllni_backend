@@ -589,15 +589,21 @@ test('pending signed revision updates the same visit, preserves historical quote
         ->assertOk()->assertJsonPath('data.state', 'paused');
     $ext = $fundingUrl.'/live-extensions';
     Sanctum::actingAs($customer);
+    $this->getJson($ext.'/context')->assertOk()->assertJsonPath('data.canQuote', true)
+        ->assertJsonPath('data.canConfirm', false)->assertJsonPath('data.priceRevision', 2);
     $offer = $this->postJson($ext.'/quote', ['additionalMinutes' => 30, 'expectedPriceRevision' => 2, 'expectedClockRevision' => 3, 'commandKey' => 'extend-30'])
         ->assertOk()->assertJsonPath('data.newMinutes', 180)->assertJsonPath('data.additionalAmountSyp', '0.00')->json('data');
     $path = $ext.'/'.$offer['extensionId'];
+    $this->getJson($ext.'/context')->assertOk()->assertJsonPath('data.canConfirm', true)
+        ->assertJsonPath('data.offer.extensionId', $offer['extensionId']);
     $this->postJson($path.'/confirm', ['signature' => $offer['signature'], 'acceptedTotalSyp' => '1.00', 'accepted' => true])->assertStatus(409);
     $this->postJson($path.'/confirm', ['signature' => $offer['signature'], 'acceptedTotalSyp' => $offer['newTotalSyp'], 'accepted' => true])
         ->assertOk()->assertJsonPath('data.status', 'customer_confirmed');
     expect((int) $visit->fresh()->price_revision)->toBe(2);
     $this->postJson($path.'/decision', ['decision' => 'approve'])->assertNotFound();
     Sanctum::actingAs($supervisor);
+    $this->getJson($ext.'/context')->assertOk()->assertJsonPath('data.canDecide', true)
+        ->assertJsonPath('data.canConfirm', false);
     $this->postJson($path.'/decision', ['decision' => 'approve'])->assertOk()->assertJsonPath('data.status', 'crew_approved');
     Sanctum::actingAs($admin);
     $next = $this->getJson($path.'/funding-requirement')->assertOk()->json('data');

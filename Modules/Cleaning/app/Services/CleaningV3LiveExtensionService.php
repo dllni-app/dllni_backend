@@ -53,7 +53,10 @@ final class CleaningV3LiveExtensionService
             $outstanding = DB::table(self::TABLE)->where('cleaning_booking_session_id', $visitId)
                 ->whereIn('status', ['offered', 'customer_confirmed', 'crew_approved'])->lockForUpdate()->get();
             foreach ($outstanding as $other) {
-                if (CarbonImmutable::parse($other->expires_at, 'UTC')->isFuture() && $other->status !== 'offered') {
+                $previous = $this->payload($other);
+                if (CarbonImmutable::parse($other->expires_at, 'UTC')->isFuture() && $other->status !== 'offered'
+                    && $previous['previousRevision'] === $revision && $previous['clockRevision'] === $clockRevision
+                    && hash_equals($previous['rosterDigest'], $this->rosterDigest($booking, $visit))) {
                     throw new DomainException('V3_EXTENSION_ALREADY_PENDING');
                 }
                 DB::table(self::TABLE)->where('id', $other->id)->update(['status' => 'superseded', 'updated_at' => now()]);
@@ -88,6 +91,38 @@ final class CleaningV3LiveExtensionService
                 ->whereIn('status', $customer ? ['offered', 'customer_confirmed', 'crew_approved', 'applied'] : ['customer_confirmed', 'crew_approved', 'applied']);
             $row = $query->orderByDesc('created_at')->orderByDesc('next_revision')->first();
             return $row === null ? null : $this->present($row);
+        }, 3);
+    }
+
+    /** Read context for the visit-scoped customer/crew extension dialog. */
+    public function context(int $bookingId, int $visitId, User $actor): array
+    {
+        return DB::transaction(function () use ($bookingId, $visitId, $actor) {
+            [$booking, $visit] = $this->lock($bookingId, $visitId);
+            $access = app(CleaningV3WorkClockAccessPolicy::class);
+            $customer = $access->isCustomer($actor, $booking);
+            $crew = $access->canDecide($actor, $booking, $visit);
+            abort_unless($customer || $crew, 404);
+            $clock = app(CleaningV3WorkClockProjectionService::class)->project($visit);
+            $revision = (int) $visit->price_revision;
+            $paused = $clock['state'] === 'paused' && data_get($booking->property_details, 'v3_admission_hold') === false
+                && $revision > 0 && $visit->payment_status !== 'settled';
+            $minutes = (int) round((float) $visit->duration_hours * 60);
+            $row = DB::table(self::TABLE)->where('cleaning_booking_session_id', $visitId)
+                ->when(! $customer, fn ($q) => $q->where('status', '!=', 'offered'))
+                ->where('status', '!=', 'superseded')->orderByDesc('created_at')->orderByDesc('id')->first();
+            $offer = $row === null ? null : $this->present($row);
+            if ($offer !== null && in_array($offer['status'], ['offered', 'customer_confirmed', 'crew_approved'], true)
+                && (! $paused || $offer['previousRevision'] !== $revision || $offer['clockRevision'] !== $clock['revision'])) {
+                $offer['status'] = 'stale';
+            }
+            $pending = in_array($offer['status'] ?? '', ['customer_confirmed', 'crew_approved'], true);
+            return ['visitId' => $visitId, 'priceRevision' => $revision, 'clockRevision' => $clock['revision'],
+                'plannedMinutes' => $minutes, 'maxAdditionalMinutes' => max(0, 480 - $minutes),
+                'canQuote' => $customer && $paused && ! $pending && $minutes <= 450,
+                'canConfirm' => $customer && $paused && ($offer['status'] ?? null) === 'offered',
+                'canDecide' => $crew && $paused && ($offer['status'] ?? null) === 'customer_confirmed',
+                'offer' => $offer];
         }, 3);
     }
 

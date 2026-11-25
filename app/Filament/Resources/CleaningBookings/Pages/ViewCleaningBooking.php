@@ -256,6 +256,67 @@ final class ViewCleaningBooking extends ViewRecord
                         ->body(implode(' | ', array_map(fn ($issue) => $labels[$issue] ?? $issue, $review['blockers'])))
                         ->warning()->persistent()->send();
                 }),
+            Action::make('reviewV3FundingRequirement')
+                ->label('متطلبات تمويل زيارة V3')
+                ->visible(fn (): bool => $this->record->contract_version === 'v3'
+                    && \Modules\Cleaning\Services\CleaningV3CashSettlementService::authorized())
+                ->authorize(fn (): bool => \Modules\Cleaning\Services\CleaningV3CashSettlementService::authorized())
+                ->form([
+                    Select::make('visitId')->label('الزيارة المطلوبة')
+                        ->options(fn (): array => $this->record->sessions()->pluck('sequence', 'id')
+                            ->map(fn ($sequence) => 'زيارة '.$sequence)->all())->required(),
+                    \Filament\Forms\Components\TextInput::make('extensionId')->label('معرّف التمديد (إن وجد)')
+                        ->helperText('اتركه فارغاً لمراجعة التمويل الحالي.')->maxLength(36),
+                ])
+                ->action(function (array $data): void {
+                    try {
+                        $visit = (int) $data['visitId'];
+                        $extension = $data['extensionId'] ?? null;
+                        $state = filled($extension)
+                            ? app(\Modules\Cleaning\Services\CleaningV3LiveExtensionService::class)
+                                ->fundingRequirement((int) $this->record->id, $visit, $extension)
+                            : app(\Modules\Cleaning\Services\CleaningV3OperationalFundingService::class)
+                                ->review((int) $this->record->id, $visit);
+                        Notification::make()->title('بيانات التمويل المطلوبة من أمين الخزينة')
+                            ->body(json_encode($state, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT))
+                            ->persistent()->send();
+                    } catch (\DomainException $e) {
+                        Notification::make()->title('تعذر مراجعة التمويل')->body($e->getMessage())->danger()->send();
+                    }
+                }),
+            Action::make('importV3FundingProof')
+                ->label('استيراد إثبات تمويل زيارة V3')
+                ->visible(fn (): bool => $this->record->contract_version === 'v3'
+                    && \Modules\Cleaning\Services\CleaningV3CashSettlementService::authorized())
+                ->authorize(fn (): bool => \Modules\Cleaning\Services\CleaningV3CashSettlementService::authorized())
+                ->modalDescription('استورد الإثبات الموقّع من أمين خزينة مستقل. لا ينشئ هذا الإجراء رصيداً نقدياً أو يعدّ الدفع محصلاً.')
+                ->form([
+                    Select::make('visitId')->label('الزيارة المطلوبة')
+                        ->options(fn (): array => $this->record->sessions()->pluck('sequence', 'id')
+                            ->map(fn ($sequence) => 'زيارة '.$sequence)->all())->required(),
+                    \Filament\Forms\Components\TextInput::make('extensionId')->label('معرّف التمديد (إن وجد)')->maxLength(36),
+                    Textarea::make('proof')->label('الإثبات الموقّع JSON')->required()->maxLength(16000)->rows(8),
+                ])
+                ->action(function (array $data): void {
+                    try {
+                        $proof = json_decode($data['proof'], true, 32, JSON_THROW_ON_ERROR);
+                        if (! is_array($proof)) {
+                            throw new \DomainException('V3_TREASURY_ALLOCATION_INVALID');
+                        }
+                        $visit = (int) $data['visitId'];
+                        $extension = $data['extensionId'] ?? null;
+                        if (filled($extension)) {
+                            app(\Modules\Cleaning\Services\CleaningV3LiveExtensionService::class)
+                                ->apply((int) $this->record->id, $visit, $extension, $proof);
+                        } else {
+                            app(\Modules\Cleaning\Services\CleaningV3OperationalFundingService::class)
+                                ->import((int) $this->record->id, $visit, $proof);
+                        }
+                        Notification::make()->title('تم التحقق من إثبات التمويل وتسجيله')->success()->send();
+                    } catch (\DomainException|\JsonException $e) {
+                        Notification::make()->title('لم يعتمد إثبات التمويل')->body($e->getMessage())->danger()->send();
+                    }
+                }),
             Action::make('reviewV3CashSettlement')
                 ->label('مراجعة التسوية النقدية V3')
                 ->visible(fn (): bool => $this->record->contract_version === 'v3'
