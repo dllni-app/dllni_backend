@@ -53,6 +53,11 @@ final class CleaningBookingSessionCoverageService
             }
 
             if ((string) ($locked->booking->contract_version ?? '') === 'v3') {
+                if (CleaningV3OperationalAdmissionService::admitted($locked->booking)
+                    && in_array($locked->status->value, ['scheduled', 'worker_assigned'], true)) {
+                    $locked->forceFill(['status' => $coverage === CleaningBookingSessionCoverageStatus::FullyCovered ? 'worker_assigned' : 'scheduled'])->saveQuietly();
+                    app(CleaningBookingSessionLifecycleService::class)->syncParentStatus($locked->booking);
+                }
                 // Recompute remaining seats without ever resetting the visit's
                 // original six-hour search deadline after a worker withdraws.
                 app(CleaningV3VisitDispatchService::class)->reconcileCoverage($locked);

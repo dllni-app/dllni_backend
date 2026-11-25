@@ -25,7 +25,7 @@ final class CleaningBookingShowController
     public function __invoke(CleaningBooking $cleaning_booking): CleaningBookingOperationalResource|JsonResponse
     {
         // Supervisor-managed work has a separate redacted read endpoint.
-        if ($cleaning_booking->isSupervisedTeam()) {
+        if ($cleaning_booking->isSupervisedTeam() && $cleaning_booking->contract_version !== 'v3') {
             abort(404);
         }
         $worker = Auth::user()?->worker;

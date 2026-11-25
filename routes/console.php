@@ -50,6 +50,31 @@ Artisan::command('cleaning:v3-readiness {--json : Output machine-readable prefli
     return $result['readyForCommercialLaunch'] ? 0 : 2;
 })->purpose('Read-only structural and financial readiness audit for Cleaning V3');
 
+// Disabled by default; automatic approval requires the explicit compatible-client rollout.
+Artisan::command('cleaning:v3-admit-pending', function (
+    Modules\Cleaning\Services\CleaningV3OperationalAdmissionService $service
+): int {
+    if (! $service::enabled()) {
+        return 0;
+    }
+    $admitted = 0;
+    CleaningBooking::query()->where('contract_version', 'v3')->where('status', 'pending')
+        ->where('property_details->v3_admission_hold', true)->orderBy('id')->chunkById(50, function ($bookings) use ($service, &$admitted): void {
+            foreach ($bookings as $booking) {
+                try {
+                    $result = $service->admit((int) $booking->id);
+                    $admitted += (int) ($result['admitted'] && ! $result['replayed']);
+                } catch (\DomainException $e) {
+                    continue;
+                }
+            }
+        });
+    $this->info('V3 bookings admitted: '.$admitted);
+    return 0;
+})->purpose('Atomically admit signed unpaid V3 bookings when operational policy is ready');
+
+Schedule::command('cleaning:v3-admit-pending')->everyMinute()->withoutOverlapping();
+
 // V3 dispatch escalation writes only durable notice intentions. Delivery
 // must be retried through an audited outbox adapter; no cancellation occurs.
 Artisan::command('cleaning:v3-escalate-incomplete-visits', function (

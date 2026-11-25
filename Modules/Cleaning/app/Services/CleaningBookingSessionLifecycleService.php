@@ -50,6 +50,15 @@ final class CleaningBookingSessionLifecycleService
             $this->assertSessionNotTerminal($locked);
             $assignment = $this->activeAssignment($locked, $worker, true);
 
+            if (CleaningV3OperationalAdmissionService::admitted($booking)) {
+                if ($locked->acceptedWorkerCount() < $locked->requiredWorkerCount()) {
+                    throw new InvalidArgumentException('V3_TEAM_NOT_READY');
+                }
+                if ($locked->supervision_mode === CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR
+                    && app(CleaningSupervisorAssignmentService::class)->activeSupervisorId($booking) === null) {
+                    throw new InvalidArgumentException('V3_SUPERVISOR_REQUIRED');
+                }
+            }
             if ($assignment->started_travel_at === null) {
                 $this->qaClock->forScheduling($locked, auth()->user() instanceof \App\Models\User ? auth()->user() : null, 'worker_start_travel');
                 $startedAt = now();
@@ -123,6 +132,10 @@ final class CleaningBookingSessionLifecycleService
                 throw new InvalidArgumentException('Session work has already been approved for this worker.');
             }
 
+            if (CleaningV3OperationalAdmissionService::admitted($booking)
+                && $locked->supervision_mode === CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR) {
+                throw new InvalidArgumentException('V3_SUPERVISOR_ACTION_REQUIRED');
+            }
             $generated = $this->uniqueSecurityCode($locked);
             $expiresAt = now()->addMinutes(self::SECURITY_CODE_TTL_MINUTES);
 
@@ -219,6 +232,10 @@ final class CleaningBookingSessionLifecycleService
         ): CleaningBookingSession {
             $locked = $this->lockSession($booking, $session);
             $this->assertSessionNotTerminal($locked);
+            if (CleaningV3OperationalAdmissionService::admitted($booking)
+                && $locked->supervision_mode === CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR) {
+                throw new InvalidArgumentException('V3_SUPERVISOR_ACTION_REQUIRED');
+            }
             $providedHash = $this->securityCodeHash($code);
 
             $record = DB::table('booking_security_codes')
@@ -376,6 +393,16 @@ final class CleaningBookingSessionLifecycleService
             }
             $assignment = $this->activeAssignment($locked, $worker, true);
 
+            if (CleaningV3OperationalAdmissionService::admitted($booking)) {
+                if ($locked->supervision_mode === CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR) {
+                    throw new InvalidArgumentException('V3_SUPERVISOR_ACTION_REQUIRED');
+                }
+                try {
+                    app(CleaningV3OperationalAdmissionService::class)->assertVisitPayable($booking, $locked);
+                } catch (\DomainException $e) {
+                    throw new InvalidArgumentException($e->getMessage());
+                }
+            }
             if ($assignment->arrived_at === null) {
                 throw new InvalidArgumentException('Worker must arrive before starting session work.');
             }
@@ -441,6 +468,10 @@ final class CleaningBookingSessionLifecycleService
             $this->assertSessionNotTerminal($locked);
             $assignment = $this->activeAssignment($locked, $worker, true);
 
+            if (CleaningV3OperationalAdmissionService::admitted($booking)
+                && $locked->supervision_mode === CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR) {
+                throw new InvalidArgumentException('V3_SUPERVISOR_ACTION_REQUIRED');
+            }
             if ($assignment->work_started_at === null) {
                 throw new InvalidArgumentException('Session work must start before requesting completion.');
             }
@@ -968,7 +999,7 @@ final class CleaningBookingSessionLifecycleService
             // margin from accepted workers' fee allocations. A stale/incomplete
             // allocation must not be marked settled by the presence of 0.01.
             // Do not apply this rule to provisional or Open-Time pricing.
-            if ($locked->session_type === 'event_day' && $locked->is_pricing_final) {
+            if (! $isV3 && $locked->session_type === 'event_day' && $locked->is_pricing_final) {
                 $sessionFeeCents = (int) round(max(0.0, (float) $locked->admin_margin_amount) * 100);
                 $workerFeeCents = $assignments->sum(
                     static fn (CleaningBookingSessionWorkerAssignment $assignment): int => (int) round(max(0.0, (float) $assignment->admin_margin_amount) * 100),

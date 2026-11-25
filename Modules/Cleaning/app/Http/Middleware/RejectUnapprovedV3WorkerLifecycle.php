@@ -56,6 +56,16 @@ final class RejectUnapprovedV3WorkerLifecycle
             );
         }
 
+        $admitted = \Modules\Cleaning\Services\CleaningV3OperationalAdmissionService::admitted($booking);
+        if ($admitted && str_contains($request->path(), '/sessions/')) {
+            $accepting = in_array($request->route()?->getName(), [
+                'cleaning-bookings.sessions.accept-all', 'cleaning-bookings.sessions.accept-selected',
+            ], true);
+            if (! $accepting || \Modules\Cleaning\Services\CleaningV3OperationalAdmissionService::enabled()) {
+                return $next($request);
+            }
+        }
+
         // A claimed capability is not proof of funding, genuine APK signing,
         // approved pricing, worker entitlement, or a valid quote. Never let
         // this header alone authorize any V3 mutation.

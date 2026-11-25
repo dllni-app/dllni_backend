@@ -345,6 +345,20 @@ final class CleaningBookingSessionAcceptanceService
         if ((string) $booking->contract_version === 'v3' && data_get($booking->property_details, 'v3_admission_hold') === true) {
             return $this->rejection((int) $session->id, 'v3_admission_pending', 'Visit is not operationally admitted.');
         }
+        if (CleaningV3OperationalAdmissionService::admitted($booking)) {
+            if (! CleaningV3OperationalAdmissionService::enabled()) {
+                return $this->rejection((int) $session->id, 'v3_admission_paused', 'Visit acceptance is paused.');
+            }
+            try {
+                DB::transaction(function () use ($booking, $session): void {
+                    $parent = CleaningBooking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
+                    $visit = $parent->sessions()->whereKey($session->id)->lockForUpdate()->firstOrFail();
+                    app(CleaningV3OperationalAdmissionService::class)->assertVisitPayable($parent, $visit);
+                });
+            } catch (\DomainException $e) {
+                return $this->rejection((int) $session->id, 'v3_payment_policy_unavailable', 'Visit payment policy requires review.');
+            }
+        }
         $status = $session->status instanceof CleaningBookingSessionStatus
             ? $session->status->value
             : (string) $session->status;

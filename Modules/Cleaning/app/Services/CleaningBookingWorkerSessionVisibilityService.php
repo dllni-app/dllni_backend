@@ -44,7 +44,8 @@ final class CleaningBookingWorkerSessionVisibilityService
         // restrictive than the legacy booking that was already dispatched to
         // this worker. Keep multi-session products on the stricter session gate.
         if (
-            $sessions->count() === 1
+            $booking->contract_version !== 'v3'
+            && $sessions->count() === 1
             && $this->canViewLegacySingleSessionBooking($booking, $worker)
         ) {
             return true;

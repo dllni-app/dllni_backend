@@ -644,7 +644,70 @@ test('pending signed revision updates the same visit, preserves historical quote
             ->toThrow(\DomainException::class, 'V3_REVISION_FUNDING_RECONCILIATION_REQUIRED');
     }
 
-    // Simulate an already admitted visit solely in this isolated integration test.
+    // Exercise the real automatic admission and supervisor visit endpoints for the cash policy.
+    if ($manual) {
+        $admission = app(\Modules\Cleaning\Services\CleaningV3OperationalAdmissionService::class);
+        expect($admission->admit($booking->id)['admitted'])->toBeFalse();
+        config()->set([
+            'cleaning_v3_catalog.operational_admission_enabled' => true,
+            'cleaning_v3_catalog.cash_settlement_enabled' => true,
+            'cleaning_worker_update.enabled' => true,
+            'cleaning_worker_update.min_supported_version_code' => 1,
+            'cleaning_worker_update.latest_version_code' => 1,
+            'cleaning_worker_update.apk_sha256' => str_repeat('a', 64),
+            'cleaning_worker_update.signing_certificate_sha256' => str_repeat('b', 64),
+            'cleaning_worker_update.allowed_download_host' => 'updates.example.test',
+            'cleaning_worker_update.download_url' => 'https://updates.example.test/worker.apk',
+        ]);
+        $visit->forceFill(['scheduled_time' => '11:00'])->saveQuietly();
+        expect($admission->admit($booking->id)['admitted'])->toBeFalse();
+        $visit->forceFill(['scheduled_time' => '09:00'])->saveQuietly();
+        expect($admission->admit($booking->id)['admitted'])->toBeTrue();
+        expect($admission->admit($booking->id)['replayed'])->toBeTrue();
+        expect(DB::table('cleaning_v3_visit_dispatches')->where('cleaning_booking_session_id', $visit->id)->count())->toBe(1);
+        expect($booking->fresh()->property_details['v3_admission_hold'])->toBeFalse();
+        $supervisor = User::factory()->create(['is_active' => true]);
+        $supervisor->assignRole(Role::findOrCreate('Cleaning Supervisor', 'web'));
+        app(\Modules\Cleaning\Services\CleaningSupervisorAssignmentService::class)->assign($admin, $booking->id, $supervisor->id, null, true);
+        \App\Models\CleaningDepositSetting::query()->updateOrCreate(['id' => \App\Models\CleaningDepositSetting::query()->value('id') ?? 1], [
+            'minimum_deposit_amount' => 0, 'restriction_threshold_percent' => 100,
+            'allowance_warning_threshold_percent' => 10, 'trust_minimum_for_dispatch' => 50,
+        ]);
+        $headers = ['X-Cleaning-V3-Capabilities' => 'visit-v3-r1'];
+        $workers = [];
+        for ($i = 0; $i < 2; $i++) {
+            $workerUser = User::factory()->create(['is_active' => true]);
+            $worker = \App\Models\Worker::factory()->financiallyEligible()->create([
+                'user_id' => $workerUser->id, 'trust_score' => 90, 'is_active' => true, 'is_suspended' => false,
+            ]);
+            $workers[] = $workerUser;
+            Sanctum::actingAs($workerUser);
+            $this->getJson('/api/v1/cleaning/v3/worker/visits', $headers)->assertOk()
+                ->assertJsonPath('data.0.bookingId', $booking->id);
+            $this->postJson('/api/v1/cleaning-bookings/'.$booking->id.'/sessions/accept-selected', ['sessionIds' => [$visit->id]], $headers)
+                ->assertOk()->assertJsonPath('data.acceptance.acceptedSessionIds.0', $visit->id);
+        }
+        expect($visit->fresh()->status->value)->toBe('worker_assigned');
+        foreach ($workers as $workerUser) {
+            Sanctum::actingAs($workerUser);
+            $this->postJson($fundingUrl.'/start-travel', [], $headers)->assertOk();
+            $this->postJson($fundingUrl.'/arrive', [], $headers)->assertOk();
+        }
+        $execution = $fundingUrl.'/supervisor-execution';
+        $this->getJson($fundingUrl.'/security-code', $headers)->assertUnprocessable();
+        $this->postJson($execution.'/start')->assertNotFound();
+        Sanctum::actingAs($customer);
+        $code = $this->postJson($execution.'/customer-code')->assertOk()->json('data.code');
+        Sanctum::actingAs($supervisor);
+        $this->postJson($execution.'/customer-code')->assertNotFound();
+        $this->postJson($execution.'/verify', ['code' => $code === '000000' ? '000001' : '000000'])->assertStatus(409);
+        expect((int) DB::table('cleaning_v3_supervisor_visit_verifications')->where('visit_id', $visit->id)->value('attempts'))->toBe(1);
+        $this->postJson($execution.'/verify', ['code' => $code])->assertOk()->assertJsonPath('data.canStart', true);
+        $this->postJson($execution.'/start')->assertOk()->assertJsonPath('data.status', 'in_progress');
+        $this->postJson($execution.'/start')->assertOk();
+        expect(DB::table('cleaning_work_intervals')->where('cleaning_booking_session_id', $visit->id)->count())->toBe(1);
+    } else {
+    // Legacy independently-funded fixture retains its isolated historical execution path.
     $booking->refresh();
     $visit->refresh();
     $booking->forceFill(['property_details' => [...$booking->property_details, 'v3_admission_hold' => false]])->saveQuietly();
@@ -665,6 +728,7 @@ test('pending signed revision updates the same visit, preserves historical quote
         'active_slot' => 1, 'assigned_at' => now(), 'created_at' => now(), 'updated_at' => now(),
     ]);
     app(\Modules\Cleaning\Services\CleaningV3WorkClockCommandService::class)->initializeApprovedVisit($booking->id, $visit->id);
+    }
     $this->travel(20)->minutes();
     Sanctum::actingAs($customer);
     $pause = $this->postJson($fundingUrl.'/pause-requests', ['commandKey' => 'pause-extension', 'expectedRevision' => 1])
@@ -719,4 +783,13 @@ test('pending signed revision updates the same visit, preserves historical quote
     $this->postJson($fundingUrl.'/resume', ['commandKey' => 'stale-resume', 'expectedRevision' => 3])->assertStatus(409);
     $this->postJson($fundingUrl.'/resume', ['commandKey' => 'resume-extension', 'expectedRevision' => 4])
         ->assertOk()->assertJsonPath('data.state', 'running')->assertJsonPath('data.activeSeconds', 1200);
+    if ($manual) {
+        $this->travel(10)->minutes();
+        $this->postJson($execution.'/finish')->assertOk()->assertJsonPath('data.status', 'awaiting_customer_completion');
+        Sanctum::actingAs($customer);
+        $this->postJson($fundingUrl.'/completion/confirm')->assertOk();
+        expect($visit->fresh()->status->value)->toBe('completed')
+            ->and($visit->fresh()->payment_status)->toBe('pending')
+            ->and(DB::table('cleaning_v3_cash_movements')->count())->toBe(0);
+    }
 })->with([false, true]);

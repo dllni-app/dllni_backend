@@ -95,6 +95,9 @@ final class CleaningV3WorkClockAccessPolicy
 
     private function requiresSupervisor(CleaningBooking $booking, CleaningBookingSession $visit): bool
     {
+        if (CleaningV3OperationalAdmissionService::admitted($booking)) {
+            return $visit->supervision_mode === CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR;
+        }
         return (string) $booking->booking_kind === SupervisedTeamService::KIND
             || (string) $visit->supervision_mode === CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR
             || DB::table('cleaning_supervisor_assignments')

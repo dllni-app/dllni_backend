@@ -507,7 +507,9 @@ final class SupervisorWorkflowController
 
     private function assigned(Request $request, int $id, bool $lock = false): CleaningBooking
     {
-        return $this->teams->assignedBooking($request->user(), $id, $lock);
+        $booking = $this->teams->assignedBooking($request->user(), $id, $lock);
+        abort_if($booking->contract_version === 'v3', 409, 'V3_VISIT_REQUIRED');
+        return $booking;
     }
 
     private function customer(Request $request, int $id, bool $lock = false): CleaningBooking
@@ -520,6 +522,7 @@ final class SupervisorWorkflowController
             ->where('customer_id', $request->user()?->id);
         $result = ($lock ? $query->lockForUpdate() : $query)->first();
         abort_unless($result && $request->user()?->is_active, 404);
+        abort_if($result->contract_version === 'v3', 409, 'V3_VISIT_REQUIRED');
 
         return $result;
     }

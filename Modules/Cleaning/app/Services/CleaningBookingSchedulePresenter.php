@@ -330,7 +330,21 @@ final class CleaningBookingSchedulePresenter
             $attendanceActionWorkerIds[CleaningBookingSessionAttendanceService::ACTION_CANCEL] = $noTravelWorkerIds->all();
         }
 
+        $isV3 = (string) $session->booking->contract_version === 'v3';
+        $managed = $isV3 && $session->supervision_mode === 'supervisor';
+        $destination = null;
+        if ($isV3 && $hasMyActiveAssignment && $myAssignment->started_travel_at !== null
+            && $myAssignment->arrived_at === null && ! $session->isTerminal()
+            && $session->booking->address_latitude !== null && $session->booking->address_longitude !== null) {
+            $destination = [
+                'latitude' => (float) $session->booking->address_latitude,
+                'longitude' => (float) $session->booking->address_longitude,
+                'address' => data_get($session->booking->property_details, 'address'),
+            ];
+        }
         $payload = [
+            'v3SupervisorManaged' => $managed,
+            'v3Destination' => $destination,
             'id' => (int) $session->id,
             'sessionId' => (int) $session->id,
             'sequence' => (int) $session->sequence,
@@ -351,9 +365,9 @@ final class CleaningBookingSchedulePresenter
             'canStartTravel' => $canStartTravel,
             'canStart' => $canStartTravel,
             'canArrive' => $canArrive,
-            'canStartWork' => $canStartWork,
-            'canComplete' => $canComplete,
-            'canConfirmStartVerification' => $canConfirmStartVerification,
+            'canStartWork' => $canStartWork && ! $managed,
+            'canComplete' => $canComplete && ! $managed,
+            'canConfirmStartVerification' => $canConfirmStartVerification && ! $managed,
             'canConfirmCompletion' => $canConfirmCompletion,
             'canSendSos' => $canSendSos,
             'canExtend' => $canRequestOpenTimeExtension,
@@ -361,9 +375,9 @@ final class CleaningBookingSchedulePresenter
             'canRequestOpenTimeEnd' => $canRequestOpenTimeEnd,
             'canDecideOpenTimeEnd' => $canDecideOpenTimeEnd,
             'openTime' => $isCustomerView ? $openTime : null,
-            'canCancel' => $canCancel,
+            'canCancel' => $canCancel && ! $isV3,
             'canSkip' => $canSkip,
-            'canReschedule' => $isCustomerView && $canReschedule,
+            'canReschedule' => $isCustomerView && $canReschedule && ! $isV3,
             'coverageStatus' => $session->coverage_status?->value ?? (string) $session->coverage_status,
             'coverageStatusLabel' => $session->coverage_status?->label(),
             'requiredWorkers' => $session->requiredWorkerCount(),

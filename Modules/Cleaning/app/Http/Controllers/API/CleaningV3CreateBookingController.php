@@ -255,9 +255,11 @@ final class CleaningV3CreateBookingController
 
     private function result(CleaningBooking $booking, bool $replayed): array
     {
+        $cancelled = $booking->status->value === 'cancelled';
+        $admitted = ! $cancelled && \Modules\Cleaning\Services\CleaningV3OperationalAdmissionService::admitted($booking);
         return ['bookingId' => (int) $booking->id, 'bookingNumber' => $booking->booking_number,
-            'paymentStatus' => 'unpaid', 'admissionStatus' => $booking->status->value === 'cancelled' ? 'cancelled' : 'pending_operational_review',
-            'canDispatch' => false, 'replayed' => $replayed,
+            'paymentStatus' => 'unpaid', 'admissionStatus' => $cancelled ? 'cancelled' : ($admitted ? 'admitted' : 'pending_operational_review'),
+            'canDispatch' => $admitted, 'replayed' => $replayed,
             'visits' => $booking->sessions()->orderBy('sequence')->get()->map(fn ($v) => [
                 'visitId' => (int) $v->id, 'occurrenceKey' => $v->occurrence_key,
                 'appointmentKey' => $v->appointment_key, 'priceRevision' => (int) $v->price_revision,

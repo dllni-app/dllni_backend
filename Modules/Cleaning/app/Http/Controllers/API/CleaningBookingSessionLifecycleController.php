@@ -372,13 +372,15 @@ final class CleaningBookingSessionLifecycleController
                 'bookingId' => (int) $freshBooking->id,
                 'bookingNumber' => $freshBooking->booking_number,
                 'status' => $freshBooking->status?->value ?? (string) $freshBooking->status,
-                'totalPrice' => (float) $freshBooking->total_price,
                 'currency' => (string) config('app.currency', 'SYP'),
                 'schedule' => $schedule,
-                'reviewTarget' => [
-                    'sessionId' => (int) $session->id,
-                    'workerIds' => $reviewWorkerIds,
-                ],
+                ...(($viewerWorker instanceof Worker && (string) $freshBooking->contract_version === 'v3') ? [] : [
+                    'totalPrice' => (float) $freshBooking->total_price,
+                    'reviewTarget' => [
+                        'sessionId' => (int) $session->id,
+                        'workerIds' => $reviewWorkerIds,
+                    ],
+                ]),
             ],
             'sessionId' => (int) $session->id,
         ]);

@@ -160,7 +160,8 @@ final class SupervisedTeamService
             // through the already authorization-scoped summary endpoint.
             'contractVersion' => (string) ($booking->contract_version ?? '') === 'v3' ? 3 : 2,
             'v3VisitIds' => (string) ($booking->contract_version ?? '') === 'v3'
-                ? $booking->sessions()->orderBy('sequence')->pluck('id')->map(static fn ($id): int => (int) $id)->all()
+                ? $booking->sessions()->when(CleaningV3OperationalAdmissionService::admitted($booking), fn ($q) => $q->where('supervision_mode', 'supervisor'))
+                    ->orderBy('sequence')->pluck('id')->map(static fn ($id): int => (int) $id)->all()
                 : [],
             'bookingNumber' => $booking->booking_number,
             'serviceType' => (string) $booking->booking_kind,
@@ -182,7 +183,7 @@ final class SupervisedTeamService
             'pendingAttendanceWorkers' => $attendance['pendingAttendanceWorkers'],
             'serverNow' => now()->toIso8601String(),
             'timezone' => config('app.timezone'),
-            'allowedActions' => array_values(array_unique($actions)),
+            'allowedActions' => $booking->contract_version === 'v3' ? [] : array_values(array_unique($actions)),
         ];
     }
 
