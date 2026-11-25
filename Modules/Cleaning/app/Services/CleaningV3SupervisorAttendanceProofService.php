@@ -30,7 +30,8 @@ final class CleaningV3SupervisorAttendanceProofService
         return DB::transaction(function () use ($bookingId, $visitId, $supervisorId, $start, $end, $reference, $evidence, $actor) {
             $visit = $this->lockVisit($bookingId, $visitId);
             $facts = $this->facts($visit, $supervisorId, $start, $end);
-            $existing = DB::table(self::TABLE)->where('cleaning_booking_session_id', $visitId)->lockForUpdate()->first();
+            $existing = DB::table(self::TABLE)->where('cleaning_booking_session_id', $visitId)
+                ->where('supervisor_assignment_id', $facts['supervisor_assignment_id'])->lockForUpdate()->first();
             if ($existing !== null) {
                 if ($existing->reference !== $reference || $existing->evidence !== $evidence
                     || (int) $existing->recorded_by !== $actor || ! $this->matches($existing, $facts)) {
@@ -51,7 +52,8 @@ final class CleaningV3SupervisorAttendanceProofService
         $this->authorize();
         return DB::transaction(function () use ($bookingId, $visitId, $reference, $activeSeconds) {
             $visit = $this->lockVisit($bookingId, $visitId);
-            $row = DB::table(self::TABLE)->where('cleaning_booking_session_id', $visitId)->lockForUpdate()->first();
+            $row = DB::table(self::TABLE)->where('cleaning_booking_session_id', $visitId)
+                ->where('reference', $reference)->lockForUpdate()->first();
             $actor = (int) auth()->id();
             if ($row === null || $row->reference !== $reference || (int) $row->recorded_by === $actor
                 || (int) $row->active_seconds !== $activeSeconds) {
@@ -74,17 +76,38 @@ final class CleaningV3SupervisorAttendanceProofService
     /** Must be called under the locked settlement visit transaction. */
     public function verified(CleaningBookingSession $visit): array
     {
-        $row = DB::table(self::TABLE)->where('cleaning_booking_session_id', $visit->id)->lockForUpdate()->first();
-        if ($row === null || $row->verified_at === null || $row->verified_by === null
-            || (int) $row->recorded_by === (int) $row->verified_by) {
+        $rows = DB::table(self::TABLE)->where('cleaning_booking_session_id', $visit->id)->orderBy('id')->lockForUpdate()->get();
+        $intervals = DB::table('cleaning_work_intervals')->where('cleaning_booking_session_id', $visit->id)->orderBy('started_at')->lockForUpdate()->get();
+        $needed = [];
+        foreach ($visit->booking->supervisorAssignments()->lockForUpdate()->get() as $assignment) {
+            foreach ($intervals as $interval) {
+                if ($assignment->assigned_at < CarbonImmutable::parse($interval->ended_at, 'UTC')
+                    && ($assignment->released_at === null || $assignment->released_at > CarbonImmutable::parse($interval->started_at, 'UTC'))) {
+                    $needed[(int) $assignment->id] = true;
+                    break;
+                }
+            }
+        }
+        if ($needed === [] || $rows->count() !== count($needed)) {
             throw new DomainException('V3_SUPERVISOR_ATTENDANCE_PROOF_REQUIRED');
         }
-        $facts = $this->facts($visit, (int) $row->supervisor_user_id,
-            CarbonImmutable::parse($row->present_from, 'UTC'), CarbonImmutable::parse($row->present_until, 'UTC'));
-        if (! $this->matches($row, $facts)) {
-            throw new DomainException('V3_SUPERVISOR_ATTENDANCE_CHANGED');
+        $proofs = [];
+        $end = null;
+        foreach ($rows->sortBy('present_from') as $row) {
+            if (! isset($needed[(int) $row->supervisor_assignment_id]) || $row->verified_at === null
+                || $row->verified_by === null || (int) $row->recorded_by === (int) $row->verified_by
+                || ($end !== null && $row->present_from < $end)) {
+                throw new DomainException('V3_SUPERVISOR_ATTENDANCE_PROOF_REQUIRED');
+            }
+            $facts = $this->facts($visit, (int) $row->supervisor_user_id,
+                CarbonImmutable::parse($row->present_from, 'UTC'), CarbonImmutable::parse($row->present_until, 'UTC'));
+            if (! $this->matches($row, $facts)) {
+                throw new DomainException('V3_SUPERVISOR_ATTENDANCE_CHANGED');
+            }
+            $proofs[] = $facts + ['proofReference' => $row->reference];
+            $end = $row->present_until;
         }
-        return $facts + ['proofReference' => $row->reference];
+        return $proofs;
     }
 
     private function authorize(): void
@@ -141,16 +164,14 @@ final class CleaningV3SupervisorAttendanceProofService
         }
         $first = CarbonImmutable::parse($intervals->first()->started_at, 'UTC');
         $last = CarbonImmutable::parse($intervals->last()->ended_at, 'UTC');
-        // Only one supervisor throughout the visit can be automatically
-        // reconciled by this policy. Replacements require distinct liabilities.
+        // Each replacement has its own evidence and assignment window.
         $assignments = $visit->booking->supervisorAssignments()
-            ->where('assigned_at', '<', $last->toDateTimeString())
-            ->where(fn ($q) => $q->whereNull('released_at')->orWhere('released_at', '>', $first->toDateTimeString()))
+            ->where('supervisor_user_id', $supervisorId)
+            ->where('assigned_at', '<=', $start->toDateTimeString())
+            ->where(fn ($q) => $q->whereNull('released_at')->orWhere('released_at', '>=', $end->toDateTimeString()))
             ->lockForUpdate()->get();
         $assignment = $assignments->count() === 1 ? $assignments->first() : null;
-        if ($assignment === null || (int) $assignment->supervisor_user_id !== $supervisorId
-            || CarbonImmutable::instance($assignment->assigned_at)->utc() > $first
-            || ($assignment->released_at !== null && CarbonImmutable::instance($assignment->released_at)->utc() < $last)) {
+        if ($assignment === null || $start >= $last || $end <= $first) {
             throw new DomainException('V3_SUPERVISOR_ASSIGNMENT_REVIEW_REQUIRED');
         }
         // The actual documented attendance window must lie within the

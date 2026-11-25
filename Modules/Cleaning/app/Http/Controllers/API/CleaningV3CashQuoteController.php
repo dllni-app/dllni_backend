@@ -91,6 +91,7 @@ final class CleaningV3CashQuoteController
                     ...$signed, 'idempotencyKey' => $key, 'requestHash' => $hash,
                     'paymentMethod' => 'cash_on_delivery', 'paymentStatus' => 'unpaid',
                     'canCreateBooking' => false, 'canCharge' => false, 'canSettle' => false,
+                    'canSubmitPendingBooking' => config('cleaning_v3_catalog.new_booking_admission_enabled', false) && $review['couponCode'] === null,
                 ]], 200, $headers);
             }, 3);
         } catch (DomainException $e) {

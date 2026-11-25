@@ -15,6 +15,9 @@ final class CleaningGeographicDispatchService
 
     public function hasOpenWorkerSlots(CleaningBooking $booking): bool
     {
+        if ((string) $booking->contract_version === 'v3' && data_get($booking->property_details, 'v3_admission_hold') === true) {
+            return false;
+        }
         // Six hours triggers customer escalation only. Continue discovering
         // eligible workers while an actual future visit remains unfilled.
         if (! app(CleaningSearchDiscoveryWindowPolicy::class)->hasAcceptableFutureStart($booking)) {

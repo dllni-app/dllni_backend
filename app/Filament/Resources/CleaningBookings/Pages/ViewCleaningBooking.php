@@ -250,13 +250,13 @@ final class ViewCleaningBooking extends ViewRecord
                     try {
                         $state = app(\Modules\Cleaning\Services\CleaningV3CashSettlementService::class)
                             ->review((int) $this->record->id, (int) $data['visitId']);
-                        $body = 'المستحق: '.$state['totalDueSyp'].' ل.س — العجز: '.$state['unfundedSyp']
+                        $body = 'المستحق: '.$state['totalDueSyp'].' ل.س — العجز: '.$state['remainingFundingGapSyp']
                             .' — وقت العمل الفعلي: '.$state['activeSeconds'].' ثانية';
                         foreach ($state['workerPayables'] as $worker) {
                             $body .= ' | عامل '.$worker['workerId'].': '.$worker['grossPayableSyp'].' ل.س (worker:'.$worker['workerId'].')';
                         }
-                        if ($state['supervisorRequired']) {
-                            $body .= ' | مشرف '.$state['supervisorUserId'].': '.$state['supervisorPayableSyp'].' ل.س (supervisor:'.$state['supervisorUserId'].')';
+                        foreach ($state['supervisorPayables'] as $key => $amount) {
+                            $body .= ' | مشرف '.$key.': '.$amount.' ل.س';
                         }
                         foreach ($state['movements'] as $movement) {
                             $body .= ' | '.$movement['reference'].' — '.$movement['amount'].' ل.س — '.($movement['status'] === 'posted' ? 'مؤكد' : 'قيد التحقق');
@@ -336,7 +336,7 @@ final class ViewCleaningBooking extends ViewRecord
                         ->options(fn (): array => $this->record->sessions()->where('status', 'completed')
                             ->pluck('sequence', 'id')->map(fn ($sequence) => 'زيارة '.$sequence)->all())->required(),
                     Select::make('kind')->label('الحركة')->options([
-                        'collection' => 'استلام نقدي في صندوق المنصة', 'payout' => 'صرف مستحق عامل أو مشرف', 'fee_refund' => 'رد رسم عامل إضافي',
+                        'collection' => 'استلام نقدي في صندوق المنصة', 'funding_topup' => 'إيداع تمويل فعلي لتغطية عجز الزيارة', 'payout' => 'صرف مستحق عامل أو مشرف', 'fee_refund' => 'رد رسم عامل إضافي',
                     ])->required(),
                     \Filament\Forms\Components\TextInput::make('beneficiary')->label('الطرف')
                         ->helperText('treasury للتحصيل، worker:رقم_العامل أو supervisor:رقم_المشرف للصرف، customer لرد الرسم')->required()->maxLength(96),

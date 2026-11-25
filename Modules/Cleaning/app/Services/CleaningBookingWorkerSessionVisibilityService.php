@@ -21,6 +21,9 @@ final class CleaningBookingWorkerSessionVisibilityService
 
     public function canViewBooking(CleaningBooking $booking, Worker $worker): bool
     {
+        if ($booking->contract_version === 'v3' && data_get($booking->property_details, 'v3_admission_hold') === true) {
+            return false;
+        }
         $sessions = $this->bookingSessions($booking);
 
         if ($sessions->isEmpty()) {
@@ -76,6 +79,9 @@ final class CleaningBookingWorkerSessionVisibilityService
     /** @return Collection<int, CleaningBookingSession> */
     public function visibleSessions(CleaningBooking $booking, Worker $worker): Collection
     {
+        if ($booking->contract_version === 'v3' && data_get($booking->property_details, 'v3_admission_hold') === true) {
+            return collect();
+        }
         return $this->visibleSessionsFrom($booking, $worker, $this->bookingSessions($booking));
     }
 

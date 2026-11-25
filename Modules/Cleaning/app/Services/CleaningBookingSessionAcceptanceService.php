@@ -336,6 +336,9 @@ final class CleaningBookingSessionAcceptanceService
         CleaningBookingSession $session,
         Worker $worker,
     ): ?array {
+        if ((string) $booking->contract_version === 'v3' && data_get($booking->property_details, 'v3_admission_hold') === true) {
+            return $this->rejection((int) $session->id, 'v3_admission_pending', 'Visit is not operationally admitted.');
+        }
         $status = $session->status instanceof CleaningBookingSessionStatus
             ? $session->status->value
             : (string) $session->status;

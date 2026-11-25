@@ -37,6 +37,33 @@ final class UserCleaningOrderCancelController
             ->findOrFail($order);
 
         $reason = $request->validated('reason');
+        if ($model->contract_version === 'v3') {
+            $cancelled = DB::transaction(function () use ($model, $reason) {
+                $booking = CleaningBooking::query()->whereKey($model->id)->lockForUpdate()->firstOrFail();
+                abort_unless(data_get($booking->property_details, 'v3_admission_hold') === true, 409, 'V3_CANCELLATION_REVIEW_REQUIRED');
+                if ($booking->status === CleaningBookingStatus::Cancelled) {
+                    return $booking;
+                }
+                $visits = $booking->sessions()->lockForUpdate()->get();
+                abort_if($visits->contains(fn ($visit) => $visit->status->value !== 'scheduled'
+                    || $visit->workerAssignments()->exists()), 409, 'V3_CANCELLATION_REVIEW_REQUIRED');
+                $ids = $visits->pluck('id');
+                abort_if(DB::table('cleaning_v3_cash_movements')->whereIn('cleaning_booking_session_id', $ids)->exists()
+                    || DB::table('cleaning_work_intervals')->whereIn('cleaning_booking_session_id', $ids)->exists(), 409);
+                DB::table('cleaning_equipment_reservations')->where('cleaning_booking_id', $booking->id)
+                    ->where('status', 'reserved')->update(['status' => 'released', 'updated_at' => now()]);
+                foreach ($visits as $visit) {
+                    $visit->forceFill(['status' => 'cancelled'])->saveQuietly();
+                }
+                $booking->forceFill(['status' => CleaningBookingStatus::Cancelled, 'cancelled_at' => now(),
+                    'cancelled_by_role' => 'customer', 'cancellation_reason' => $reason, 'cancellation_fee' => 0,
+                    'total_price' => 0])->saveQuietly();
+                DB::table('booking_status_logs')->insert(['booking_id' => $booking->id, 'booking_type' => CleaningBooking::class,
+                    'from_status' => 'pending', 'to_status' => 'cancelled', 'created_at' => now(), 'updated_at' => now()]);
+                return $booking;
+            }, 3);
+            return response()->json(['order' => UserCleaningBookingResource::make($cancelled->fresh())]);
+        }
         // If the worker search expired without any acceptance, cancellation
         // is a no-worker decision, not a late cancellation of accepted work.
         // All bookings with accepted workers keep the existing fee policy.

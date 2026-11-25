@@ -30,6 +30,9 @@ final class CleaningV3VisitDispatchService
     {
         return DB::transaction(function () use ($session, $clock): array {
             $visit = $this->lockVisit($session);
+            if (data_get($visit->booking->property_details, 'v3_admission_hold') === true) {
+                throw new DomainException('V3_OPERATIONAL_ADMISSION_REQUIRED');
+            }
             $now = $this->clock($clock);
             $existing = DB::table('cleaning_v3_visit_dispatches')
                 ->where('cleaning_booking_session_id', $visit->id)

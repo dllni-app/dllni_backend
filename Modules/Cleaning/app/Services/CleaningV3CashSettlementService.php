@@ -67,7 +67,7 @@ final class CleaningV3CashSettlementService
             $this->assertMovement($state, $kind, $beneficiary, $amount);
             DB::table(self::TABLE)->insert([
                 'cleaning_booking_session_id' => $visitId, 'quote_id' => $quote->id,
-                'reference' => $reference, 'collection_reference' => $kind === 'collection' ? null : $state['collectionReference'],
+                'reference' => $reference, 'collection_reference' => in_array($kind, ['collection', 'funding_topup'], true) ? null : $state['collectionReference'],
                 'kind' => $kind, 'beneficiary_key' => $beneficiary,
                 'amount' => $amount, 'currency' => 'SYP', 'status' => 'pending',
                 'evidence' => $evidence, 'calculation_digest' => $digest,
@@ -111,7 +111,7 @@ final class CleaningV3CashSettlementService
                 foreach ($calc['workerPayables'] as $payable) {
                     $worker = Worker::query()->whereKey($payable['workerId'])->firstOrFail();
                     $assignment = $visit->workerAssignments()->where('worker_id', $worker->id)
-                        ->where('status', 'completed')->firstOrFail();
+                        ->firstOrFail();
                     $assignment->forceFill([
                         'service_share_amount' => $payable['serviceShareSyp'], 'travel_fee' => $payable['travelSyp'],
                         'worker_amount' => $payable['grossPayableSyp'], 'admin_margin_amount' => $payable['commissionReceivableSyp'],
@@ -194,35 +194,76 @@ final class CleaningV3CashSettlementService
         $intervals = DB::table('cleaning_work_intervals')->where('cleaning_booking_session_id', $visit->id)
             ->orderBy('started_at')->lockForUpdate()->get();
         $attendance = [];
-        $assignments = $visit->workerAssignments()->where('status', 'completed')->orderBy('worker_id')->lockForUpdate()->get();
+        $assignments = $visit->workerAssignments()->orderBy('worker_id')->lockForUpdate()->get();
+        $edges = [];
         foreach ($assignments as $assignment) {
-            if ($assignment->work_started_at === null || $assignment->work_finished_at === null
-                || $assignment->released_at !== null) {
+            if ($assignment->work_started_at === null) {
+                continue;
+            }
+            $status = $assignment->status->value;
+            $endAt = $assignment->work_finished_at ?? $assignment->released_at;
+            if ($endAt === null || ! in_array($status, ['completed', 'withdrawn', 'cancelled'], true)
+                || ($status !== 'completed' && $assignment->released_at === null)
+                || $assignment->accepted_at === null) {
                 throw new DomainException('V3_SETTLEMENT_ATTENDANCE_REVIEW_REQUIRED');
             }
             $start = CarbonImmutable::instance($assignment->work_started_at)->utc();
-            $end = CarbonImmutable::instance($assignment->work_finished_at)->utc();
+            $end = CarbonImmutable::instance($endAt)->utc();
+            if ($assignment->released_at !== null) {
+                $end = $end->min(CarbonImmutable::instance($assignment->released_at)->utc());
+            }
+            if ($end <= $start || $start < CarbonImmutable::instance($assignment->accepted_at)->utc()
+                || $end > CarbonImmutable::now('UTC')) {
+                throw new DomainException('V3_SETTLEMENT_ATTENDANCE_REVIEW_REQUIRED');
+            }
             $seconds = 0;
             foreach ($intervals as $interval) {
                 $a = CarbonImmutable::parse($interval->started_at, 'UTC')->max($start);
                 $b = CarbonImmutable::parse($interval->ended_at, 'UTC')->min($end);
                 if ($b > $a) {
                     $seconds += (int) $a->diffInSeconds($b, false);
+                    $edges[$a->getTimestamp()] = ($edges[$a->getTimestamp()] ?? 0) + 1;
+                    $edges[$b->getTimestamp()] = ($edges[$b->getTimestamp()] ?? 0) - 1;
                 }
             }
-            $attendance[] = ['workerId' => (int) $assignment->worker_id, 'activeSeconds' => $seconds];
+            if ($seconds > 0) {
+                $attendance[] = ['workerId' => (int) $assignment->worker_id, 'activeSeconds' => $seconds];
+            }
+        }
+        // Refuse overlapping replacements that would pay more simultaneous
+        // workers than the customer-approved crew, even if total seconds fit.
+        ksort($edges, SORT_NUMERIC);
+        $present = 0;
+        foreach ($edges as $delta) {
+            $present += $delta;
+            if ($present < 0 || $present > $row['pricedWorkers']) {
+                throw new DomainException('V3_SETTLEMENT_ATTENDANCE_OVERLAP');
+            }
         }
         $mode = $snapshot['settlementBasis']['visits'][$visit->occurrence_key]['billingMode'] ?? null;
         $supervised = $mode === 'task' && $row['pricedWorkers'] > 1;
         if ($supervised !== ($visit->supervision_mode === CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR)) {
             throw new DomainException('V3_SETTLEMENT_SUPERVISION_MISMATCH');
         }
-        $proof = $supervised ? app(CleaningV3SupervisorAttendanceProofService::class)->verified($visit) : null;
+        $proofs = $supervised ? app(CleaningV3SupervisorAttendanceProofService::class)->verified($visit) : [];
+        $seconds = array_sum(array_column($proofs, 'active_seconds'));
         $calc = app(CleaningV3CashSettlementCalculator::class)->calculate(
-            $snapshot, $visit->occurrence_key, $clock['activeSeconds'], $attendance, $proof['active_seconds'] ?? null,
+            $snapshot, $visit->occurrence_key, $clock['activeSeconds'], $attendance, $supervised ? $seconds : null,
         );
-        $calc['supervisorUserId'] = $proof['supervisor_user_id'] ?? null;
-        $calc['supervisorProofReference'] = $proof['proofReference'] ?? null;
+        $supervisorPayables = [];
+        $cursor = 0;
+        $previous = 0;
+        $rate = CleaningV3CashSettlementBasis::cents($snapshot['settlementBasis']['supervisorHourlyCompensation']);
+        foreach ($proofs as $proof) {
+            $cursor += $proof['active_seconds'];
+            $next = (int) bcdiv(bcadd(bcmul((string) $rate, (string) $cursor, 0), '1800', 0), '3600', 0);
+            $key = 'supervisor:'.$proof['supervisor_user_id'];
+            $supervisorPayables[$key] = ($supervisorPayables[$key] ?? 0) + $next - $previous;
+            $previous = $next;
+        }
+        $calc['supervisorPayables'] = array_map(CleaningV3CashSettlementBasis::money(...), $supervisorPayables);
+        $calc['supervisorProofReferences'] = array_column($proofs, 'proofReference');
+        $calc['supervisorUserId'] = count($proofs) === 1 ? $proofs[0]['supervisor_user_id'] : null;
         $digest = hash('sha256', json_encode([$quote->id, $visit->id, $snapshot['pricingRevision'], $clock['revision'], $calc], JSON_THROW_ON_ERROR));
         return [$quote, $calc, $digest];
     }
@@ -231,6 +272,7 @@ final class CleaningV3CashSettlementService
     {
         $rows = DB::table(self::TABLE)->where('cleaning_booking_session_id', $visit->id)->orderBy('id')->lockForUpdate()->get();
         $collection = 0;
+        $funded = 0;
         $collectionReference = null;
         $payouts = [];
         $pending = [];
@@ -250,6 +292,10 @@ final class CleaningV3CashSettlementService
                 if ($row->status === 'posted') {
                     $collectionReference = $row->reference;
                 }
+            } elseif ($row->kind === 'funding_topup') {
+                if ($row->collection_reference !== null || $row->beneficiary_key !== 'treasury') {
+                    throw new DomainException('V3_CASH_LEDGER_RECONCILIATION_REQUIRED');
+                }
             } elseif ($collectionReference === null || $row->collection_reference !== $collectionReference) {
                 throw new DomainException('V3_CASH_LEDGER_RECONCILIATION_REQUIRED');
             }
@@ -264,6 +310,7 @@ final class CleaningV3CashSettlementService
             }
             match ($row->kind) {
                 'collection' => $collection += $amount,
+                'funding_topup' => $funded += $amount,
                 'payout' => $payouts[$row->beneficiary_key] = ($payouts[$row->beneficiary_key] ?? 0) + $amount,
                 'fee_refund' => $refunds += $amount,
                 default => throw new DomainException('V3_CASH_LEDGER_RECONCILIATION_REQUIRED'),
@@ -273,15 +320,17 @@ final class CleaningV3CashSettlementService
         foreach ($calc['workerPayables'] as $p) {
             $expected['worker:'.$p['workerId']] = CleaningV3CashSettlementBasis::cents($p['grossPayableSyp']);
         }
-        if ($calc['supervisorRequired'] && $calc['supervisorPayableSyp'] !== '0.00') {
-            $expected['supervisor:'.$calc['supervisorUserId']] = CleaningV3CashSettlementBasis::cents($calc['supervisorPayableSyp']);
+        foreach ($calc['supervisorPayables'] as $key => $amount) {
+            if ($amount !== '0.00') {
+                $expected[$key] = CleaningV3CashSettlementBasis::cents($amount);
+            }
         }
         $due = CleaningV3CashSettlementBasis::cents($calc['totalDueSyp']);
         $fee = CleaningV3CashSettlementBasis::cents($calc['additionalWorkerFeeSyp']);
         $gap = CleaningV3CashSettlementBasis::cents($calc['unfundedSyp']);
-        if ($collection > $due || $refunds > $fee || $refunds > $collection
+        if ($collection > $due || $funded > $gap || $refunds > $fee || $refunds > $collection
             || array_diff_key($payouts, $expected) !== []
-            || array_sum($payouts) > max(0, $collection - $fee)) {
+            || array_sum($payouts) > max(0, $collection - $fee) + $funded) {
             throw new DomainException('V3_CASH_LEDGER_RECONCILIATION_REQUIRED');
         }
         foreach ($payouts as $key => $amount) {
@@ -289,15 +338,17 @@ final class CleaningV3CashSettlementService
                 throw new DomainException('V3_CASH_LEDGER_RECONCILIATION_REQUIRED');
             }
         }
-        $all = $collection === $due && $gap === 0 && array_sum($payouts) === array_sum($expected) && $pending === [];
+        $all = $collection === $due && $gap === $funded && array_sum($payouts) === array_sum($expected) && $pending === [];
         if ($visit->payment_status === 'settled' && ! $all && $exclude === null
-            && ($collection !== $due || array_sum($payouts) !== array_sum($expected) || $gap !== 0)) {
+            && ($collection !== $due || array_sum($payouts) !== array_sum($expected) || $gap !== $funded)) {
             throw new DomainException('V3_CASH_LEDGER_RECONCILIATION_REQUIRED');
         }
         return [
             ...$calc, 'visitId' => (int) $visit->id, 'quoteId' => $quote->id,
             'calculationDigest' => $digest, 'collectionReference' => $collectionReference,
             'collectedCents' => $collection, 'refundedFeeCents' => $refunds,
+            'verifiedFundingTopUpCents' => $funded,
+            'remainingFundingGapSyp' => CleaningV3CashSettlementBasis::money($gap - $funded),
             'expectedPayoutsCents' => $expected, 'postedPayoutsCents' => $payouts, 'pendingCents' => $pending,
             'allPayablesPosted' => $all, 'paymentStatus' => $visit->payment_status,
             'movements' => $rows->map(static fn ($row) => [
@@ -317,7 +368,10 @@ final class CleaningV3CashSettlementService
         $valid = match ($kind) {
             'collection' => $beneficiary === 'treasury' && $state['collectedCents'] === 0
                 && $pending === 0 && $cents === $due,
-            'payout' => $state['collectedCents'] === $due && $state['unfundedSyp'] === '0.00'
+            'funding_topup' => $beneficiary === 'treasury' && $state['collectedCents'] === $due
+                && $state['verifiedFundingTopUpCents'] === 0 && $pending === 0
+                && $cents === CleaningV3CashSettlementBasis::cents($state['unfundedSyp']),
+            'payout' => $state['collectedCents'] === $due && $state['remainingFundingGapSyp'] === '0.00'
                 && isset($state['expectedPayoutsCents'][$beneficiary])
                 && ($state['postedPayoutsCents'][$beneficiary] ?? 0) === 0 && $pending === 0
                 && $cents === $state['expectedPayoutsCents'][$beneficiary],

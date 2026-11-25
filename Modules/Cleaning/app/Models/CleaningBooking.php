@@ -416,6 +416,8 @@ final class CleaningBooking extends Model
     public function scopeWithoutExcludedWorker(Builder $query, int $workerId): Builder
     {
         return $query->where(fn ($q) => $q->whereNull('contract_version')->orWhere('contract_version', '!=', 'v3')
+            ->orWhereNull('property_details->v3_admission_hold')->orWhere('property_details->v3_admission_hold', false))
+            ->where(fn ($q) => $q->whereNull('contract_version')->orWhere('contract_version', '!=', 'v3')
             ->orWhereNull('property_details->v3_excluded_worker_ids')
             ->orWhereJsonDoesntContain('property_details->v3_excluded_worker_ids', $workerId));
     }

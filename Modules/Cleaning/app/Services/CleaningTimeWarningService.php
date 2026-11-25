@@ -423,6 +423,9 @@ final class CleaningTimeWarningService
     /** Require customer consent and an active booking after locking, before writes. */
     private function assertCleaningDecisionAllowed(CleaningBooking $booking, CleaningTimeWarning $warning): void
     {
+        if ($booking->contract_version === 'v3') {
+            throw new InvalidArgumentException('V3_EXTENSION_APPROVAL_REQUIRED');
+        }
         if (! in_array($booking->status, [
             CleaningBookingStatus::InProgress,
             CleaningBookingStatus::AwaitingCustomerCompletion,

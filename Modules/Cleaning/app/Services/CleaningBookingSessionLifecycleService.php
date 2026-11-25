@@ -503,6 +503,9 @@ final class CleaningBookingSessionLifecycleService
         $fromStatus = $booking->status instanceof CleaningBookingStatus
             ? $booking->status->value
             : (string) $booking->status;
+        if ($booking->contract_version === 'v3') {
+            throw \Illuminate\Validation\ValidationException::withMessages(['extension' => ['V3_EXTENSION_APPROVAL_REQUIRED']]);
+        }
         $extensionPricing = $this->extensionPricingService->quoteForBooking(
             $booking,
             $additionalMinutes,

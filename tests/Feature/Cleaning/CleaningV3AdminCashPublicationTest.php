@@ -154,7 +154,7 @@ test('Filament administrator can approve and publish a reviewed version', functi
 });
 
 
-test('cash reconciliation requires linked signed price, closed work, distinct verifier and actual receipt before payout', function (int $workers): void {
+test('cash reconciliation requires linked signed price, closed work, distinct verifier and actual receipt before payout', function (int $workers, bool $replacement): void {
     [$admin, $draft] = adminCashCatalogFixture();
     config()->set('cleaning_v3_catalog.cash_settlement_enabled', true);
     $version = app(CleaningV3AdminCatalogPublication::class)->publish($draft,
@@ -172,7 +172,7 @@ test('cash reconciliation requires linked signed price, closed work, distinct ve
     \App\Models\CleaningFinancialSetting::query()->create([
         ...\Modules\Cleaning\Support\CleaningRuntimeSettings::financialDefaults(),
         'travel_markup_value' => 1000, 'cleaning_minimum_order_price' => 1000,
-        'commission_type' => 'percent', 'default_commission_rate' => 10, 'supervisor_hourly_rate' => 5000, 'supervisor_compensation_hourly_rate' => 3000,
+        'commission_type' => 'percent', 'default_commission_rate' => 10, 'supervisor_hourly_rate' => 5000, 'supervisor_compensation_hourly_rate' => $replacement ? 20000 : 3000,
     ]);
     $form = [
         'contractVersion' => 3, 'catalogVersionKey' => $version->version_key,
@@ -217,6 +217,16 @@ test('cash reconciliation requires linked signed price, closed work, distinct ve
             'work_started_at' => $start, 'work_finished_at' => $end, 'currency' => 'SYP',
         ]);
     }
+    if ($replacement) {
+        $visit->workerAssignments()->orderBy('worker_id')->firstOrFail()->forceFill([
+            'status' => 'withdrawn', 'work_finished_at' => null, 'released_at' => $start->copy()->addMinutes(30),
+        ])->save();
+        $visit->workerAssignments()->create([
+            'worker_id' => \App\Models\Worker::factory()->create()->id, 'status' => 'completed',
+            'accepted_at' => $start->copy()->addMinutes(55), 'work_started_at' => $start->copy()->addMinutes(60),
+            'work_finished_at' => $end, 'currency' => 'SYP',
+        ]);
+    }
     foreach ([[$start, $start->copy()->addMinutes(30)], [$start->copy()->addMinutes(60), $end]] as $i => [$a, $b]) {
         DB::table('cleaning_work_intervals')->insert([
             'cleaning_booking_session_id' => $visit->id, 'start_command_key' => 'qa-start-'.$i, 'end_command_key' => 'qa-end-'.$i,
@@ -232,22 +242,42 @@ test('cash reconciliation requires linked signed price, closed work, distinct ve
         DB::table('cleaning_supervisor_assignments')->insert([
             'cleaning_booking_id' => $booking->id, 'supervisor_user_id' => $supervisor->id,
             'assigned_by_user_id' => $admin->id, 'assigned_at' => $start->copy()->subMinutes(10),
-            'active_slot' => 1, 'created_at' => now(), 'updated_at' => now(),
+            'released_at' => $replacement ? $start->copy()->addMinutes(30) : null,
+            'active_slot' => $replacement ? null : 1, 'created_at' => now(), 'updated_at' => now(),
         ]);
+        if ($replacement) {
+            $other = User::factory()->create();
+            DB::table('cleaning_supervisor_assignments')->insert([
+                'cleaning_booking_id' => $booking->id, 'supervisor_user_id' => $other->id,
+                'assigned_by_user_id' => $admin->id, 'assigned_at' => $start->copy()->addMinutes(60),
+                'active_slot' => 1, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
         $proof = app(\Modules\Cleaning\Services\CleaningV3SupervisorAttendanceProofService::class);
         expect(fn () => $service->review($booking->id, $visit->id))->toThrow(DomainException::class, 'V3_SUPERVISOR_ATTENDANCE_PROOF_REQUIRED');
+        $proofEnd = $replacement ? $start->copy()->addMinutes(30) : $end;
+        $seconds = $replacement ? 900 : 2700;
         $facts = $proof->record($booking->id, $visit->id, $supervisor->id,
-            $start->copy()->addMinutes(15)->format('Y-m-d\TH:i:s\Z'), $end->format('Y-m-d\TH:i:s\Z'), 'QA-presence', $evidence);
-        expect($facts['active_seconds'])->toBe(2700);
-        expect(fn () => $proof->verify($booking->id, $visit->id, 'QA-presence', 2700))->toThrow(DomainException::class);
+            $start->copy()->addMinutes(15)->format('Y-m-d\TH:i:s\Z'), $proofEnd->format('Y-m-d\TH:i:s\Z'), 'QA-presence', $evidence);
+        expect($facts['active_seconds'])->toBe($seconds);
+        expect(fn () => $proof->verify($booking->id, $visit->id, 'QA-presence', $seconds))->toThrow(DomainException::class);
         $this->actingAs($reviewer);
-        $proof->verify($booking->id, $visit->id, 'QA-presence', 2700);
+        $proof->verify($booking->id, $visit->id, 'QA-presence', $seconds);
         $this->actingAs($admin);
+        if ($replacement) {
+            expect(fn () => $service->review($booking->id, $visit->id))->toThrow(DomainException::class, 'V3_SUPERVISOR_ATTENDANCE_PROOF_REQUIRED');
+            $facts = $proof->record($booking->id, $visit->id, $other->id,
+                $start->copy()->addMinutes(60)->format('Y-m-d\TH:i:s\Z'), $end->format('Y-m-d\TH:i:s\Z'), 'QA-presence-other', $evidence);
+            expect($facts['active_seconds'])->toBe(1800);
+            $this->actingAs($reviewer);
+            $proof->verify($booking->id, $visit->id, 'QA-presence-other', 1800);
+            $this->actingAs($admin);
+        }
     }
     $state = $service->review($booking->id, $visit->id);
     expect($state['activeSeconds'])->toBe(3600)->and($state['totalDueSyp'])->toBe($due)
-        ->and($state['workerPayables'][0]['grossPayableSyp'])->toBe($workers === 1 ? '201000.00' : '101000.00')
-        ->and($state['supervisorPayableSyp'])->toBe($workers === 1 ? '0.00' : '2250.00')
+        ->and($state['workerPayables'][0]['grossPayableSyp'])->toBe($replacement ? '51000.00' : ($workers === 1 ? '201000.00' : '101000.00'))
+        ->and($state['supervisorPayableSyp'])->toBe($replacement ? '15000.00' : ($workers === 1 ? '0.00' : '2250.00'))
         ->and($state['commissionReceivableSyp'])->toBe('20000.00')
         ->and($state['paymentStatus'])->toBe('pending');
     $beneficiary = array_key_first($state['expectedPayoutsCents']);
@@ -264,6 +294,16 @@ test('cash reconciliation requires linked signed price, closed work, distinct ve
         ->toThrow(DomainException::class, 'V3_CASH_INDEPENDENT_VERIFICATION_REQUIRED');
     $service->verify($booking->id, $visit->id, 'QA-receipt', $due);
     expect($visit->fresh()->payment_status)->toBe('pending');
+    if ($replacement) {
+        $this->actingAs($admin);
+        expect($state['remainingFundingGapSyp'])->toBe('6000.00');
+        expect(fn () => $service->record($booking->id, $visit->id, 'payout', $beneficiary, $payable, 'QA-payout', $evidence))
+            ->toThrow(DomainException::class, 'V3_CASH_MOVEMENT_NOT_ALLOWED');
+        $service->record($booking->id, $visit->id, 'funding_topup', 'treasury', '6000.00', 'QA-topup', $evidence);
+        expect(fn () => $service->verify($booking->id, $visit->id, 'QA-topup', '6000.00'))->toThrow(DomainException::class);
+        $this->actingAs($reviewer);
+        expect($service->verify($booking->id, $visit->id, 'QA-topup', '6000.00')['remainingFundingGapSyp'])->toBe('0.00');
+    }
     foreach ($state['expectedPayoutsCents'] as $beneficiary => $cents) {
         $payable = \Modules\Cleaning\Services\CleaningV3CashSettlementBasis::money($cents);
         $reference = 'QA-payout-'.$beneficiary;
@@ -274,7 +314,7 @@ test('cash reconciliation requires linked signed price, closed work, distinct ve
         $service->verify($booking->id, $visit->id, $reference, $payable);
     }
     expect($settled['paymentStatus'])->toBe('settled')->and($settled['allPayablesPosted'])->toBeTrue();
-    expect(DB::table('cleaning_v3_cash_movements')->count())->toBe($workers === 1 ? 2 : 4)
+    expect(DB::table('cleaning_v3_cash_movements')->count())->toBe($replacement ? 7 : ($workers === 1 ? 2 : 4))
         ->and(DB::table('cleaning_visit_funding_reservations')->count())->toBe(0);
     if ($workers === 2) {
         $this->actingAs($admin);
@@ -288,7 +328,7 @@ test('cash reconciliation requires linked signed price, closed work, distinct ve
     }
         $this->actingAs($customer);
     expect(fn () => $service->review($booking->id, $visit->id))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
-})->with([1, 2]);
+})->with([[1, false], [2, false], [2, true]]);
 
 test('published catalog refuses deactivated sources and readiness reports valid publication separately', function (): void {
     [, $draft, $item] = adminCashCatalogFixture();
@@ -301,4 +341,80 @@ test('published catalog refuses deactivated sources and readiness reports valid 
     CleaningHomeType::query()->whereKey($item->source_id)->update(['is_active' => false]);
     $this->getJson('/api/v1/cleaning/catalog/v3')->assertStatus(503);
     expect($version->fresh()->status)->toBe('published');
+});
+
+
+test('confirmed cash booking persists one unpaid held order and exact visits, with safe retry', function (): void {
+    [, $draft] = adminCashCatalogFixture();
+    $asset = \Modules\Cleaning\Models\CleaningSpecialServiceEquipment::query()->create([
+        'name' => 'QA equipment', 'asset_code' => 'QA-BOOKING-TOOL', 'status' => 'available',
+        'buffer_before_minutes' => 15, 'buffer_after_minutes' => 15, 'is_active' => true,
+    ]);
+    $draft->items()->create([
+        'item_key' => 'qa.tool', 'source_type' => 'equipment', 'source_id' => $asset->id,
+        'label_ar' => 'معدات', 'measurement_mode' => 'piece', 'required' => false, 'is_enabled' => true,
+        'input_rules' => ['equipmentUnitPriceSyp' => '7500.50'],
+    ]);
+    config()->set('cleaning_v3_catalog.new_booking_admission_enabled', true);
+    $version = app(CleaningV3AdminCatalogPublication::class)->publish($draft,
+        app(CleaningV3CatalogReviewManifestService::class)->fingerprint($draft));
+    $customer = User::factory()->create(['is_active' => true]);
+    Sanctum::actingAs($customer);
+    $address = \Modules\User\Models\UserAddress::factory()->create([
+        'user_id' => $customer->id, 'street' => 'QA street', 'latitude' => '36.20', 'longitude' => '37.15',
+    ]);
+    $revision = $this->getJson('/api/v1/cleaning/v3/customer-preferences')->assertOk()->json('data.addresses.0.revision');
+    DB::table('cleaning_financial_settings')->delete();
+    \App\Models\CleaningFinancialSetting::query()->create([
+        ...\Modules\Cleaning\Support\CleaningRuntimeSettings::financialDefaults(),
+        'travel_markup_value' => 1000, 'cleaning_minimum_order_price' => 1000,
+    ]);
+    $form = [
+        'contractVersion' => 3, 'catalogVersionKey' => $version->version_key,
+        'catalogRevision' => $version->published_digest, 'cleaningMode' => 'regular',
+        'answers' => ['qa.room' => 2, 'qa.tool' => 1], 'pricingPreviewRequested' => true,
+        'preferences' => ['addressId' => $address->id, 'addressRevision' => $revision,
+            'genderPreference' => 'any', 'excludedWorkerIds' => []],
+        'appointments' => [['appointmentKey' => 'appointment', 'visits' => [[
+            'occurrenceKey' => 'visit', 'scheduledDate' => now('Asia/Damascus')->addDay()->toDateString(),
+            'scheduledTime' => '09:00', 'durationMinutes' => 120, 'requiredWorkers' => 1,
+        ]]]],
+    ];
+    $preview = $this->postJson('/api/v1/cleaning/v3/visit-plan/preview', $form)->assertOk();
+    $form['expectedPricingFingerprint'] = $preview->json('data.commercialPricePreview.pricingFingerprint');
+    $quote = $this->postJson('/api/v1/cleaning/v3/quotes', [...$form, 'idempotencyKey' => (string) \Illuminate\Support\Str::uuid()])->assertOk()->json('data');
+    $confirmation = [
+        'quoteId' => $quote['quoteId'], 'idempotencyKey' => $quote['idempotencyKey'],
+        'requestHash' => $quote['requestHash'], 'quoteSignature' => $quote['signature'],
+        'acceptedTotalSyp' => $quote['snapshot']['totalWithAdditionalWorkerFees'], 'pricingRevision' => 1,
+        'pricingFingerprint' => $quote['snapshot']['commercialReview']['pricingFingerprint'],
+        'draftFingerprint' => $quote['snapshot']['commercialReview']['draftFingerprint'],
+    ];
+    $payload = ['confirmation' => $confirmation, 'draft' => $form, 'termsAccepted' => true];
+    $url = '/api/v1/cleaning/v3/bookings';
+    $this->postJson($url, [...$payload, 'confirmation' => [...$confirmation, 'acceptedTotalSyp' => '1.00']])->assertStatus(409);
+    expect(DB::table('cleaning_bookings')->count())->toBe(0);
+    $created = $this->postJson($url, $payload)->assertCreated()
+        ->assertJsonPath('data.admissionStatus', 'pending_operational_review')
+        ->assertJsonPath('data.paymentStatus', 'unpaid')->assertJsonPath('data.canDispatch', false)
+        ->assertJsonPath('data.visits.0.occurrenceKey', 'visit')->json('data');
+    $booking = \Modules\Cleaning\Models\CleaningBooking::findOrFail($created['bookingId']);
+    expect($booking->contract_version)->toBe('v3')
+        ->and($booking->sessions()->count())->toBe(1)
+        ->and($booking->sessions()->first()->total_price)->toEqual(208500.50)
+        ->and($booking->sessions()->first()->payment_status)->toBe('pending')
+        ->and(DB::table('cleaning_booking_quotes')->where('id', $quote['quoteId'])->value('cleaning_booking_id'))->toEqual($booking->id)
+        ->and(app(\Modules\Cleaning\Services\CleaningGeographicDispatchService::class)->hasOpenWorkerSlots($booking))->toBeFalse();
+    $this->postJson($url, $payload)->assertOk()->assertJsonPath('data.replayed', true)->assertJsonPath('data.bookingId', $booking->id);
+    expect(DB::table('cleaning_bookings')->count())->toBe(1)
+        ->and(DB::table('cleaning_v3_visit_dispatches')->count())->toBe(0)
+        ->and(DB::table('cleaning_v3_cash_movements')->count())->toBe(0);
+
+    $reservation = \Modules\Cleaning\Models\CleaningEquipmentReservation::query()->where('cleaning_booking_id', $booking->id)->firstOrFail();
+    expect($reservation->status)->toBe('reserved')->and((int) $reservation->cleaning_booking_session_id)->toBe($booking->sessions()->first()->id);
+    $this->postJson('/api/v1/user/cleaning/orders/'.$booking->id.'/cancel', ['reason' => 'QA cancellation'])->assertOk();
+    expect($booking->fresh()->status->value)->toBe('cancelled')
+        ->and($reservation->fresh()->status)->toBe('released')
+        ->and($booking->sessions()->first()->status->value)->toBe('cancelled');
+    $this->postJson($url, $payload)->assertOk()->assertJsonPath('data.admissionStatus', 'cancelled');
 });
