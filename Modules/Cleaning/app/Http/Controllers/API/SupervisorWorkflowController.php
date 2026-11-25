@@ -294,7 +294,8 @@ final class SupervisorWorkflowController
 
     public function handoverRequest(Request $request, int $booking): JsonResponse
     {
-        $result = DB::transaction(function () use ($request, $booking): array {
+        $report = \Modules\Cleaning\Services\CleaningCustomerIncidentService::validate($request);
+        $result = DB::transaction(function () use ($request, $booking, $report): array {
             $order = $this->assigned($request, $booking, true);
             $existing = DB::table('cleaning_supervisor_handovers')->where('cleaning_booking_id', $booking)->first();
             if ($existing) {
@@ -310,6 +311,7 @@ final class SupervisorWorkflowController
             ]);
             $order->forceFill(['status' => CleaningBookingStatus::AwaitingCustomerCompletion,
                 'supervised_state' => 'handover_pending', 'work_finished_at' => now()])->save();
+            \Modules\Cleaning\Services\CleaningCustomerIncidentService::record($order, 0, (int) $request->user()->id, 'supervisor', $report);
             $this->teams->activity($booking, $request->user()->id, 'handover_requested');
 
             return ['id' => $id, 'status' => 'pending'];

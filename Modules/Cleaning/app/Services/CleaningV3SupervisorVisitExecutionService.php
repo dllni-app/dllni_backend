@@ -123,9 +123,9 @@ final class CleaningV3SupervisorVisitExecutionService
         }, 3);
     }
 
-    public function finish(int $bookingId, int $visitId, User $actor): array
+    public function finish(int $bookingId, int $visitId, User $actor, ?array $report = null): array
     {
-        return DB::transaction(function () use ($bookingId, $visitId, $actor): array {
+        return DB::transaction(function () use ($bookingId, $visitId, $actor, $report): array {
             [$booking, $visit, $supervisor] = $this->lock($bookingId, $visitId);
             abort_unless($this->supervisor($actor, $supervisor), 404);
             if (in_array($visit->status, [SessionStatus::AwaitingCustomerCompletion, SessionStatus::Completed], true)) {
@@ -143,6 +143,7 @@ final class CleaningV3SupervisorVisitExecutionService
                 'status' => WorkerStatus::AwaitingCustomerCompletion->value, 'work_finished_at' => $at, 'updated_at' => $at,
             ]);
             $visit->forceFill(['status' => SessionStatus::AwaitingCustomerCompletion, 'work_finished_at' => $at, 'payment_status' => 'pending'])->saveQuietly();
+            CleaningCustomerIncidentService::record($booking, $visitId, (int) $actor->id, 'supervisor', $report);
             app(CleaningBookingSessionLifecycleService::class)->syncParentStatus($booking);
             return $this->project($visit->fresh(), $supervisor, false);
         }, 3);

@@ -20,7 +20,7 @@ final class CleaningV3SupervisorVisitExecutionController
                 'customer-code' => $service->issue($booking, $session, $actor),
                 'verify' => $service->verify($booking, $session, $actor, $request->validate(['code' => ['required', 'string', 'regex:/^\d{6}$/D']])['code']),
                 'start' => $service->start($booking, $session, $actor),
-                'finish' => $service->finish($booking, $session, $actor),
+                'finish' => $service->finish($booking, $session, $actor, \Modules\Cleaning\Services\CleaningCustomerIncidentService::validate($request)),
                 default => abort(404),
             };
             return response()->json(['success' => true, 'data' => $data])->header('Cache-Control', 'private, no-store');

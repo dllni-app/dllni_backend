@@ -132,15 +132,25 @@ final class CleaningBookingSessionLifecycleController
             'message' => ['sometimes', 'nullable', 'string', 'max:1000'],
         ]);
 
+        $report = \Modules\Cleaning\Services\CleaningCustomerIncidentService::validate($request);
+        abort_if($report !== null && ($cleaning_booking_session->requiredWorkerCount() > 1
+            || $cleaning_booking_session->supervision_mode === CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR), 403, 'بلاغ الفريق من صلاحيات المشرف.');
+
         return $this->workerTransition(
             $cleaning_booking,
             $cleaning_booking_session,
-            fn (Worker $worker) => $this->lifecycle->requestCompletion(
-                $cleaning_booking,
-                $cleaning_booking_session,
-                $worker,
-                isset($validated['message']) ? (string) $validated['message'] : null,
-            ),
+            function (Worker $worker) use ($cleaning_booking, $cleaning_booking_session, $validated, $report) {
+                return \Illuminate\Support\Facades\DB::transaction(function () use ($worker, $cleaning_booking, $cleaning_booking_session, $validated, $report) {
+                    $updated = $this->lifecycle->requestCompletion(
+                        $cleaning_booking,
+                        $cleaning_booking_session,
+                        $worker,
+                        isset($validated['message']) ? (string) $validated['message'] : null,
+                    );
+                    \Modules\Cleaning\Services\CleaningCustomerIncidentService::record($cleaning_booking, (int) $updated->id, (int) Auth::id(), 'worker', $report);
+                    return $updated;
+                });
+            },
         );
     }
 
