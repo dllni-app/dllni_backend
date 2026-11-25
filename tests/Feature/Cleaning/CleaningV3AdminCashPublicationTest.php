@@ -314,6 +314,10 @@ test('cash reconciliation requires linked signed price, closed work, distinct ve
         $service->verify($booking->id, $visit->id, $reference, $payable);
     }
     expect($settled['paymentStatus'])->toBe('settled')->and($settled['allPayablesPosted'])->toBeTrue();
+    $summary = $service->customerSummary($booking->id, $customer->id)[0];
+    expect($summary['status'])->toBe('settled')->and($summary['finalAmountSyp'])->toBe($due)
+        ->and($summary['collectedAmountSyp'])->toBe($due)->and($summary['refundedAmountSyp'])->toBe('0.00')
+        ->and(array_keys($summary))->not->toContain('workerPayables', 'movements', 'collectionReference');
     expect(DB::table('cleaning_v3_cash_movements')->count())->toBe($replacement ? 7 : ($workers === 1 ? 2 : 4))
         ->and(DB::table('cleaning_visit_funding_reservations')->count())->toBe(0);
     if ($workers === 2) {
@@ -344,7 +348,7 @@ test('published catalog refuses deactivated sources and readiness reports valid 
 });
 
 
-test('confirmed cash booking persists one unpaid held order and exact visits, with safe retry', function (): void {
+test('confirmed cash booking persists one unpaid held order and exact visits, with safe retry', function (bool $withCoupon): void {
     [, $draft] = adminCashCatalogFixture();
     $asset = \Modules\Cleaning\Models\CleaningSpecialServiceEquipment::query()->create([
         'name' => 'QA equipment', 'asset_code' => 'QA-BOOKING-TOOL', 'status' => 'available',
@@ -380,6 +384,17 @@ test('confirmed cash booking persists one unpaid held order and exact visits, wi
             'scheduledTime' => '09:00', 'durationMinutes' => 120, 'requiredWorkers' => 1,
         ]]]],
     ];
+    $coupon = null;
+    if ($withCoupon) {
+        $coupon = \App\Models\PlatformCoupon::query()->create([
+            'code' => 'V3HELD', 'title_ar' => 'QA coupon', 'description_ar' => 'QA coupon test', 'section' => 'cleaning',
+            'discount_type' => 'fixed', 'discount_value' => 20000,
+            'audience_type' => 'all_users', 'is_active' => true, 'total_usage_limit' => 1,
+            'per_user_usage_limit' => 1, 'funding_type' => 'platform',
+            'cap_platform_funding_to_revenue' => false,
+        ]);
+        $form['couponCode'] = $coupon->code;
+    }
     $preview = $this->postJson('/api/v1/cleaning/v3/visit-plan/preview', $form)->assertOk();
     $form['expectedPricingFingerprint'] = $preview->json('data.commercialPricePreview.pricingFingerprint');
     $quote = $this->postJson('/api/v1/cleaning/v3/quotes', [...$form, 'idempotencyKey' => (string) \Illuminate\Support\Str::uuid()])->assertOk()->json('data');
@@ -401,7 +416,7 @@ test('confirmed cash booking persists one unpaid held order and exact visits, wi
     $booking = \Modules\Cleaning\Models\CleaningBooking::findOrFail($created['bookingId']);
     expect($booking->contract_version)->toBe('v3')
         ->and($booking->sessions()->count())->toBe(1)
-        ->and($booking->sessions()->first()->total_price)->toEqual(208500.50)
+        ->and($booking->sessions()->first()->total_price)->toEqual($withCoupon ? 188500.50 : 208500.50)
         ->and($booking->sessions()->first()->payment_status)->toBe('pending')
         ->and(DB::table('cleaning_booking_quotes')->where('id', $quote['quoteId'])->value('cleaning_booking_id'))->toEqual($booking->id)
         ->and(app(\Modules\Cleaning\Services\CleaningGeographicDispatchService::class)->hasOpenWorkerSlots($booking))->toBeFalse();
@@ -410,6 +425,17 @@ test('confirmed cash booking persists one unpaid held order and exact visits, wi
         ->and(DB::table('cleaning_v3_visit_dispatches')->count())->toBe(0)
         ->and(DB::table('cleaning_v3_cash_movements')->count())->toBe(0);
 
+    if ($withCoupon) {
+        expect((int) $coupon->fresh()->used_count)->toBe(1)
+            ->and(\App\Models\PlatformCouponRedemption::query()->count())->toBe(1)
+            ->and($booking->fresh()->total_price)->toEqual(188500.50);
+        $this->postJson('/api/v1/cleaning/v3/visit-plan/preview', $form)->assertStatus(422);
+    }
+    $this->getJson('/api/v1/cleaning-bookings/'.$booking->id.'/schedule')->assertOk()
+        ->assertJsonPath('data.v3AdmissionStatus', 'pending_operational_review')
+        ->assertJsonPath('data.v3CashSettlements.0.status', 'awaiting_completion')
+        ->assertJsonPath('data.v3CashSettlements.0.finalAmountSyp', null);
+
     $reservation = \Modules\Cleaning\Models\CleaningEquipmentReservation::query()->where('cleaning_booking_id', $booking->id)->firstOrFail();
     expect($reservation->status)->toBe('reserved')->and((int) $reservation->cleaning_booking_session_id)->toBe($booking->sessions()->first()->id);
     $this->postJson('/api/v1/user/cleaning/orders/'.$booking->id.'/cancel', ['reason' => 'QA cancellation'])->assertOk();
@@ -417,4 +443,87 @@ test('confirmed cash booking persists one unpaid held order and exact visits, wi
         ->and($reservation->fresh()->status)->toBe('released')
         ->and($booking->sessions()->first()->status->value)->toBe('cancelled');
     $this->postJson($url, $payload)->assertOk()->assertJsonPath('data.admissionStatus', 'cancelled');
+
+    if ($withCoupon) {
+        expect((int) $coupon->fresh()->used_count)->toBe(0)
+            ->and(\App\Models\PlatformCouponRedemption::query()->whereNotNull('reversed_at')->count())->toBe(1);
+    }
+    $this->getJson('/api/v1/cleaning-bookings/'.$booking->id.'/schedule')->assertOk()
+        ->assertJsonPath('data.v3CashSettlements.0.status', 'cancelled_unpaid')
+        ->assertJsonPath('data.v3CashSettlements.0.finalAmountSyp', '0.00');
+})->with([false, true]);
+
+
+test('pending signed revision updates the same visit, preserves historical quote and rejects stale revisions', function (): void {
+    [$admin, $draft] = adminCashCatalogFixture();
+    config()->set('cleaning_v3_catalog.new_booking_admission_enabled', true);
+    $version = app(CleaningV3AdminCatalogPublication::class)->publish($draft,
+        app(CleaningV3CatalogReviewManifestService::class)->fingerprint($draft));
+    $customer = User::factory()->create(['is_active' => true]);
+    Sanctum::actingAs($customer);
+    $address = \Modules\User\Models\UserAddress::factory()->create([
+        'user_id' => $customer->id, 'street' => 'QA street', 'latitude' => '36.20', 'longitude' => '37.15',
+    ]);
+    $revision = $this->getJson('/api/v1/cleaning/v3/customer-preferences')->assertOk()->json('data.addresses.0.revision');
+    DB::table('cleaning_financial_settings')->delete();
+    \App\Models\CleaningFinancialSetting::query()->create([
+        ...\Modules\Cleaning\Support\CleaningRuntimeSettings::financialDefaults(),
+        'travel_markup_value' => 1000, 'cleaning_minimum_order_price' => 1000,
+    ]);
+    $form = [
+        'contractVersion' => 3, 'catalogVersionKey' => $version->version_key,
+        'catalogRevision' => $version->published_digest, 'cleaningMode' => 'regular',
+        'answers' => ['qa.room' => 2], 'pricingPreviewRequested' => true,
+        'preferences' => ['addressId' => $address->id, 'addressRevision' => $revision,
+            'genderPreference' => 'any', 'excludedWorkerIds' => []],
+        'appointments' => [['appointmentKey' => 'appointment', 'visits' => [[
+            'occurrenceKey' => 'visit', 'scheduledDate' => now('Asia/Damascus')->addDay()->toDateString(),
+            'scheduledTime' => '09:00', 'durationMinutes' => 120, 'requiredWorkers' => 1,
+        ]]]],
+    ];
+    $issue = function (array $form, array $amendment = []): array {
+        $form['expectedPricingFingerprint'] = $this->postJson('/api/v1/cleaning/v3/visit-plan/preview', $form)
+            ->assertOk()->json('data.commercialPricePreview.pricingFingerprint');
+        $quote = $this->postJson('/api/v1/cleaning/v3/quotes', [...$form, ...$amendment, 'idempotencyKey' => (string) \Illuminate\Support\Str::uuid()])
+            ->assertOk()->json('data');
+        $confirmation = [
+            'quoteId' => $quote['quoteId'], 'idempotencyKey' => $quote['idempotencyKey'],
+            'requestHash' => $quote['requestHash'], 'quoteSignature' => $quote['signature'],
+            'acceptedTotalSyp' => $quote['snapshot']['totalWithAdditionalWorkerFees'], 'pricingRevision' => $quote['snapshot']['pricingRevision'],
+            'pricingFingerprint' => $quote['snapshot']['commercialReview']['pricingFingerprint'],
+            'draftFingerprint' => $quote['snapshot']['commercialReview']['draftFingerprint'],
+        ];
+        return [$quote, ['confirmation' => $confirmation, 'draft' => $form, 'termsAccepted' => true]];
+    };
+    [$first, $initial] = $issue($form);
+    $url = '/api/v1/cleaning/v3/bookings';
+    $created = $this->postJson($url, $initial)->assertCreated()->json('data');
+    $booking = \Modules\Cleaning\Models\CleaningBooking::findOrFail($created['bookingId']);
+    $visit = $booking->sessions()->firstOrFail();
+    $form['appointments'][0]['visits'][0]['requiredWorkers'] = 2;
+    $form['appointments'][0]['visits'][0]['durationMinutes'] = 150;
+    [$second, $amended] = $issue($form, ['revisionBookingId' => $booking->id, 'expectedPriceRevision' => 1]);
+    [$stale, $stalePayload] = $issue($form, ['revisionBookingId' => $booking->id, 'expectedPriceRevision' => 1]);
+    expect($second['snapshot']['pricingRevision'])->toBe(2)
+        ->and($second['snapshot']['amendment']['previousQuoteId'])->toBe($first['quoteId']);
+    $this->postJson($url, $amended)->assertCreated()->assertJsonPath('data.bookingId', $booking->id)
+        ->assertJsonPath('data.visits.0.visitId', $visit->id)->assertJsonPath('data.visits.0.priceRevision', 2);
+    expect($visit->fresh()->requiredWorkerCount())->toBe(2)
+        ->and((float) $visit->fresh()->duration_hours)->toBe(2.5)
+        ->and(DB::table('cleaning_bookings')->count())->toBe(1)
+        ->and(DB::table('cleaning_booking_quotes')->where('cleaning_booking_id', $booking->id)->count())->toBe(2)
+        ->and($booking->fresh()->property_details['v3_current_quote_id'])->toBe($second['quoteId']);
+    $this->postJson($url, $amended)->assertOk()->assertJsonPath('data.replayed', true);
+    $this->postJson($url, $stalePayload)->assertStatus(409);
+    $this->postJson($url, $initial)->assertStatus(409);
+    expect($booking->sessions()->count())->toBe(1)->and(DB::table('cleaning_v3_visit_dispatches')->count())->toBe(0);
+    $draftUrl = '/api/v1/cleaning/v3/bookings/'.$booking->id.'/revision-draft';
+    $this->getJson($draftUrl)->assertOk()->assertJsonPath('data.priceRevision', 2)
+        ->assertJsonPath('data.draft.appointments.0.visits.0.durationMinutes', 150);
+    Sanctum::actingAs(User::factory()->create(['is_active' => true]));
+    $this->getJson($draftUrl)->assertNotFound();
+    $this->actingAs($admin);
+    $review = app(\Modules\Cleaning\Services\CleaningV3OperationalAdmissionReview::class)->review($booking->id);
+    expect($review['signedPriceVerified'])->toBeTrue()->and($review['canDispatch'])->toBeFalse()
+        ->and($review['blockers'])->toContain('CLEARED_FUNDING_SOURCE_INTEGRATION_REQUIRED');
 });

@@ -236,6 +236,26 @@ final class ViewCleaningBooking extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('reviewV3OperationalAdmission')
+                ->label('فحص اعتماد تشغيل الحجز V3')
+                ->visible(fn (): bool => $this->record->contract_version === 'v3'
+                    && data_get($this->record->property_details, 'v3_admission_hold') === true
+                    && \Modules\Cleaning\Services\CleaningV3CashSettlementService::authorized())
+                ->authorize(fn (): bool => \Modules\Cleaning\Services\CleaningV3CashSettlementService::authorized())
+                ->action(function (): void {
+                    $review = app(\Modules\Cleaning\Services\CleaningV3OperationalAdmissionReview::class)->review((int) $this->record->id);
+                    $labels = [
+                        'BOOKING_NOT_PENDING_OPERATIONAL_REVIEW' => 'الحجز ليس قيد انتظار الاعتماد',
+                        'SIGNED_PRICE_OR_VISIT_MISMATCH' => 'عدم تطابق عرض السعر أو الزيارات',
+                        'VISIT_SCHEDULE_OR_ROSTER_REVIEW_REQUIRED' => 'المواعيد أو التعيينات تحتاج مراجعة',
+                        'WORKER_APK_MANIFEST_UNAVAILABLE' => 'نسخة العامل الموقعة غير مهيأة',
+                        'CLEARED_FUNDING_SOURCE_INTEGRATION_REQUIRED' => 'مصدر تمويل المنصة المحقق غير مربوط بعد',
+                        'SIGNED_APK_ROLLOUT_AND_VISIT_EXECUTION_QA_REQUIRED' => 'يلزم إثبات توافق النسخ واختبار التنفيذ',
+                    ];
+                    Notification::make()->title('الحجز غير مؤهل للإرسال')
+                        ->body(implode(' | ', array_map(fn ($issue) => $labels[$issue] ?? $issue, $review['blockers'])))
+                        ->warning()->persistent()->send();
+                }),
             Action::make('reviewV3CashSettlement')
                 ->label('مراجعة التسوية النقدية V3')
                 ->visible(fn (): bool => $this->record->contract_version === 'v3'

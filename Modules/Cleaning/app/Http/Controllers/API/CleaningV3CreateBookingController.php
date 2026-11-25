@@ -86,10 +86,30 @@ final class CleaningV3CreateBookingController
                     || ! isset($snapshot['settlementBasis'])) {
                     throw new DomainException('REQUOTE_REQUIRED');
                 }
-                // A coupon must be redeemed in the eventual operational
-                // admission transaction. Do not promise a scarce coupon twice.
-                if ($review['couponCode'] !== null) {
-                    throw new DomainException('V3_COUPON_BOOKING_ADMISSION_REQUIRED');
+                $amendment = $snapshot['amendment'] ?? null;
+                $existingBooking = null;
+                $existingVisits = null;
+                if ($amendment !== null) {
+                    [$existingBooking, $existingVisits, $previousQuote] = app(\Modules\Cleaning\Services\CleaningV3PendingRevisionService::class)
+                        ->lock($customerId, $amendment['bookingId'], $amendment['previousRevision']);
+                    if ($previousQuote->id !== $amendment['previousQuoteId']
+                        || (int) $existingBooking->catalog_version_id !== (int) $quote->catalog_version_id) {
+                        throw new DomainException('V3_PRICE_REVISION_FROZEN_OR_STALE');
+                    }
+                    app(\Modules\Cleaning\Services\CleaningV3PendingRevisionService::class)->assertSameVisits($existingVisits, $data, $review);
+                    $existingVisits = $existingVisits->keyBy('occurrence_key');
+                } elseif ($snapshot['pricingRevision'] !== 1) {
+                    throw new DomainException('INVALID_V3_PRICE_REVISION');
+                }
+                // Reserve the coupon's usage under the same lock as the
+                // confirmed price. This is NOT cleared financial funding.
+                $coupon = $review['couponCode'] === null ? null : PlatformCoupon::query()
+                    ->where('code', $review['couponCode'])->lockForUpdate()->firstOrFail();
+                if ($coupon !== null && ($coupon->funding_type !== PlatformCoupon::FUNDING_PLATFORM
+                    || $coupon->cap_platform_funding_to_revenue
+                    || ($coupon->max_platform_funding_amount !== null
+                        && bccomp($review['totals']['discountAmountSyp'], (string) $coupon->max_platform_funding_amount, 2) > 0))) {
+                    throw new DomainException('V3_COUPON_FUNDING_POLICY_REVIEW_REQUIRED');
                 }
                 $catalog = CleaningV3CatalogVersion::query()->whereKey($quote->catalog_version_id)->firstOrFail();
                 $catalog->load('items.tariffRules');
@@ -128,13 +148,18 @@ final class CleaningV3CreateBookingController
                     'address_details' => $address['details'], 'v3_address_id' => $address['addressId'],
                     'v3_excluded_worker_ids' => $preferences['excludedWorkerIds'],
                     'v3_admission_hold' => true, 'v3_acceptance_hash' => $acceptanceHash,
+                    'v3_current_quote_id' => $quote->id, 'v3_quote_accepted_at' => now('UTC')->toIso8601String(),
                     'v3_answers' => $answers, 'v3_scope_selections' => $draft['scopeSelections'] ?? [],
                     'cleaning_mode' => $draft['cleaningMode'] ?? null,
                     'schedule' => ['mode' => $data['recurrenceRule'] === null ? 'single' : 'recurring',
                         'rule' => $data['recurrenceRule'], 'skippedOccurrences' => $data['skippedOccurrences']],
                 ];
-                $booking = new CleaningBooking([
-                    'customer_id' => $customerId, 'booking_number' => 'CLN-V3-'.Str::upper(Str::random(20)),
+                if ($existingBooking !== null && (string) $existingBooking->property_type !== $property) {
+                    throw new DomainException('V3_REVISION_PROPERTY_CHANGED');
+                }
+                $booking = $existingBooking ?? new CleaningBooking;
+                $booking->fill([
+                    'customer_id' => $customerId, 'booking_number' => $existingBooking?->booking_number ?? 'CLN-V3-'.Str::upper(Str::random(20)),
                     'status' => 'pending', 'booking_kind' => $supervised ? 'supervised_team' : 'standard',
                     'property_type' => $property, 'property_details' => $details,
                     'cleaning_event_type_id' => $event === null ? null : $catalog->items->firstWhere('item_key', $event['eventItemKey'])?->source_id,
@@ -155,16 +180,31 @@ final class CleaningV3CreateBookingController
                 // Never fire legacy dispatch/repricing observers for an
                 // unpaid, not yet operationally admitted booking.
                 $booking->saveQuietly();
-                DB::table('booking_status_logs')->insert([
-                    'booking_id' => $booking->id, 'booking_type' => CleaningBooking::class,
-                    'from_status' => null, 'to_status' => 'pending', 'created_at' => now(), 'updated_at' => now(),
-                ]);
+                if ($coupon !== null) {
+                    // Existing redemption service serializes total and per-user
+                    // use limits. Suppress legacy repricing/dispatch observers.
+                    $subtotal = bcsub(bcadd($totals['totalAmountSyp'], $totals['discountAmountSyp'], 2),
+                        $totals['additionalWorkerFeeSyp'], 2);
+                    CleaningBooking::withoutEvents(fn () => app(\App\Services\Coupons\PlatformCouponRedemptionService::class)->record(
+                        $coupon, $customerId, PlatformCoupon::SECTION_CLEANING,
+                        (float) $subtotal, (float) $totals['discountAmountSyp'], $booking,
+                    ));
+                    $booking->forceFill(['discount_amount' => $totals['discountAmountSyp'],
+                        'subtotal_before_discount' => $subtotal])->saveQuietly();
+                }
+                if ($existingBooking === null) {
+                    DB::table('booking_status_logs')->insert([
+                        'booking_id' => $booking->id, 'booking_type' => CleaningBooking::class,
+                        'from_status' => null, 'to_status' => 'pending', 'created_at' => now(), 'updated_at' => now(),
+                    ]);
+                }
                 $work = collect($data['capacityCheck']['visits'])->keyBy('occurrenceKey');
                 foreach ($visits as $index => $plan) {
                     $key = $plan['occurrenceKey'];
                     $row = $rows->get($key);
                     $basis = $snapshot['settlementBasis']['visits'][$key];
-                    $visit = $booking->sessions()->make([
+                    $visit = $existingVisits === null ? $booking->sessions()->make() : $existingVisits->get($key);
+                    $visit->fill([
                         'sequence' => $index + 1, 'session_type' => $event === null ? 'recurring_cleaning' : 'event_day',
                         'calculation_mode' => $event === null ? 'task' : 'time',
                         'scheduled_date' => $plan['scheduledDate'], 'scheduled_time' => $plan['scheduledTime'],
@@ -183,7 +223,7 @@ final class CleaningV3CreateBookingController
                             'equipmentRequests' => array_map(fn ($r) => array_intersect_key($r, array_flip(['itemKey','quantity','label','unitPriceSyp'])), $requests)],
                     ]);
                     $visit->forceFill(['appointment_key' => $plan['appointmentKey'], 'occurrence_key' => $key,
-                        'price_revision' => $snapshot['pricingRevision']])->save();
+                        'price_revision' => $snapshot['pricingRevision']])->saveQuietly();
                     // Persist equipment allocations against the real visit.
                     foreach ($allocation[$key] ?? [] as $entries) {
                         foreach ($entries as $entry) {
@@ -199,6 +239,7 @@ final class CleaningV3CreateBookingController
                 }
                 DB::table('cleaning_booking_quotes')->where('id', $quote->id)->update([
                     'cleaning_booking_id' => $booking->id, 'updated_at' => now(),
+                    'v3_confirmed_draft' => json_encode($draft, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
                 ]);
                 return $this->result($booking, false);
             }, 3);

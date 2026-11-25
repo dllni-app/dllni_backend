@@ -56,7 +56,23 @@ final class CleaningV3CashQuoteController
                 }
                 // Re-run the exact public validation/pricing pipeline. The
                 // request contains no server totals, payment status or funding.
-                $payload = $request->except('idempotencyKey');
+                $amends = $request->input('revisionBookingId');
+                $revision = $request->input('expectedPriceRevision');
+                $amendment = null;
+                $oldVisits = null;
+                if ($amends !== null || $revision !== null) {
+                    if (! config('cleaning_v3_catalog.new_booking_admission_enabled', false)
+                        || ! is_int($amends) || $amends < 1 || ! is_int($revision)) {
+                        throw new DomainException('INVALID_V3_PRICE_REVISION');
+                    }
+                    [$oldBooking, $oldVisits, $oldQuote] = app(\Modules\Cleaning\Services\CleaningV3PendingRevisionService::class)
+                        ->lock($customerId, $amends, $revision);
+                    if ((int) $oldBooking->catalog_version_id !== (int) $catalog->id) {
+                        throw new DomainException('V3_REVISION_CATALOG_CHANGED');
+                    }
+                    $amendment = ['bookingId' => $amends, 'previousQuoteId' => $oldQuote->id, 'previousRevision' => $revision];
+                }
+                $payload = $request->except(['idempotencyKey', 'revisionBookingId', 'expectedPriceRevision']);
                 $previewRequest = $request->duplicate($payload, $payload);
                 if ($request->isJson()) {
                     $previewRequest->setJson(new \Symfony\Component\HttpFoundation\InputBag($payload));
@@ -71,16 +87,33 @@ final class CleaningV3CashQuoteController
                 if (! is_array($review) || ! hash_equals($expected, $review['pricingFingerprint'])) {
                     throw new DomainException('REQUOTE_REQUIRED');
                 }
+                if ($review['couponCode'] !== null && config('cleaning_v3_catalog.new_booking_admission_enabled', false)) {
+                    $coupon = \App\Models\PlatformCoupon::query()->where('code', $review['couponCode'])->lockForUpdate()->firstOrFail();
+                    if ($coupon->funding_type !== \App\Models\PlatformCoupon::FUNDING_PLATFORM
+                        || $coupon->cap_platform_funding_to_revenue
+                        || ($coupon->max_platform_funding_amount !== null && bccomp($review['totals']['discountAmountSyp'], (string) $coupon->max_platform_funding_amount, 2) > 0)) {
+                        throw new DomainException('V3_COUPON_FUNDING_POLICY_REVIEW_REQUIRED');
+                    }
+                }
                 $plan = array_intersect_key($data, array_flip(['contractVersion', 'catalogVersionKey', 'catalogRevision', 'timezone', 'appointments']));
                 $plan['draftFingerprint'] = hash('sha256', json_encode($plan, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
-                $snapshot = app(CleaningV3CommercialQuoteSnapshot::class)->assemble($plan, $review, $data['draftFingerprint'], 1);
+                if ($amendment !== null) {
+                    app(\Modules\Cleaning\Services\CleaningV3PendingRevisionService::class)->assertSameVisits($oldVisits, $plan, $review);
+                }
+                $snapshot = app(CleaningV3CommercialQuoteSnapshot::class)->assemble($plan, $review, $data['draftFingerprint'], $amendment === null ? 1 : $revision + 1);
+                if ($amendment !== null) {
+                    $snapshot['amendment'] = $amendment;
+                }
                 // Signed payment policy explicitly prohibits treating a quote
                 // as collected money. No funding, coupon redemption or stock write.
                 $snapshot['paymentMethod'] = 'cash_on_delivery';
                 $snapshot['paymentStatus'] = 'unpaid';
                 $snapshot['settlementBasis'] = $review['settlementBasis'];
-                $hash = hash('sha256', json_encode([$customerId, $digest, $data['draftFingerprint'],
-                    $review['pricingFingerprint'], 'cash_on_delivery'], JSON_THROW_ON_ERROR));
+                $identity = [$customerId, $digest, $data['draftFingerprint'], $review['pricingFingerprint'], 'cash_on_delivery'];
+                if ($amendment !== null) {
+                    $identity[] = $amendment;
+                }
+                $hash = hash('sha256', json_encode($identity, JSON_THROW_ON_ERROR));
                 $archive = app(CleaningV3QuoteArchiveService::class);
                 $signed = $archive->findReplay($customerId, $catalog->id, $key, $hash);
                 if ($signed === null) {
@@ -91,7 +124,7 @@ final class CleaningV3CashQuoteController
                     ...$signed, 'idempotencyKey' => $key, 'requestHash' => $hash,
                     'paymentMethod' => 'cash_on_delivery', 'paymentStatus' => 'unpaid',
                     'canCreateBooking' => false, 'canCharge' => false, 'canSettle' => false,
-                    'canSubmitPendingBooking' => config('cleaning_v3_catalog.new_booking_admission_enabled', false) && $review['couponCode'] === null,
+                    'canSubmitPendingBooking' => config('cleaning_v3_catalog.new_booking_admission_enabled', false),
                 ]], 200, $headers);
             }, 3);
         } catch (DomainException $e) {

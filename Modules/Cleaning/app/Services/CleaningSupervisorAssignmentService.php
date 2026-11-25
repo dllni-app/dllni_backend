@@ -43,6 +43,9 @@ final class CleaningSupervisorAssignmentService
 
     public function isEligible(CleaningBooking $booking): bool
     {
+        if ($booking->contract_version === 'v3' && data_get($booking->property_details, 'v3_admission_hold') === true) {
+            return false;
+        }
         return $booking->isSupervisedTeam() || $this->schedule->isEligible($booking);
     }
 

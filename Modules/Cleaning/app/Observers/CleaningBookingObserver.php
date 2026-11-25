@@ -83,7 +83,8 @@ final class CleaningBookingObserver
         }
 
         if (
-            (int) ($booking->platform_coupon_id ?? 0) > 0
+            $booking->contract_version !== 'v3'
+            && (int) ($booking->platform_coupon_id ?? 0) > 0
             && $booking->isDirty([
                 'platform_coupon_id',
                 'base_price',

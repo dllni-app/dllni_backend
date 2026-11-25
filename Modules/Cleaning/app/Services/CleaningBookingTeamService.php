@@ -490,6 +490,9 @@ final class CleaningBookingTeamService
 
     private function assertLegacyTeamMutationAllowed(CleaningBooking $booking): void
     {
+        if ($booking->contract_version === 'v3' && data_get($booking->property_details, 'v3_admission_hold') === true) {
+            throw ValidationException::withMessages(['status' => ['V3_OPERATIONAL_ADMISSION_REQUIRED']]);
+        }
         if ($booking->status === CleaningBookingStatus::PartiallyCompleted) {
             throw ValidationException::withMessages([
                 'status' => ['This partially completed booking cannot use legacy team or room mutations.'],

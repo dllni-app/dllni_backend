@@ -129,6 +129,7 @@ Route::prefix('v1')->group(function () {
         Route::post('cleaning/v3/workload/preview', CleaningV3WorkloadPricePreviewController::class)->middleware('throttle:20,1');
         Route::post('cleaning/v3/quotes', \Modules\Cleaning\Http\Controllers\API\CleaningV3CashQuoteController::class)->middleware('throttle:20,1');
         Route::post('cleaning/v3/bookings', \Modules\Cleaning\Http\Controllers\API\CleaningV3CreateBookingController::class)->middleware('throttle:20,1');
+        Route::get('cleaning/v3/bookings/{bookingId}/revision-draft', \Modules\Cleaning\Http\Controllers\API\CleaningV3RevisionDraftController::class)->whereNumber('bookingId')->middleware('throttle:20,1');
         // Exact-visit, customer-only V3 dispatch progress; never resets the search deadline.
         Route::get('cleaning-bookings/{booking}/sessions/{session}/dispatch', CleaningV3VisitDispatchController::class)
             ->whereNumber('booking')->whereNumber('session')->middleware('throttle:60,1');

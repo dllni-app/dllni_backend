@@ -115,7 +115,7 @@ final class CleaningV3SignedQuoteEnvelope
             'draftFingerprint', 'pricingRevision', 'currency',
             'visits', 'eligibleBaseTotal', 'discountTotal',
             'netBeforeAdditionalWorkerFees', 'additionalWorkerFees',
-            'totalWithAdditionalWorkerFees', 'commercialReview', 'paymentMethod', 'paymentStatus', 'settlementBasis',
+            'totalWithAdditionalWorkerFees', 'commercialReview', 'paymentMethod', 'paymentStatus', 'settlementBasis', 'amendment',
         ]) !== [] || ($snapshot['contractVersion'] ?? null) !== 3) {
             throw new DomainException('INVALID_V3_QUOTE_SNAPSHOT');
         }
@@ -132,6 +132,16 @@ final class CleaningV3SignedQuoteEnvelope
             throw new DomainException('INVALID_V3_QUOTE_SNAPSHOT');
         }
 
+        if (array_key_exists('amendment', $snapshot)) {
+            $amendment = $snapshot['amendment'];
+            if (! is_array($amendment) || count($amendment) !== 3
+                || ! is_int($amendment['bookingId'] ?? null) || $amendment['bookingId'] < 1
+                || ! is_string($amendment['previousQuoteId'] ?? null) || ! Str::isUuid($amendment['previousQuoteId'])
+                || ! is_int($amendment['previousRevision'] ?? null) || $amendment['previousRevision'] < 1
+                || $snapshot['pricingRevision'] !== $amendment['previousRevision'] + 1) {
+                throw new DomainException('INVALID_V3_QUOTE_AMENDMENT');
+            }
+        }
         $commercial = array_key_exists('commercialReview', $snapshot);
         if (array_key_exists('paymentMethod', $snapshot) || array_key_exists('paymentStatus', $snapshot)) {
             if (! $commercial || ($snapshot['paymentMethod'] ?? null) !== 'cash_on_delivery'

@@ -55,6 +55,9 @@ final class UserCleaningOrderCancelController
                 foreach ($visits as $visit) {
                     $visit->forceFill(['status' => 'cancelled'])->saveQuietly();
                 }
+                app(\App\Services\Coupons\PlatformCouponRedemptionService::class)->reverseForOrder(
+                    $booking, 'v3_unstarted_booking_cancelled', (int) $booking->customer_id,
+                );
                 $booking->forceFill(['status' => CleaningBookingStatus::Cancelled, 'cancelled_at' => now(),
                     'cancelled_by_role' => 'customer', 'cancellation_reason' => $reason, 'cancellation_fee' => 0,
                     'total_price' => 0])->saveQuietly();

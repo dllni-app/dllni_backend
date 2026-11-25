@@ -178,13 +178,14 @@ final class CleaningBookingResource extends Resource
     {
         return self::hasPermission('bookings.update')
             && $record instanceof CleaningBooking
+            && $record->contract_version !== 'v3'
             && $record->status !== CleaningBookingStatus::PartiallyCompleted;
     }
 
     public static function canDelete(Model $record): bool
     {
         return self::hasPermission('bookings.delete')
-            && (! $record instanceof CleaningBooking || $record->status !== CleaningBookingStatus::PartiallyCompleted);
+            && (! $record instanceof CleaningBooking || ($record->contract_version !== 'v3' && $record->status !== CleaningBookingStatus::PartiallyCompleted));
     }
 
     public static function getRelations(): array

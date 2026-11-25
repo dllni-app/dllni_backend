@@ -41,6 +41,43 @@ final class CleaningV3CashSettlementService
         }, 3);
     }
 
+    /** Customer-safe projection: never expose payroll, evidence or treasury references. */
+    public function customerSummary(int $bookingId, int $customerId): array
+    {
+        return DB::transaction(function () use ($bookingId, $customerId) {
+            $booking = CleaningBooking::query()->whereKey($bookingId)->where('customer_id', $customerId)->lockForUpdate()->firstOrFail();
+            abort_unless($booking->contract_version === 'v3', 404);
+            $result = [];
+            foreach ($booking->sessions()->orderBy('sequence')->lockForUpdate()->get() as $visit) {
+                $visit->setRelation('booking', $booking);
+                $row = ['visitId' => (int) $visit->id, 'quotedAmountSyp' => bcadd((string) $visit->getRawOriginal('total_price'), '0', 2),
+                    'finalAmountSyp' => null, 'collectedAmountSyp' => null, 'refundedAmountSyp' => null,
+                    'currency' => 'SYP', 'status' => 'awaiting_completion'];
+                if ($visit->status === CleaningBookingSessionStatus::Cancelled && data_get($booking->property_details, 'v3_admission_hold') === true
+                    && ! $visit->workerAssignments()->exists() && ! DB::table(self::TABLE)->where('cleaning_booking_session_id', $visit->id)->exists()) {
+                    $row = array_replace($row, ['status' => 'cancelled_unpaid', 'finalAmountSyp' => '0.00', 'collectedAmountSyp' => '0.00', 'refundedAmountSyp' => '0.00']);
+                } elseif ($visit->status === CleaningBookingSessionStatus::Completed) {
+                    try {
+                        [$quote, $calc, $digest] = $this->calculation($booking, $visit);
+                        $state = $this->state($visit, $quote, $calc, $digest);
+                        $row = array_replace($row, [
+                            'status' => $state['paymentStatus'] === 'settled' ? 'settled' : ($state['collectedCents'] > 0 ? 'collected_pending_settlement' : 'awaiting_collection'),
+                            'finalAmountSyp' => $calc['totalDueSyp'],
+                            'collectedAmountSyp' => CleaningV3CashSettlementBasis::money($state['collectedCents']),
+                            'refundedAmountSyp' => CleaningV3CashSettlementBasis::money($state['refundedFeeCents']),
+                        ]);
+                    } catch (DomainException) {
+                        $row['status'] = 'review_required';
+                    }
+                } elseif ($visit->isTerminal()) {
+                    $row['status'] = 'review_required';
+                }
+                $result[] = $row;
+            }
+            return $result;
+        }, 3);
+    }
+
     public function record(int $bookingId, int $visitId, string $kind, string $beneficiary, string $amount,
         string $reference, string $evidence): array
     {
@@ -159,8 +196,12 @@ final class CleaningV3CashSettlementService
 
     private function calculation(CleaningBooking $booking, CleaningBookingSession $visit): array
     {
-        $quotes = DB::table('cleaning_booking_quotes')->where('cleaning_booking_id', $booking->id)
-            ->where('contract_version', 'v3')->lockForUpdate()->get();
+        $query = DB::table('cleaning_booking_quotes')->where('cleaning_booking_id', $booking->id)->where('contract_version', 'v3');
+        $currentId = data_get($booking->property_details, 'v3_current_quote_id');
+        if (is_string($currentId)) {
+            $query->where('id', $currentId);
+        }
+        $quotes = $query->lockForUpdate()->get();
         if ($quotes->count() !== 1) {
             throw new DomainException('V3_SETTLEMENT_QUOTE_LINK_REQUIRED');
         }
@@ -176,7 +217,8 @@ final class CleaningV3CashSettlementService
         }
         // Verify the historic quote at the original booking creation, not
         // against today's catalog or current 15-minute quote lifetime.
-        $acceptedAt = CarbonImmutable::instance($booking->created_at)->utc();
+        $accepted = data_get($booking->property_details, 'v3_quote_accepted_at');
+        $acceptedAt = is_string($accepted) ? CarbonImmutable::parse($accepted)->utc() : CarbonImmutable::instance($booking->created_at)->utc();
         $snapshot = app(CleaningV3SignedQuoteEnvelope::class)->verify($envelope, (int) $booking->customer_id,
             $catalog->version_key, $catalog->published_digest, $acceptedAt);
         $row = collect($snapshot['commercialReview']['visits'] ?? [])->firstWhere('occurrenceKey', $visit->occurrence_key);

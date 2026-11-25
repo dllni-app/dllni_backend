@@ -99,7 +99,7 @@ final class CleaningV3ReleaseReadinessAuditService
         $checks[] = $this->check(
             'signed_v3_financial_admission',
             false,
-            'Cash quote and manual treasury reconciliation are implemented; booking and worker admission, verified supervised attendance, and actual funding/cash workflow integration remain required.'
+            'Pending booking and signed pre-dispatch revisions, coupon usage and manual cash reconciliation are implemented. Independently verified pre-work treasury funding and worker/supervisor operational admission remain required.'
         );
         $checks[] = $this->check(
             'mysql_concurrency_and_mobile_e2e_evidence',

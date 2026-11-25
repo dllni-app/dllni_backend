@@ -66,6 +66,12 @@ final class CleaningBookingScheduleController
                 'hasReview' => $hasReview,
                 'canReview' => $canReview,
                 'schedule' => $schedule,
+                ...($isCustomer && $cleaning_booking->contract_version === 'v3' ? [
+                    'v3AdmissionStatus' => data_get($cleaning_booking->property_details, 'v3_admission_hold') === true
+                        ? ($cleaning_booking->status === CleaningBookingStatus::Cancelled ? 'cancelled' : 'pending_operational_review') : null,
+                    'v3CashSettlements' => app(\Modules\Cleaning\Services\CleaningV3CashSettlementService::class)
+                        ->customerSummary($bookingId, (int) $user->id),
+                ] : []),
             ],
         ])->header('Cache-Control', 'private, no-store');
     }

@@ -216,6 +216,7 @@ final class CleaningV3CommercialPricePreviewService
             'supervisor' => $supervisorRate, 'commissionType' => $commissionType, 'commission' => $commission, 'eventRate' => $eventRate, 'eventTariff' => $eventTariff,
             'couponId' => $coupon?->id, 'couponValue' => $coupon?->discount_value,
             'couponType' => $coupon?->discount_type, 'couponCap' => $coupon?->max_discount_amount,
+            ...($coupon === null ? [] : ['couponFunding' => [$coupon->funding_type, $coupon->cap_platform_funding_to_revenue, $coupon->max_platform_funding_amount]]),
         ], JSON_THROW_ON_ERROR));
         $result = [
             'currency' => 'SYP', 'previewOnly' => true, 'canQuote' => false,
