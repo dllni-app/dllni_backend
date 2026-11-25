@@ -112,6 +112,9 @@ final class ItemsRelationManager extends RelationManager
             Repeater::make('tariffRules')
                 ->visible(static fn (Get $get): bool => $get('source_type') !== 'equipment')
                 ->label('قواعد السعر والجهد (مسودة — غير قابلة للتحصيل)')
+                ->helperText(static fn (Get $get): ?string => $get('source_type') === 'event_type'
+                    ? 'للمناسبات: اختر القياس بالساعة، حوسة، whole، وجهد 60 دقيقة للوحدة. الكمية مجموع ساعات العمال للمناسبة كاملة، وسعر الوحدة سعر ساعة عامل واحد. الحد الأعلى للشريحة غير شامل.'
+                    : null)
                 ->relationship('tariffRules')
                 ->schema([
                     TextInput::make('rule_key')->label('المعرّف الثابت للقاعدة')

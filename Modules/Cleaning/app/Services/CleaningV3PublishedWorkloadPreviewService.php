@@ -173,6 +173,11 @@ final class CleaningV3PublishedWorkloadPreviewService
         }
         $fields = $this->serializer->serialize($catalog, 'ar')['items'];
         $fields = app(CleaningV3PropertyFormSelector::class)->select($fields, $propertyKey);
+        foreach ($fields as $field) {
+            if ($field['sourceType'] === 'event_type' && array_key_exists($field['key'], $answers)) {
+                throw new \DomainException('V3_EVENT_SCHEDULE_REQUIRED');
+            }
+        }
         $normalized = $this->forms->normalize($fields, $answers);
         $items = $catalog->items->keyBy('item_key');
         $equipmentRequests = app(CleaningV3EquipmentPreviewService::class)->requests($items, $normalized);

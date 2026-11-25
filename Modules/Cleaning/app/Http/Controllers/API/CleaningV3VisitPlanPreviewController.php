@@ -74,7 +74,6 @@ final class CleaningV3VisitPlanPreviewController
             $catalog = $serializer->serialize($version, $locale);
             $propertyKey = $request->input('propertyKey');
             $fields = app(\Modules\Cleaning\Services\CleaningV3PropertyFormSelector::class)->select($catalog['items'], $propertyKey);
-            $answers = $forms->normalize($fields, $rawAnswers);
             $payload = $request->all();
             $mode = $payload['cleaningMode'] ?? null;
             $scopes = array_key_exists('scopeSelections', $payload) ? $payload['scopeSelections'] : [];
@@ -100,6 +99,18 @@ final class CleaningV3VisitPlanPreviewController
                 }
                 $event = app(\Modules\Cleaning\Services\CleaningV3EventSchedulePreviewService::class)->preview($version, $rule);
             }
+            // Event selection and hours belong exclusively to the validated
+            // schedule; event types are alternatives, not required form rows.
+            $answerFields = $fields;
+            if ($event !== null) {
+                $answerFields = array_values(array_filter($fields, static fn ($field) => $field['sourceType'] !== 'event_type'));
+            }
+            foreach ($fields as $field) {
+                if ($field['sourceType'] === 'event_type' && array_key_exists($field['key'], $rawAnswers)) {
+                    throw new DomainException('V3_EVENT_SCHEDULE_REQUIRED');
+                }
+            }
+            $answers = $forms->normalize($answerFields, $rawAnswers);
             $pricingRequested = array_key_exists('pricingPreviewRequested', $payload);
             $couponCode = $payload['couponCode'] ?? null;
             $expectedPricing = $payload['expectedPricingFingerprint'] ?? null;

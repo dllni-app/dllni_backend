@@ -51,7 +51,7 @@ final class CleaningV3EventSchedulePreviewService
         $fields = app(CleaningV3CatalogPublicSerializer::class)->serialize($catalog, 'ar')['items'];
         $fields = app(CleaningV3PropertyFormSelector::class)->select($fields, $input['propertyKey'] ?? null);
         if (! collect($fields)->contains(static fn ($field) => $field['key'] === $input['eventItemKey']
-            && $field['sourceType'] === 'event_type')) {
+            && $field['sourceType'] === 'event_type' && $field['supportedByServer'] === true)) {
             throw new DomainException('V3_EVENT_ITEM_UNAVAILABLE');
         }
 

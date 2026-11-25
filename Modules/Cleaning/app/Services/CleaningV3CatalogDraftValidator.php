@@ -127,6 +127,11 @@ final class CleaningV3CatalogDraftValidator
                 $problems[] = 'INVALID_EQUIPMENT_CONFIGURATION:'.$item->item_key;
             }
             $rules = $item->tariffRules->where('is_enabled', true);
+            if ($item->source_type === 'event_type' && ($item->measurement_mode !== 'hour'
+                || $rules->contains(static fn ($rule): bool => $rule->cleaning_mode !== 'regular'
+                    || $rule->scope_key !== 'whole' || (float) $rule->unit_effort_minutes !== 60.0))) {
+                $problems[] = 'INVALID_EVENT_HOURLY_TARIFF:'.$item->item_key;
+            }
             $scopeCatalog = app(CleaningV3DeepScopeCatalog::class);
             if (! $scopeCatalog->validLabels($inputRules['scopeLabels'] ?? [])) {
                 $problems[] = 'INVALID_SCOPE_LABELS:'.$item->item_key;

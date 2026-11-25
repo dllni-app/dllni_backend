@@ -46,18 +46,22 @@ final class CleaningV3CommercialPricePreviewService
 
         $items = $catalog->items->keyBy('item_key');
         $eventRate = null;
+        $eventTariff = null;
         $eventType = null;
         if ($event !== null) {
             $eventItem = $items->get($event['eventItemKey']);
-            // The existing event rate is per worker per 30 minutes. Never
-            // silently replace a separately configured event-specific tariff.
-            if ($eventItem === null || $eventItem->source_type !== 'event_type'
-                || $eventItem->tariffRules->where('is_enabled', true)->isNotEmpty()) {
+            if ($eventItem === null || $eventItem->source_type !== 'event_type' || ! $eventItem->is_enabled) {
                 throw new DomainException('V3_COMMERCIAL_EVENT_TARIFF_UNSUPPORTED');
             }
-            $eventRate = $this->money((string) $setting->extension_rate_per_30_minutes);
-            if (bccomp($eventRate, '0', 2) <= 0) {
-                throw new DomainException('V3_FINANCIAL_SETTINGS_UNAVAILABLE');
+            // A configured event-specific tariff always takes precedence.
+            // Disabled/gapped tariffs must never fall back to the global rate.
+            if ($eventItem->tariffRules->isNotEmpty()) {
+                $eventTariff = app(CleaningV3EventTariffPricing::class)->price($catalog, $eventItem, $plan, $event);
+            } else {
+                $eventRate = $this->money((string) $setting->extension_rate_per_30_minutes);
+                if (bccomp($eventRate, '0', 2) <= 0) {
+                    throw new DomainException('V3_FINANCIAL_SETTINGS_UNAVAILABLE');
+                }
             }
             $eventType = \Modules\Cleaning\Models\CleaningEventType::query()->whereKey($eventItem->source_id)->value('slug');
             foreach ($fields as $field) {
@@ -93,7 +97,9 @@ final class CleaningV3CommercialPricePreviewService
                 if (isset($rows[$key]) || $e === null || ($event === null && ($w === null || $w['requestedWorkers'] !== $visit['requiredWorkers']))) {
                     throw new DomainException('V3_PRICING_VISIT_COVERAGE_MISMATCH');
                 }
-                $base = $eventRate === null ? '0.00' : $this->ceil(bcmul($eventRate, (string) (intdiv($visit['durationMinutes'], 30) * $visit['requiredWorkers']), 2));
+                $base = $eventTariff !== null
+                    ? $this->money($eventTariff['visits'][$key] ?? null)
+                    : ($eventRate === null ? '0.00' : $this->ceil(bcmul($eventRate, (string) (intdiv($visit['durationMinutes'], 30) * $visit['requiredWorkers']), 2)));
                 $addons = '0.00';
                 foreach ($w['taskGroups'] ?? [] as $group) {
                     $item = $items->get($group['itemKey']);
@@ -194,7 +200,7 @@ final class CleaningV3CommercialPricePreviewService
         }
         $settingsDigest = hash('sha256', json_encode([
             'id' => $setting->id, 'travel' => $transport, 'minimum' => $minimum,
-            'supervisor' => $supervisorRate, 'commissionType' => $commissionType, 'commission' => $commission, 'eventRate' => $eventRate,
+            'supervisor' => $supervisorRate, 'commissionType' => $commissionType, 'commission' => $commission, 'eventRate' => $eventRate, 'eventTariff' => $eventTariff,
             'couponId' => $coupon?->id, 'couponValue' => $coupon?->discount_value,
             'couponType' => $coupon?->discount_type, 'couponCap' => $coupon?->max_discount_amount,
         ], JSON_THROW_ON_ERROR));
