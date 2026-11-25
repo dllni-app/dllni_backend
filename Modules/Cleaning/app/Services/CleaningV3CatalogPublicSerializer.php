@@ -36,6 +36,11 @@ final class CleaningV3CatalogPublicSerializer
             'capabilities' => [
                 'readOnlyPreview' => true,
                 'quoteEnabled' => false,
+                'cashQuoteEnabled' => $version->status === CleaningV3CatalogVersion::PUBLISHED
+                    && config('cleaning_v3_catalog.admin_publication_enabled', false)
+                    && config('cleaning_v3_catalog.read_enabled', false)
+                    && config('cleaning_v3_catalog.cash_quote_enabled', false)
+                    && config('cleaning_v3_catalog.new_quote_archive_enabled', false),
                 'createEnabled' => false,
                 'serverSupportedComponents' => self::SUPPORTED_COMPONENT_IDS,
                 'minimumRendererRevision' => 1,

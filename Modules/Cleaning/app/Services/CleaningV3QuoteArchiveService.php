@@ -58,7 +58,7 @@ final class CleaningV3QuoteArchiveService
             if (CarbonImmutable::parse((string) $row->expires_at, 'UTC') <= $at) {
                 throw new DomainException('V3_QUOTE_EXPIRED');
             }
-            $digest = config('cleaning_v3_catalog.approved_publication_digest');
+            $digest = \Modules\Cleaning\Services\CleaningV3AdminCatalogPublication::digest();
             $catalog = CleaningV3CatalogVersion::query()->whereKey($catalogVersionId)
                 ->where('status', CleaningV3CatalogVersion::PUBLISHED)->whereNotNull('published_at')->first();
             if (! config('cleaning_v3_catalog.read_enabled', false) || ! is_string($digest)
@@ -141,7 +141,7 @@ final class CleaningV3QuoteArchiveService
                 throw new DomainException('V3_NEW_QUOTES_PAUSED');
             }
 
-            $approvedDigest = config('cleaning_v3_catalog.approved_publication_digest');
+            $approvedDigest = \Modules\Cleaning\Services\CleaningV3AdminCatalogPublication::digest();
             $catalog = CleaningV3CatalogVersion::query()->whereKey($catalogVersionId)
                 ->where('status', CleaningV3CatalogVersion::PUBLISHED)
                 ->whereNotNull('published_at')

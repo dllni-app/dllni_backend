@@ -46,7 +46,7 @@ final class CleaningV3ReleaseReadinessAuditService
             );
         }
 
-        $approvedDigest = (string) config('cleaning_v3_catalog.approved_publication_digest', '');
+        $approvedDigest = (string) \Modules\Cleaning\Services\CleaningV3AdminCatalogPublication::digest();
         $digestValid = preg_match('/^[a-f0-9]{64}$/D', $approvedDigest) === 1;
         $checks[] = $this->check(
             'approved_catalog_digest',
@@ -90,7 +90,7 @@ final class CleaningV3ReleaseReadinessAuditService
         $checks[] = $this->check(
             'signed_v3_financial_admission',
             false,
-            'Public V3 quote and booking controllers remain fail-closed until implementation and independently verified cleared funding.',
+            'Cash quotes can be issued unpaid after administrative publication; booking, execution and settlement still require transactional collection/funding controls.',
         );
         $checks[] = $this->check(
             'mysql_concurrency_and_mobile_e2e_evidence',

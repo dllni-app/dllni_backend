@@ -14,6 +14,8 @@ use Illuminate\Validation\ValidationException;
  */
 final class CleaningV3CatalogTariffRule extends Model
 {
+    use LocksCleaningV3CatalogDraft;
+
     public const MODES = ['regular', 'deep'];
 
     protected $table = 'cleaning_v3_catalog_tariff_rules';

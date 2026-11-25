@@ -73,7 +73,8 @@ final class CleaningV3CatalogDraftValidator
             }
             if ((isset($inputRules['min'], $inputRules['max'])
                     && is_numeric($inputRules['min']) && is_numeric($inputRules['max'])
-                    && (float) $inputRules['max'] <= (float) $inputRules['min'])
+                    && ((float) $inputRules['max'] < (float) $inputRules['min']
+                        || ((float) $inputRules['max'] === (float) $inputRules['min'] && $item->measurement_mode !== 'fixed')))
                 || (isset($inputRules['step']) && is_numeric($inputRules['step'])
                     && (float) $inputRules['step'] <= 0)
                 || (isset($inputRules['maxSelections'])

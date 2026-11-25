@@ -74,6 +74,16 @@ final class CleaningV3CatalogVersionResource extends Resource
             ])
             ->headerActions([\Filament\Actions\CreateAction::make()->label('مسودة جديدة')])
             ->recordActions([
+                \Filament\Actions\Action::make('duplicatePublished')
+                    ->label('إنشاء مسودة لتعديل الأسعار')
+                    ->visible(fn (CleaningV3CatalogVersion $record): bool => $record->status === CleaningV3CatalogVersion::PUBLISHED
+                        && \Modules\Cleaning\Services\CleaningV3AdminCatalogPublication::authorized())
+                    ->authorize(fn (): bool => \Modules\Cleaning\Services\CleaningV3AdminCatalogPublication::authorized())
+                    ->requiresConfirmation()
+                    ->action(function (CleaningV3CatalogVersion $record) {
+                        $draft = app(\Modules\Cleaning\Services\CleaningV3AdminCatalogPublication::class)->duplicate($record);
+                        return redirect(self::getUrl('edit', ['record' => $draft]));
+                    }),
                 \Filament\Actions\EditAction::make()->label('إدارة المسودة')
                     ->visible(fn (CleaningV3CatalogVersion $record): bool => self::canEdit($record)),
             ])

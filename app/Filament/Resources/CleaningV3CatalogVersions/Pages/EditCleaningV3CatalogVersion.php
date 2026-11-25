@@ -23,6 +23,38 @@ final class EditCleaningV3CatalogVersion extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('publishCatalog')
+                ->label('اعتماد الأسعار ونشر الكتالوج')
+                ->icon('heroicon-o-check-circle')
+                ->visible(fn (): bool => config('cleaning_v3_catalog.admin_publication_enabled', false)
+                    && \Modules\Cleaning\Services\CleaningV3AdminCatalogPublication::authorized()
+                    && CleaningV3CatalogVersionResource::canEdit($this->record))
+                ->authorize(fn (): bool => \Modules\Cleaning\Services\CleaningV3AdminCatalogPublication::authorized())
+                ->requiresConfirmation()
+                ->form([
+                    TextInput::make('reviewedFingerprint')->label('بصمة النسخة التي تمت مراجعتها')
+                        ->default(fn () => app(CleaningV3CatalogReviewManifestService::class)->fingerprint($this->record))
+                        ->readOnly()->required(),
+                    \Filament\Forms\Components\Checkbox::make('approved')
+                        ->label('راجعت الأسعار والمدد ونطاقات القياس وأوافق على نشر هذه النسخة للعملاء')
+                        ->rule('accepted')->required(),
+                ])
+                ->action(function (array $data): void {
+                    try {
+                        if (($data['approved'] ?? false) !== true) {
+                            throw new \DomainException('V3_PUBLICATION_APPROVAL_REQUIRED');
+                        }
+                        app(\Modules\Cleaning\Services\CleaningV3AdminCatalogPublication::class)->publish($this->record, $data['reviewedFingerprint']);
+                        Notification::make()->title('تم اعتماد ونشر الكتالوج')->success()->send();
+                        $this->redirect(CleaningV3CatalogVersionResource::getUrl('index'));
+                    } catch (\Illuminate\Validation\ValidationException $e) {
+                        Notification::make()->title('تعذر النشر')->body(implode(' — ', array_map(
+                            fn (string $issue): string => $this->readinessIssueLabel($issue), $e->errors()['catalog'] ?? [],
+                        )))->danger()->persistent()->send();
+                    } catch (\DomainException|\LogicException $e) {
+                        Notification::make()->title('تعذر النشر، أعد مراجعة النسخة')->danger()->send();
+                    }
+                }),
             Action::make('reviewDraftManifest')
                 ->label('بصمة مراجعة الكتالوج')
                 ->icon('heroicon-o-finger-print')
@@ -48,7 +80,9 @@ final class EditCleaningV3CatalogVersion extends EditRecord
                 ->action(function (): void {
                     /** @var CleaningV3CatalogVersion $version */
                     $version = $this->record;
-                    $problems = app(CleaningV3CatalogDraftValidator::class)->review($version);
+                    $problems = config('cleaning_v3_catalog.admin_publication_enabled', false)
+                        ? app(\Modules\Cleaning\Services\CleaningV3AdminCatalogPublication::class)->issues($version)
+                        : app(CleaningV3CatalogDraftValidator::class)->review($version);
                     // All reads are fresh. This action NEVER publishes,
                     // approves financing, or changes a saved price.
                     Notification::make()
@@ -128,6 +162,14 @@ final class EditCleaningV3CatalogVersion extends EditRecord
     {
         [$code, $itemKey] = array_pad(explode(':', $problem, 2), 2, null);
         $message = match ($code) {
+            'FINITE_QUANTITY_RANGE_REQUIRED' => 'حدد أقل وأكبر كمية مسموحة للبند',
+            'FIXED_QUANTITY_REQUIRED' => 'السعر الثابت يتطلب كمية واحدة',
+            'INTEGER_QUANTITY_REQUIRED' => 'العدد والقطعة يتطلبان كميات وخطوة صحيحة',
+            'TARIFF_COVERAGE_INCOMPLETE' => 'التعرفة لا تغطي كل الكميات أو نطاق التنظيف',
+            'EVENT_COVERAGE_INCOMPLETE' => 'تعرفة المناسبة لا تغطي ساعات العمال المسموحة',
+            'UNSUPPORTED_PRICED_COMPONENT' => 'البند المسعر يتطلب حقل كمية مدعوماً',
+            'CATALOG_FIELD_LIMIT_EXCEEDED' => 'عدد البنود أكبر من الحد المدعوم',
+            'INVALID_EVENT_HOURLY_TARIFF' => 'تعرفة المناسبة يجب أن تكون بالساعة وجهد 60 دقيقة',
             'CATALOG_EMPTY' => 'لا توجد بنود في المسودة',
             'INVALID_SOURCE' => 'مصدر البند غير صالح أو غير مفعّل',
             'INVALID_PRESET' => 'حدود قياس غير صحيحة',

@@ -24,6 +24,16 @@ final class CleaningV3CatalogReviewManifestService
             throw new DomainException('V3_REVIEW_REQUIRES_DRAFT');
         }
 
+        return $this->build($version);
+    }
+
+    public function fingerprint(CleaningV3CatalogVersion $version): string
+    {
+        return $this->build($version, false)['fingerprint'];
+    }
+
+    private function build(CleaningV3CatalogVersion $version, bool $review = true): array
+    {
         $version->load('items.presets', 'items.tariffRules');
         $items = [];
         $tariffCount = 0;
@@ -78,7 +88,7 @@ final class CleaningV3CatalogReviewManifestService
             'catalogVersionKey' => (string) $version->version_key,
             'items' => $items,
         ];
-        $issues = $this->validator->review($version);
+        $issues = $review ? $this->validator->review($version) : [];
         sort($issues, SORT_STRING);
 
         return [

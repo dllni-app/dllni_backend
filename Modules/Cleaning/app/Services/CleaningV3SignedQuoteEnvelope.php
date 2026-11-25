@@ -115,7 +115,7 @@ final class CleaningV3SignedQuoteEnvelope
             'draftFingerprint', 'pricingRevision', 'currency',
             'visits', 'eligibleBaseTotal', 'discountTotal',
             'netBeforeAdditionalWorkerFees', 'additionalWorkerFees',
-            'totalWithAdditionalWorkerFees', 'commercialReview',
+            'totalWithAdditionalWorkerFees', 'commercialReview', 'paymentMethod', 'paymentStatus',
         ]) !== [] || ($snapshot['contractVersion'] ?? null) !== 3) {
             throw new DomainException('INVALID_V3_QUOTE_SNAPSHOT');
         }
@@ -133,6 +133,12 @@ final class CleaningV3SignedQuoteEnvelope
         }
 
         $commercial = array_key_exists('commercialReview', $snapshot);
+        if (array_key_exists('paymentMethod', $snapshot) || array_key_exists('paymentStatus', $snapshot)) {
+            if (! $commercial || ($snapshot['paymentMethod'] ?? null) !== 'cash_on_delivery'
+                || ($snapshot['paymentStatus'] ?? null) !== 'unpaid') {
+                throw new DomainException('INVALID_V3_QUOTE_PAYMENT_POLICY');
+            }
+        }
         $totals = [
             'base' => 0,
             'discount' => 0,

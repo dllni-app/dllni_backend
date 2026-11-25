@@ -78,6 +78,12 @@ final class ItemsRelationManager extends RelationManager
                 ])
                 ->columns(3)
                 ->defaultItems(0),
+            TextInput::make('input_rules.min')->label('أقل كمية مسموحة')->numeric()->minValue(0.01)
+                ->visible(static fn (Get $get): bool => ! in_array($get('source_type'), ['equipment', 'event_type'], true)),
+            TextInput::make('input_rules.max')->label('أكبر كمية مسموحة')->numeric()->minValue(0.01)
+                ->visible(static fn (Get $get): bool => ! in_array($get('source_type'), ['equipment', 'event_type'], true)),
+            TextInput::make('input_rules.step')->label('خطوة تغيير الكمية')->numeric()->minValue(0.01)
+                ->visible(static fn (Get $get): bool => ! in_array($get('source_type'), ['equipment', 'event_type'], true)),
             TagsInput::make('input_rules.propertyKeys')
                 ->label('المنشآت التي يظهر فيها البند (رموز الكتالوج)')
                 ->helperText('اتركه فارغاً للبند المشترك. استخدم رموز بنود المنشآت الموجودة في المسودة.')
@@ -201,6 +207,25 @@ final class ItemsRelationManager extends RelationManager
 
     private static function normalizeItemRules(array $data): array
     {
+        foreach (['min', 'max', 'step'] as $key) {
+            if (blank($data['input_rules'][$key] ?? null)) {
+                unset($data['input_rules'][$key]);
+            }
+        }
+        if (($data['source_type'] ?? null) === 'event_type') {
+            $data['measurement_mode'] = 'hour';
+            $data['required'] = false;
+            $data['input_rules']['componentId'] = 'numeric';
+            $data['input_rules']['min'] = 1;
+            $data['input_rules']['max'] = 470;
+            $data['input_rules']['step'] = 0.5;
+        }
+        if (($data['measurement_mode'] ?? null) === 'fixed' && ($data['source_type'] ?? null) !== 'event_type') {
+            $data['input_rules']['componentId'] = 'stepper';
+            $data['input_rules']['min'] = 1;
+            $data['input_rules']['max'] = 1;
+            $data['input_rules']['step'] = 1;
+        }
         if (blank($data['input_rules']['splitUnitQuantity'] ?? null)
             || ! in_array($data['measurement_mode'] ?? null, ['sqm', 'linear_meter', 'hour'], true)
             || ($data['source_type'] ?? null) === 'equipment') {

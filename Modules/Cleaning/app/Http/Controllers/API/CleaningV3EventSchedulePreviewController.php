@@ -15,7 +15,7 @@ final class CleaningV3EventSchedulePreviewController
     public function __invoke(Request $request, CleaningV3EventSchedulePreviewService $service): JsonResponse
     {
         $headers = ['Cache-Control' => 'private, no-store'];
-        $digest = (string) config('cleaning_v3_catalog.approved_publication_digest', '');
+        $digest = (string) \Modules\Cleaning\Services\CleaningV3AdminCatalogPublication::digest();
         $key = $request->input('catalogVersionKey');
         $catalog = config('cleaning_v3_catalog.read_enabled', false)
             && preg_match('/^[a-f0-9]{64}$/D', $digest) === 1 && is_string($key)

@@ -12,6 +12,8 @@ use Modules\Cleaning\Services\CleaningV3CatalogDraftValidator;
 
 final class CleaningV3CatalogItem extends Model
 {
+    use LocksCleaningV3CatalogDraft;
+
     public const SOURCE_TYPES = ['property', 'room', 'service', 'special_service', 'material', 'event_type', 'equipment'];
 
     public const MEASUREMENT_MODES = ['count', 'sqm', 'linear_meter', 'piece', 'hour', 'fixed'];

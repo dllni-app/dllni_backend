@@ -10,6 +10,8 @@ use Illuminate\Validation\ValidationException;
 
 final class CleaningV3CatalogSizePreset extends Model
 {
+    use LocksCleaningV3CatalogDraft;
+
     protected $table = 'cleaning_v3_catalog_size_presets';
 
     protected $fillable = [

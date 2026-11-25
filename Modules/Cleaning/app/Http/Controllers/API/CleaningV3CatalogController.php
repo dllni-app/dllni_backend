@@ -27,7 +27,7 @@ final class CleaningV3CatalogController
             ], 503, ['Cache-Control' => 'private, no-store']);
         }
 
-        $approvedDigest = (string) config('cleaning_v3_catalog.approved_publication_digest');
+        $approvedDigest = (string) \Modules\Cleaning\Services\CleaningV3AdminCatalogPublication::digest();
         if (! preg_match('/^[a-f0-9]{64}$/D', $approvedDigest)) {
             return response()->json([
                 'success' => false,
@@ -54,7 +54,10 @@ final class CleaningV3CatalogController
 
         $locale = str_starts_with(mb_strtolower((string) $request->header('Accept-Language', 'ar')), 'en')
             ? 'en' : 'ar';
-        $etag = '"'.hash('sha256', $version->version_key.':'.$version->published_digest.':'.$locale.':renderer-1').'"';
+        $cashCapability = config('cleaning_v3_catalog.admin_publication_enabled', false)
+            && config('cleaning_v3_catalog.cash_quote_enabled', false)
+            && config('cleaning_v3_catalog.new_quote_archive_enabled', false);
+        $etag = '"'.hash('sha256', $version->version_key.':'.$version->published_digest.':'.$locale.':renderer-1:cash-'.(int) $cashCapability).'"';
         $headers['ETag'] = $etag;
 
         if ($request->header('If-None-Match') === $etag) {

@@ -9,6 +9,8 @@ return [
     // Requires the exact approved immutable version digest; a toggle alone
     // cannot make a manually marked-as-published draft publicly visible.
     'approved_publication_digest' => env('CLEANING_V3_APPROVED_PUBLICATION_DIGEST'),
+    'admin_publication_enabled' => (bool) env('CLEANING_V3_ADMIN_PUBLICATION_ENABLED', false),
+    'cash_quote_enabled' => (bool) env('CLEANING_V3_CASH_QUOTE_ENABLED', false),
     'renderer_schema_version' => 3,
     'min_renderer_revision' => 1,
     // Independent rollback switches for NEW V3 commercial work only.

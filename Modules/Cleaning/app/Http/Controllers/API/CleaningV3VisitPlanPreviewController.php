@@ -29,7 +29,7 @@ final class CleaningV3VisitPlanPreviewController
         CleaningV3CatalogPublicSerializer $serializer,
     ): JsonResponse {
         $noStore = ['Cache-Control' => 'private, no-store'];
-        $digest = (string) config('cleaning_v3_catalog.approved_publication_digest', '');
+        $digest = (string) \Modules\Cleaning\Services\CleaningV3AdminCatalogPublication::digest();
         if (! config('cleaning_v3_catalog.read_enabled', false)
             || preg_match('/^[a-f0-9]{64}$/D', $digest) !== 1) {
             return response()->json([

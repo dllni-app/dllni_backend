@@ -101,7 +101,7 @@ final class CleaningV3QuoteBookingAdmissionService
             ->where('status', CleaningV3CatalogVersion::PUBLISHED)
             ->whereNotNull('published_at')
             ->first();
-        $approvedDigest = config('cleaning_v3_catalog.approved_publication_digest');
+        $approvedDigest = \Modules\Cleaning\Services\CleaningV3AdminCatalogPublication::digest();
 
         if (! config('cleaning_v3_catalog.read_enabled', false)
             || ! is_string($approvedDigest)
