@@ -78,6 +78,7 @@ final class CleaningV3CashQuoteController
                 // as collected money. No funding, coupon redemption or stock write.
                 $snapshot['paymentMethod'] = 'cash_on_delivery';
                 $snapshot['paymentStatus'] = 'unpaid';
+                $snapshot['settlementBasis'] = $review['settlementBasis'];
                 $hash = hash('sha256', json_encode([$customerId, $digest, $data['draftFingerprint'],
                     $review['pricingFingerprint'], 'cash_on_delivery'], JSON_THROW_ON_ERROR));
                 $archive = app(CleaningV3QuoteArchiveService::class);

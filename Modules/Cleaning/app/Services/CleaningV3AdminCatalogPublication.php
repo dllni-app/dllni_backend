@@ -42,7 +42,19 @@ final class CleaningV3AdminCatalogPublication
         }
         // Detect bypasses of model immutability and concurrent child edits.
         $actual = app(CleaningV3CatalogReviewManifestService::class)->fingerprint($version);
-        return hash_equals($actual, $version->published_digest) ? $actual : null;
+        if (! hash_equals($actual, $version->published_digest)) {
+            return null;
+        }
+        // A source disabled in the existing catalog must not continue to be
+        // offered to new customers just because the immutable V3 hash matches.
+        foreach ($version->items->where('is_enabled', true) as $item) {
+            try {
+                app(CleaningV3CatalogDraftValidator::class)->assertActiveSource($item->source_type, (int) $item->source_id);
+            } catch (ValidationException) {
+                return null;
+            }
+        }
+        return $actual;
     }
 
     /** Structural coverage for supported, enabled fields. No funding claims. */
@@ -60,6 +72,27 @@ final class CleaningV3AdminCatalogPublication
             $issues[] = 'CATALOG_EMPTY';
         }
         $fields = collect(app(CleaningV3CatalogPublicSerializer::class)->serialize($version, 'ar')['items'])->keyBy('key');
+        if ($enabled->whereNotIn('source_type', ['equipment', 'material'])->isEmpty()) {
+            $issues[] = 'CATALOG_NO_BOOKABLE_SERVICE';
+        }
+        $selector = app(CleaningV3PropertyFormSelector::class);
+        $propertyKeys = $fields->contains(static fn ($field) => $field['propertyScopeConfigured'])
+            ? $fields->where('sourceType', 'property')->pluck('key')->all() : [null];
+        if ($selector->issues($fields->values()->all()) === []) {
+            foreach ($propertyKeys as $propertyKey) {
+                $visible = collect($selector->select($fields->values()->all(), $propertyKey));
+                // A timed event cannot also require ordinary priced task
+                // fields; the event pricing engine intentionally rejects them.
+                if ($visible->contains('sourceType', 'event_type')
+                    && $visible->contains(static fn ($f) => $f['required']
+                        && ! in_array($f['sourceType'], ['event_type', 'equipment'], true))) {
+                    $issues[] = 'EVENT_FORM_REQUIRES_TASK_FIELDS:'.($propertyKey ?? 'shared');
+                }
+                if (! $visible->contains(static fn ($f) => ! in_array($f['sourceType'], ['equipment', 'material'], true))) {
+                    $issues[] = 'CATALOG_NO_BOOKABLE_SERVICE:'.($propertyKey ?? 'shared');
+                }
+            }
+        }
         foreach ($enabled as $item) {
             $field = $fields->get($item->item_key);
             $key = $item->item_key;
@@ -77,6 +110,9 @@ final class CleaningV3AdminCatalogPublication
                 // 60 minutes through a same-day maximum of 1410 minutes.
                 $min = $input['min'] ?? 1;
                 $max = $input['max'] ?? 470;
+                if ($item->required) {
+                    $issues[] = 'EVENT_TYPE_MUST_BE_OPTIONAL:'.$key;
+                }
                 if (! is_numeric($min) || ! is_numeric($max) || (float) $min > 1
                     || (float) $max < 470 || (isset($input['step']) && (float) $input['step'] !== 0.5)) {
                     $issues[] = 'EVENT_COVERAGE_INCOMPLETE:'.$key;
@@ -101,6 +137,9 @@ final class CleaningV3AdminCatalogPublication
                     && (floor((float) $min) !== (float) $min || floor((float) $max) !== (float) $max
                         || (isset($input['step']) && floor((float) $input['step']) !== (float) $input['step']))) {
                     $issues[] = 'INTEGER_QUANTITY_REQUIRED:'.$key;
+                }
+                if (in_array($item->measurement_mode, ['count', 'piece'], true) && (float) $max > 40) {
+                    $issues[] = 'TASK_QUANTITY_LIMIT_EXCEEDED:'.$key;
                 }
                 $groups = ['regular|whole', 'deep|whole'];
                 foreach ($field['deepScopeChoices'] as $scope) {

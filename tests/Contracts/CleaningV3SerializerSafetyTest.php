@@ -6,7 +6,7 @@ use Modules\Cleaning\Services\CleaningV3CatalogPublicSerializer;
 
 function makeV3SerializerFakeItem(array $rules): object
 {
-    return (object) [
+    $item = new \Modules\Cleaning\Models\CleaningV3CatalogItem([
         'input_rules' => $rules,
         'measurement_mode' => 'sqm',
         'label_ar' => 'مساحة',
@@ -15,8 +15,8 @@ function makeV3SerializerFakeItem(array $rules): object
         'source_type' => 'property',
         'source_id' => 1,
         'required' => true,
-        'presets' => collect([]),
-    ];
+    ]);
+    return $item->setRelation('presets', collect([]))->setRelation('tariffRules', collect([]));
 }
 
 test('V3 serializer keeps simple safe numeric constraints while dropping internal pricing fields', function (): void {

@@ -32,6 +32,9 @@ final class CleaningV3ReleaseReadinessAuditService
             'cleaning_v3_catalog_versions',
             'cleaning_v3_catalog_items',
             'cleaning_v3_catalog_tariff_rules',
+            'cleaning_v3_catalog_publication',
+            'cleaning_v3_cash_movements',
+            'cleaning_v3_supervisor_attendance_proofs',
             'cleaning_booking_sessions',
             'cleaning_visit_funding_reservations',
             'cleaning_work_intervals',
@@ -70,11 +73,17 @@ final class CleaningV3ReleaseReadinessAuditService
         );
 
         if ($catalog !== null) {
-            $issues = app(CleaningV3CatalogDraftValidator::class)->review($catalog);
+            $issues = config('cleaning_v3_catalog.admin_publication_enabled', false)
+                ? app(CleaningV3AdminCatalogPublication::class)->issues($catalog)
+                : app(CleaningV3CatalogDraftValidator::class)->review($catalog);
+            $checks[] = $this->check('admin_catalog_publication', $issues === []
+                && config('cleaning_v3_catalog.admin_publication_enabled', false),
+                'Administrative publication and supported tariff coverage are independent of actual cash collection.',
+                ['issueCodes' => array_values($issues)]);
             $checks[] = $this->check(
                 'approved_catalog_coverage_and_funding',
-                $issues === [],
-                'All missing catalog coverage, pricing, refund and funding proofs must be approved.',
+                false,
+                'Catalog structure can pass independently; actual funding and complete booking admission evidence are still required.',
                 ['issueCodes' => array_values($issues)],
             );
         } else {
@@ -90,7 +99,7 @@ final class CleaningV3ReleaseReadinessAuditService
         $checks[] = $this->check(
             'signed_v3_financial_admission',
             false,
-            'Cash quotes can be issued unpaid after administrative publication; booking, execution and settlement still require transactional collection/funding controls.',
+            'Cash quote and manual treasury reconciliation are implemented; booking and worker admission, verified supervised attendance, and actual funding/cash workflow integration remain required.'
         );
         $checks[] = $this->check(
             'mysql_concurrency_and_mobile_e2e_evidence',

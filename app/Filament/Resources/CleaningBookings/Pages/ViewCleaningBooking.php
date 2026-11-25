@@ -236,6 +236,155 @@ final class ViewCleaningBooking extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('reviewV3CashSettlement')
+                ->label('مراجعة التسوية النقدية V3')
+                ->visible(fn (): bool => $this->record->contract_version === 'v3'
+                    && \Modules\Cleaning\Services\CleaningV3CashSettlementService::authorized())
+                ->authorize(fn (): bool => \Modules\Cleaning\Services\CleaningV3CashSettlementService::authorized())
+                ->form([
+                    Select::make('visitId')->label('الزيارة المكتملة')
+                        ->options(fn (): array => $this->record->sessions()->where('status', 'completed')
+                            ->pluck('sequence', 'id')->map(fn ($sequence) => 'زيارة '.$sequence)->all())->required(),
+                ])
+                ->action(function (array $data): void {
+                    try {
+                        $state = app(\Modules\Cleaning\Services\CleaningV3CashSettlementService::class)
+                            ->review((int) $this->record->id, (int) $data['visitId']);
+                        $body = 'المستحق: '.$state['totalDueSyp'].' ل.س — العجز: '.$state['unfundedSyp']
+                            .' — وقت العمل الفعلي: '.$state['activeSeconds'].' ثانية';
+                        foreach ($state['workerPayables'] as $worker) {
+                            $body .= ' | عامل '.$worker['workerId'].': '.$worker['grossPayableSyp'].' ل.س (worker:'.$worker['workerId'].')';
+                        }
+                        if ($state['supervisorRequired']) {
+                            $body .= ' | مشرف '.$state['supervisorUserId'].': '.$state['supervisorPayableSyp'].' ل.س (supervisor:'.$state['supervisorUserId'].')';
+                        }
+                        foreach ($state['movements'] as $movement) {
+                            $body .= ' | '.$movement['reference'].' — '.$movement['amount'].' ل.س — '.($movement['status'] === 'posted' ? 'مؤكد' : 'قيد التحقق');
+                        }
+                        Notification::make()->title('مراجعة النقد والمستحقات')->body($body)->persistent()->send();
+                    } catch (\DomainException $e) {
+                        Notification::make()->title('التسوية غير متاحة')->body($e->getMessage())->danger()->send();
+                    }
+                }),
+            Action::make('recordV3SupervisorPresence')
+                ->label('تسجيل إثبات حضور المشرف')
+                ->visible(fn (): bool => $this->record->contract_version === 'v3'
+                    && config('cleaning_v3_catalog.cash_settlement_enabled', false)
+                    && \Modules\Cleaning\Services\CleaningV3CashSettlementService::authorized())
+                ->authorize(fn (): bool => \Modules\Cleaning\Services\CleaningV3CashSettlementService::authorized())
+                ->form([
+                    Select::make('visitId')->label('الزيارة المكتملة')
+                        ->options(fn (): array => $this->record->sessions()->where('status', 'completed')
+                            ->where('supervision_mode', 'supervisor')->pluck('sequence', 'id')
+                            ->map(fn ($sequence) => 'زيارة '.$sequence)->all())->required(),
+                    Select::make('supervisorId')->label('المشرف')
+                        ->options(fn (): array => User::query()->whereIn('id', $this->record->supervisorAssignments()->pluck('supervisor_user_id'))->pluck('name', 'id')->all())->required(),
+                    \Filament\Forms\Components\TextInput::make('from')->label('بداية الحضور UTC')->placeholder('2026-11-25T09:00:00Z')->required(),
+                    \Filament\Forms\Components\TextInput::make('until')->label('نهاية الحضور UTC')->placeholder('2026-11-25T11:00:00Z')->required(),
+                    \Filament\Forms\Components\TextInput::make('reference')->label('مرجع إثبات الحضور')->required()->maxLength(128),
+                    Textarea::make('evidence')->label('مصدر الإثبات الفعلي للحضور')->required()->minLength(10)->maxLength(500),
+                ])
+                ->action(function (array $data): void {
+                    try {
+                        $result = app(\Modules\Cleaning\Services\CleaningV3SupervisorAttendanceProofService::class)->record(
+                            (int) $this->record->id, (int) $data['visitId'], (int) $data['supervisorId'],
+                            $data['from'], $data['until'], $data['reference'], $data['evidence'],
+                        );
+                        Notification::make()->title('تم تسجيل الإثبات بانتظار مسؤول آخر')
+                            ->body('الوقت الفعلي بعد استبعاد التوقف: '.$result['active_seconds'].' ثانية')->success()->persistent()->send();
+                    } catch (\DomainException $e) {
+                        Notification::make()->title('تعذر تسجيل الحضور')->body($e->getMessage())->danger()->send();
+                    }
+                }),
+            Action::make('verifyV3SupervisorPresence')
+                ->label('اعتماد حضور المشرف')
+                ->visible(fn (): bool => $this->record->contract_version === 'v3'
+                    && config('cleaning_v3_catalog.cash_settlement_enabled', false)
+                    && \Modules\Cleaning\Services\CleaningV3CashSettlementService::authorized())
+                ->authorize(fn (): bool => \Modules\Cleaning\Services\CleaningV3CashSettlementService::authorized())
+                ->form([
+                    Select::make('visitId')->label('الزيارة المكتملة')
+                        ->options(fn (): array => $this->record->sessions()->where('status', 'completed')
+                            ->where('supervision_mode', 'supervisor')->pluck('sequence', 'id')
+                            ->map(fn ($sequence) => 'زيارة '.$sequence)->all())->required(),
+                    \Filament\Forms\Components\TextInput::make('reference')->label('مرجع الإثبات')->required()->maxLength(128),
+                    \Filament\Forms\Components\TextInput::make('activeSeconds')->label('ثواني العمل الفعلية المطابقة للإثبات')->integer()->minValue(1)->required(),
+                    \Filament\Forms\Components\Checkbox::make('verified')->label('تحققت من حضور المشرف فعلياً ومن مستند الإثبات')->rule('accepted')->required(),
+                ])
+                ->action(function (array $data): void {
+                    try {
+                        if (($data['verified'] ?? false) !== true) {
+                            throw new \DomainException('V3_SUPERVISOR_ATTENDANCE_EVIDENCE_REQUIRED');
+                        }
+                        app(\Modules\Cleaning\Services\CleaningV3SupervisorAttendanceProofService::class)->verify(
+                            (int) $this->record->id, (int) $data['visitId'], $data['reference'], (int) $data['activeSeconds'],
+                        );
+                        Notification::make()->title('تم اعتماد حضور المشرف')->success()->send();
+                    } catch (\DomainException $e) {
+                        Notification::make()->title('تعذر اعتماد الحضور')->body($e->getMessage())->danger()->send();
+                    }
+                }),
+            Action::make('recordV3CashMovement')
+                ->label('تسجيل حركة نقدية V3')
+                ->visible(fn (): bool => $this->record->contract_version === 'v3'
+                    && config('cleaning_v3_catalog.cash_settlement_enabled', false)
+                    && \Modules\Cleaning\Services\CleaningV3CashSettlementService::authorized())
+                ->authorize(fn (): bool => \Modules\Cleaning\Services\CleaningV3CashSettlementService::authorized())
+                ->modalDescription('سجل فقط مبلغاً تم استلامه أو صرفه فعلياً من صندوق المنصة. التسجيل وحده لا يثبت التحصيل ولا التسوية. يلزم تحقق مسؤول آخر من الدليل.')
+                ->form([
+                    Select::make('visitId')->label('الزيارة المكتملة')
+                        ->options(fn (): array => $this->record->sessions()->where('status', 'completed')
+                            ->pluck('sequence', 'id')->map(fn ($sequence) => 'زيارة '.$sequence)->all())->required(),
+                    Select::make('kind')->label('الحركة')->options([
+                        'collection' => 'استلام نقدي في صندوق المنصة', 'payout' => 'صرف مستحق عامل أو مشرف', 'fee_refund' => 'رد رسم عامل إضافي',
+                    ])->required(),
+                    \Filament\Forms\Components\TextInput::make('beneficiary')->label('الطرف')
+                        ->helperText('treasury للتحصيل، worker:رقم_العامل أو supervisor:رقم_المشرف للصرف، customer لرد الرسم')->required()->maxLength(96),
+                    \Filament\Forms\Components\TextInput::make('amount')->label('المبلغ الفعلي بالليرة السورية (مثال 100.00)')
+                        ->required()->regex('/^(?:0|[1-9][0-9]{0,11})\.[0-9]{2}$/'),
+                    \Filament\Forms\Components\TextInput::make('reference')->label('مرجع سند الصندوق الفريد')->required()->maxLength(128),
+                    Textarea::make('evidence')->label('دليل وسبب الحركة الفعلية')->required()->minLength(10)->maxLength(500),
+                ])
+                ->action(function (array $data): void {
+                    try {
+                        app(\Modules\Cleaning\Services\CleaningV3CashSettlementService::class)->record(
+                            (int) $this->record->id, (int) $data['visitId'], $data['kind'], $data['beneficiary'],
+                            $data['amount'], $data['reference'], $data['evidence'],
+                        );
+                        Notification::make()->title('تم تسجيل الحركة بانتظار تحقق مسؤول آخر')->success()->send();
+                    } catch (\DomainException $e) {
+                        Notification::make()->title('لم تسجل الحركة')->body($e->getMessage())->danger()->send();
+                    }
+                }),
+            Action::make('verifyV3CashMovement')
+                ->label('التحقق من حركة نقدية V3')
+                ->visible(fn (): bool => $this->record->contract_version === 'v3'
+                    && config('cleaning_v3_catalog.cash_settlement_enabled', false)
+                    && \Modules\Cleaning\Services\CleaningV3CashSettlementService::authorized())
+                ->authorize(fn (): bool => \Modules\Cleaning\Services\CleaningV3CashSettlementService::authorized())
+                ->modalDescription('أكد فقط بعد مطابقة سند الصندوق مع المبلغ الفعلي. لا يمكن للمسؤول الذي سجل الحركة اعتمادها.')
+                ->form([
+                    Select::make('visitId')->label('الزيارة المكتملة')
+                        ->options(fn (): array => $this->record->sessions()->where('status', 'completed')
+                            ->pluck('sequence', 'id')->map(fn ($sequence) => 'زيارة '.$sequence)->all())->required(),
+                    \Filament\Forms\Components\TextInput::make('reference')->label('مرجع السند')->required()->maxLength(128),
+                    \Filament\Forms\Components\TextInput::make('amount')->label('المبلغ المطابق الفعلي')->required()
+                        ->regex('/^(?:0|[1-9][0-9]{0,11})\.[0-9]{2}$/'),
+                    \Filament\Forms\Components\Checkbox::make('verified')->label('تحققت فعلياً من السند والمبلغ')->rule('accepted')->required(),
+                ])
+                ->action(function (array $data): void {
+                    try {
+                        if (($data['verified'] ?? false) !== true) {
+                            throw new \DomainException('V3_CASH_EVIDENCE_REQUIRED');
+                        }
+                        $state = app(\Modules\Cleaning\Services\CleaningV3CashSettlementService::class)
+                            ->verify((int) $this->record->id, (int) $data['visitId'], $data['reference'], $data['amount']);
+                        Notification::make()->title($state['paymentStatus'] === 'settled'
+                            ? 'تمت مطابقة التسوية النقدية' : 'تم التحقق من الحركة النقدية')->success()->send();
+                    } catch (\DomainException $e) {
+                        Notification::make()->title('تعذر اعتماد الحركة')->body($e->getMessage())->danger()->send();
+                    }
+                }),
             Action::make('assign_supervisor')
                 ->label('إسناد المشرف / تغييره')
                 ->icon('heroicon-o-user-group')

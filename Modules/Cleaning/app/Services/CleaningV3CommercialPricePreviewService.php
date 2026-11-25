@@ -85,6 +85,8 @@ final class CleaningV3CommercialPricePreviewService
         $work = collect($capacity['visits'] ?? [])->keyBy('occurrenceKey');
         $equipment = collect($capacity['equipmentPreview']['visits'] ?? [])->keyBy('occurrenceKey');
         $rows = [];
+        $settlementVisits = [];
+        $supervisorCompensation = $this->money((string) $setting->supervisor_compensation_hourly_rate);
         $totalEligible = '0.00';
         $totalBeforeDiscount = '0.00';
         foreach ($plan['appointments'] as $appointment) {
@@ -101,6 +103,7 @@ final class CleaningV3CommercialPricePreviewService
                     ? $this->money($eventTariff['visits'][$key] ?? null)
                     : ($eventRate === null ? '0.00' : $this->ceil(bcmul($eventRate, (string) (intdiv($visit['durationMinutes'], 30) * $visit['requiredWorkers']), 2)));
                 $addons = '0.00';
+                $material = '0.00';
                 foreach ($w['taskGroups'] ?? [] as $group) {
                     $item = $items->get($group['itemKey']);
                     if ($item === null || $item->source_type === 'equipment' || $item->source_type === 'event_type') {
@@ -109,6 +112,9 @@ final class CleaningV3CommercialPricePreviewService
                     $amount = $this->money($group['estimatedBaseAmountSyp']);
                     if (in_array($item->source_type, ['special_service', 'material'], true)) {
                         $addons = bcadd($addons, $amount, 2);
+                        if ($item->source_type === 'material') {
+                            $material = bcadd($material, $amount, 2);
+                        }
                     } else {
                         $base = bcadd($base, $amount, 2);
                     }
@@ -130,6 +136,13 @@ final class CleaningV3CommercialPricePreviewService
                     'equipmentAmountSyp' => $eq, 'supervisorAmountSyp' => $supervisor,
                     'minimumTopUpSyp' => '0.00', 'travelAmountSyp' => $travel,
                     'eligibleBeforeDiscountSyp' => $eligible,
+                ];
+                $settlementVisits[$key] = [
+                    'billingMode' => $event === null ? 'task' : 'event',
+                    'plannedMinutes' => $visit['durationMinutes'],
+                    'materialAmountSyp' => $material,
+                    'eventRateSyp' => $eventTariff['unitPriceSyp'] ?? $eventRate,
+                    'eventRateMinutes' => $eventTariff !== null ? 60 : ($eventRate !== null ? 30 : null),
                 ];
                 $keys[] = $key;
                 $subtotal = bcadd($subtotal, $gross, 2);
@@ -209,6 +222,9 @@ final class CleaningV3CommercialPricePreviewService
             'canCharge' => false, 'canCreateBooking' => false,
             'requiresCommercialApproval' => true, 'requiresFundingAdmission' => true,
             'couponCode' => $coupon?->code, 'totals' => $totals, 'visits' => array_values($rows),
+            'settlementBasis' => ['version' => 1, 'commissionType' => $commissionType,
+                'commission' => $commission, 'supervisorHourlyCompensation' => $supervisorCompensation,
+                'visits' => $settlementVisits],
         ];
         return [...$result, 'pricingFingerprint' => hash('sha256', json_encode([
             $customerId, $draftFingerprint, $settingsDigest, $result,

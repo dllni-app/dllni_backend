@@ -115,7 +115,7 @@ final class CleaningV3SignedQuoteEnvelope
             'draftFingerprint', 'pricingRevision', 'currency',
             'visits', 'eligibleBaseTotal', 'discountTotal',
             'netBeforeAdditionalWorkerFees', 'additionalWorkerFees',
-            'totalWithAdditionalWorkerFees', 'commercialReview', 'paymentMethod', 'paymentStatus',
+            'totalWithAdditionalWorkerFees', 'commercialReview', 'paymentMethod', 'paymentStatus', 'settlementBasis',
         ]) !== [] || ($snapshot['contractVersion'] ?? null) !== 3) {
             throw new DomainException('INVALID_V3_QUOTE_SNAPSHOT');
         }
@@ -204,6 +204,12 @@ final class CleaningV3SignedQuoteEnvelope
         }
         if ($commercial) {
             app(CleaningV3CommercialQuoteSnapshot::class)->assertMatches($snapshot);
+        }
+        if (array_key_exists('settlementBasis', $snapshot)) {
+            if (($snapshot['paymentMethod'] ?? null) !== 'cash_on_delivery') {
+                throw new DomainException('INVALID_V3_SETTLEMENT_BASIS');
+            }
+            app(CleaningV3CashSettlementBasis::class)->assertValid($snapshot);
         }
         if ($totals['total'] > 99999999999999) {
             throw new DomainException('INVALID_V3_QUOTE_TOTALS');

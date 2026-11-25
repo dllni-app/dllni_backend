@@ -162,6 +162,10 @@ final class EditCleaningV3CatalogVersion extends EditRecord
     {
         [$code, $itemKey] = array_pad(explode(':', $problem, 2), 2, null);
         $message = match ($code) {
+            'CATALOG_NO_BOOKABLE_SERVICE' => 'لا توجد خدمة قابلة للحجز ضمن هذا النموذج',
+            'EVENT_FORM_REQUIRES_TASK_FIELDS' => 'افصل نموذج المناسبة الزمنية عن بنود التنظيف الإلزامية',
+            'EVENT_TYPE_MUST_BE_OPTIONAL' => 'نوع المناسبة يحدد من جدول المناسبة وليس كحقل إلزامي',
+            'TASK_QUANTITY_LIMIT_EXCEEDED' => 'عدد القطع أكبر من حد التخطيط المدعوم',
             'FINITE_QUANTITY_RANGE_REQUIRED' => 'حدد أقل وأكبر كمية مسموحة للبند',
             'FIXED_QUANTITY_REQUIRED' => 'السعر الثابت يتطلب كمية واحدة',
             'INTEGER_QUANTITY_REQUIRED' => 'العدد والقطعة يتطلبان كميات وخطوة صحيحة',
