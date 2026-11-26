@@ -116,6 +116,15 @@ Route::prefix('v1')->group(function () {
     Route::apiResource('cleaning-services.pricing', ServicePricingController::class)->only(['index', 'show'])->scoped();
     Route::apiResource('cleaning-billing-policies', CleaningBillingPolicyController::class)->only(['index', 'show']);
     Route::get('cleaning/suite-config', CleaningSuiteConfigController::class);
+    Route::middleware('auth:sanctum')->prefix('cleaning/booking-templates')->group(function (): void {
+        $controller = \Modules\Cleaning\Http\Controllers\API\CleaningBookingTemplateController::class;
+        Route::get('/', [$controller, 'index']);
+        Route::post('/', [$controller, 'store']);
+        Route::get('{id}', [$controller, 'show'])->whereNumber('id');
+        Route::patch('{id}', [$controller, 'update'])->whereNumber('id');
+        Route::delete('{id}', [$controller, 'destroy'])->whereNumber('id');
+    });
+
     // Read-only versioned V3 catalog. No V3 quote/write routes; held until approved.
     Route::get('cleaning/catalog/v3', CleaningV3CatalogController::class)->middleware('throttle:60,1');
 
