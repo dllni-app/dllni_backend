@@ -75,6 +75,7 @@ final class UserAccountService
 
             $user->tokens()->delete();
             $user->notifications()->delete();
+            \Modules\Cleaning\Models\CleaningBookingTemplate::query()->where('customer_id', $user->id)->delete();
             $user->addresses()->delete();
             $user->favorites()->delete();
             $user->carts()->delete();

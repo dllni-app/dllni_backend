@@ -66,3 +66,29 @@ test('template rejects non-property services and stores recurrence preferences w
     $this->postJson($url, [...$base, 'inputs' => [...$inputs, 'recurrenceWeekdays' => [8]]])->assertUnprocessable();
     $this->postJson($url, [...$base, 'inputs' => $inputs])->assertCreated()->assertJsonPath('data.inputs', $inputs);
 });
+test('template is deleted when account is anonymized', function (): void {
+    $customer = User::factory()->create(['is_active' => true]);
+    Sanctum::actingAs($customer);
+    $url = '/api/v1/cleaning/booking-templates';
+    $id = $this->postJson($url, [
+        'name' => 'Private home notes', 'creationKey' => (string) Str::uuid(),
+        'inputs' => ['source' => 'v2', 'propertyKey' => 'apartment', 'notes' => 'private'],
+    ])->assertCreated()->json('data.id');
+    app(\Modules\User\Services\UserAccountService::class)->deleteAccount($customer->fresh());
+    $this->assertDatabaseMissing('cleaning_booking_templates', ['id' => $id]);
+});
+
+test('template property summary uses authoritative home type', function (): void {
+    $property = \Modules\Cleaning\Models\CleaningHomeType::query()->create([
+        'section' => 'property', 'code' => 'template_test_property',
+        'booking_value' => 'template_test_property', 'title' => 'Test property',
+        'is_active' => true, 'sort_order' => 0,
+    ]);
+    Sanctum::actingAs(User::factory()->create(['is_active' => true]));
+    $this->postJson('/api/v1/cleaning/booking-templates', [
+        'name' => 'Home', 'creationKey' => (string) Str::uuid(),
+        'inputs' => ['source' => 'v2', 'propertyKey' => 'template_test_property'],
+    ])->assertCreated()->assertJsonPath('data.propertySourceId', $property->id)
+        ->assertJsonPath('data.propertyBookingValue', 'template_test_property')
+        ->assertJsonPath('data.propertyLabel', 'Test property');
+});

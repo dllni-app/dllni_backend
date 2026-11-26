@@ -33,6 +33,7 @@ final class CleaningBookingTemplateController
 
     public function store(Request $request): JsonResponse
     {
+        $this->owned($request);
         $data = $this->validated($request, true);
         $hash = hash('sha256', json_encode($this->canonical([$data['name'], $data['inputs']]), JSON_THROW_ON_ERROR));
         return DB::transaction(function () use ($request, $data, $hash): JsonResponse {
@@ -196,7 +197,7 @@ final class CleaningBookingTemplateController
             'inputs.services.*' => ['array:serviceKey,specialServiceId,targetRoomKeys,quantity,dirtinessLevel'],
             'inputs.services.*.serviceKey' => ['required', 'string', 'max:160'],
             'inputs.services.*.specialServiceId' => ['required', 'integer', 'min:1'],
-            'inputs.services.*.targetRoomKeys' => ['required', 'array', 'max:50'],
+            'inputs.services.*.targetRoomKeys' => ['present', 'array', 'max:50'],
             'inputs.services.*.targetRoomKeys.*' => ['string', 'max:160'],
             'inputs.services.*.quantity' => ['required', 'numeric', 'gt:0', 'max:100000'],
             'inputs.services.*.dirtinessLevel' => ['nullable', 'string', 'max:120'],
@@ -239,7 +240,7 @@ final class CleaningBookingTemplateController
                     && ! \Modules\Cleaning\Models\CleaningV3CatalogItem::query()
                         ->where('item_key', $property)->where('source_type', 'property')->exists();
                 if ($knownOccasion || $knownNonProperty || in_array($property, ['event_assistance', 'hourly_worker', 'hourly', 'event'], true)) {
-                    $validator->errors()->add('inputs.propertyKey', 'Cleaning templates support properties only.');
+                    $validator->errors()->add('inputs.propertyKey', 'نماذج التنظيف مخصصة للعقارات فقط.');
                 }
             }
             if (strlen(json_encode($inputs, JSON_INVALID_UTF8_SUBSTITUTE) ?: '') > 65536) {
