@@ -23,7 +23,10 @@ final class CleaningBookingTemplateController
     public function index(Request $request): JsonResponse
     {
         $items = $this->owned($request)->orderByDesc('updated_at')->orderByDesc('id')->get();
-        return response()->json(['data' => $items->map(fn ($item) => $this->summary($item))], 200, self::HEADERS);
+        $addresses = UserAddress::query()->where('user_id', $request->user()->id)
+            ->whereIn('id', $items->map(fn ($item) => $item->inputs['addressId'] ?? null)->filter()->unique())
+            ->get()->keyBy('id');
+        return response()->json(['data' => $items->map(fn ($item) => $this->summary($item, $addresses->get($item->inputs['addressId'] ?? 0)))], 200, self::HEADERS);
     }
 
     public function show(Request $request, int $id): JsonResponse
@@ -103,7 +106,7 @@ final class CleaningBookingTemplateController
         return CleaningBookingTemplate::query()->where('customer_id', $user->id);
     }
 
-    private function summary(CleaningBookingTemplate $item): array
+    private function summary(CleaningBookingTemplate $item, ?UserAddress $address = null): array
     {
         $key = $item->inputs['propertyKey'];
         $property = null;
@@ -128,6 +131,12 @@ final class CleaningBookingTemplateController
             'id' => $item->id, 'name' => $item->name, 'revision' => $item->revision,
             'schemaVersion' => $item->schema_version,
             'propertyKey' => $item->inputs['propertyKey'],
+            'addressId' => isset($item->inputs['addressId']) ? (int) $item->inputs['addressId'] : null,
+            'addressAvailable' => $address !== null,
+            'addressLabel' => $address?->label,
+            'addressText' => $address === null ? null : implode('، ', array_unique(array_filter([
+                $address->neighborhood, $address->street,
+            ]))),
             'roomCount' => isset($item->inputs['rooms']) ? count($item->inputs['rooms']) : null,
             'updatedAt' => $item->updated_at?->toISOString(),
         ];
@@ -135,7 +144,10 @@ final class CleaningBookingTemplateController
 
     private function detail(CleaningBookingTemplate $item): array
     {
-        return [...$this->summary($item), 'inputs' => $item->inputs];
+        $address = isset($item->inputs['addressId'])
+            ? UserAddress::query()->where('user_id', $item->customer_id)->find($item->inputs['addressId'])
+            : null;
+        return [...$this->summary($item, $address), 'inputs' => $item->inputs];
     }
 
     private function conflict(string $message): JsonResponse

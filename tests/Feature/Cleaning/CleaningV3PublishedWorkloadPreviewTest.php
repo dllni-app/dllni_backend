@@ -77,6 +77,18 @@ test('three indivisible 250-minute pieces require three workers rather than ceil
         ->and($result['canSettle'])->toBeFalse();
 });
 
+test('a chosen team gets a derived duration with the same immutable price', function (): void {
+    [$version, $digest] = v3WorkloadCatalog('piece', '100.00');
+    $planner = app(CleaningV3PublishedWorkloadPreviewService::class);
+    foreach ([1 => 300, 2 => 200, 3 => 100] as $workers => $expected) {
+        $preview = $planner->previewForm($version, $digest, ['restaurant.equipment' => 3], 'regular', requestedWorkers: $workers);
+        expect($preview['requestedWorkers'])->toBe($workers)
+            ->and(max(array_column($preview['capacity']['workerLoads'], 'effortMinutes')))->toBe($expected)
+            ->and($preview['estimatedBaseAmountSyp'])->toBe('15000.00')
+            ->and($preview['canBook'])->toBeFalse();
+    }
+});
+
 test('an impossible two-worker or fractional-piece job fails safely', function (): void {
     [$version, $digest] = v3WorkloadCatalog();
     $planner = app(CleaningV3PublishedWorkloadPreviewService::class);

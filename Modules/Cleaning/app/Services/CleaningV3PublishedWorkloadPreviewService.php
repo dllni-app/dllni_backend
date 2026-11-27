@@ -117,7 +117,7 @@ final class CleaningV3PublishedWorkloadPreviewService
         ];
     }
 
-    private function withCapacity(array $prepared, int $maximumWorkers, int $windowMinutes): array
+    private function withCapacity(array $prepared, int $maximumWorkers, int $windowMinutes, ?int $requestedWorkers = null): array
     {
         $tasks = array_map(static fn (array $task): array => [
             'taskKey' => $task['taskKey'], 'durationMinutes' => $task['durationMinutes'],
@@ -130,8 +130,42 @@ final class CleaningV3PublishedWorkloadPreviewService
         }
         return [
             ...$prepared,
-            'capacity' => $this->capacity->estimate($tasks, $maximumWorkers, $windowMinutes),
+            ...($requestedWorkers === null ? [] : ['requestedWorkers' => $requestedWorkers]),
+            'capacity' => $requestedWorkers === null
+                ? $this->capacity->estimate($tasks, $maximumWorkers, $windowMinutes)
+                : $this->capacityForTeam($tasks, $requestedWorkers, $windowMinutes),
         ];
+    }
+
+    /** Reuse the existing bounded task allocator to derive a feasible window
+     * for the explicitly selected team, without accepting client duration.
+     * Keep the last proven feasible allocation if the tighter search exhausts
+     * its budget. Never return an unverified shorter duration.
+     */
+    private function capacityForTeam(array $tasks, int $workers, int $windowMinutes): array
+    {
+        $best = $this->capacity->estimate($tasks, $workers, $windowMinutes);
+        $low = max(1, max(array_column($tasks, 'durationMinutes')), (int) ceil(array_sum(array_column($tasks, 'durationMinutes')) / $workers));
+        $high = max(array_column($best['workerLoads'], 'effortMinutes'));
+
+        while ($low < $high) {
+            $middle = intdiv($low + $high, 2);
+            try {
+                $candidate = $this->capacity->estimate($tasks, $workers, $middle, 10000);
+                $best = $candidate;
+                $high = max(array_column($candidate['workerLoads'], 'effortMinutes'));
+            } catch (CleaningV3CapacityException $exception) {
+                if ($exception->reasonCode === 'CAPACITY_INFEASIBLE') {
+                    $low = $middle + 1;
+                } elseif ($exception->reasonCode === 'CAPACITY_CHECK_UNAVAILABLE') {
+                    break;
+                } else {
+                    throw $exception;
+                }
+            }
+        }
+
+        return $best;
     }
 
     /**
@@ -148,10 +182,11 @@ final class CleaningV3PublishedWorkloadPreviewService
         mixed $propertyKey = null,
         int $maximumWorkers = 20,
         int $windowMinutes = 480,
+        ?int $requestedWorkers = null,
     ): array {
         return $this->withCapacity(
             $this->prepareForm($catalog, $digest, $answers, $mode, $scopeSelections, $propertyKey),
-            $maximumWorkers, $windowMinutes,
+            $maximumWorkers, $windowMinutes, $requestedWorkers,
         );
     }
 

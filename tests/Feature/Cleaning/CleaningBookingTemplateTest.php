@@ -9,6 +9,30 @@ use Laravel\Sanctum\Sanctum;
 
 uses(RefreshDatabase::class);
 
+test('property address link is owner scoped, reflects edits and survives deletion without copying data', function (): void {
+    $customer = User::factory()->create(['is_active' => true]);
+    $other = User::factory()->create(['is_active' => true]);
+    $address = \Modules\User\Models\UserAddress::factory()->create([
+        'user_id' => $customer->id, 'label' => 'Home', 'neighborhood' => 'Midan', 'street' => 'First street',
+    ]);
+    $foreign = \Modules\User\Models\UserAddress::factory()->create(['user_id' => $other->id]);
+    Sanctum::actingAs($customer);
+    $url = '/api/v1/cleaning/booking-templates';
+    $inputs = ['source' => 'v2', 'propertyKey' => 'apartment', 'addressId' => $address->id];
+    $payload = ['name' => 'Home', 'creationKey' => (string) Str::uuid(), 'inputs' => $inputs];
+    $id = $this->postJson($url, $payload)->assertCreated()
+        ->assertJsonPath('data.addressId', $address->id)
+        ->assertJsonPath('data.addressAvailable', true)
+        ->assertJsonPath('data.addressLabel', 'Home')->json('data.id');
+    $address->update(['street' => 'Corrected street']);
+    $this->getJson($url)->assertOk()->assertJsonPath('data.0.addressText', 'Midan، Corrected street');
+    $this->patchJson("$url/$id", ['revision' => 1, 'inputs' => [...$inputs, 'addressId' => $foreign->id]])
+        ->assertUnprocessable();
+    $address->delete();
+    $this->getJson("$url/$id")->assertOk()->assertJsonPath('data.addressAvailable', false)
+        ->assertJsonPath('data.addressLabel', null)->assertJsonPath('data.inputs.addressId', $address->id);
+});
+
 test('customer templates are partial, idempotent, private and revisioned', function (): void {
     $customer = User::factory()->create(['is_active' => true]);
     Sanctum::actingAs($customer);

@@ -55,10 +55,11 @@ final class CleaningV3WorkloadPricePreviewController
         $payload = $request->all();
         $formMode = array_key_exists('answers', $payload) || array_key_exists('cleaningMode', $payload);
         $allowed = $formMode
-            ? ['catalogVersionKey', 'catalogRevision', 'answers', 'cleaningMode', 'scopeSelections', 'propertyKey']
+            ? ['catalogVersionKey', 'catalogRevision', 'answers', 'cleaningMode', 'scopeSelections', 'propertyKey', 'requestedWorkers']
             : ['catalogVersionKey', 'catalogRevision', 'lines'];
         if (array_diff(array_keys($payload), $allowed) !== []
-            || ! is_array($payload[$formMode ? 'answers' : 'lines'] ?? null)) {
+            || ! is_array($payload[$formMode ? 'answers' : 'lines'] ?? null)
+            || (array_key_exists('requestedWorkers', $payload) && (! is_int($payload['requestedWorkers']) || $payload['requestedWorkers'] < 1 || $payload['requestedWorkers'] > 20))) {
             return response()->json([
                 'success' => false,
                 'code' => 'INVALID_V3_PREVIEW_FIELDS',
@@ -68,9 +69,9 @@ final class CleaningV3WorkloadPricePreviewController
 
         try {
             // The server derives all prices/effort from immutable tariff
-            // records, never accepting monetary or worker-count overrides.
+            // records. An optional team size is only a capacity constraint.
             $result = $formMode
-                ? $preview->previewForm($catalog, $digest, $payload['answers'], $payload['cleaningMode'] ?? null, (array_key_exists('scopeSelections', $payload) ? $payload['scopeSelections'] : []), $payload['propertyKey'] ?? null)
+                ? $preview->previewForm($catalog, $digest, $payload['answers'], $payload['cleaningMode'] ?? null, (array_key_exists('scopeSelections', $payload) ? $payload['scopeSelections'] : []), $payload['propertyKey'] ?? null, requestedWorkers: $payload['requestedWorkers'] ?? null)
                 : $preview->preview($catalog, $digest, $payload['lines']);
         } catch (CleaningV3CapacityException $exception) {
             return response()->json([

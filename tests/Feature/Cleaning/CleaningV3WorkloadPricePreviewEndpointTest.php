@@ -11,6 +11,12 @@ use Modules\Cleaning\Models\CleaningV3CatalogVersion;
 
 uses(RefreshDatabase::class);
 
+// These fixtures deliberately pin a synthetic legacy publication digest.
+// Do not inherit the developer machine's admin-publication pointer setting.
+beforeEach(function (): void {
+    config()->set('cleaning_v3_catalog.admin_publication_enabled', false);
+});
+
 /** @return array{0:CleaningV3CatalogVersion,1:array<string,mixed>} */
 function v3PriceEndpointFixture(): array
 {
@@ -72,6 +78,34 @@ test('workload preview is authenticated and requires exact approved published ca
     config()->set('cleaning_v3_catalog.approved_publication_digest', str_repeat('b', 64));
     $this->postJson($url, $payload)->assertStatus(503)
         ->assertJsonPath('code', 'V3_CATALOG_UNAVAILABLE');
+});
+
+test('selected team size derives a safe window without accepting customer duration or money', function (): void {
+    [$version, $payload] = v3PriceEndpointFixture();
+    config()->set('cleaning_v3_catalog.read_enabled', true);
+    config()->set('cleaning_v3_catalog.approved_publication_digest', str_repeat('a', 64));
+    Sanctum::actingAs(User::factory()->create(['is_active' => true]));
+    $url = '/api/v1/cleaning/v3/workload/preview';
+    $form = [
+        'catalogVersionKey' => $version->version_key,
+        'catalogRevision' => str_repeat('a', 64),
+        'answers' => ['restaurant.furnace' => 1],
+        'cleaningMode' => 'regular',
+        'requestedWorkers' => 1,
+    ];
+    $this->postJson($url, $form)->assertOk()
+        ->assertJsonPath('data.requestedWorkers', 1)
+        ->assertJsonPath('data.capacity.workerLoads.0.effortMinutes', 250)
+        ->assertJsonPath('data.estimatedBaseAmountSyp', '50000.00');
+    $this->postJson($url, [...$form, 'answers' => ['restaurant.furnace' => 3], 'requestedWorkers' => 3])
+        ->assertOk()->assertJsonPath('data.requestedWorkers', 3)
+        ->assertJsonPath('data.capacity.estimatedWorkers', 3)
+        ->assertJsonPath('data.estimatedBaseAmountSyp', '150000.00');
+    $this->postJson($url, [...$form, 'answers' => ['restaurant.furnace' => 3], 'requestedWorkers' => 2])
+        ->assertStatus(422)->assertJsonPath('code', 'CAPACITY_INFEASIBLE');
+    $this->postJson($url, [...$form, 'requestedWorkers' => 0])->assertStatus(422);
+    $this->postJson($url, [...$form, 'durationMinutes' => 1])->assertStatus(422);
+    $this->postJson($url, [...$form, 'totalPrice' => 0])->assertStatus(422);
 });
 
 test('workload preview returns derived money and real staffing needs but cannot book or charge', function (): void {
