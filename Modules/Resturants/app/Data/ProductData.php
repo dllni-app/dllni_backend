@@ -39,5 +39,6 @@ final class ProductData extends Data
         public ?int $primaryFoodCategoryId = null,
         public ?int $servings = null,
         public ?array $ingredientExclusions = null,
+        public ?array $includedComponents = null,
     ) {}
 }

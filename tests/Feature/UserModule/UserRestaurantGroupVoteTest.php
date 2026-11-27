@@ -5,6 +5,8 @@ declare(strict_types=1);
 use App\Models\User;
 use Laravel\Sanctum\Sanctum;
 use Modules\Resturants\Models\CuisineType;
+use Modules\Resturants\Models\Category;
+use Modules\Resturants\Models\FoodDiscoveryCategory;
 use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
 use Modules\Resturants\Models\RestaurantGroupVote;
@@ -19,6 +21,27 @@ it('returns vote suggestions payload', function (): void {
         'cuisineTypes',
         'suggestions',
     ]);
+});
+
+it('intersects the public food family with indexed presentation filters', function (): void {
+    $restaurant = Restaurant::factory()->create(['is_active' => true]);
+    $section = Category::factory()->create(['restaurant_id' => $restaurant->id, 'is_active' => true]);
+    $shawarma = FoodDiscoveryCategory::create(['slug' => 'shawarma-vote', 'name_ar' => 'Shawarma', 'is_active' => true]);
+    $burger = FoodDiscoveryCategory::create(['slug' => 'burger-vote', 'name_ar' => 'Burger', 'is_active' => true]);
+    $common = ['restaurant_id' => $restaurant->id, 'category_id' => $section->id, 'catalog_role' => 'independent',
+        'classification_status' => 'reviewed', 'product_kind' => 'main_dish', 'is_available' => true, 'stock_quantity' => 10];
+    $sandwich = Product::factory()->create($common + ['primary_food_category_id' => $shawarma->id, 'item_type' => 'sandwich']);
+    Product::factory()->create($common + ['primary_food_category_id' => $shawarma->id, 'item_type' => 'meal']);
+    Product::factory()->create($common + ['primary_food_category_id' => $burger->id, 'item_type' => 'sandwich']);
+    $url = '/api/v1/user/restaurants/votes/suggestions?'.http_build_query([
+        'foodCategoryId' => $shawarma->id, 'itemTypes' => ['sandwich'],
+    ]);
+    $payload = $this->getJson($url)->assertOk()->json();
+    expect(array_column($payload['suggestions'], 'id'))->toBe([$sandwich->id])
+        ->and($payload['suggestions'][0]['itemType'])->toBe('sandwich')
+        ->and(array_column($payload['foodCategories'], 'id'))->toContain($shawarma->id, $burger->id);
+    $section->update(['is_active' => false]);
+    $this->getJson($url)->assertOk()->assertJsonCount(0, 'suggestions');
 });
 
 it('filters suggestions by cuisine type', function (): void {

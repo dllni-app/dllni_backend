@@ -19,6 +19,8 @@ final class RestaurantV2SearchController
             'cuisineId' => $request->validated('cuisineId'),
             'categoryId' => $request->validated('categoryId'),
             'foodCategoryId' => $request->validated('foodCategoryId'),
+            'foodCategorySlug' => $request->validated('foodCategorySlug'),
+            'itemTypes' => $request->validated('itemTypes', []),
             'minPrice' => $request->validated('minPrice'),
             'maxPrice' => $request->validated('maxPrice'),
             'area' => $request->validated('area'),

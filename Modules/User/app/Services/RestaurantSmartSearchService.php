@@ -166,8 +166,7 @@ final class RestaurantSmartSearchService
     {
         $scoreById = collect($semantic ?? [])->pluck('score', 'id');
 
-        $builder = Product::query()
-            ->where('is_available', true)
+        $builder = RestaurantFoodEligibility::browsableProducts(Product::query())
             ->whereHas('restaurant', fn ($q) => $q
                 ->where('is_active', true)
                 ->where('is_temporarily_closed', false)
@@ -175,7 +174,7 @@ final class RestaurantSmartSearchService
             ->with([
                 'restaurant.cuisineTypes',
                 'restaurant.media',
-                'category',
+                'category', 'foodCategory',
                 'offers',
                 'media',
             ]);

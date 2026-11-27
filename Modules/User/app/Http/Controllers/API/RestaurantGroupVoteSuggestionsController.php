@@ -20,6 +20,8 @@ final class RestaurantGroupVoteSuggestionsController
             search: $request->validated('search'),
             cuisineTypeId: $request->validated('cuisineTypeId') !== null ? (int) $request->validated('cuisineTypeId') : null,
             limit: $request->integer('limit', 20),
+            foodCategoryId: $request->validated('foodCategoryId') !== null ? (int) $request->validated('foodCategoryId') : null,
+            itemTypes: $request->validated('itemTypes', []),
         );
 
         return response()->json($payload);

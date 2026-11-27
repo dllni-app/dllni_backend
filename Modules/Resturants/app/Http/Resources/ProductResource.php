@@ -32,6 +32,7 @@ final class ProductResource extends JsonResource
             'description' => $this->description,
             'searchTags' => $this->search_tags ?? [],
             'servings' => $this->servings,
+            'includedComponents' => $this->included_components,
             'ingredientExclusions' => $this->ingredient_exclusions ?? [],
             'price' => $originalPrice,
             'discountedPrice' => $effectiveDiscountedPrice,

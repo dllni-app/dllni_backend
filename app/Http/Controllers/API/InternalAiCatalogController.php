@@ -6,9 +6,9 @@ namespace App\Http\Controllers\API;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Modules\Resturants\Http\Resources\ProductResource;
+use Modules\Resturants\Http\Resources\RestaurantMealIndexResource;
 use Modules\Resturants\Http\Resources\RestaurantResource;
-use Modules\Resturants\Models\Product;
+use Modules\Resturants\Services\RestaurantMealIndexDocument;
 use Modules\Resturants\Models\Restaurant;
 use Modules\Supermarket\Http\Resources\SmProductResource;
 use Modules\Supermarket\Http\Resources\SmStoreResource;
@@ -29,12 +29,12 @@ final class InternalAiCatalogController
 
     public function restaurantProducts(Request $request): AnonymousResourceCollection
     {
-        $products = Product::query()
-            ->with(['restaurant', 'category'])
+        $products = RestaurantMealIndexDocument::query()
+            ->with('media')
             ->orderBy('id')
             ->paginate($this->perPage($request));
 
-        return ProductResource::collection($products);
+        return RestaurantMealIndexResource::collection($products);
     }
 
     public function supermarketStores(Request $request): AnonymousResourceCollection

@@ -25,7 +25,11 @@ final class ProductFactory extends Factory
 
         return [
             'restaurant_id' => $restaurant,
-            'category_id' => Category::factory()->for($restaurant, 'restaurant'),
+            // Resolve the merchant after factory overrides; otherwise a test that
+            // supplies restaurant_id could accidentally receive a foreign category.
+            'category_id' => fn (array $attributes) => Category::factory()->create([
+                'restaurant_id' => $attributes['restaurant_id'],
+            ])->id,
             'name' => $name,
             'description' => fake()->sentence(),
             'price' => $price,

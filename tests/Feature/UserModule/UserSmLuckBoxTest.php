@@ -8,6 +8,18 @@ use Database\Factories\ProductFactory;
 use Database\Factories\RestaurantFactory;
 use Laravel\Sanctum\Sanctum;
 use Modules\Resturants\Models\CuisineType;
+use Modules\Resturants\Models\FoodDiscoveryCategory;
+
+function reviewedLuckBoxMeal(string $slug, string $type): array
+{
+    $family = FoodDiscoveryCategory::query()->firstOrCreate(['slug' => $slug], [
+        'name_ar' => $slug, 'name_en' => $slug, 'is_active' => true,
+    ]);
+
+    return ['primary_food_category_id' => $family->id, 'classification_status' => 'reviewed',
+        'classified_at' => now(), 'catalog_role' => 'independent', 'product_kind' => 'main_dish',
+        'item_type' => $type, 'servings' => 1];
+}
 
 it('requires auth for restaurant luck box endpoints', function (): void {
     $this->getJson('/api/v1/user/restaurants/luck-box/options')
@@ -70,6 +82,7 @@ it('returns restaurant luck box bundle suggestions', function (): void {
     $catB = CategoryFactory::new()->create(['restaurant_id' => $restaurant->id, 'name' => 'Sides']);
 
     ProductFactory::new()->create([
+        ...reviewedLuckBoxMeal('shawarma', 'sandwich'),
         'restaurant_id' => $restaurant->id,
         'category_id' => $catA->id,
         'name' => 'Chicken Shawarma',
@@ -78,6 +91,7 @@ it('returns restaurant luck box bundle suggestions', function (): void {
         'is_available' => true,
     ]);
     ProductFactory::new()->create([
+        ...reviewedLuckBoxMeal('falafel', 'dish'),
         'restaurant_id' => $restaurant->id,
         'category_id' => $catA->id,
         'name' => 'Falafel Plate',
@@ -149,6 +163,7 @@ it('applies default 10km radius when coordinates are provided', function (): voi
     $farCategory = CategoryFactory::new()->create(['restaurant_id' => $farRestaurant->id]);
 
     ProductFactory::new()->create([
+        ...reviewedLuckBoxMeal('burger', 'burger'),
         'restaurant_id' => $nearRestaurant->id,
         'category_id' => $nearCategory->id,
         'name' => 'Nearby Burger',
@@ -158,6 +173,7 @@ it('applies default 10km radius when coordinates are provided', function (): voi
     ]);
 
     ProductFactory::new()->create([
+        ...reviewedLuckBoxMeal('pizza', 'pizza'),
         'restaurant_id' => $farRestaurant->id,
         'category_id' => $farCategory->id,
         'name' => 'Far Pizza',

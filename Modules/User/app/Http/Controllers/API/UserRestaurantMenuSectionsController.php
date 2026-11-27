@@ -19,10 +19,10 @@ final class UserRestaurantMenuSectionsController
         $itemsPerSection = $request->getItemsPerSection();
 
         $categories = $restaurantModel->categories()
+            ->effectivelyActive()
             ->orderBy('sort_order')
             ->with([
-                'products' => fn($query) => $query
-                    ->where('is_available', true)
+                'products' => fn($query) => \Modules\User\Services\RestaurantFoodEligibility::browsableProducts($query)
                     ->with('media')
                     ->orderByDesc('is_featured')
                     ->orderBy('name'),
@@ -59,6 +59,10 @@ final class UserRestaurantMenuSectionsController
                     'id' => $category->id,
                     'name' => $category->name,
                     'sortOrder' => $category->sort_order,
+                    'parentId' => $category->parent_id,
+                    'depth' => $category->parent_id === null ? 0 : 1,
+                    'sectionKey' => 'category:'.$category->id,
+                    'effectiveActive' => true,
                     'totalProducts' => $category->products->count(),
                     'items' => $products->map(function ($product): array {
                         $price = $product->price !== null ? (float) $product->price : null;

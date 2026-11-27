@@ -27,6 +27,10 @@ final class RestaurantLuckBoxSuggestRequest extends FormRequest
             'longitude' => ['sometimes', 'numeric', 'between:-180,180'],
             'cuisineTypeId' => ['sometimes', 'nullable', 'integer', 'exists:cuisine_types,id'],
             'restaurantId' => ['sometimes', 'nullable', 'integer', 'exists:restaurants,id'],
+            'foodCategoryId' => ['sometimes', 'nullable', 'integer', 'exists:food_discovery_categories,id'],
+            'itemTypes' => ['sometimes', 'array', 'max:13'],
+            'itemTypes.*' => ['string', 'distinct', \Illuminate\Validation\Rule::in(\Modules\Resturants\Services\ProductClassificationRules::TYPES)],
+            'mode' => ['sometimes', 'string', 'in:any,sandwiches,meals,family'],
         ];
     }
 }

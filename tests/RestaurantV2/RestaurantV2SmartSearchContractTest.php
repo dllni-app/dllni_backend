@@ -90,6 +90,25 @@ final class RestaurantV2SmartSearchContractTest extends TestCase
         $this->postJson('/api/v2/user/restaurants/search/smart', ['scope' => 'all'])->assertUnprocessable();
     }
 
+    public function test_normalized_arabic_family_meal_intersects_food_family_and_explicit_presentation(): void
+    {
+        $this->fakeGemini(['goal' => 'find_food', 'searchText' => 'شاورما', 'itemType' => 'meal']);
+        $category = FoodDiscoveryCategory::query()->where('slug', 'shawarma')->firstOrFail();
+        foreach (['وجبة شاورما عائلية', 'وجبة شاورما عايلية'] as $query) {
+            $result = $this->postJson('/api/v2/user/restaurants/search/smart', [
+                'q' => $query, 'scope' => 'dishes', 'perPage' => 50,
+            ])->assertOk()->assertJsonPath('interpretation.foodCategoryId', (int) $category->id)->json('data');
+            self::assertNotEmpty($result);
+            foreach ($result as $row) {
+                self::assertSame('family_meal', $row['itemType']);
+                self::assertSame('shawarma', $row['foodCategory']['slug']);
+            }
+        }
+        $this->postJson('/api/v2/user/restaurants/search/smart', [
+            'q' => 'وجبة شاورما عائلية', 'scope' => 'dishes', 'itemTypes' => ['sandwich'],
+        ])->assertOk()->assertJsonCount(0, 'data');
+    }
+
     public function test_voice_upload_transcribes_and_rejects_invalid_audio(): void
     {
         $this->fakeGemini(['transcript' => 'بدي شاورما دجاج']);

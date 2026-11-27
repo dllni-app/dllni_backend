@@ -91,3 +91,30 @@ it('deletes a category', function () {
     $response->assertNoContent();
     $this->assertDatabaseMissing('categories', ['id' => $category->id]);
 });
+
+it('reorders all siblings atomically and rejects stale or foreign IDs', function () {
+    $a = Category::factory()->create(['restaurant_id' => $this->restaurant->id, 'sort_order' => 0]);
+    $b = Category::factory()->create(['restaurant_id' => $this->restaurant->id, 'sort_order' => 1]);
+    $child = Category::factory()->create(['restaurant_id' => $this->restaurant->id, 'parent_id' => $a->id]);
+    $foreign = Category::factory()->create();
+    $endpoint = '/api/v1/categories/reorder';
+    $body = ['parentId' => null, 'expectedIds' => [$a->id, $b->id], 'orderedIds' => [$b->id, $a->id]];
+    $this->putJson($endpoint, $body)->assertNoContent();
+    expect($a->fresh()->sort_order)->toBe(1)->and($b->fresh()->sort_order)->toBe(0);
+    $this->putJson($endpoint, $body)->assertUnprocessable()->assertJsonValidationErrors('expectedIds');
+    foreach ([[$a->id, $foreign->id], [$a->id, $child->id], [$a->id]] as $invalid) {
+        $this->putJson($endpoint, ['parentId' => null, 'expectedIds' => [$b->id, $a->id], 'orderedIds' => $invalid])
+            ->assertUnprocessable()->assertJsonValidationErrors('orderedIds');
+        expect($a->fresh()->sort_order)->toBe(1)->and($b->fresh()->sort_order)->toBe(0);
+    }
+    $this->putJson($endpoint, ['parentId' => null, 'expectedIds' => [$b->id, $a->id], 'orderedIds' => [$a->id, $a->id]])
+        ->assertUnprocessable()->assertJsonValidationErrors('orderedIds.0');
+    expect($a->fresh()->sort_order)->toBe(1)->and($b->fresh()->sort_order)->toBe(0);
+    $this->putJson($endpoint, ['parentId' => $foreign->id, 'expectedIds' => [$foreign->id], 'orderedIds' => [$foreign->id]])
+        ->assertUnprocessable()->assertJsonValidationErrors('parentId');
+    $otherChild = Category::factory()->create(['restaurant_id' => $this->restaurant->id, 'parent_id' => $a->id, 'sort_order' => $child->sort_order + 1]);
+    $this->putJson($endpoint, ['parentId' => $a->id, 'expectedIds' => [$child->id, $otherChild->id], 'orderedIds' => [$otherChild->id, $child->id]])
+        ->assertNoContent();
+    expect($child->fresh()->sort_order)->toBe(1)->and($otherChild->fresh()->sort_order)->toBe(0)
+        ->and($a->fresh()->sort_order)->toBe(1);
+});

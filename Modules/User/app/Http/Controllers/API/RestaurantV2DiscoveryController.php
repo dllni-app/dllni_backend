@@ -18,6 +18,8 @@ final class RestaurantV2DiscoveryController
             'cuisineId' => $request->validated('cuisineId'),
             'categoryId' => $request->validated('categoryId'),
             'foodCategoryId' => $request->validated('foodCategoryId'),
+            'foodCategorySlug' => $request->validated('foodCategorySlug'),
+            'itemTypes' => $request->validated('itemTypes', []),
             'openNow' => $request->boolean('filter.openNow'),
             'hasOffers' => $request->boolean('filter.hasOffers'),
             'sort' => $request->validated('sort', 'rating'),

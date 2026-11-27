@@ -13,12 +13,16 @@ use RuntimeException;
 
 final class SmProductMasterLinkSeeder extends Seeder
 {
-    public function run(): void
+    /** @param array<int, int>|null $storeIds */
+    public function run(?array $storeIds = null): void
     {
         /** @var Collection<int, MasterProduct> $masterProducts */
         $masterProducts = MasterProduct::query()->get();
 
-        SmProduct::query()
+        $products = SmProduct::query()
+            ->when($storeIds !== null, fn ($query) => $query->whereIn('store_id', $storeIds));
+
+        (clone $products)
             ->orderBy('id')
             ->chunkById(100, function (Collection $products) use (&$masterProducts): void {
                 foreach ($products as $product) {
@@ -34,7 +38,7 @@ final class SmProductMasterLinkSeeder extends Seeder
                 }
             });
 
-        if (SmProduct::query()->whereNull('master_product_id')->exists()) {
+        if ($products->whereNull('master_product_id')->exists()) {
             throw new RuntimeException('Every seeded supermarket product must be linked to a master product.');
         }
     }

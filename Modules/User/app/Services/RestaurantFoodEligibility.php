@@ -19,6 +19,8 @@ final class RestaurantFoodEligibility
     {
         return $query
             ->where('products.catalog_role', 'independent')
+            ->whereHas('category', fn (Builder $category): Builder => $category->effectivelyActive()
+                ->whereColumn('categories.restaurant_id', 'products.restaurant_id'))
             ->where(function (Builder $availability): void {
                 $availability->where('products.is_available', true)
                     ->orWhere(function (Builder $expired): void {
@@ -34,7 +36,8 @@ final class RestaurantFoodEligibility
         return self::browsableProducts($query)
             ->where('products.classification_status', 'reviewed')
             ->whereIn('products.product_kind', ['main_dish', 'combo_meal'])
-            ->whereNotNull('products.primary_food_category_id');
+            ->whereHas('foodCategory', fn (Builder $category): Builder => $category->where('is_active', true))
+            ->whereIn('products.item_type', ['meal', 'sandwich', 'burger', 'pizza', 'dish', 'combo', 'family_meal', 'breakfast']);
     }
 
     public static function isIndependentlyOrderable(Product $product): bool

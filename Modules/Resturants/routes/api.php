@@ -88,6 +88,8 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () use (
 
     Route::apiResource('inventory-items', InventoryItemController::class)
         ->middleware($warehousePermission);
+    Route::put('categories/reorder', [CategoryController::class, 'reorder'])
+        ->middleware($menuPermission)->name('categories.reorder');
     Route::apiResource('categories', CategoryController::class)
         ->middleware($menuPermission);
     Route::post('orders/{order}/accept', OrderAcceptController::class)

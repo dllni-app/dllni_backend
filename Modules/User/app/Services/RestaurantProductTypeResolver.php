@@ -17,11 +17,12 @@ final class RestaurantProductTypeResolver
             return $itemType;
         }
 
-        $text = $this->normalize(implode(' ', array_filter([
-            $categoryName,
-            $productName,
-            $description,
-        ])));
+        // Legacy-only fallback: product name has precedence over the menu label.
+        // Descriptions list included ingredients and must not classify a meal as a sandwich.
+        $text = $this->normalize((string) $productName);
+        if (preg_match('/(?:عائلي|family meal)/u', $text)) return 'family_meal';
+        if (preg_match('/(?:كومبو|combo)/u', $text)) return 'combo';
+        if (preg_match('/^(?:وجبه|وجبات|طبق رئيسي|meal|main dish)(?:\s|$)/u', $text)) return 'meal';
 
         $aliases = [
             'sandwich' => ['سندويش', 'ساندويش', 'سندويتش', 'sandwich'],
@@ -54,6 +55,13 @@ final class RestaurantProductTypeResolver
                 if (str_contains($text, $this->normalize($word))) {
                     return $type;
                 }
+            }
+        }
+
+        $section = $this->normalize((string) $categoryName);
+        foreach (['sandwich', 'drink', 'dessert', 'salad', 'appetizer', 'side', 'breakfast'] as $type) {
+            foreach ($aliases[$type] as $word) {
+                if ($section === $this->normalize($word)) return $type;
             }
         }
 

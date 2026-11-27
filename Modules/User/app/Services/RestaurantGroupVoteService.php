@@ -37,6 +37,15 @@ final class RestaurantGroupVoteService
         ?int $cuisineTypeId = null,
     ): RestaurantGroupVote {
         return DB::transaction(function () use ($creatorUserId, $durationMinutes, $options, $foodCategoryHint, $cuisineTypeId) {
+            $ids = collect($options)->pluck('productId')->filter()->unique()->values();
+            $available = RestaurantFoodEligibility::browsableProducts(Product::query())
+                ->whereIn('products.id', $ids)->where('stock_quantity', '>', 0)
+                ->whereHas('restaurant', fn ($q) => $q->where('is_active', true)->where('is_temporarily_closed', false)
+                    ->where(fn ($active) => $active->whereNull('suspension_until')->orWhere('suspension_until', '<=', now())))
+                ->count();
+            if ($available !== $ids->count()) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['options' => 'A selected product is no longer available.']);
+            }
             $vote = RestaurantGroupVote::create([
                 'user_id' => $creatorUserId,
                 'cuisine_type_id' => $cuisineTypeId,
@@ -359,7 +368,7 @@ final class RestaurantGroupVoteService
      *     suggestions: list<array{id:int,name:string,unitPrice:float,restaurantId:int,restaurantName:string}>
      * }
      */
-    public function suggestionsCatalog(?string $search, ?int $cuisineTypeId, int $limit = 20): array
+    public function suggestionsCatalog(?string $search, ?int $cuisineTypeId, int $limit = 20, ?int $foodCategoryId = null, array $itemTypes = []): array
     {
         $durationMinutesPresets = [15, 30, 45, 60, 90, 120];
 
@@ -378,8 +387,12 @@ final class RestaurantGroupVoteService
         $term = is_string($search) ? mb_trim($search) : '';
         $escaped = $term !== '' ? addcslashes($term, '%_\\') : null;
 
-        $products = Product::query()
-            ->where('is_available', true)
+        $products = RestaurantFoodEligibility::browsableProducts(Product::query())
+            ->where('stock_quantity', '>', 0)
+            ->when($foodCategoryId !== null, fn ($q) => $q->where('primary_food_category_id', $foodCategoryId)
+                ->where('classification_status', 'reviewed')
+                ->whereHas('foodCategory', fn ($family) => $family->where('is_active', true)))
+            ->when($itemTypes !== [], fn ($q) => $q->whereIn('item_type', $itemTypes))
             ->whereHas('restaurant', function ($q): void {
                 $q->where('is_active', true)
                     ->where('is_temporarily_closed', false)
@@ -394,15 +407,14 @@ final class RestaurantGroupVoteService
                     ->where('name', 'like', '%' . $escaped . '%')
                     ->orWhere('description', 'like', '%' . $escaped . '%')
             ))
-            ->with(['restaurant:id,name'])
+            ->with(['restaurant:id,name', 'foodCategory', 'offers', 'media'])
             ->orderByDesc('is_featured')
             ->orderBy('name')
             ->limit($limit)
             ->get();
 
         $suggestions = $products->map(function (Product $product): array {
-            $d = $product->discounted_price;
-            $unit = (float) (($d !== null && (float) $d > 0) ? $d : $product->price);
+            $unit = $product->effectivePrice();
 
             return [
                 'id' => (int) $product->id,
@@ -410,12 +422,19 @@ final class RestaurantGroupVoteService
                 'unitPrice' => round($unit, 2),
                 'restaurantId' => (int) $product->restaurant_id,
                 'restaurantName' => (string) ($product->restaurant->name ?? ''),
+                'imageUrl' => $product->getFirstMediaUrl('primary-image') ?: null,
+                'itemType' => $product->item_type,
+                'productKind' => $product->product_kind,
+                'foodCategoryId' => $product->primary_food_category_id,
+                'servings' => $product->servings,
             ];
         })->values()->all();
 
         return [
             'durationMinutesPresets' => $durationMinutesPresets,
             'cuisineTypes' => $cuisineTypes,
+            'foodCategories' => \Modules\Resturants\Models\FoodDiscoveryCategory::query()->where('is_active', true)
+                ->orderBy('sort_order')->orderBy('id')->get()->map(fn ($family) => ['id' => (int) $family->id, 'name' => $family->name_ar, 'slug' => $family->slug])->all(),
             'suggestions' => $suggestions,
         ];
     }

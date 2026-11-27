@@ -152,9 +152,10 @@ final class RestaurantGroupOrderService
                 ]);
             }
 
+            $this->assertOrderableLine($groupOrder, $product, $quantity, $substituteProductId);
             $modifiers = $this->validatedModifiers($product, $modifierIds);
             $modifierTotal = (float) $modifiers->sum(fn(Modifier $modifier): float => (float) ($modifier->price ?? 0));
-            $basePrice = (float) ($product->discounted_price ?? $product->price ?? 0);
+            $basePrice = $product->effectivePrice();
             $unitPrice = $basePrice + $modifierTotal;
 
             $item = RestaurantGroupOrderItem::query()->create([
@@ -212,9 +213,10 @@ final class RestaurantGroupOrderService
                 ->firstOrFail();
 
             $product = $item->product;
+            $this->assertOrderableLine($groupOrder, $product, $quantity, $substituteProductId, $item->id);
             $modifiers = $this->validatedModifiers($product, $modifierIds);
             $modifierTotal = (float) $modifiers->sum(fn(Modifier $modifier): float => (float) ($modifier->price ?? 0));
-            $basePrice = (float) ($product->discounted_price ?? $product->price ?? 0);
+            $basePrice = $product->effectivePrice();
             $unitPrice = $basePrice + $modifierTotal;
 
             $item->update([
@@ -558,10 +560,6 @@ final class RestaurantGroupOrderService
     {
         $modifierIds = array_values(array_unique(array_map('intval', $modifierIds)));
 
-        if ($modifierIds === []) {
-            return collect();
-        }
-
         $allowedIds = $product->modifierGroups
             ->flatMap(fn($group) => $group->modifiers->pluck('id'))
             ->unique()
@@ -573,8 +571,37 @@ final class RestaurantGroupOrderService
                 'modifierIds' => ['Some modifiers are not allowed for this product.'],
             ]);
         }
+        foreach ($product->modifierGroups as $group) {
+            $selected = count(array_intersect($modifierIds, $group->modifiers->pluck('id')->map(fn ($id) => (int) $id)->all()));
+            $minimum = max((int) $group->min_selections, $group->is_required ? 1 : 0);
+            if ($selected < $minimum || $selected > (int) $group->max_selections) {
+                throw ValidationException::withMessages(['modifierIds' => ['Select the required number of choices for each modifier group.']]);
+            }
+        }
 
         return Modifier::query()->whereIn('id', $modifierIds)->get();
+    }
+
+    private function assertOrderableLine(RestaurantGroupOrder $groupOrder, Product $product, int $quantity, ?int $substituteId, ?int $exceptItemId = null): void
+    {
+        $available = RestaurantFoodEligibility::browsableProducts(Product::query())
+            ->whereKey($product->id)->where('restaurant_id', $groupOrder->restaurant_id)
+            ->whereHas('restaurant', fn ($query) => $query->where('is_active', true)->where('is_temporarily_closed', false)
+                ->where(fn ($active) => $active->whereNull('suspension_until')->orWhere('suspension_until', '<=', now())))
+            ->lockForUpdate()->first();
+        $otherQuantity = RestaurantGroupOrderItem::query()->where('group_order_id', $groupOrder->id)
+            ->where('product_id', $product->id)
+            ->when($exceptItemId !== null, fn ($q) => $q->whereKeyNot($exceptItemId))
+            ->sum('quantity');
+        if ($available === null || $quantity < 1 || $otherQuantity + $quantity > (int) $available->stock_quantity) {
+            throw ValidationException::withMessages(['productId' => ['This product is no longer orderable in the requested quantity.']]);
+        }
+        if ($substituteId !== null && ($substituteId === $product->id || !RestaurantFoodEligibility::browsableProducts(Product::query())
+            ->whereKey($substituteId)->where('restaurant_id', $groupOrder->restaurant_id)->where('stock_quantity', '>', 0)->exists()
+            || !DB::table('restaurant_product_substitutions')->where('restaurant_id', $groupOrder->restaurant_id)
+                ->where('product_id', $product->id)->where('substitute_product_id', $substituteId)->exists())) {
+            throw ValidationException::withMessages(['substituteProductId' => ['Choose an available configured substitute.']]);
+        }
     }
 
     private function attemptPlacement(RestaurantGroupOrder $groupOrder, bool $force): void
@@ -608,6 +635,29 @@ final class RestaurantGroupOrderService
             ]);
 
             return;
+        }
+
+        // Revalidate the current catalog before turning group selections into
+        // an order. Never silently purchase a stale or repriced line.
+        try {
+            $products = Product::query()->whereIn('id', $groupOrder->items->pluck('product_id')->unique())
+                ->orderBy('id')->lockForUpdate()->with(['modifierGroups.modifiers', 'offers'])->get()->keyBy('id');
+            foreach ($groupOrder->items as $item) {
+                $product = $products->get($item->product_id);
+                if ($product === null) throw ValidationException::withMessages(['productId' => ['A selected product is missing.']]);
+                $this->assertOrderableLine($groupOrder, $product, (int) $item->quantity, $item->substitute_product_id, $item->id);
+                $modifiers = $this->validatedModifiers($product, $item->modifiers->pluck('id')->all());
+                $price = $product->effectivePrice() + (float) $modifiers->sum('price');
+                if (abs($price - (float) $item->unit_price) > 0.009) {
+                    throw ValidationException::withMessages(['productId' => ['A selected product price has changed. Review the group order.']]);
+                }
+            }
+        } catch (ValidationException $exception) {
+            if (now()->greaterThan($groupOrder->ends_at)) {
+                $groupOrder->update(['status' => RestaurantGroupOrderStatus::Expired]);
+                return;
+            }
+            throw $exception;
         }
 
         $groupOrder->update([

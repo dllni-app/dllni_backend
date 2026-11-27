@@ -15,6 +15,12 @@ final class ProductRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        if (is_string($this->input('includedComponents'))) {
+            $decoded = json_decode($this->input('includedComponents'), true);
+            if (is_array($decoded) && array_is_list($decoded)) {
+                $this->merge(['includedComponents' => $decoded]);
+            }
+        }
         if ($this->has('ingredientExclusions') && !is_array($this->input('ingredientExclusions'))) {
             $input = $this->input('ingredientExclusions');
             if (is_string($input) || $input === null) {
@@ -28,14 +34,18 @@ final class ProductRequest extends FormRequest
         return [
             'restaurantId' => 'prohibited',
             'categoryId' => 'required|exists:categories,id',
-            'itemType' => 'nullable|string|in:meal,sandwich,burger,pizza,dish,combo,family_meal,appetizer,side,salad,dessert,drink,breakfast,other',
+            'itemType' => 'sometimes|nullable|string|in:meal,sandwich,burger,pizza,dish,combo,family_meal,appetizer,side,salad,dessert,drink,breakfast,other',
             'productKind' => 'sometimes|nullable|string|in:main_dish,combo_meal,side_dish,beverage,dessert,standalone_sauce,other',
             'primaryFoodCategoryId' => 'sometimes|nullable|integer|exists:food_discovery_categories,id',
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'searchTags' => 'nullable|array|max:20',
             'searchTags.*' => 'string|max:80',
-            'servings' => 'sometimes|nullable|integer|min:0|max:50',
+            'servings' => 'sometimes|nullable|integer|min:1|max:50',
+            'includedComponents' => 'sometimes|nullable|array|max:4',
+            'includedComponents.*' => 'distinct|string|in:side,beverage,dessert,sauce',
+            'classificationStatus' => 'prohibited',
+            'catalogRole' => 'prohibited',
             'ingredientExclusions' => 'sometimes|nullable|array|max:20',
             'ingredientExclusions.*' => 'string|max:80',
             'price' => 'required|numeric|min:0',

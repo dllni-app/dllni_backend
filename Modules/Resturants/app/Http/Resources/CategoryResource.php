@@ -32,6 +32,9 @@ final class CategoryResource extends JsonResource
             'name' => $this->name,
             'slug' => $this->slug,
             'sortOrder' => $this->sort_order,
+            'parentId' => $this->parent_id,
+            'depth' => $this->parent_id === null ? 0 : 1,
+            'isActive' => (bool) ($this->is_active ?? true),
             'imageUrl' => $imageUrl,
             'restaurant' => $this->whenLoaded('restaurant', fn () => [
                 'id' => $this->restaurant->id,

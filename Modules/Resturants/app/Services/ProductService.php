@@ -6,8 +6,11 @@ namespace Modules\Resturants\Services;
 
 use App\Services\ActivityLogService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Modules\Resturants\Data\ProductData;
 use Modules\Resturants\Models\Product;
+use Modules\Resturants\Models\Category;
+use Modules\Resturants\Models\Restaurant;
 use Mrmarchone\LaravelAutoCrud\Helpers\MediaHelper;
 
 final class ProductService
@@ -25,6 +28,8 @@ final class ProductService
                 unset($attributes['primary_food_category_id']);
             }
             if ($data->servings !== null) $attributes['servings'] = $data->servings ?: null;
+            $this->lockCategory((int) $data->restaurantId, (int) $data->categoryId);
+            ProductClassificationRules::validate($attributes);
             $product = Product::create($attributes);
             $this->attachMedia($data, $product, false);
             $this->activityLogService->logProductCreated($product, (int) $product->restaurant_id);
@@ -33,32 +38,29 @@ final class ProductService
         });
     }
 
-    public function update(ProductData $data, Product $product): Product
+    public function update(ProductData $data, Product $product, ?array $provided = null): Product
     {
-        return DB::transaction(function () use ($data, $product) {
+        return DB::transaction(function () use ($data, $product, $provided) {
+            $this->lockCategory((int) $product->restaurant_id, (int) $data->categoryId);
+            $product = Product::query()->where('restaurant_id', $product->restaurant_id)->lockForUpdate()->findOrFail($product->id);
             $oldAttributes = $product->getAttributes();
             $attributes = $data->onlyModelAttributes();
-            if ($data->productKind === null) {
-                unset($attributes['product_kind']);
-            } elseif ($data->productKind !== $product->product_kind) {
-                // Owner edits invalidate an earlier editorial classification approval.
-                $attributes['classification_status'] = 'unreviewed';
-                $attributes['classified_at'] = null;
+            unset($attributes['restaurant_id'], $attributes['classification_status'], $attributes['classified_at'], $attributes['catalog_role']);
+            $semanticFields = [
+                'itemType' => 'item_type', 'productKind' => 'product_kind',
+                'primaryFoodCategoryId' => 'primary_food_category_id', 'servings' => 'servings',
+                'includedComponents' => 'included_components', 'ingredientExclusions' => 'ingredient_exclusions',
+            ];
+            foreach ($semanticFields as $apiField => $dbField) {
+                if ($provided !== null && array_key_exists($apiField, $provided)) {
+                    $attributes[$dbField] = $data->{$apiField};
+                } elseif ($provided !== null || $data->{$apiField} === null) {
+                    unset($attributes[$dbField]);
+                }
             }
-            if ($data->primaryFoodCategoryId === null) {
-                unset($attributes['primary_food_category_id']);
-            } elseif ($data->primaryFoodCategoryId !== $product->primary_food_category_id) {
-                $attributes['classification_status'] = 'unreviewed';
-                $attributes['classified_at'] = null;
-            }
-            if ($data->servings === null) {
-                unset($attributes['servings']);
-            } else {
-                $attributes['servings'] = $data->servings ?: null;
-            }
-            if ($data->ingredientExclusions === null) unset($attributes['ingredient_exclusions']);
-            // Ingredient claims must be explicitly reviewed after owner edits.
-            if ($data->ingredientExclusions !== null && $data->ingredientExclusions !== ($product->ingredient_exclusions ?? [])) {
+            $product->fill($attributes);
+            if ($product->isDirty([...array_values($semanticFields), 'name', 'description'])) {
+                ProductClassificationRules::validate($product->attributesToArray());
                 $attributes['classification_status'] = 'unreviewed';
                 $attributes['classified_at'] = null;
             }
@@ -68,6 +70,14 @@ final class ProductService
 
             return $product;
         });
+    }
+
+    private function lockCategory(int $restaurantId, int $categoryId): void
+    {
+        Restaurant::query()->lockForUpdate()->findOrFail($restaurantId);
+        if (Category::query()->where('restaurant_id', $restaurantId)->lockForUpdate()->find($categoryId) === null) {
+            throw ValidationException::withMessages(['categoryId' => 'Choose a menu section from your restaurant.']);
+        }
     }
 
     private function attachMedia(ProductData $data, Product $product, bool $isUpdate): void

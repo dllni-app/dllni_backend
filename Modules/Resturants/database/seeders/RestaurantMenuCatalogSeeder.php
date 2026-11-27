@@ -14,6 +14,7 @@ use Modules\Resturants\Models\Modifier;
 use Modules\Resturants\Models\ModifierGroup;
 use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
+use Modules\Resturants\Services\ProductClassificationRules;
 use Spatie\MediaLibrary\HasMedia;
 
 /**
@@ -34,6 +35,7 @@ final class RestaurantMenuCatalogSeeder extends Seeder
         'grill' => 'kebab', 'fried-chicken' => 'karaage', 'breakfast' => 'fatteh',
         'pasta' => 'carbonara', 'asian' => 'sushi', 'sides' => 'hummus',
         'desserts' => 'knafeh', 'drinks' => 'juice',
+        'falafel' => 'falafel', 'potato' => 'fries', 'salads' => 'salad', 'pastries' => 'feteer',
     ];
 
     public function run(): void
@@ -53,6 +55,7 @@ final class RestaurantMenuCatalogSeeder extends Seeder
         foreach ($catalog['images'] as $key => $url) {
             $this->asset($key);
         }
+        $this->validateCatalog($catalog);
 
         $this->ensureDemoRestaurants($catalog);
         $this->call(FoodDiscoveryCategorySeeder::class);
@@ -69,7 +72,7 @@ final class RestaurantMenuCatalogSeeder extends Seeder
                 : Restaurant::query()->where('slug', $slug)->first();
 
             if ($restaurant === null) {
-                continue;
+                throw new LogicException('Missing demo restaurant: '.$slug);
             }
 
             // The known demo seller serves primarily Levantine food, not Italian cuisine.
@@ -123,7 +126,10 @@ final class RestaurantMenuCatalogSeeder extends Seeder
         $hero = null;
         $secondaryHero = null;
 
-        foreach ($sections as $sectionKey => [$sectionName, $items]) {
+        $sectionIds = [];
+        foreach ($sections as $sectionKey => $section) {
+            $sectionName = $section['name'];
+            $items = $section['products'];
             $category = Category::query()->where('restaurant_id', $restaurant->id)
                 ->where('slug', $sectionKey)->first()
                 ?? Category::query()->where('restaurant_id', $restaurant->id)
@@ -133,33 +139,47 @@ final class RestaurantMenuCatalogSeeder extends Seeder
             $category->fill([
                 'name' => $sectionName,
                 'slug' => $sectionKey,
-                'sort_order' => count($categoryImages) + 1,
+                'sort_order' => $section['sortOrder'],
+                'parent_id' => $section['parentKey'] === null ? null : $sectionIds[$section['parentKey']],
+                'is_active' => true,
             ])->save();
+            $sectionIds[$sectionKey] = $category->id;
 
-            $categoryImages[$category->id] = $items[0][3];
-            $this->attachImage($category, 'category-image', $items[0][3]);
-            $hero ??= $items[0][3];
-            if ($secondaryHero === null && $hero !== $items[0][3]) {
-                $secondaryHero = $items[0][3];
+            if ($items === []) {
+                continue;
+            }
+
+            $categoryImages[$category->id] = $items[0]['imageKey'];
+            $this->attachImage($category, 'category-image', $items[0]['imageKey']);
+            $hero ??= $items[0]['imageKey'];
+            if ($secondaryHero === null && $hero !== $items[0]['imageKey']) {
+                $secondaryHero = $items[0]['imageKey'];
             }
 
             $sectionProducts = [];
             foreach ($items as $index => $row) {
-                [$name, $description, $price, $image, $itemType, $groupKeys] = $row;
-                $discount = $row[6] ?? null;
-                $kind = match ($itemType) {
-                    'combo', 'family_meal' => 'combo_meal',
-                    'appetizer', 'side', 'salad' => 'side_dish',
-                    'dessert' => 'dessert',
-                    'drink' => 'beverage',
-                    default => 'main_dish',
-                };
-                $foodSlug = $catalog['taxonomy'][$sectionKey];
-                // Taxonomy is derived from the reviewed menu section, never the photo.
+                $name = $row['name'];
+                $description = $row['description'];
+                $price = $row['price'];
+                $image = $row['imageKey'];
+                $itemType = $row['itemType'];
+                $groupKeys = $row['modifierGroupKeys'];
+                $discount = $row['discount'];
+                $kind = $row['productKind'];
+                $foodSlug = $row['foodSlug'];
                 $foodCategory = $foodCategories->get($foodSlug);
                 if ($foodCategory === null) {
                     throw new LogicException('Unknown food category: '.$foodSlug);
                 }
+                $classification = [
+                    'item_type' => $itemType,
+                    'product_kind' => $kind,
+                    'catalog_role' => $row['catalogRole'],
+                    'primary_food_category_id' => $foodCategory->id,
+                    'servings' => $row['servings'],
+                    'included_components' => $row['includedComponents'],
+                ];
+                ProductClassificationRules::validate($classification, true);
 
                 // Match the demo product by restaurant/name, retaining the original product ID.
                 $matches = Product::query()->where('restaurant_id', $restaurant->id)
@@ -172,11 +192,8 @@ final class RestaurantMenuCatalogSeeder extends Seeder
                 $product->fill([
                     'category_id' => $category->id,
                     'description' => $description,
-                    'item_type' => $itemType,
-                    'product_kind' => $kind,
-                    'catalog_role' => 'independent',
+                    ...$classification,
                     'classification_status' => 'reviewed',
-                    'primary_food_category_id' => $foodCategory->id,
                     'classified_at' => $product->classified_at ?? now(),
                     'search_tags' => array_values(array_unique([$name, $sectionName, $foodCategory->name_ar, $foodCategory->name_en])),
                     'price' => $price,
@@ -257,7 +274,7 @@ final class RestaurantMenuCatalogSeeder extends Seeder
                 $source = Product::find($link->product_id);
                 $target = Product::find($link->substitute_product_id);
                 if ($source === null || $target === null || !$source->is_available || !$target->is_available
-                    || $source->category_id !== $target->category_id || $source->product_kind !== $target->product_kind) {
+                     || $source->primary_food_category_id !== $target->primary_food_category_id || $source->product_kind !== $target->product_kind) {
                     DB::table('restaurant_product_substitutions')
                         ->where('restaurant_id', $link->restaurant_id)
                         ->where('product_id', $link->product_id)
@@ -317,7 +334,8 @@ final class RestaurantMenuCatalogSeeder extends Seeder
         foreach ($products as $source) {
             foreach ($products as $target) {
                 if ($source->id === $target->id || $source->product_kind !== $target->product_kind
-                    || $source->item_type !== $target->item_type) {
+                     || $source->item_type !== $target->item_type
+                     || $source->primary_food_category_id !== $target->primary_food_category_id) {
                     continue;
                 }
                 DB::table('restaurant_product_substitutions')->updateOrInsert([
@@ -325,6 +343,46 @@ final class RestaurantMenuCatalogSeeder extends Seeder
                     'product_id' => $source->id,
                     'substitute_product_id' => $target->id,
                 ], ['updated_at' => now(), 'created_at' => now()]);
+            }
+        }
+    }
+
+    private function validateCatalog(array $catalog): void
+    {
+        if (($catalog['schemaVersion'] ?? null) !== 2) {
+            throw new LogicException('Unsupported restaurant fixture schema.');
+        }
+        foreach ($catalog['menus'] as $merchant => $sections) {
+            $roots = [];
+            $keys = [];
+            $names = [];
+            foreach ($sections as $sectionKey => $section) {
+                if ($section['parentKey'] === null) {
+                    $roots[$sectionKey] = true;
+                } elseif (!isset($roots[$section['parentKey']])) {
+                    throw new LogicException("Invalid or unordered section parent: {$merchant}/{$sectionKey}");
+                }
+                if (trim($section['name']) === '' || !is_int($section['sortOrder']) || $section['sortOrder'] < 0) {
+                    throw new LogicException("Invalid section: {$merchant}/{$sectionKey}");
+                }
+                foreach ($section['products'] as $row) {
+                    $key = $row['key'];
+                    $name = $row['name'];
+                    if (isset($keys[$key]) || isset($names[$name]) || trim($name) === '') {
+                        throw new LogicException("Duplicate or empty product identity: {$merchant}/{$key}");
+                    }
+                    $keys[$key] = $names[$name] = true;
+                    if (!isset(self::FOOD_ARTWORK[$row['foodSlug']], $catalog['images'][$row['imageKey']])
+                        || !is_numeric($row['price']) || $row['price'] < 0
+                        || ($row['discount'] !== null && (!is_numeric($row['discount']) || $row['discount'] < 0 || $row['discount'] > $row['price']))) {
+                        throw new LogicException("Invalid family, image or price: {$merchant}/{$key}");
+                    }
+                    foreach ($row['modifierGroupKeys'] as $groupKey) {
+                        if (!isset($catalog['groups'][$groupKey])) {
+                            throw new LogicException("Unknown modifier group: {$merchant}/{$key}/{$groupKey}");
+                        }
+                    }
+                }
             }
         }
     }

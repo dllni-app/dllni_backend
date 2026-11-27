@@ -82,7 +82,8 @@ final class ProductController
                 'primaryImage' => $request->file('primaryImage'),
                 'images' => $request->file('images'),
             ]),
-            $product
+            $product,
+            $request->validated()
         );
 
         return ProductResource::make(

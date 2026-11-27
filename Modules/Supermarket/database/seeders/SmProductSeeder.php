@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Modules\Supermarket\Database\Seeders;
 
 use App\Models\MasterProduct;
-use Database\Seeders\Support\SeederMedia;
+use App\Support\SyrianPoundPrice;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Collection;
 use Modules\Supermarket\Enums\SmProductSource;
@@ -17,6 +17,7 @@ final class SmProductSeeder extends Seeder
 {
     public function run(): void
     {
+        $catalog = SmDemoCatalog::load();
         $stores = SmStore::query()
             ->whereIn('slug', [
                 'supermarket-al-atrash',
@@ -84,8 +85,8 @@ final class SmProductSeeder extends Seeder
                             'barcode' => sprintf('SM-%d-%04d', $store->id, $barcodeCounter),
                             'source_type' => SmProductSource::Manual->value,
                             'description' => $productData['description'] ?? null,
-                            'price' => $productData['price'],
-                            'discounted_price' => $productData['discounted_price'] ?? null,
+                            'price' => SyrianPoundPrice::normalize($productData['price']),
+                            'discounted_price' => SyrianPoundPrice::normalizeDiscount($productData['discounted_price'] ?? null, $productData['price']),
                             'stock_quantity' => $productData['stock_quantity'],
                             'low_stock_threshold' => $productData['low_stock_threshold'] ?? 10,
                             'expires_at' => $expiresAt,
@@ -96,6 +97,33 @@ final class SmProductSeeder extends Seeder
                     $seededProductIds[] = $product->id;
                     $barcodeCounter++;
                 }
+            }
+
+            // Append new SKUs after the legacy fixtures to preserve their identifiers.
+            foreach ($catalog['products'] as $row) {
+                $slug = SmDemoCatalog::categorySlug($store->slug, $row['category']);
+                $category = $categoryMap->get($slug);
+                if ($category === null) {
+                    throw new \LogicException('Missing demo supermarket category: '.$slug);
+                }
+                $master = SmDemoCatalog::master($row);
+                $product = SmProduct::query()->updateOrCreate(
+                    ['store_id' => $store->id, 'name' => $row['name']],
+                    [
+                        'category_id' => $category->id,
+                        'master_product_id' => $master->id,
+                        'barcode' => sprintf('SM-%d-DEMO-%s', $store->id, $row['key']),
+                        'source_type' => SmProductSource::CatalogSearch->value,
+                        'description' => $row['name'],
+                        'price' => $row['store_prices'][$store->slug] ?? $row['price'],
+                        'discounted_price' => $row['discounted_price'] ?? null,
+                        'stock_quantity' => $row['stock_quantity'],
+                        'low_stock_threshold' => 10,
+                        'expires_at' => isset($row['expires_in_days']) ? now()->addDays($row['expires_in_days']) : null,
+                        'is_available' => $row['is_available'] ?? true,
+                    ]
+                );
+                $seededProductIds[] = $product->id;
             }
         }
 
@@ -366,18 +394,7 @@ final class SmProductSeeder extends Seeder
         $items = SmProduct::query()->whereIn('id', $productIds)->get();
 
         foreach ($items as $product) {
-            if ($product->getFirstMedia(SmProduct::IMAGE_COLLECTION) !== null) {
-                continue;
-            }
-
-            $seed = (string) $product->id;
-
-            SeederMedia::ensureSingleMedia(
-                $product,
-                SmProduct::IMAGE_COLLECTION,
-                'https://images.unsplash.com/photo-1583258292688-d0213dc5a3a8?auto=format&fit=crop&w=800&q=80',
-                "sm-product-{$seed}"
-            );
+            SmDemoCatalog::attachProduct($product);
         }
     }
 }

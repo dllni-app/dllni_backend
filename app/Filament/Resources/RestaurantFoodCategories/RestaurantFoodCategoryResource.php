@@ -57,6 +57,7 @@ final class RestaurantFoodCategoryResource extends Resource
                         ->disabled(fn (?Model $record): bool => $record !== null),
                     TextInput::make('name_ar')->label('الاسم بالعربية')->required()->maxLength(120),
                     TextInput::make('name_en')->label('الاسم بالإنجليزية')->maxLength(120),
+                    \Filament\Forms\Components\TagsInput::make('aliases')->label('مرادفات البحث')->nestedRecursiveRules(['string', 'max:80']),
                     TextInput::make('sort_order')->label('ترتيب العرض')->numeric()->default(0)->minValue(0)->required(),
                     Toggle::make('is_active')->label('فعال للاكتشاف')->default(true),
                 ])->columns(2),

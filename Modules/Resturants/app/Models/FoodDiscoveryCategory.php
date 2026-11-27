@@ -21,6 +21,7 @@ final class FoodDiscoveryCategory extends Model implements HasMedia
         'name_en',
         'is_active',
         'sort_order',
+        'aliases',
     ];
 
     protected function casts(): array
@@ -28,6 +29,7 @@ final class FoodDiscoveryCategory extends Model implements HasMedia
         return [
             'is_active' => 'boolean',
             'sort_order' => 'integer',
+            'aliases' => 'array',
         ];
     }
 

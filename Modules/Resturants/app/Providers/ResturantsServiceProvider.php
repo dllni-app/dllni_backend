@@ -24,6 +24,9 @@ final class ResturantsServiceProvider extends ServiceProvider
     public function boot(): void
     {
         \Modules\Resturants\Models\Product::observe(\Modules\Resturants\Observers\ProductMealIndexObserver::class);
+        \Modules\Resturants\Models\Category::observe(\Modules\Resturants\Observers\MealIndexDependencyObserver::class);
+        \Modules\Resturants\Models\FoodDiscoveryCategory::observe(\Modules\Resturants\Observers\MealIndexDependencyObserver::class);
+        \Modules\Resturants\Models\Restaurant::observe(\Modules\Resturants\Observers\MealIndexDependencyObserver::class);
         $this->registerCommands();
         $this->registerCommandSchedules();
         $this->registerTranslations();

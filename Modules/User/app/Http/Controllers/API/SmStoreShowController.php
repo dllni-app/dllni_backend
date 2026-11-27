@@ -33,17 +33,17 @@ final class SmStoreShowController
                 'storeHours',
                 'categories' => fn ($query) => $query
                     ->where('is_active', true)
+                    ->withCount(['products' => fn ($products) => $products
+                        ->where('store_id', $store)
+                        ->where('is_available', true)])
+                    ->with(['products' => fn ($products) => $products
+                        ->where('store_id', $store)
+                        ->where('is_available', true)
+                        ->latest('id')
+                        ->limit(4)
+                        ->with(['category', 'media', 'masterProduct.media', 'offerProducts.offer'])])
                     ->orderBy('sort_order')
                     ->orderBy('name'),
-                'products' => fn ($query) => $query
-                    ->where('is_available', true)
-                    ->latest('id')
-                    ->limit(5)
-                    ->with([
-                        'category',
-                        'media',
-                        'offerProducts.offer',
-                    ]),
                 'offers' => fn ($query) => \Modules\User\Services\SupermarketPromotionCatalog::constrain($query, request()->boolean('includeUpcoming')),
                 'coupons' => fn ($query) => $query
                     ->where('is_active', true)
@@ -51,6 +51,12 @@ final class SmStoreShowController
                     ->where(fn ($validity) => $validity->whereNull('ends_at')->orWhere('ends_at', '>=', $now)),
             ])
             ->findOrFail($store);
+
+        // Keep the existing flat store.products response, but bound its
+        // previews per active department instead of across the entire store.
+        $model->setRelation('products', $model->categories
+            ->flatMap(fn ($category) => $category->products)
+            ->values());
 
         $cartPayload = null;
         $user = $request->user('sanctum');

@@ -149,12 +149,7 @@ final class RestaurantV2CatalogService
             if (isset($filters['restaurantId'])) {
                 $products->where('products.restaurant_id', $filters['restaurantId']);
             }
-            if (isset($filters['categoryId'])) {
-                $products->where('products.category_id', $filters['categoryId']);
-            }
-            if (isset($filters['foodCategoryId'])) {
-                $products->where('products.primary_food_category_id', $filters['foodCategoryId'])->where('products.classification_status', 'reviewed');
-            }
+            $this->applyFoodFilters($products, $filters);
             if (isset($filters['cuisineId'])) {
                 $products->whereHas('restaurant.cuisineTypes', fn (Builder $cuisine): Builder => $cuisine->where('cuisine_types.id', $filters['cuisineId']));
             }
@@ -333,24 +328,27 @@ final class RestaurantV2CatalogService
             ->with([
                 'media', 'operatingHours', 'cuisineTypes',
                 'offers' => fn ($q) => $this->eligibleOffers($q)->with($this->offerCardRelations(false))->orderBy('starts_at')->orderBy('id'),
-                'categories' => fn ($q) => $q->withCount(['products as available_products_count' => fn (Builder $products): Builder => $this->availableProducts($products)])->orderBy('sort_order')->orderBy('id'),
-                'categories.products' => fn ($q) => $this->availableProducts($q)
-                    ->with($this->productCardRelations($request, false, false))
-                    ->orderByDesc('is_featured')->orderBy('name')->orderBy('id')->limit(30),
             ])->findOrFail($restaurantId);
 
         $this->attachRestaurantFavorites(collect([$restaurant]), $request);
         $restaurant->offers->each(fn (Offer $offer) => $offer->setRelation('restaurant', $restaurant));
-        $this->attachMenuParents($restaurant, $restaurant->categories);
-        $products = $restaurant->categories->flatMap(fn (Category $category) => $category->products)->unique('id')->values();
-        $this->attachProductFavorites($products, $request);
+        $menu = $this->menu($request, $restaurantId, 30);
         $reviews = $restaurant->reviews()->with('user')->latest('id')->paginate(perPage: $reviewsPerPage, page: $reviewsPage);
         $totalReviews = $reviews->total();
         $average = $totalReviews > 0 ? (float) $restaurant->reviews_avg_rating : null;
         $counts = $restaurant->reviews()->selectRaw('rating, count(*) as aggregate')->groupBy('rating')->pluck('aggregate', 'rating');
         $gallery = $restaurant->getMedia('images')->map(fn ($media): string => $media->getUrl())->values()->all();
-        $popularProducts = $this->availableProducts($restaurant->products())->with($this->productCardRelations($request, false))
-            ->orderByDesc('is_featured')->orderBy('name')->orderBy('id')->limit(10)->get();
+        $sales = \Modules\Resturants\Models\OrderItem::query()
+            ->join('orders', 'orders.id', '=', 'order_items.order_id')
+            ->where('orders.restaurant_id', $restaurantId)
+            ->whereIn('orders.status', [OrderStatus::Completed->value, OrderStatus::PickedUp->value])
+            ->where('orders.created_at', '>=', CarbonImmutable::now()->subDays(30))
+            ->selectRaw('order_items.product_id, SUM(order_items.quantity) as completed_units_30d')
+            ->groupBy('order_items.product_id');
+        $popularProducts = $this->curatedMealQuery($request)
+            ->where('products.restaurant_id', $restaurantId)
+            ->joinSub($sales, 'recent_sales', 'recent_sales.product_id', '=', 'products.id')
+            ->select('products.*')->orderByDesc('recent_sales.completed_units_30d')->orderBy('products.id')->limit(10)->get();
         $popularProducts->each(fn (Product $product) => $product->setRelation('restaurant', $restaurant));
         $this->attachProductFavorites($popularProducts, $request);
 
@@ -364,11 +362,7 @@ final class RestaurantV2CatalogService
                 'openTime' => $hour->open_time, 'closeTime' => $hour->close_time, 'isClosed' => (bool) $hour->is_closed,
             ])->values()->all(),
             'offers' => $restaurant->offers->map(fn (Offer $offer): array => $this->offerData($offer))->all(),
-            'categories' => $restaurant->categories->map(fn (Category $category): array => [
-                'id' => (int) $category->id, 'name' => $category->name, 'sortOrder' => (int) $category->sort_order,
-                'totalProducts' => (int) $category->available_products_count, 'hasMore' => (int) $category->available_products_count > $category->products->count(),
-                'products' => $category->products->unique('id')->values()->map(fn (Product $product): array => $this->productData($product, $request))->all(),
-            ])->filter(fn (array $category): bool => $category['products'] !== [])->values()->all(),
+            'categories' => $menu['categories'],
             'popularProducts' => $popularProducts->map(fn (Product $product): array => $this->productData($product, $request))->all(),
             'reviews' => $reviews->getCollection()->map(fn ($review): array => [
                 'id' => (int) $review->id, 'rating' => (int) $review->rating, 'comment' => $review->comment,
@@ -385,7 +379,11 @@ final class RestaurantV2CatalogService
     {
         $restaurant = Restaurant::query()->where('is_active', true)
             ->with(['media' => fn ($media) => $media->where('collection_name', 'primary-image')])->findOrFail($restaurantId);
-        $baseCategories = $restaurant->categories()->whereHas('products', fn (Builder $q): Builder => $this->availableProducts($q));
+        $baseCategories = $restaurant->categories()->effectivelyActive()
+            ->where(function (Builder $sections): void {
+                $sections->whereHas('products', fn (Builder $q): Builder => $this->availableProducts($q))
+                    ->orWhereHas('children.products', fn (Builder $q): Builder => $this->availableProducts($q));
+            });
 
         if ($categoryId !== null) {
             $category = (clone $baseCategories)->whereKey($categoryId)
@@ -402,6 +400,10 @@ final class RestaurantV2CatalogService
                 'id' => (int) $category->id,
                 'name' => $category->name,
                 'sortOrder' => (int) $category->sort_order,
+                'parentId' => $category->parent_id,
+                'depth' => $category->parent_id === null ? 0 : 1,
+                'sectionKey' => 'category:'.$category->id,
+                'effectiveActive' => true,
                 'imageUrl' => ($image = $category->getFirstMediaUrl('category-image')) !== '' ? $image : null,
                 'products' => $paginator->getCollection()->map(fn (Product $product): array => $this->productData($product, $request))->all(),
                 'totalProducts' => (int) $category->available_products_count,
@@ -420,17 +422,22 @@ final class RestaurantV2CatalogService
         $this->attachMenuParents($restaurant, $categories);
         $products = $categories->flatMap(fn (Category $category) => $category->products)->unique('id')->values();
         $this->attachProductFavorites($products, $request);
-        $categoryData = $categories->map(function (Category $category) use ($request): array {
+        $children = $categories->whereNotNull('parent_id')->groupBy('parent_id');
+        $ordered = $categories->whereNull('parent_id')->flatMap(fn (Category $root) => collect([$root])->concat($children->get($root->id, collect())));
+        $categoryData = $ordered->map(function (Category $category) use ($request, $children): array {
             $image = \App\Support\ImageVariants::url($category, 'category-image', true);
 
             return ['id' => (int) $category->id, 'name' => $category->name, 'sortOrder' => (int) $category->sort_order,
+                'parentId' => $category->parent_id, 'depth' => $category->parent_id === null ? 0 : 1,
+                'sectionKey' => 'category:'.$category->id, 'effectiveActive' => true,
+                'subtreeProducts' => (int) $category->available_products_count + (int) $children->get($category->id, collect())->sum('available_products_count'),
                 'imageUrl' => $image !== '' ? $image : null,
                 'products' => $category->products->unique('id')->values()
                     ->map(fn (Product $product): array => $this->productData($product, $request))->all(),
                 'totalProducts' => (int) $category->available_products_count,
                 'hasMore' => (int) $category->available_products_count > $category->products->count(),
                 'nextPage' => (int) $category->available_products_count > $category->products->count() ? 2 : null];
-        })->filter(fn (array $category): bool => $category['products'] !== [])->values()->all();
+        })->filter(fn (array $category): bool => $category['subtreeProducts'] > 0)->values()->all();
 
         return ['restaurantId' => (int) $restaurant->id, 'categories' => $categoryData];
     }
@@ -440,6 +447,7 @@ final class RestaurantV2CatalogService
     {
         $product = Product::query()->where('products.catalog_role', 'independent')
             ->whereHas('restaurant', fn (Builder $q): Builder => $q->where('is_active', true))
+            ->whereHas('category', fn (Builder $q): Builder => $q->effectivelyActive())
             ->with([...$this->productCardRelations($request), 'modifierGroups.modifiers'])
             ->findOrFail($productId);
         $this->attachProductFavorites(collect([$product]), $request);
@@ -561,10 +569,7 @@ final class RestaurantV2CatalogService
 
     private function curatedMealQuery(Request $request): Builder
     {
-        return $this->productQuery($request)
-            ->where('products.classification_status', 'reviewed')
-            ->whereIn('products.product_kind', ['main_dish', 'combo_meal'])
-            ->whereNotNull('products.primary_food_category_id');
+        return RestaurantFoodEligibility::curatedMeals($this->productQuery($request));
     }
 
     private function restaurantQuery(Request $request): Builder
@@ -658,7 +663,7 @@ final class RestaurantV2CatalogService
             $area = '%'.addcslashes($filters['area'], '%_\\').'%';
             $query->where(fn (Builder $location) => $location->where('restaurants.city', 'like', $area)->orWhere('restaurants.district', 'like', $area));
         }
-        $productScoped = ($filters['browseEligible'] ?? false) || isset($filters['categoryId']) || isset($filters['foodCategoryId'])
+        $productScoped = ($filters['browseEligible'] ?? false) || isset($filters['categoryId']) || isset($filters['foodCategoryId']) || isset($filters['foodCategorySlug']) || !empty($filters['itemTypes'])
             || isset($filters['minPrice']) || isset($filters['maxPrice'])
             || array_key_exists('candidateIds', $filters) || isset($filters['requiredTerm']) || isset($filters['maxPreparationMinutes']) || isset($filters['servings']) || isset($filters['ingredientExclusions'])
             || (isset($filters['cuisineId']) && ($filters['hasOffers'] ?? false) === true);
@@ -689,13 +694,7 @@ final class RestaurantV2CatalogService
     {
         $this->availableProducts($product);
         $this->applySmartConstraints($product, $filters);
-        if (isset($filters['categoryId'])) {
-            $product->where('products.category_id', $filters['categoryId']);
-        }
-        if (isset($filters['foodCategoryId'])) {
-            $product->where('products.primary_food_category_id', $filters['foodCategoryId'])
-                ->where('products.classification_status', 'reviewed');
-        }
+        $this->applyFoodFilters($product, $filters);
         foreach (['minPrice' => '>=', 'maxPrice' => '<='] as $key => $operator) {
             if (isset($filters[$key])) {
                 $product->whereRaw($this->effectivePriceSql().' '.$operator.' ?', [...$this->effectivePriceBindings(), $filters[$key]]);
@@ -728,6 +727,26 @@ final class RestaurantV2CatalogService
         }
         if (isset($filters['maxPreparationMinutes'])) {
             $product->whereNotNull('products.preparation_time')->where('products.preparation_time', '<=', $filters['maxPreparationMinutes']);
+        }
+    }
+
+    private function applyFoodFilters(Builder $product, array $filters): void
+    {
+        if (isset($filters['categoryId'])) {
+            $id = $filters['categoryId'];
+            $product->whereHas('category', fn (Builder $category) => $category
+                ->where(fn (Builder $section) => $section->whereKey($id)->orWhere('parent_id', $id)));
+        }
+        if (isset($filters['foodCategoryId']) || isset($filters['foodCategorySlug'])) {
+            $product->where('products.classification_status', 'reviewed')
+                ->whereHas('foodCategory', function (Builder $family) use ($filters): void {
+                    $family->where('is_active', true);
+                    if (isset($filters['foodCategoryId'])) $family->whereKey($filters['foodCategoryId']);
+                    if (isset($filters['foodCategorySlug'])) $family->where('slug', $filters['foodCategorySlug']);
+                });
+        }
+        if (!empty($filters['itemTypes'])) {
+            $product->whereIn('products.item_type', $filters['itemTypes']);
         }
     }
 

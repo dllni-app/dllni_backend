@@ -27,6 +27,7 @@ final class CategoryController
         $categories = Category::getQuery()
             ->where('restaurant_id', $this->ownerContext->restaurantId())
             ->with(['restaurant', 'products'])
+            ->orderBy('id')
             ->paginate($request->get('perPage', 10));
 
         return CategoryResource::collection($categories);
@@ -39,7 +40,8 @@ final class CategoryController
             CategoryData::from([
                 ...$request->validated(),
                 'restaurantId' => $this->ownerContext->restaurantId(),
-            ])
+            ]),
+            $request->safe()->only(['parentId', 'isActive'])
         );
 
         return CategoryResource::make($category->load(['restaurant', 'products']));
@@ -63,7 +65,8 @@ final class CategoryController
                 ...$request->validated(),
                 'restaurantId' => $this->ownerContext->restaurantId(),
             ]),
-            $category
+            $category,
+            $request->safe()->only(['parentId', 'isActive'])
         );
 
         return CategoryResource::make($updated->load(['restaurant', 'products']));
@@ -72,7 +75,26 @@ final class CategoryController
     public function destroy(Category $category): Response
     {
         abort_unless($this->ownerContext->modelBelongsToRestaurant($category, $this->ownerContext->restaurantId()), Response::HTTP_NOT_FOUND);
-        $category->delete();
+        $this->categoryService->delete($category);
+
+        return response()->noContent();
+    }
+
+    public function reorder(\Illuminate\Http\Request $request): Response
+    {
+        $data = $request->validate([
+            'parentId' => ['present', 'nullable', 'integer', 'min:1'],
+            'expectedIds' => ['required', 'array', 'min:1', 'max:1000', 'list'],
+            'expectedIds.*' => ['required', 'integer', 'min:1', 'distinct'],
+            'orderedIds' => ['required', 'array', 'min:1', 'max:1000', 'list'],
+            'orderedIds.*' => ['required', 'integer', 'min:1', 'distinct'],
+        ]);
+        $this->categoryService->reorder(
+            $this->ownerContext->restaurantId(),
+            $data['parentId'] === null ? null : (int) $data['parentId'],
+            $data['expectedIds'],
+            $data['orderedIds'],
+        );
 
         return response()->noContent();
     }

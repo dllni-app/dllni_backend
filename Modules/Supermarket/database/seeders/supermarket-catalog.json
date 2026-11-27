@@ -1,0 +1,1705 @@
+{
+  "schemaVersion": 1,
+  "categories": {
+    "essentials": {
+      "name": "الأرز والحبوب والبقوليات",
+      "image": "rice"
+    },
+    "oils": {
+      "name": "الزيوت والسمن",
+      "image": "olive-oil"
+    },
+    "pasta": {
+      "name": "المعكرونة والطحين",
+      "image": "pasta"
+    },
+    "canned": {
+      "name": "المعلبات والمحفوظات",
+      "image": "tuna-new"
+    },
+    "condiments": {
+      "name": "التوابل والصلصات",
+      "image": "ketchup"
+    },
+    "breakfast": {
+      "name": "الفطور والمربيات",
+      "image": "honey"
+    },
+    "bakery": {
+      "name": "المخبوزات",
+      "image": "bread-new"
+    },
+    "dairy": {
+      "name": "الألبان والأجبان",
+      "image": "milk-new"
+    },
+    "eggs": {
+      "name": "البيض",
+      "image": "eggs"
+    },
+    "vegetables": {
+      "name": "الخضار",
+      "image": "tomato-new"
+    },
+    "fruits": {
+      "name": "الفواكه",
+      "image": "apple-new"
+    },
+    "meat": {
+      "name": "اللحوم والدواجن",
+      "image": "chicken"
+    },
+    "seafood": {
+      "name": "الأسماك والمأكولات البحرية",
+      "image": "salmon"
+    },
+    "frozen": {
+      "name": "المجمدات",
+      "image": "frozen-peas"
+    },
+    "drinks": {
+      "name": "المشروبات",
+      "image": "water-new"
+    },
+    "hot-drinks": {
+      "name": "الشاي والقهوة والمتة",
+      "image": "coffee"
+    },
+    "snacks": {
+      "name": "التسالي والمكسرات",
+      "image": "chips-new"
+    },
+    "sweets": {
+      "name": "الحلويات والشوكولاتة",
+      "image": "chocolate-new"
+    },
+    "personal-care": {
+      "name": "العناية الشخصية",
+      "image": "shampoo"
+    },
+    "baby": {
+      "name": "الأم والطفل",
+      "image": "diapers"
+    },
+    "cleaning": {
+      "name": "المنظفات",
+      "image": "laundry-new"
+    },
+    "household": {
+      "name": "الأدوات المنزلية والورقيات",
+      "image": "tissue"
+    },
+    "pet-care": {
+      "name": "مستلزمات الحيوانات الأليفة",
+      "image": "cat-food"
+    }
+  },
+  "products": [
+    {
+      "key": "rice",
+      "category": "essentials",
+      "name": "أرز بسمتي طويل الحبة 1 كغ",
+      "label": "BASMATI RICE",
+      "style": "bag",
+      "color": "f2b84d",
+      "size": "1 kg",
+      "price": 50,
+      "stock_quantity": 160
+    },
+    {
+      "key": "rice-family",
+      "category": "essentials",
+      "name": "أرز بسمتي طويل الحبة 5 كغ",
+      "label": "BASMATI RICE",
+      "style": "bag",
+      "color": "f2b84d",
+      "size": "5 kg",
+      "price": 200,
+      "stock_quantity": 65
+    },
+    {
+      "key": "lentils",
+      "category": "essentials",
+      "name": "عدس بني حب 1 كغ",
+      "label": "BROWN LENTILS",
+      "style": "bag",
+      "color": "aa7049",
+      "size": "1 kg",
+      "price": 50,
+      "stock_quantity": 100
+    },
+    {
+      "key": "chickpeas",
+      "category": "essentials",
+      "name": "حمص حب جاف 500 غ",
+      "label": "CHICKPEAS",
+      "style": "bag",
+      "color": "e1ac63",
+      "size": "500 g",
+      "price": 25,
+      "stock_quantity": 110
+    },
+    {
+      "key": "sugar",
+      "category": "essentials",
+      "name": "سكر ناعم 2 كغ",
+      "label": "WHITE SUGAR",
+      "style": "bag",
+      "color": "72a9d2",
+      "size": "2 kg",
+      "price": 50,
+      "stock_quantity": 140
+    },
+    {
+      "key": "salt",
+      "category": "essentials",
+      "name": "ملح طعام ناعم 500 غ",
+      "label": "TABLE SALT",
+      "style": "box",
+      "color": "6aa5ca",
+      "size": "500 g",
+      "price": 10,
+      "stock_quantity": 120
+    },
+    {
+      "key": "olive-oil",
+      "category": "oils",
+      "name": "زيت زيتون بكر 1 لتر",
+      "label": "OLIVE OIL",
+      "style": "bottle",
+      "color": "687e3d",
+      "size": "1 L",
+      "price": 200,
+      "stock_quantity": 80
+    },
+    {
+      "key": "sunflower-oil",
+      "category": "oils",
+      "name": "زيت دوار الشمس 1 لتر",
+      "label": "SUNFLOWER OIL",
+      "style": "bottle",
+      "color": "d7a73b",
+      "size": "1 L",
+      "price": 50,
+      "stock_quantity": 120
+    },
+    {
+      "key": "ghee",
+      "category": "oils",
+      "name": "سمن نباتي 700 غ",
+      "label": "VEGETABLE GHEE",
+      "style": "tub",
+      "color": "cfa243",
+      "size": "700 g",
+      "price": 100,
+      "stock_quantity": 65
+    },
+    {
+      "key": "pasta",
+      "category": "pasta",
+      "name": "معكرونة سباغيتي 500 غ",
+      "label": "SPAGHETTI",
+      "style": "bag",
+      "color": "db9748",
+      "size": "500 g",
+      "price": 25,
+      "stock_quantity": 150
+    },
+    {
+      "key": "macaroni",
+      "category": "pasta",
+      "name": "معكرونة أقلام 500 غ",
+      "label": "PENNE PASTA",
+      "style": "bag",
+      "color": "d8a54a",
+      "size": "500 g",
+      "price": 25,
+      "stock_quantity": 130
+    },
+    {
+      "key": "flour",
+      "category": "pasta",
+      "name": "طحين أبيض 1 كغ",
+      "label": "WHEAT FLOUR",
+      "style": "bag",
+      "color": "b09061",
+      "size": "1 kg",
+      "price": 25,
+      "stock_quantity": 120
+    },
+    {
+      "key": "tuna-new",
+      "category": "canned",
+      "name": "تونة بزيت الزيتون 160 غ",
+      "label": "TUNA",
+      "style": "can",
+      "color": "417b9f",
+      "size": "160 g",
+      "price": 50,
+      "stock_quantity": 100
+    },
+    {
+      "key": "beans",
+      "category": "canned",
+      "name": "فاصولياء بيضاء معلبة 400 غ",
+      "label": "WHITE BEANS",
+      "style": "can",
+      "color": "a17b4e",
+      "size": "400 g",
+      "price": 25,
+      "stock_quantity": 95
+    },
+    {
+      "key": "tomato-paste",
+      "category": "canned",
+      "name": "رب بندورة 300 غ",
+      "label": "TOMATO PASTE",
+      "style": "jar",
+      "color": "ca493a",
+      "size": "300 g",
+      "price": 25,
+      "stock_quantity": 100
+    },
+    {
+      "key": "ketchup",
+      "category": "condiments",
+      "name": "كاتشب طماطم 500 غ",
+      "label": "TOMATO KETCHUP",
+      "style": "bottle",
+      "color": "c74939",
+      "size": "500 g",
+      "price": 50,
+      "stock_quantity": 110
+    },
+    {
+      "key": "zaatar",
+      "category": "condiments",
+      "name": "زعتر حلبي 250 غ",
+      "label": "ALEPPO ZAATAR",
+      "style": "jar",
+      "color": "657e47",
+      "size": "250 g",
+      "price": 50,
+      "stock_quantity": 90
+    },
+    {
+      "key": "paprika",
+      "category": "condiments",
+      "name": "بابريكا حلوة 100 غ",
+      "label": "PAPRIKA",
+      "style": "jar",
+      "color": "b84d38",
+      "size": "100 g",
+      "price": 25,
+      "stock_quantity": 80
+    },
+    {
+      "key": "tahini",
+      "category": "condiments",
+      "name": "طحينة سمسم 400 غ",
+      "label": "SESAME TAHINI",
+      "style": "jar",
+      "color": "bba46f",
+      "size": "400 g",
+      "price": 100,
+      "stock_quantity": 70
+    },
+    {
+      "key": "honey",
+      "category": "breakfast",
+      "name": "عسل زهور طبيعي 500 غ",
+      "label": "FLOWER HONEY",
+      "style": "jar",
+      "color": "d59a37",
+      "size": "500 g",
+      "price": 200,
+      "stock_quantity": 60
+    },
+    {
+      "key": "jam",
+      "category": "breakfast",
+      "name": "مربى مشمش 350 غ",
+      "label": "APRICOT JAM",
+      "style": "jar",
+      "color": "e78c42",
+      "size": "350 g",
+      "price": 50,
+      "stock_quantity": 90
+    },
+    {
+      "key": "oats",
+      "category": "breakfast",
+      "name": "شوفان كامل 500 غ",
+      "label": "ROLLED OATS",
+      "style": "box",
+      "color": "b69b6a",
+      "size": "500 g",
+      "price": 50,
+      "stock_quantity": 75
+    },
+    {
+      "key": "cereal",
+      "category": "breakfast",
+      "name": "رقائق ذرة للفطور 375 غ",
+      "label": "CORN FLAKES",
+      "style": "box",
+      "color": "e0ad39",
+      "size": "375 g",
+      "price": 100,
+      "stock_quantity": 80
+    },
+    {
+      "key": "bread-new",
+      "category": "bakery",
+      "name": "خبز عربي أسمر 6 أرغفة",
+      "label": "WHOLE WHEAT PITA",
+      "style": "bread",
+      "color": "bd8246",
+      "size": "6 pcs",
+      "price": 10,
+      "stock_quantity": 150,
+      "expires_in_days": 2
+    },
+    {
+      "key": "toast",
+      "category": "bakery",
+      "name": "خبز توست أبيض 500 غ",
+      "label": "WHITE TOAST",
+      "style": "bread",
+      "color": "cba76c",
+      "size": "500 g",
+      "price": 25,
+      "stock_quantity": 100,
+      "expires_in_days": 5
+    },
+    {
+      "key": "cake",
+      "category": "bakery",
+      "name": "كيك فانيليا 300 غ",
+      "label": "VANILLA CAKE",
+      "style": "box",
+      "color": "dfb774",
+      "size": "300 g",
+      "price": 50,
+      "stock_quantity": 65,
+      "expires_in_days": 8
+    },
+    {
+      "key": "milk-new",
+      "category": "dairy",
+      "name": "حليب طازج نصف دسم 1 لتر",
+      "label": "FRESH MILK",
+      "style": "carton",
+      "color": "4e92c5",
+      "size": "1 L",
+      "price": 50,
+      "store_prices": {
+        "supermarket-al-sultan": 25,
+        "supermarket-al-noor": 100
+      },
+      "stock_quantity": 140,
+      "expires_in_days": 8
+    },
+    {
+      "key": "yogurt-new",
+      "category": "dairy",
+      "name": "لبن زبادي طبيعي 1 كغ",
+      "label": "PLAIN YOGURT",
+      "style": "tub",
+      "color": "62a4a1",
+      "size": "1 kg",
+      "price": 50,
+      "stock_quantity": 100,
+      "expires_in_days": 6
+    },
+    {
+      "key": "cheese-new",
+      "category": "dairy",
+      "name": "جبنة حلوم 250 غ",
+      "label": "HALLOUMI",
+      "style": "tray",
+      "color": "65a9a2",
+      "size": "250 g",
+      "price": 100,
+      "stock_quantity": 80,
+      "expires_in_days": 12
+    },
+    {
+      "key": "butter-new",
+      "category": "dairy",
+      "name": "زبدة غير مملحة 250 غ",
+      "label": "UNSALTED BUTTER",
+      "style": "bar",
+      "color": "e0b74e",
+      "size": "250 g",
+      "price": 100,
+      "stock_quantity": 55,
+      "expires_in_days": 20
+    },
+    {
+      "key": "eggs",
+      "category": "eggs",
+      "name": "بيض طازج 12 حبة",
+      "label": "FRESH EGGS",
+      "style": "eggs",
+      "color": "c59668",
+      "size": "12 pcs",
+      "price": 100,
+      "stock_quantity": 100,
+      "expires_in_days": 14
+    },
+    {
+      "key": "eggs-family",
+      "category": "eggs",
+      "name": "بيض طازج 30 حبة",
+      "label": "FRESH EGGS",
+      "style": "eggs",
+      "color": "a98861",
+      "size": "30 pcs",
+      "price": 200,
+      "stock_quantity": 45,
+      "expires_in_days": 14
+    },
+    {
+      "key": "tomato-new",
+      "category": "vegetables",
+      "name": "طماطم كرزية 500 غ",
+      "label": "CHERRY TOMATOES",
+      "style": "tomato",
+      "color": "dc4e3a",
+      "size": "500 g",
+      "price": 25,
+      "stock_quantity": 100,
+      "expires_in_days": 5
+    },
+    {
+      "key": "cucumber-new",
+      "category": "vegetables",
+      "name": "خيار طازج 500 غ",
+      "label": "CUCUMBER",
+      "style": "cucumber",
+      "color": "64934f",
+      "size": "500 g",
+      "price": 25,
+      "stock_quantity": 110,
+      "expires_in_days": 5
+    },
+    {
+      "key": "pepper",
+      "category": "vegetables",
+      "name": "فليفلة ملونة 500 غ",
+      "label": "BELL PEPPERS",
+      "style": "pepper",
+      "color": "df8b3e",
+      "size": "500 g",
+      "price": 50,
+      "stock_quantity": 75,
+      "expires_in_days": 5
+    },
+    {
+      "key": "carrot-new",
+      "category": "vegetables",
+      "name": "جزر طازج 500 غ",
+      "label": "CARROTS",
+      "style": "carrot",
+      "color": "df8b35",
+      "size": "500 g",
+      "price": 25,
+      "stock_quantity": 90,
+      "expires_in_days": 7
+    },
+    {
+      "key": "apple-new",
+      "category": "fruits",
+      "name": "تفاح أخضر 1 كغ",
+      "label": "GREEN APPLES",
+      "style": "apple",
+      "color": "8aa84b",
+      "size": "1 kg",
+      "price": 50,
+      "stock_quantity": 100,
+      "expires_in_days": 10
+    },
+    {
+      "key": "banana-new",
+      "category": "fruits",
+      "name": "موز طازج 500 غ",
+      "label": "BANANAS",
+      "style": "banana",
+      "color": "e9bd42",
+      "size": "500 g",
+      "price": 25,
+      "stock_quantity": 105,
+      "expires_in_days": 5
+    },
+    {
+      "key": "orange-new",
+      "category": "fruits",
+      "name": "برتقال بلدي 1 كغ",
+      "label": "ORANGES",
+      "style": "orange",
+      "color": "e58b36",
+      "size": "1 kg",
+      "price": 50,
+      "stock_quantity": 120,
+      "expires_in_days": 10
+    },
+    {
+      "key": "grapes",
+      "category": "fruits",
+      "name": "عنب أحمر 500 غ",
+      "label": "RED GRAPES",
+      "style": "grapes",
+      "color": "85528e",
+      "size": "500 g",
+      "price": 50,
+      "stock_quantity": 65,
+      "expires_in_days": 6
+    },
+    {
+      "key": "chicken",
+      "category": "meat",
+      "name": "صدور دجاج طازجة 1 كغ",
+      "label": "CHICKEN BREAST",
+      "style": "meat",
+      "color": "e7a895",
+      "size": "1 kg",
+      "price": 200,
+      "stock_quantity": 60,
+      "expires_in_days": 3
+    },
+    {
+      "key": "beef",
+      "category": "meat",
+      "name": "لحم بقري مفروم 500 غ",
+      "label": "GROUND BEEF",
+      "style": "meat",
+      "color": "a94349",
+      "size": "500 g",
+      "price": 200,
+      "stock_quantity": 45,
+      "expires_in_days": 2
+    },
+    {
+      "key": "sausage",
+      "category": "meat",
+      "name": "نقانق دجاج 400 غ",
+      "label": "CHICKEN SAUSAGE",
+      "style": "meat",
+      "color": "d48567",
+      "size": "400 g",
+      "price": 100,
+      "stock_quantity": 55,
+      "expires_in_days": 7
+    },
+    {
+      "key": "salmon",
+      "category": "seafood",
+      "name": "شرائح سلمون 400 غ",
+      "label": "SALMON FILLETS",
+      "style": "fish",
+      "color": "ee9669",
+      "size": "400 g",
+      "price": 500,
+      "stock_quantity": 30,
+      "expires_in_days": 3
+    },
+    {
+      "key": "shrimp",
+      "category": "seafood",
+      "name": "روبيان مقشر مجمد 500 غ",
+      "label": "SHRIMP",
+      "style": "fish",
+      "color": "e39478",
+      "size": "500 g",
+      "price": 200,
+      "stock_quantity": 40
+    },
+    {
+      "key": "frozen-peas",
+      "category": "frozen",
+      "name": "بازلاء مجمدة 400 غ",
+      "label": "FROZEN PEAS",
+      "style": "bag",
+      "color": "78a35b",
+      "size": "400 g",
+      "price": 50,
+      "stock_quantity": 90
+    },
+    {
+      "key": "frozen-fries",
+      "category": "frozen",
+      "name": "بطاطا مقلية مجمدة 1 كغ",
+      "label": "FROZEN FRIES",
+      "style": "bag",
+      "color": "e0ab43",
+      "size": "1 kg",
+      "price": 100,
+      "stock_quantity": 85
+    },
+    {
+      "key": "ice-cream",
+      "category": "frozen",
+      "name": "آيس كريم فانيليا 500 مل",
+      "label": "VANILLA ICE CREAM",
+      "style": "tub",
+      "color": "a18cc8",
+      "size": "500 ml",
+      "price": 100,
+      "stock_quantity": 35
+    },
+    {
+      "key": "water-new",
+      "category": "drinks",
+      "name": "مياه شرب 500 مل",
+      "label": "SPRING WATER",
+      "style": "bottle",
+      "color": "6caccb",
+      "size": "500 ml",
+      "price": 10,
+      "stock_quantity": 220
+    },
+    {
+      "key": "water-pack",
+      "category": "drinks",
+      "name": "مياه شرب 6 عبوات 500 مل",
+      "label": "SPRING WATER",
+      "style": "multipack",
+      "color": "6caccb",
+      "size": "6 x 500 ml",
+      "price": 50,
+      "stock_quantity": 120
+    },
+    {
+      "key": "orange-juice",
+      "category": "drinks",
+      "name": "عصير برتقال طبيعي 250 مل",
+      "label": "ORANGE JUICE",
+      "style": "carton",
+      "color": "ed963a",
+      "size": "250 ml",
+      "price": 25,
+      "stock_quantity": 160
+    },
+    {
+      "key": "apple-juice",
+      "category": "drinks",
+      "name": "عصير تفاح طبيعي 250 مل",
+      "label": "APPLE JUICE",
+      "style": "carton",
+      "color": "83a344",
+      "size": "250 ml",
+      "price": 50,
+      "stock_quantity": 155
+    },
+    {
+      "key": "cola",
+      "category": "drinks",
+      "name": "مشروب غازي كولا 330 مل",
+      "label": "COLA",
+      "style": "can",
+      "color": "b94742",
+      "size": "330 ml",
+      "price": 25,
+      "stock_quantity": 180
+    },
+    {
+      "key": "coffee",
+      "category": "hot-drinks",
+      "name": "قهوة عربية مطحونة 250 غ",
+      "label": "ARABIC COFFEE",
+      "style": "bag",
+      "color": "85614d",
+      "size": "250 g",
+      "price": 100,
+      "stock_quantity": 95
+    },
+    {
+      "key": "tea",
+      "category": "hot-drinks",
+      "name": "شاي أسود 100 كيس",
+      "label": "BLACK TEA",
+      "style": "box",
+      "color": "397f55",
+      "size": "100 bags",
+      "price": 100,
+      "stock_quantity": 85
+    },
+    {
+      "key": "mate",
+      "category": "hot-drinks",
+      "name": "متة خضراء 250 غ",
+      "label": "YERBA MATE",
+      "style": "bag",
+      "color": "6a8b49",
+      "size": "250 g",
+      "price": 50,
+      "stock_quantity": 80
+    },
+    {
+      "key": "chips-new",
+      "category": "snacks",
+      "name": "شيبس بطاطا بالجبنة 80 غ",
+      "label": "CHEESE CHIPS",
+      "style": "bag",
+      "color": "ec9d3c",
+      "size": "80 g",
+      "price": 25,
+      "stock_quantity": 170
+    },
+    {
+      "key": "nuts-new",
+      "category": "snacks",
+      "name": "لوز محمص 200 غ",
+      "label": "ROASTED ALMONDS",
+      "style": "bag",
+      "color": "b57e50",
+      "size": "200 g",
+      "price": 100,
+      "stock_quantity": 70
+    },
+    {
+      "key": "crackers",
+      "category": "snacks",
+      "name": "مقرمشات مملحة 150 غ",
+      "label": "SALT CRACKERS",
+      "style": "box",
+      "color": "c4a15c",
+      "size": "150 g",
+      "price": 25,
+      "stock_quantity": 115
+    },
+    {
+      "key": "chocolate-new",
+      "category": "sweets",
+      "name": "شوكولاتة بالحليب 100 غ",
+      "label": "MILK CHOCOLATE",
+      "style": "bar",
+      "color": "956040",
+      "size": "100 g",
+      "price": 50,
+      "stock_quantity": 150
+    },
+    {
+      "key": "wafer",
+      "category": "sweets",
+      "name": "ويفر بندق 45 غ",
+      "label": "HAZELNUT WAFER",
+      "style": "bar",
+      "color": "bb8859",
+      "size": "45 g",
+      "price": 10,
+      "stock_quantity": 130
+    },
+    {
+      "key": "dates",
+      "category": "sweets",
+      "name": "تمر مجدول 500 غ",
+      "label": "MEDJOOL DATES",
+      "style": "tray",
+      "color": "8a5545",
+      "size": "500 g",
+      "price": 100,
+      "stock_quantity": 60
+    },
+    {
+      "key": "shampoo",
+      "category": "personal-care",
+      "name": "شامبو للشعر 400 مل",
+      "label": "HAIR SHAMPOO",
+      "style": "bottle",
+      "color": "8c79ba",
+      "size": "400 ml",
+      "price": 100,
+      "stock_quantity": 90
+    },
+    {
+      "key": "toothpaste",
+      "category": "personal-care",
+      "name": "معجون أسنان بالنعناع 100 مل",
+      "label": "MINT TOOTHPASTE",
+      "style": "tube",
+      "color": "5b9b8f",
+      "size": "100 ml",
+      "price": 50,
+      "stock_quantity": 100
+    },
+    {
+      "key": "soap",
+      "category": "personal-care",
+      "name": "صابون زيت زيتون 125 غ",
+      "label": "OLIVE SOAP",
+      "style": "bar",
+      "color": "73904e",
+      "size": "125 g",
+      "price": 25,
+      "stock_quantity": 100
+    },
+    {
+      "key": "deodorant",
+      "category": "personal-care",
+      "name": "مزيل عرق 150 مل",
+      "label": "DEODORANT",
+      "style": "bottle",
+      "color": "6f97b4",
+      "size": "150 ml",
+      "price": 100,
+      "stock_quantity": 55
+    },
+    {
+      "key": "diapers",
+      "category": "baby",
+      "name": "حفاضات أطفال مقاس 4 عدد 30",
+      "label": "BABY DIAPERS",
+      "style": "bag",
+      "color": "8bb4d6",
+      "size": "30 pcs",
+      "price": 200,
+      "stock_quantity": 55
+    },
+    {
+      "key": "baby-wipes",
+      "category": "baby",
+      "name": "مناديل أطفال مبللة 72 حبة",
+      "label": "BABY WIPES",
+      "style": "pouch",
+      "color": "c19acc",
+      "size": "72 pcs",
+      "price": 50,
+      "stock_quantity": 90
+    },
+    {
+      "key": "baby-shampoo",
+      "category": "baby",
+      "name": "شامبو أطفال 250 مل",
+      "label": "BABY SHAMPOO",
+      "style": "bottle",
+      "color": "e2af64",
+      "size": "250 ml",
+      "price": 100,
+      "stock_quantity": 55
+    },
+    {
+      "key": "laundry-new",
+      "category": "cleaning",
+      "name": "جل غسيل ملابس 2 لتر",
+      "label": "LAUNDRY GEL",
+      "style": "bottle",
+      "color": "5c83c7",
+      "size": "2 L",
+      "price": 200,
+      "stock_quantity": 65
+    },
+    {
+      "key": "dish-soap",
+      "category": "cleaning",
+      "name": "سائل جلي تفاح 750 مل",
+      "label": "DISH LIQUID",
+      "style": "bottle",
+      "color": "70a74a",
+      "size": "750 ml",
+      "price": 50,
+      "stock_quantity": 100
+    },
+    {
+      "key": "cleaner",
+      "category": "cleaning",
+      "name": "منظف مطبخ بخاخ 500 مل",
+      "label": "KITCHEN CLEANER",
+      "style": "spray",
+      "color": "56a5ba",
+      "size": "500 ml",
+      "price": 100,
+      "stock_quantity": 80
+    },
+    {
+      "key": "tissue",
+      "category": "household",
+      "name": "محارم ورقية 200 منديل",
+      "label": "FACIAL TISSUE",
+      "style": "box",
+      "color": "a19ac6",
+      "size": "200 sheets",
+      "price": 50,
+      "stock_quantity": 100
+    },
+    {
+      "key": "paper-towel",
+      "category": "household",
+      "name": "ورق مطبخ 3 لفات",
+      "label": "PAPER TOWELS",
+      "style": "roll",
+      "color": "70a4b6",
+      "size": "3 rolls",
+      "price": 100,
+      "stock_quantity": 85
+    },
+    {
+      "key": "foil",
+      "category": "household",
+      "name": "ورق ألمنيوم 20 متر",
+      "label": "ALUMINIUM FOIL",
+      "style": "box",
+      "color": "879bac",
+      "size": "20 m",
+      "price": 50,
+      "stock_quantity": 85
+    },
+    {
+      "key": "cat-food",
+      "category": "pet-care",
+      "name": "طعام قطط جاف 1 كغ",
+      "label": "CAT FOOD",
+      "style": "bag",
+      "color": "b28a68",
+      "size": "1 kg",
+      "price": 200,
+      "stock_quantity": 50
+    },
+    {
+      "key": "dog-food",
+      "category": "pet-care",
+      "name": "طعام كلاب جاف 2 كغ",
+      "label": "DOG FOOD",
+      "style": "bag",
+      "color": "94765b",
+      "size": "2 kg",
+      "price": 500,
+      "stock_quantity": 30
+    },
+    {
+      "key": "cat-litter",
+      "category": "pet-care",
+      "name": "رمل قطط 5 كغ",
+      "label": "CAT LITTER",
+      "style": "bag",
+      "color": "9896af",
+      "size": "5 kg",
+      "price": 200,
+      "stock_quantity": 40
+    },
+    {
+      "key": "low-stock",
+      "category": "household",
+      "name": "بطاريات قلوية AA أربع حبات",
+      "label": "AA BATTERIES",
+      "style": "box",
+      "color": "728b9f",
+      "size": "4 pcs",
+      "price": 100,
+      "stock_quantity": 3
+    },
+    {
+      "key": "out-of-stock",
+      "category": "drinks",
+      "name": "عصير رمان طبيعي 1 لتر",
+      "label": "POMEGRANATE JUICE",
+      "style": "carton",
+      "color": "a34559",
+      "size": "1 L",
+      "price": 100,
+      "stock_quantity": 0
+    },
+    {
+      "key": "unavailable",
+      "category": "frozen",
+      "name": "بيتزا خضار مجمدة 350 غ",
+      "label": "VEGETABLE PIZZA",
+      "style": "box",
+      "color": "c98145",
+      "size": "350 g",
+      "price": 100,
+      "stock_quantity": 25,
+      "is_available": false
+    },
+    {
+      "key": "expired",
+      "category": "dairy",
+      "name": "لبن زبادي بالفراولة 150 غ",
+      "label": "STRAWBERRY YOGURT",
+      "style": "tub",
+      "color": "dd8fa2",
+      "size": "150 g",
+      "price": 25,
+      "stock_quantity": 12,
+      "expires_in_days": -1
+    },
+    {
+      "key": "manual-discount",
+      "category": "snacks",
+      "name": "فشار بالزبدة 100 غ",
+      "label": "BUTTER POPCORN",
+      "style": "bag",
+      "color": "d9b34d",
+      "size": "100 g",
+      "price": 50,
+      "stock_quantity": 120,
+      "discounted_price": 25
+    },
+    {
+      "key": "free-discount",
+      "category": "sweets",
+      "name": "حلوى نعناع 50 غ",
+      "label": "MINT CANDY",
+      "style": "bag",
+      "color": "74a994",
+      "size": "50 g",
+      "price": 25,
+      "stock_quantity": 90,
+      "discounted_price": 0
+    }
+  ],
+  "legacyArtwork": {
+    "فشار جاهز 80غ": {
+      "key": "legacy-092",
+      "label": "READY POPCORN",
+      "style": "bag",
+      "color": "d2a951",
+      "size": "80 g"
+    },
+    "عصير تفاح 1 لتر": {
+      "key": "legacy-093",
+      "label": "APPLE JUICE",
+      "style": "carton",
+      "color": "8aa653",
+      "size": "1 L"
+    },
+    "خبز عربي أبيض": {
+      "key": "legacy-001",
+      "label": "WHITE PITA",
+      "style": "bread",
+      "color": "caa56e",
+      "size": ""
+    },
+    "خبز قمح كامل": {
+      "key": "legacy-002",
+      "label": "WHOLE WHEAT BREAD",
+      "style": "bread",
+      "color": "a77a44",
+      "size": ""
+    },
+    "كرواسون زبدة": {
+      "key": "legacy-003",
+      "label": "BUTTER CROISSANT",
+      "style": "bread",
+      "color": "dfab54",
+      "size": ""
+    },
+    "توست حبوب 600غ": {
+      "key": "legacy-004",
+      "label": "MULTIGRAIN TOAST",
+      "style": "bread",
+      "color": "af8853",
+      "size": "600g"
+    },
+    "مناقيش زعتر مجمدة": {
+      "key": "legacy-005",
+      "label": "ZAATAR FLATBREAD",
+      "style": "box",
+      "color": "81934f",
+      "size": ""
+    },
+    "حمص معلب 400غ": {
+      "key": "legacy-006",
+      "label": "CHICKPEAS",
+      "style": "can",
+      "color": "d8ae6b",
+      "size": "400g"
+    },
+    "فول مدمس 400غ": {
+      "key": "legacy-007",
+      "label": "FAVA BEANS",
+      "style": "can",
+      "color": "906b48",
+      "size": "400g"
+    },
+    "ذرة حلوة 340غ": {
+      "key": "legacy-008",
+      "label": "SWEET CORN",
+      "style": "can",
+      "color": "e8b840",
+      "size": "340g"
+    },
+    "تونة قطع خفيفة 185غ": {
+      "key": "legacy-009",
+      "label": "LIGHT TUNA",
+      "style": "can",
+      "color": "487d9f",
+      "size": "185g"
+    },
+    "صلصة طماطم 680غ": {
+      "key": "legacy-010",
+      "label": "TOMATO SAUCE",
+      "style": "jar",
+      "color": "bc493b",
+      "size": "680g"
+    },
+    "منظف أرضيات ليمون 2 لتر": {
+      "key": "legacy-011",
+      "label": "LEMON FLOOR CLEANER",
+      "style": "bottle",
+      "color": "d1b444",
+      "size": "2 L"
+    },
+    "منظف زجاج 750مل": {
+      "key": "legacy-012",
+      "label": "GLASS CLEANER",
+      "style": "spray",
+      "color": "5f9fc7",
+      "size": "750ml"
+    },
+    "سائل جلي 1 لتر": {
+      "key": "legacy-013",
+      "label": "DISH LIQUID",
+      "style": "bottle",
+      "color": "70a65a",
+      "size": "1 L"
+    },
+    "كلور معطر 2 لتر": {
+      "key": "legacy-014",
+      "label": "SCENTED BLEACH",
+      "style": "bottle",
+      "color": "72a7c9",
+      "size": "2 L"
+    },
+    "أكياس قمامة كبيرة 50 حبة": {
+      "key": "legacy-015",
+      "label": "LARGE BIN BAGS",
+      "style": "roll",
+      "color": "7a8387",
+      "size": "50 pcs"
+    },
+    "حليب كامل الدسم 1 لتر": {
+      "key": "legacy-016",
+      "label": "WHOLE MILK",
+      "style": "carton",
+      "color": "548ac5",
+      "size": "1 L"
+    },
+    "لبن زبادي 500غ": {
+      "key": "legacy-017",
+      "label": "PLAIN YOGURT",
+      "style": "tub",
+      "color": "65a6a6",
+      "size": "500g"
+    },
+    "جبنة بيضاء 500غ": {
+      "key": "legacy-018",
+      "label": "WHITE CHEESE",
+      "style": "tray",
+      "color": "6b9ab1",
+      "size": "500g"
+    },
+    "لبنة كاملة 400غ": {
+      "key": "legacy-019",
+      "label": "WHOLE LABNEH",
+      "style": "tub",
+      "color": "80a99b",
+      "size": "400g"
+    },
+    "زبدة طبيعية 200غ": {
+      "key": "legacy-020",
+      "label": "NATURAL BUTTER",
+      "style": "bar",
+      "color": "e1b949",
+      "size": "200g"
+    },
+    "رقائق بطاطا ملح 160غ": {
+      "key": "legacy-021",
+      "label": "SALTED POTATO CHIPS",
+      "style": "bag",
+      "color": "d4b34b",
+      "size": "160g"
+    },
+    "بسكويت شاي 12 قطعة": {
+      "key": "legacy-022",
+      "label": "TEA BISCUITS",
+      "style": "box",
+      "color": "c5a16a",
+      "size": "12 pcs"
+    },
+    "شوكولاتة داكنة 90غ": {
+      "key": "legacy-023",
+      "label": "DARK CHOCOLATE",
+      "style": "bar",
+      "color": "6c4d3f",
+      "size": "90g"
+    },
+    "مكسرات مشكلة 250غ": {
+      "key": "legacy-024",
+      "label": "MIXED NUTS",
+      "style": "bag",
+      "color": "b17d50",
+      "size": "250g"
+    },
+    "عصير برتقال 1 لتر": {
+      "key": "legacy-025",
+      "label": "ORANGE JUICE",
+      "style": "carton",
+      "color": "e58d3e",
+      "size": "1 L"
+    },
+    "طماطم طازجة 1 كغ": {
+      "key": "legacy-026",
+      "label": "FRESH TOMATOES",
+      "style": "tomato",
+      "color": "d74a38",
+      "size": "1 kg"
+    },
+    "خيار بلدي 1 كغ": {
+      "key": "legacy-027",
+      "label": "CUCUMBER",
+      "style": "cucumber",
+      "color": "598b45",
+      "size": "1 kg"
+    },
+    "بطاطا 2 كغ": {
+      "key": "legacy-028",
+      "label": "POTATOES",
+      "style": "potato",
+      "color": "b99661",
+      "size": "2 kg"
+    },
+    "جزر طازج 1 كغ": {
+      "key": "legacy-029",
+      "label": "CARROTS",
+      "style": "carrot",
+      "color": "e0903d",
+      "size": "1 kg"
+    },
+    "خس روماني": {
+      "key": "legacy-030",
+      "label": "ROMAINE LETTUCE",
+      "style": "lettuce",
+      "color": "74a15b",
+      "size": ""
+    },
+    "بصل يابس 1 كغ": {
+      "key": "legacy-031",
+      "label": "ONIONS",
+      "style": "onion",
+      "color": "c09b67",
+      "size": "1 kg"
+    },
+    "تفاح أحمر 1 كغ": {
+      "key": "legacy-032",
+      "label": "RED APPLES",
+      "style": "apple",
+      "color": "c64c45",
+      "size": "1 kg"
+    },
+    "موز مستورد 1 كغ": {
+      "key": "legacy-033",
+      "label": "BANANAS",
+      "style": "banana",
+      "color": "e4bb45",
+      "size": "1 kg"
+    },
+    "برتقال عصير 1 كغ": {
+      "key": "legacy-034",
+      "label": "ORANGES",
+      "style": "orange",
+      "color": "e88d34",
+      "size": "1 kg"
+    },
+    "عنب أخضر 1 كغ": {
+      "key": "legacy-035",
+      "label": "GREEN GRAPES",
+      "style": "grapes",
+      "color": "91a653",
+      "size": "1 kg"
+    },
+    "فراولة 500غ": {
+      "key": "legacy-036",
+      "label": "STRAWBERRIES",
+      "style": "strawberry",
+      "color": "d94e58",
+      "size": "500g"
+    },
+    "حليب قليل الدسم 1 لتر": {
+      "key": "legacy-037",
+      "label": "LOW FAT MILK",
+      "style": "carton",
+      "color": "74abc5",
+      "size": "1 L"
+    },
+    "لبن رائب 1 لتر": {
+      "key": "legacy-038",
+      "label": "CULTURED MILK",
+      "style": "carton",
+      "color": "6da5a4",
+      "size": "1 L"
+    },
+    "جبنة موزاريلا 200غ": {
+      "key": "legacy-039",
+      "label": "MOZZARELLA",
+      "style": "tray",
+      "color": "75a294",
+      "size": "200g"
+    },
+    "جبنة شيدر شرائح 180غ": {
+      "key": "legacy-040",
+      "label": "CHEDDAR SLICES",
+      "style": "tray",
+      "color": "d1a34d",
+      "size": "180g"
+    },
+    "قشطة طبخ 250مل": {
+      "key": "legacy-041",
+      "label": "COOKING CREAM",
+      "style": "carton",
+      "color": "d1b286",
+      "size": "250ml"
+    },
+    "مسحوق غسيل ملابس 3 كغ": {
+      "key": "legacy-042",
+      "label": "LAUNDRY POWDER",
+      "style": "bag",
+      "color": "6d8bc4",
+      "size": "3 kg"
+    },
+    "مطهر متعدد الاستخدام 1 لتر": {
+      "key": "legacy-043",
+      "label": "MULTI SURFACE CLEANER",
+      "style": "bottle",
+      "color": "63a394",
+      "size": "1 L"
+    },
+    "مناديل مبللة مطهرة 80 قطعة": {
+      "key": "legacy-044",
+      "label": "DISINFECTANT WIPES",
+      "style": "pouch",
+      "color": "70aac3",
+      "size": "80 pcs"
+    },
+    "صابون يدين رغوي 500مل": {
+      "key": "legacy-045",
+      "label": "FOAM HAND SOAP",
+      "style": "bottle",
+      "color": "c38ba3",
+      "size": "500ml"
+    },
+    "فوط تنظيف ميكروفايبر": {
+      "key": "legacy-046",
+      "label": "MICROFIBRE CLOTHS",
+      "style": "pouch",
+      "color": "70a59e",
+      "size": ""
+    },
+    "ورق ألمنيوم 30 متر": {
+      "key": "legacy-047",
+      "label": "ALUMINIUM FOIL",
+      "style": "box",
+      "color": "7f95a6",
+      "size": "30 m"
+    },
+    "أكواب ورقية 50 حبة": {
+      "key": "legacy-048",
+      "label": "PAPER CUPS",
+      "style": "roll",
+      "color": "baab94",
+      "size": "50 pcs"
+    },
+    "أطباق بلاستيك 25 حبة": {
+      "key": "legacy-049",
+      "label": "PLASTIC PLATES",
+      "style": "tray",
+      "color": "94a6c0",
+      "size": "25 pcs"
+    },
+    "إسفنج مطبخ 6 قطع": {
+      "key": "legacy-050",
+      "label": "KITCHEN SPONGES",
+      "style": "tray",
+      "color": "d8b54b",
+      "size": ""
+    },
+    "قماش مائدة للاستعمال مرة": {
+      "key": "legacy-051",
+      "label": "TABLE COVER",
+      "style": "pouch",
+      "color": "9b92c1",
+      "size": ""
+    },
+    "فاصولياء حمراء 400غ": {
+      "key": "legacy-052",
+      "label": "KIDNEY BEANS",
+      "style": "can",
+      "color": "a14a4b",
+      "size": "400g"
+    },
+    "عدس معلب 400غ": {
+      "key": "legacy-053",
+      "label": "LENTILS",
+      "style": "can",
+      "color": "ad8059",
+      "size": "400g"
+    },
+    "بازلاء مع جزر 340غ": {
+      "key": "legacy-054",
+      "label": "PEAS AND CARROTS",
+      "style": "can",
+      "color": "79a04f",
+      "size": "340g"
+    },
+    "ذرة معلبة 340غ": {
+      "key": "legacy-055",
+      "label": "CANNED CORN",
+      "style": "can",
+      "color": "e4b83d",
+      "size": "340g"
+    },
+    "صلصة بيتزا 400غ": {
+      "key": "legacy-056",
+      "label": "PIZZA SAUCE",
+      "style": "jar",
+      "color": "c85b41",
+      "size": "400g"
+    },
+    "منظف حمام 900مل": {
+      "key": "legacy-057",
+      "label": "BATHROOM CLEANER",
+      "style": "bottle",
+      "color": "74a6b9",
+      "size": "900ml"
+    },
+    "سائل تعقيم أسطح 750مل": {
+      "key": "legacy-058",
+      "label": "SURFACE SANITIZER",
+      "style": "spray",
+      "color": "68a99d",
+      "size": "750ml"
+    },
+    "فوط مطبخ رول مزدوج": {
+      "key": "legacy-059",
+      "label": "KITCHEN PAPER",
+      "style": "roll",
+      "color": "83a7b9",
+      "size": ""
+    },
+    "أكياس طعام صغيرة 100 حبة": {
+      "key": "legacy-060",
+      "label": "FOOD BAGS",
+      "style": "box",
+      "color": "91b0cb",
+      "size": "100 pcs"
+    },
+    "معطر جو 300مل": {
+      "key": "legacy-061",
+      "label": "AIR FRESHENER",
+      "style": "spray",
+      "color": "b29ac9",
+      "size": "300ml"
+    },
+    "حليب خالي الدسم 1 لتر": {
+      "key": "legacy-062",
+      "label": "SKIM MILK",
+      "style": "carton",
+      "color": "79b4c2",
+      "size": "1 L"
+    },
+    "لبن يوناني 170غ": {
+      "key": "legacy-063",
+      "label": "GREEK YOGURT",
+      "style": "tub",
+      "color": "7393bd",
+      "size": "170g"
+    },
+    "جبنة قشقوان 300غ": {
+      "key": "legacy-064",
+      "label": "KASHKAVAL CHEESE",
+      "style": "tray",
+      "color": "d7b34f",
+      "size": "300g"
+    },
+    "لبنة قليلة الدسم 400غ": {
+      "key": "legacy-065",
+      "label": "LIGHT LABNEH",
+      "style": "tub",
+      "color": "87b0a2",
+      "size": "400g"
+    },
+    "حليب شوكولاتة 250مل": {
+      "key": "legacy-066",
+      "label": "CHOCOLATE MILK",
+      "style": "carton",
+      "color": "9c6c4c",
+      "size": "250ml"
+    },
+    "بسكويت دايجستف 250غ": {
+      "key": "legacy-067",
+      "label": "DIGESTIVE BISCUITS",
+      "style": "box",
+      "color": "b98b54",
+      "size": "250g"
+    },
+    "لوح شوكولاتة بالحليب 90غ": {
+      "key": "legacy-068",
+      "label": "MILK CHOCOLATE",
+      "style": "bar",
+      "color": "a3714f",
+      "size": "90g"
+    },
+    "مياه معدنية 1.5 لتر": {
+      "key": "legacy-069",
+      "label": "MINERAL WATER",
+      "style": "bottle",
+      "color": "78b3d0",
+      "size": "1.5 L"
+    },
+    "رز قصير الحبة 1 كغ": {
+      "key": "legacy-070",
+      "label": "SHORT GRAIN RICE",
+      "style": "bag",
+      "color": "d2b27c",
+      "size": "1 kg"
+    },
+    "برغل ناعم 1 كغ": {
+      "key": "legacy-071",
+      "label": "FINE BULGUR",
+      "style": "bag",
+      "color": "d1a05d",
+      "size": "1 kg"
+    },
+    "عدس أحمر 1 كغ": {
+      "key": "legacy-072",
+      "label": "RED LENTILS",
+      "style": "bag",
+      "color": "d5874d",
+      "size": "1 kg"
+    },
+    "سكر أبيض 1 كغ": {
+      "key": "legacy-073",
+      "label": "WHITE SUGAR",
+      "style": "bag",
+      "color": "81b4d0",
+      "size": "1 kg"
+    },
+    "زيت دوار الشمس 1.8 لتر": {
+      "key": "legacy-074",
+      "label": "SUNFLOWER OIL",
+      "style": "bottle",
+      "color": "dfb641",
+      "size": "1.8 L"
+    },
+    "معجون طماطم 660 غ": {
+      "key": "legacy-075",
+      "label": "TOMATO PASTE",
+      "style": "jar",
+      "color": "c94f3a",
+      "size": "660 g"
+    },
+    "لبنة بلدية 500 غ": {
+      "key": "legacy-076",
+      "label": "COUNTRY LABNEH",
+      "style": "tub",
+      "color": "76a18e",
+      "size": "500 g"
+    },
+    "جبنة شلل 500 غ": {
+      "key": "legacy-077",
+      "label": "STRING CHEESE",
+      "style": "tray",
+      "color": "d9b56d",
+      "size": "500 g"
+    },
+    "جبنة قشقوان 300 غ": {
+      "key": "legacy-078",
+      "label": "KASHKAVAL CHEESE",
+      "style": "tray",
+      "color": "d8b552",
+      "size": "300 g"
+    },
+    "متة 500 غ": {
+      "key": "legacy-079",
+      "label": "YERBA MATE",
+      "style": "bag",
+      "color": "698a4a",
+      "size": "500 g"
+    },
+    "شاي سيلاني 400 غ": {
+      "key": "legacy-080",
+      "label": "CEYLON TEA",
+      "style": "box",
+      "color": "41845c",
+      "size": "400 g"
+    },
+    "عصير تمر هندي 1 لتر": {
+      "key": "legacy-081",
+      "label": "TAMARIND JUICE",
+      "style": "carton",
+      "color": "a5754e",
+      "size": "1 L"
+    },
+    "شراب توت الشام 750 مل": {
+      "key": "legacy-082",
+      "label": "MULBERRY SYRUP",
+      "style": "bottle",
+      "color": "97567d",
+      "size": "750 ml"
+    },
+    "بسكويت شاي سادة 12 قطعة": {
+      "key": "legacy-083",
+      "label": "PLAIN TEA BISCUITS",
+      "style": "box",
+      "color": "cba66c",
+      "size": "12 pcs"
+    },
+    "شوكولا محشية بندق 90 غ": {
+      "key": "legacy-084",
+      "label": "HAZELNUT CHOCOLATE",
+      "style": "bar",
+      "color": "9e6747",
+      "size": "90 g"
+    },
+    "بزر دوار الشمس محمص 250 غ": {
+      "key": "legacy-085",
+      "label": "SUNFLOWER SEEDS",
+      "style": "bag",
+      "color": "a99865",
+      "size": "250 g"
+    },
+    "راحة حلقوم بالفستق 400 غ": {
+      "key": "legacy-086",
+      "label": "PISTACHIO DELIGHT",
+      "style": "box",
+      "color": "90a765",
+      "size": "400 g"
+    },
+    "رقائق بطاطا حارة 160 غ": {
+      "key": "legacy-087",
+      "label": "SPICY CHIPS",
+      "style": "bag",
+      "color": "d16a42",
+      "size": "160 g"
+    },
+    "سائل جلي ليمون 1 لتر": {
+      "key": "legacy-088",
+      "label": "LEMON DISH LIQUID",
+      "style": "bottle",
+      "color": "e1bd48",
+      "size": "1 L"
+    },
+    "مسحوق غسيل 2.5 كغ": {
+      "key": "legacy-089",
+      "label": "LAUNDRY POWDER",
+      "style": "bag",
+      "color": "6c95c2",
+      "size": "2.5 kg"
+    },
+    "أكياس قمامة متوسطة 50 كيس": {
+      "key": "legacy-090",
+      "label": "MEDIUM BIN BAGS",
+      "style": "roll",
+      "color": "82949e",
+      "size": "50 bags"
+    },
+    "مناديل ورقية 10 عبوات": {
+      "key": "legacy-091",
+      "label": "FACIAL TISSUES",
+      "style": "box",
+      "color": "97acd1",
+      "size": "10 packs"
+    }
+  }
+}

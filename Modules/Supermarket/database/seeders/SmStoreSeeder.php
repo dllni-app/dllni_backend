@@ -12,6 +12,7 @@ final class SmStoreSeeder extends Seeder
 {
     public function run(): void
     {
+        SmDemoCatalog::load();
         $owner = User::firstOrCreate(
             ['email' => 'supermarket.owner@dllni.sy'],
             [
@@ -83,8 +84,8 @@ final class SmStoreSeeder extends Seeder
                     'longitude' => $data['longitude'],
                     'phone' => $data['phone'],
                     'email' => $data['email'],
-                    'cover' => $data['cover'] ?? null,
-                    'logo' => $data['logo'] ?? null,
+                    'cover' => SmDemoCatalog::storeImage($data['slug'], 'cover'),
+                    'logo' => SmDemoCatalog::storeImage($data['slug'], 'logo'),
                     'average_rating' => fake()->randomFloat(2, 4.0, 4.9),
                     'total_reviews' => fake()->numberBetween(30, 400),
                     'trust_score' => fake()->numberBetween(80, 100),

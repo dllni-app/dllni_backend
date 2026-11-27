@@ -64,6 +64,16 @@ final class RestaurantProductResource extends Resource
             Section::make('تصنيف المنتج للعرض في دلّني')
                 ->description('تتم مراجعة التصنيف يدوياً. الصلصات والمكونات الإضافية لا تظهر كوجبات مستقلة.')
                 ->schema([
+                    Select::make('item_type')->label('شكل التقديم')
+                        ->options([
+                            'sandwich' => 'ساندويش', 'burger' => 'برغر', 'pizza' => 'بيتزا',
+                            'meal' => 'وجبة', 'combo' => 'كومبو', 'family_meal' => 'عائلية',
+                            'dish' => 'طبق', 'breakfast' => 'فطور', 'appetizer' => 'مقبلات',
+                            'side' => 'جانبي', 'salad' => 'سلطة', 'dessert' => 'حلوى',
+                            'drink' => 'مشروب', 'other' => 'أخرى',
+                        ])->searchable()->native(false)->required(),
+                    Select::make('included_components')->label('المكونات المشمولة بالسعر')
+                        ->multiple()->options(['side' => 'طبق جانبي', 'beverage' => 'مشروب', 'dessert' => 'حلوى', 'sauce' => 'صوص'])->native(false),
                     \Filament\Forms\Components\TextInput::make('servings')->label('عدد الأشخاص الذين تكفيهم الوجبة')->integer()->minValue(1)->maxValue(50),
                     \Filament\Forms\Components\TagsInput::make('ingredient_exclusions')
                         ->label('مكونات أكد المطعم عدم وجودها في الوصفة')
@@ -104,6 +114,7 @@ final class RestaurantProductResource extends Resource
                 TextColumn::make('restaurant.name')->label('المطعم')->searchable()->sortable(),
                 TextColumn::make('category.name')->label('تصنيف المطعم')->placeholder('—')->toggleable(),
                 TextColumn::make('product_kind')->label('نوع المنتج')->placeholder('غير مصنف')->toggleable(),
+                TextColumn::make('item_type')->label('شكل التقديم')->placeholder('غير مصنف')->toggleable(),
                 TextColumn::make('catalog_role')->label('طبيعة المنتج')->badge(),
                 TextColumn::make('classification_status')->label('مراجعة التصنيف')->badge(),
                 TextColumn::make('foodCategory.name_ar')->label('تصنيف الطعام العام')->placeholder('—')->toggleable(),
@@ -141,6 +152,8 @@ final class RestaurantProductResource extends Resource
                 TextEntry::make('restaurant.name')->label('المطعم'),
                 TextEntry::make('category.name')->label('التصنيف')->placeholder('—'),
                 TextEntry::make('product_kind')->label('نوع المنتج')->placeholder('غير مصنف'),
+                TextEntry::make('item_type')->label('شكل التقديم')->placeholder('غير مصنف'),
+                TextEntry::make('servings')->label('عدد الحصص')->placeholder('غير محدد'),
                 TextEntry::make('catalog_role')->label('طريقة البيع')->placeholder('—'),
                 TextEntry::make('classification_status')->label('حالة المراجعة')->placeholder('—'),
                 TextEntry::make('foodCategory.name_ar')->label('تصنيف الطعام العام')->placeholder('—'),

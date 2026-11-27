@@ -21,18 +21,27 @@ final class RestaurantV2SmartIntent
             'burger'=>['برغر','برجر','بركر','burger'],
             'pizza'=>['بيتزا','pizza'],
             'grill'=>['مشاوي','كباب','شيش طاووق','grill'],
-            'fried-chicken'=>['بروستد','بروست','فروج','fried chicken'],
-            'breakfast'=>['فطور','فلافل','فول','breakfast'],
+            'fried-chicken'=>['بروستد','بروست','دجاج مقرمش','fried chicken'],
+            'falafel'=>['فلافل','falafel'],
+            'potato'=>['بطاطا','بطاطس','fries'],
+            'salads'=>['سلطه','سلطات','salad'],
+            'pastries'=>['معجنات','فطائر','pastries'],
+            'breakfast'=>['فطور','فول','breakfast'],
             'pasta'=>['باستا','معكرونه','مكرونه','pasta'],
             'asian'=>['سوشي','اسيوي','sushi'],
             'desserts'=>['حلويات','كنافه','dessert'],
             'drinks'=>['مشروبات','عصير','drink'],
-            'sides'=>['مقبلات','سلطات','salad'],
+            'sides'=>['مقبلات','sides'],
         ];
+        $families = FoodDiscoveryCategory::query()->where('is_active', true)->orderBy('sort_order')->get();
+        foreach ($families as $family) {
+            $aliases[$family->slug] = array_unique([...($aliases[$family->slug] ?? []), ...($family->aliases ?? []), $family->name_ar, $family->name_en ?? '', $family->slug]);
+        }
         $slug = null;
         foreach ($aliases as $key => $words) {
             foreach ($words as $word) {
-                if (str_contains($normalized, $word)) {
+                $word = RestaurantFoodSearchNormalizer::normalize($word);
+                if ($word !== '' && str_contains($normalized, $word)) {
                     $slug = $key;
                     break 2;
                 }
@@ -48,7 +57,7 @@ final class RestaurantV2SmartIntent
         if ($budget !== null && $budget >= 0) {
             $filters['maxPrice'] = min($filters['maxPrice'] ?? $budget, $budget);
         }
-        $category = $slug === null ? null : FoodDiscoveryCategory::query()->where('slug', $slug)->where('is_active', true)->first();
+        $category = $slug === null ? null : $families->firstWhere('slug', $slug);
         if ($category !== null) {
             if (isset($filters['foodCategoryId']) && (int) $filters['foodCategoryId'] !== (int) $category->id) {
                 $filters['candidateIds'] = [];
@@ -56,6 +65,18 @@ final class RestaurantV2SmartIntent
             } else {
                 $filters['foodCategoryId'] = $category->id;
             }
+        }
+        // Explicit presentation intent is an intersection, never a replacement of the user's chips.
+        $requestedTypes = match (true) {
+            (bool) preg_match('/عايلي|family meal/u', $normalized) => ['family_meal'],
+            (bool) preg_match('/وجبه|وجبات|كومبو|\bcombo\b|\bmeal\b/u', $normalized) => ['meal', 'combo', 'dish'],
+            (bool) preg_match('/سندويش|ساندويش|سندويتش|sandwich/u', $normalized) => ['sandwich', 'burger'],
+            default => [],
+        };
+        if ($requestedTypes !== []) {
+            $explicit = $filters['itemTypes'] ?? [];
+            $filters['itemTypes'] = $explicit === [] ? $requestedTypes : array_values(array_intersect($explicit, $requestedTypes));
+            if ($filters['itemTypes'] === []) $filters['candidateIds'] = [];
         }
         $protein = null;
         $positiveText = preg_replace('/(?:بدون|من دون|بلا|ما في|مو فيها|مش فيها|without)\s+\S+/u', '', $normalized) ?? $normalized;

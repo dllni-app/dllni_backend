@@ -36,7 +36,9 @@ final class RestaurantV2ProductResource extends JsonResource
             'categoryId' => $product->category_id !== null ? (int) $product->category_id : null,
             'category' => $category !== null ? ['id' => (int) $category->id, 'name' => $category->name] : null,
             'productKind' => $product->product_kind,
+            'itemType' => $product->item_type,
             'servings' => $product->servings,
+            'includedComponents' => $product->included_components,
             'isIndependentlyOrderable' => $product->isIndependentlyOrderable(),
             'foodCategory' => $foodCategory !== null ? [
                 'id' => (int) $foodCategory->id,
