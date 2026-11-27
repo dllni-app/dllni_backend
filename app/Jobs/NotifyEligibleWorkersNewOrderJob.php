@@ -44,7 +44,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
     public function handle(): void
     {
         $booking = CleaningBooking::find($this->cleaningBookingId);
-        if (! $booking) {
+        if (! $booking || $booking->contract_version === 'v3') {
             return;
         }
 

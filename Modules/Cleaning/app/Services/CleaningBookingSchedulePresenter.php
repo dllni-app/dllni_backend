@@ -360,7 +360,20 @@ final class CleaningBookingSchedulePresenter
             $canConfirmStartVerification = $admitted && $canConfirmStartVerification;
             $canConfirmCompletion = $admitted && $canConfirmCompletion;
         }
+        $managed = $isSupervisedV3;
+        $destination = null;
+        if ($isV3 && $admitted && $hasMyActiveAssignment && $myAssignment->started_travel_at !== null
+            && $myAssignment->arrived_at === null && ! $session->isTerminal()
+            && $session->booking->address_latitude !== null && $session->booking->address_longitude !== null) {
+            $destination = [
+                'latitude' => (float) $session->booking->address_latitude,
+                'longitude' => (float) $session->booking->address_longitude,
+                'address' => data_get($session->booking->property_details, 'address'),
+            ];
+        }
         $payload = [
+            'v3SupervisorManaged' => $managed,
+            'v3Destination' => $destination,
             'id' => (int) $session->id,
             'sessionId' => (int) $session->id,
             'sequence' => (int) $session->sequence,
@@ -393,9 +406,9 @@ final class CleaningBookingSchedulePresenter
             'canRequestOpenTimeEnd' => $canRequestOpenTimeEnd,
             'canDecideOpenTimeEnd' => $canDecideOpenTimeEnd,
             'openTime' => $isCustomerView ? $openTime : null,
-            'canCancel' => $canCancel,
+            'canCancel' => $canCancel && ! $isV3,
             'canSkip' => $canSkip,
-            'canReschedule' => $isCustomerView && $canReschedule,
+            'canReschedule' => $isCustomerView && $canReschedule && ! $isV3,
             'coverageStatus' => $isV3 && $session->isTerminal() ? 'closed' : ($session->coverage_status?->value ?? (string) $session->coverage_status),
             'coverageStatusLabel' => $session->coverage_status?->label(),
             'requiredWorkers' => $session->requiredWorkerCount(),

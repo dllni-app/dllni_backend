@@ -15,6 +15,8 @@ return [
     'treasury_provider' => env('CLEANING_V3_TREASURY_PROVIDER'),
     'treasury_public_key' => env('CLEANING_V3_TREASURY_PUBLIC_KEY'),
     'cash_settlement_enabled' => (bool) env('CLEANING_V3_CASH_SETTLEMENT_ENABLED', false),
+    // Enable only after compatible worker/supervisor apps and device QA.
+    'operational_admission_enabled' => (bool) env('CLEANING_V3_OPERATIONAL_ADMISSION_ENABLED', false),
     'renderer_schema_version' => 3,
     'min_renderer_revision' => 1,
     // Independent rollback switches for NEW V3 commercial work only.

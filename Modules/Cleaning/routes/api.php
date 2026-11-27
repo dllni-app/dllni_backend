@@ -126,6 +126,15 @@ Route::prefix('v1')->group(function () {
     Route::apiResource('cleaning-services.pricing', ServicePricingController::class)->only(['index', 'show'])->scoped();
     Route::apiResource('cleaning-billing-policies', CleaningBillingPolicyController::class)->only(['index', 'show']);
     Route::get('cleaning/suite-config', CleaningSuiteConfigController::class);
+    Route::middleware('auth:sanctum')->prefix('cleaning/booking-templates')->group(function (): void {
+        $controller = \Modules\Cleaning\Http\Controllers\API\CleaningBookingTemplateController::class;
+        Route::get('/', [$controller, 'index']);
+        Route::post('/', [$controller, 'store']);
+        Route::get('{id}', [$controller, 'show'])->whereNumber('id');
+        Route::patch('{id}', [$controller, 'update'])->whereNumber('id');
+        Route::delete('{id}', [$controller, 'destroy'])->whereNumber('id');
+    });
+
     // Read-only versioned V3 catalog. No V3 quote/write routes; held until approved.
     Route::get('cleaning/catalog/v3', CleaningV3CatalogController::class)->middleware('throttle:60,1');
 
@@ -137,6 +146,7 @@ Route::prefix('v1')->group(function () {
 
         // Phase 3: customer-authenticated, no-cost draft planning only. Real
         // V3 quote and booking writes stay explicitly fail-closed.
+        Route::get('cleaning/v3/worker/visits', \Modules\Cleaning\Http\Controllers\API\CleaningV3WorkerVisitsController::class)->middleware('throttle:60,1');
         Route::get('cleaning/v3/customer-preferences', \Modules\Cleaning\Http\Controllers\API\CleaningV3CustomerPreferencesController::class)->middleware('throttle:30,1');
         Route::post('cleaning/v3/visit-plan/preview', CleaningV3VisitPlanPreviewController::class)->middleware('throttle:30,1');
         Route::post('cleaning/v3/recurrence/preview', CleaningV3RecurringPreviewController::class)->middleware('throttle:20,1');
@@ -150,6 +160,10 @@ Route::prefix('v1')->group(function () {
         // Exact-visit, customer-only V3 dispatch progress; never resets the search deadline.
         Route::get('cleaning-bookings/{booking}/sessions/{session}/dispatch', CleaningV3VisitDispatchController::class)
             ->whereNumber('booking')->whereNumber('session')->middleware('throttle:60,1');
+        Route::get('cleaning-bookings/{booking}/sessions/{session}/supervisor-execution/{action}', \Modules\Cleaning\Http\Controllers\API\CleaningV3SupervisorVisitExecutionController::class)
+            ->whereNumber('booking')->whereNumber('session')->where('action', 'state')->middleware('throttle:60,1');
+        Route::post('cleaning-bookings/{booking}/sessions/{session}/supervisor-execution/{action}', \Modules\Cleaning\Http\Controllers\API\CleaningV3SupervisorVisitExecutionController::class)
+            ->whereNumber('booking')->whereNumber('session')->where('action', 'request|customer-code|verify|start|finish')->middleware('throttle:30,1');
         // Server-owned V3 clock; writes use locked, idempotent visit transitions.
         Route::get('cleaning-bookings/{booking}/sessions/{session}/work-clock', CleaningV3WorkClockController::class)
             ->whereNumber('booking')->whereNumber('session')->middleware('throttle:60,1');

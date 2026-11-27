@@ -39,6 +39,7 @@ final class CleaningV3SupervisedVisitService
                 if ($this->isPending($current)) {
                     return ['status' => 'pending', 'expiresAt' => CarbonImmutable::parse($current->expires_at)->toIso8601String()];
                 }
+                abort_if($current->attempts >= self::MAX_ATTEMPTS && now()->lt($current->expires_at), 409, 'V3_VISIT_CODE_ATTEMPTS_EXHAUSTED');
             }
 
             $code = (string) random_int(100000, 999999);
@@ -115,16 +116,16 @@ final class CleaningV3SupervisedVisitService
                 && now()->lt($current->expires_at), 409, 'V3_VISIT_VERIFICATION_REQUIRED');
             foreach ($crew as $assignment) {
                 $assignment->forceFill(['start_approved_at' => $current->verified_at])->save();
-                $this->lifecycle->startWork($booking, $visit, $assignment->worker);
+                $this->lifecycle->startWork($booking, $visit, $assignment->worker, supervisorVerified: true);
             }
 
             return $this->status($visit->refresh());
         }, 3);
     }
 
-    public function requestHandover(User $actor, int $bookingId, int $visitId): array
+    public function requestHandover(User $actor, int $bookingId, int $visitId, ?array $report = null): array
     {
-        return DB::transaction(function () use ($actor, $bookingId, $visitId): array {
+        return DB::transaction(function () use ($actor, $bookingId, $visitId, $report): array {
             [$booking, $visit] = $this->supervised($actor, $bookingId, $visitId);
             if ($visit->status === VisitStatus::AwaitingCustomerCompletion) {
                 return $this->status($visit);
@@ -135,8 +136,9 @@ final class CleaningV3SupervisedVisitService
                 && $crew->every(fn ($assignment) => $assignment->work_started_at !== null && $assignment->worker !== null),
                 409, 'V3_VISIT_CREW_NOT_READY');
             foreach ($crew as $assignment) {
-                $this->lifecycle->requestCompletion($booking, $visit, $assignment->worker);
+                $this->lifecycle->requestCompletion($booking, $visit, $assignment->worker, supervisorVerified: true);
             }
+            CleaningCustomerIncidentService::record($booking, $visitId, (int) $actor->id, 'supervisor', $report);
 
             return $this->status($visit->refresh());
         }, 3);

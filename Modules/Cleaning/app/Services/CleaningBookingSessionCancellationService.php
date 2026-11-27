@@ -381,6 +381,9 @@ final class CleaningBookingSessionCancellationService
         CleaningBooking $booking,
         CleaningBookingSession $session,
     ): CleaningBookingSession {
+        if ((string) $booking->contract_version === 'v3') {
+            throw new InvalidArgumentException('V3_VISIT_CANCELLATION_REQUIRES_RECONCILIATION');
+        }
         $locked = CleaningBookingSession::query()
             ->whereKey($session->id)
             ->where('cleaning_booking_id', $booking->id)

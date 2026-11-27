@@ -15,6 +15,12 @@ final class CleaningV3OperationalAdmissionReview
     public function review(int $bookingId): array
     {
         abort_unless(CleaningV3CashSettlementService::authorized(), 403);
+        return $this->inspect($bookingId);
+    }
+
+    /** Internal preflight; callers cannot use the public review to bypass authorization. */
+    public function inspect(int $bookingId): array
+    {
         return DB::transaction(function () use ($bookingId) {
             $booking = CleaningBooking::query()->whereKey($bookingId)->lockForUpdate()->firstOrFail();
             abort_unless($booking->contract_version === 'v3', 404);
@@ -28,7 +34,7 @@ final class CleaningV3OperationalAdmissionReview
             $valid = false;
             if ($catalog !== null) {
                 try {
-                    [, $snapshot, $sequence] = app(CleaningV3AcceptedQuoteResolver::class)
+                    [$quote, $snapshot, $sequence] = app(CleaningV3AcceptedQuoteResolver::class)
                         ->load($booking, 'INVALID_QUOTE');
                     $rows = collect($snapshot['commercialReview']['visits'] ?? [])->keyBy('occurrenceKey');
                     if ($sequence !== null) {
@@ -68,10 +74,31 @@ final class CleaningV3OperationalAdmissionReview
                     $valid = ($snapshot['paymentMethod'] ?? null) === 'cash_on_delivery'
                         && ($snapshot['paymentStatus'] ?? null) === 'unpaid' && $rows->count() === $visits->count()
                         && $visits->isNotEmpty() && bccomp($expectedTotal, (string) $booking->getRawOriginal('total_price'), 2) === 0;
+                    $draft = json_decode((string) $quote->v3_confirmed_draft, true);
+                    $prefs = app(CleaningV3CustomerPreferences::class)->resolve((int) $booking->customer_id, $draft['preferences'] ?? null, true);
+                    $valid = $valid && (int) data_get($booking->property_details, 'v3_address_id') === (int) $prefs['address']['addressId']
+                        && abs((float) $booking->address_latitude - (float) $prefs['address']['latitude']) < 0.000001
+                        && abs((float) $booking->address_longitude - (float) $prefs['address']['longitude']) < 0.000001
+                        && ($booking->gender_preference?->value ?? 'any') === $prefs['genderPreference']
+                        && data_get($booking->property_details, 'v3_excluded_worker_ids') === $prefs['excludedWorkerIds'];
+                    $confirmed = collect($draft['appointments'] ?? [])->flatMap(fn ($a) => collect($a['visits'] ?? [])
+                        ->map(fn ($v) => [...$v, 'appointmentKey' => $a['appointmentKey']]))->keyBy('occurrenceKey');
+                    if ($sequence !== null) {
+                        $confirmed = $confirmed->only([$visits->first()->occurrence_key]);
+                    }
+                    $valid = $valid && $confirmed->count() === $visits->count();
                     foreach ($visits as $visit) {
+                        $plan = $confirmed->get($visit->occurrence_key);
+                        $valid = $valid && $plan !== null
+                            && $plan['appointmentKey'] === $visit->appointment_key
+                            && $plan['scheduledDate'] === $visit->scheduled_date?->toDateString()
+                            && $plan['scheduledTime'] === mb_substr((string) $visit->scheduled_time, 0, 5)
+                            && $plan['durationMinutes'] === (int) round($visit->duration_hours * 60)
+                            && $plan['requiredWorkers'] === $visit->requiredWorkerCount();
                         $row = $rows->get($visit->occurrence_key);
                         $valid = $valid && $row !== null && $row['appointmentKey'] === $visit->appointment_key
                             && $row['pricedWorkers'] === $visit->requiredWorkerCount()
+                            && (int) round((float) $visit->duration_hours * 60) === ($snapshot['settlementBasis']['visits'][$visit->occurrence_key]['plannedMinutes'] ?? null)
                             && $snapshot['pricingRevision'] === (int) $visit->price_revision
                             && bccomp($row['totalAmountSyp'], (string) $visit->getRawOriginal('total_price'), 2) === 0;
                     }
@@ -81,6 +108,9 @@ final class CleaningV3OperationalAdmissionReview
             }
             if (! $valid) {
                 $issues[] = 'SIGNED_PRICE_OR_VISIT_MISMATCH';
+            }
+            if ($booking->workerAssignments()->exists() || $booking->address_latitude === null || $booking->address_longitude === null) {
+                $issues[] = 'VISIT_SCHEDULE_OR_ROSTER_REVIEW_REQUIRED';
             }
             if ($visits->isEmpty() || $visits->contains(fn ($v) => $v->status->value !== 'scheduled'
                 || $v->startsAt() === null || ! $v->startsAt()->isFuture() || $v->workerAssignments()->exists()
@@ -137,6 +167,9 @@ final class CleaningV3OperationalAdmissionReview
                 if (in_array('mysql_concurrency_and_mobile_e2e_evidence', $release['blockerCodes'] ?? [], true)) {
                     $issues[] = 'SIGNED_APK_ROLLOUT_AND_VISIT_EXECUTION_QA_REQUIRED';
                 }
+            }
+            if (! $isQa && ! config('cleaning_v3_catalog.cash_settlement_enabled', false)) {
+                $issues[] = 'V3_CASH_SETTLEMENT_PAUSED';
             }
             return ['bookingId' => $bookingId, 'signedPriceVerified' => $valid,
                 'visitCount' => $visits->count(), 'fundingVerified' => $fundingVerified, 'paymentPolicyReady' => $paymentPolicyReady, 'fundingRequests' => $fundingRequests,

@@ -59,6 +59,12 @@ final class CleaningV3OperationalApprovalService
             }
 
             $now = CarbonImmutable::now('UTC');
+            foreach ($visits as $visit) {
+                if ($visit->endsAt() === null) {
+                    throw new DomainException('V3_VISIT_SCHEDULE_INVALID');
+                }
+                app(CleaningV3EquipmentResumeGuard::class)->extend($visit, $visit->endsAt()->utc());
+            }
             $visitIds = $visits->map(fn ($visit) => (int) $visit->id)->all();
             DB::table(self::TABLE)->insert([
                 'booking_id' => $bookingId, 'quote_id' => $quoteId,
@@ -68,6 +74,7 @@ final class CleaningV3OperationalApprovalService
 
             $details = $booking->property_details;
             $details['v3_admission_hold'] = false;
+            $details['v3_operational_admitted_at'] = $now->toIso8601String();
             // Avoid legacy booking-level pricing, commission and notifications.
             $booking->forceFill(['property_details' => $details, 'search_started_at' => $now])->saveQuietly();
             foreach ($visits as $visit) {

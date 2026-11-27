@@ -946,7 +946,8 @@ final class ViewCleaningBooking extends ViewRecord
 
         return $user instanceof User
             && $assignments->canAssign($user, fromDashboard: true)
-            && CleaningBookingResource::canEdit($this->record)
+            && (CleaningBookingResource::canEdit($this->record)
+                || \Modules\Cleaning\Services\CleaningV3OperationalAdmissionService::admitted($this->record))
             && $assignments->isEligible($this->record)
             && ! $assignments->isExecutionLocked($this->record)
             && ! in_array($this->record->status, [CleaningBookingStatus::Completed, CleaningBookingStatus::Cancelled], true);

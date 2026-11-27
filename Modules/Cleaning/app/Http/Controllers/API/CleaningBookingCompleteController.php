@@ -31,30 +31,36 @@ final class CleaningBookingCompleteController
         abort_if($cleaning_booking->isSupervisedTeam(), 403, 'إنهاء العمل من صلاحيات المشرف.');
         $this->ensureWorkerCanActOnBooking($cleaning_booking);
 
-        $finishedServices = $request->finishedCleaningServices();
-        $finishedRooms = $request->finishedPropertyRooms();
+        $report = \Modules\Cleaning\Services\CleaningCustomerIncidentService::validate($request);
+        abort_if($report !== null && max(1, (int) $cleaning_booking->number_of_workers) > 1, 403, 'بلاغ الفريق من صلاحيات المشرف.');
 
-        try {
-            $booking = $this->shouldUseTeamCompletionFlow($cleaning_booking)
-                ? $this->completeTeamWorker($cleaning_booking, $request->completionMessage(), $finishedServices, $finishedRooms)
-                : $this->cleaningBookingService->complete(
-                    $cleaning_booking,
-                    $request->completionMessage(),
-                );
-        } catch (InvalidArgumentException $e) {
-            throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
-        }
+        return DB::transaction(function () use ($request, $cleaning_booking, $report) {
+            $finishedServices = $request->finishedCleaningServices();
+            $finishedRooms = $request->finishedPropertyRooms();
 
-        $booking = $this->loadBookingDetails($booking);
+            try {
+                $booking = $this->shouldUseTeamCompletionFlow($cleaning_booking)
+                    ? $this->completeTeamWorker($cleaning_booking, $request->completionMessage(), $finishedServices, $finishedRooms)
+                    : $this->cleaningBookingService->complete(
+                        $cleaning_booking,
+                        $request->completionMessage(),
+                    );
+            } catch (InvalidArgumentException $e) {
+                throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
+            }
 
-        if (! $this->shouldUseTeamCompletionFlow($booking) && $booking->status === CleaningBookingStatus::AwaitingCustomerCompletion) {
-            $booking->forceFill([
-                'worker_finished_cleaning_services' => $finishedServices,
-                'worker_finished_property_rooms' => $finishedRooms,
-            ])->save();
-        }
+            $booking = $this->loadBookingDetails($booking);
 
-        return CleaningBookingResource::make($this->loadBookingDetails($booking));
+            if (! $this->shouldUseTeamCompletionFlow($booking) && $booking->status === CleaningBookingStatus::AwaitingCustomerCompletion) {
+                $booking->forceFill([
+                    'worker_finished_cleaning_services' => $finishedServices,
+                    'worker_finished_property_rooms' => $finishedRooms,
+                ])->save();
+            }
+
+            \Modules\Cleaning\Services\CleaningCustomerIncidentService::record($booking, 0, (int) Auth::id(), 'worker', $report);
+            return CleaningBookingResource::make($this->loadBookingDetails($booking));
+        });
     }
 
     private function ensureWorkerCanActOnBooking(CleaningBooking $booking): void

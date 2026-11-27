@@ -36,7 +36,7 @@ final class SupervisedVisitController
 
     public function requestHandover(Request $request, int $booking, int $visit): JsonResponse
     {
-        return $this->response($this->visits->requestHandover($request->user(), $booking, $visit));
+        return $this->response($this->visits->requestHandover($request->user(), $booking, $visit, \Modules\Cleaning\Services\CleaningCustomerIncidentService::validate($request)));
     }
 
     private function response(array $data): JsonResponse

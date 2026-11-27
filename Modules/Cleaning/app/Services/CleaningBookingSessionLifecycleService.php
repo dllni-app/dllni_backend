@@ -50,13 +50,15 @@ final class CleaningBookingSessionLifecycleService
             $this->assertSessionNotTerminal($locked);
             $assignment = $this->activeAssignment($locked, $worker, true);
 
-            // Supervisor changes are forbidden after travel begins. Require
-            // an active supervisor first, while the parent booking is locked,
-            // so a supervised V3 visit cannot become stranded without custody.
-            if ($booking->contract_version === 'v3'
-                && $locked->supervision_mode === CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR
-                && app(CleaningSupervisorAssignmentService::class)->activeSupervisorId($booking) === null) {
-                throw new InvalidArgumentException('يجب تعيين المشرف قبل بدء التحرك إلى الزيارة.');
+            // Require a complete crew and active supervisor before travel, while the booking is locked.
+            if ($booking->contract_version === 'v3' && app(CleaningV3OperationalAdmissionPolicy::class)->approved($booking, $locked)) {
+                if ($locked->acceptedWorkerCount() < $locked->requiredWorkerCount()) {
+                    throw new InvalidArgumentException('V3_TEAM_NOT_READY');
+                }
+                if ($locked->supervision_mode === CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR
+                    && app(CleaningSupervisorAssignmentService::class)->activeSupervisorId($booking) === null) {
+                    throw new InvalidArgumentException('V3_SUPERVISOR_REQUIRED');
+                }
             }
 
             if ($assignment->started_travel_at === null) {
@@ -136,6 +138,10 @@ final class CleaningBookingSessionLifecycleService
                 throw new InvalidArgumentException('Session work has already been approved for this worker.');
             }
 
+            if (CleaningV3OperationalAdmissionService::admitted($booking)
+                && $locked->supervision_mode === CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR) {
+                throw new InvalidArgumentException('V3_SUPERVISOR_ACTION_REQUIRED');
+            }
             $generated = $this->uniqueSecurityCode($locked);
             $expiresAt = now()->addMinutes(self::SECURITY_CODE_TTL_MINUTES);
 
@@ -235,6 +241,10 @@ final class CleaningBookingSessionLifecycleService
                 && $locked->supervision_mode === CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR,
                 409, 'V3_SUPERVISOR_EXECUTION_REQUIRED');
             $this->assertSessionNotTerminal($locked);
+            if (CleaningV3OperationalAdmissionService::admitted($booking)
+                && $locked->supervision_mode === CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR) {
+                throw new InvalidArgumentException('V3_SUPERVISOR_ACTION_REQUIRED');
+            }
             $providedHash = $this->securityCodeHash($code);
 
             $record = DB::table('booking_security_codes')
@@ -382,8 +392,9 @@ final class CleaningBookingSessionLifecycleService
         CleaningBooking $booking,
         CleaningBookingSession $session,
         Worker $worker,
+        bool $supervisorVerified = false,
     ): CleaningBookingSession {
-        return DB::transaction(function () use ($booking, $session, $worker): CleaningBookingSession {
+        return DB::transaction(function () use ($booking, $session, $worker, $supervisorVerified): CleaningBookingSession {
             if ((string) ($booking->contract_version ?? '') === 'v3') {
                 // V3 clock commands lock parent before visit. Keep the same
                 // order in the approved work-start path to avoid deadlocks.
@@ -397,6 +408,16 @@ final class CleaningBookingSessionLifecycleService
             }
             $assignment = $this->activeAssignment($locked, $worker, true);
 
+            if (CleaningV3OperationalAdmissionService::admitted($booking)) {
+                if ($locked->supervision_mode === CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR && ! $supervisorVerified) {
+                    throw new InvalidArgumentException('V3_SUPERVISOR_ACTION_REQUIRED');
+                }
+                try {
+                    app(CleaningV3OperationalAdmissionService::class)->assertVisitPayable($booking, $locked);
+                } catch (\DomainException $e) {
+                    throw new InvalidArgumentException($e->getMessage());
+                }
+            }
             if ($assignment->arrived_at === null) {
                 throw new InvalidArgumentException('Worker must arrive before starting session work.');
             }
@@ -453,8 +474,9 @@ final class CleaningBookingSessionLifecycleService
         CleaningBookingSession $session,
         Worker $worker,
         ?string $message = null,
+        bool $supervisorVerified = false,
     ): CleaningBookingSession {
-        return DB::transaction(function () use ($booking, $session, $worker, $message): CleaningBookingSession {
+        return DB::transaction(function () use ($booking, $session, $worker, $message, $supervisorVerified): CleaningBookingSession {
             if ((string) ($booking->contract_version ?? '') === 'v3') {
                 CleaningBooking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
             }
@@ -462,6 +484,10 @@ final class CleaningBookingSessionLifecycleService
             $this->assertSessionNotTerminal($locked);
             $assignment = $this->activeAssignment($locked, $worker, true);
 
+            if (CleaningV3OperationalAdmissionService::admitted($booking)
+                && $locked->supervision_mode === CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR && ! $supervisorVerified) {
+                throw new InvalidArgumentException('V3_SUPERVISOR_ACTION_REQUIRED');
+            }
             if ($assignment->work_started_at === null) {
                 throw new InvalidArgumentException('Session work must start before requesting completion.');
             }
@@ -989,7 +1015,7 @@ final class CleaningBookingSessionLifecycleService
             // margin from accepted workers' fee allocations. A stale/incomplete
             // allocation must not be marked settled by the presence of 0.01.
             // Do not apply this rule to provisional or Open-Time pricing.
-            if ($locked->session_type === 'event_day' && $locked->is_pricing_final) {
+            if (! $isV3 && $locked->session_type === 'event_day' && $locked->is_pricing_final) {
                 $sessionFeeCents = (int) round(max(0.0, (float) $locked->admin_margin_amount) * 100);
                 $workerFeeCents = $assignments->sum(
                     static fn (CleaningBookingSessionWorkerAssignment $assignment): int => (int) round(max(0.0, (float) $assignment->admin_margin_amount) * 100),
