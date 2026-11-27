@@ -52,29 +52,37 @@ final class CleaningBookingController
 
     public function index(CleaningBookingFilterRequest $request): AnonymousResourceCollection|JsonResponse
     {
+        $authenticatedWorker = $request->user()?->worker;
+        // Opt in only clients implementing the daily contract. Existing APKs
+        // retain the old exclusion; the header is NOT permission or funding.
+        $dailyIds = $authenticatedWorker instanceof Worker
+            && hash_equals('daily-v3-r1', (string) $request->header('X-Cleaning-V3-Daily-Projection', ''))
+            ? $this->visibleDailyIds($authenticatedWorker) : [];
+        $request->attributes->set('cleaning_v3_worker_visible_daily_ids', $dailyIds);
+        request()->attributes->set('cleaning_v3_worker_visible_daily_ids', $dailyIds);
         // A worker cannot bypass the geographic dispatch audience by omitting
         // filter[forCurrentWorker] from the request.
         $query = CleaningBooking::getQuery();
-        $authenticatedWorker = $request->user()?->worker;
         if ($authenticatedWorker instanceof Worker) {
             // Do not advertise unfunded V3 offers to any worker APK before
             // the signed capability rollout and finance admission are ready.
             // V2 discovery and accepted historical work remain unchanged.
-            $query->where(static function ($contracts): void {
+            $query->where(static function ($contracts) use ($dailyIds): void {
                 $contracts->whereNull('contract_version')
-                    ->orWhere('contract_version', '!=', 'v3');
+                    ->orWhere('contract_version', '!=', 'v3')
+                    ->orWhereIn('id', $dailyIds);
             });
             $query->forCurrentWorker(true);
             // The fourth service is never an open invitation. Only assigned
             // workers may discover a supervisor-managed booking.
-            $query->where(function ($visible) use ($authenticatedWorker): void {
+            $query->where(function ($visible) use ($authenticatedWorker, $dailyIds): void {
                 $visible->where(function ($legacy): void {
                     $legacy->whereNull('booking_kind')
                         ->orWhere('booking_kind', '!=', 'supervised_team');
                 })->orWhereHas('workerAssignments', function ($assignments) use ($authenticatedWorker): void {
                     $assignments->where('worker_id', $authenticatedWorker->id)
                         ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
-                });
+                })->orWhereIn('id', $dailyIds);
             });
         } else {
             $this->assertGenericOperationsActor($request->user());
@@ -112,7 +120,8 @@ final class CleaningBookingController
 
             return response()->json([
                 'data' => $bookings->getCollection()
-                    ->map(fn (CleaningBooking $booking): array => $this->workerDiscoveryPayload($booking, $request, $worker))
+                    ->map(fn (CleaningBooking $booking): ?array => $this->workerDiscoveryPayload($booking, $request, $worker))
+                    ->filter()
                     ->values()
                     ->all(),
                 'links' => [
@@ -602,6 +611,9 @@ final class CleaningBookingController
     {
         $bookings->setCollection($bookings->getCollection()
             ->filter(function (CleaningBooking $booking) use ($worker): bool {
+                if ($booking->contract_version === 'v3') {
+                    return app(\Modules\Cleaning\Services\CleaningBookingWorkerSessionVisibilityService::class)->canViewBooking($booking, $worker);
+                }
                 if (! $this->isPendingCandidateForWorker($booking, $worker)) {
                     return true;
                 }
@@ -615,6 +627,9 @@ final class CleaningBookingController
     {
         $bookings->setCollection($bookings->getCollection()
             ->filter(function (CleaningBooking $booking) use ($worker): bool {
+                if ($booking->contract_version === 'v3') {
+                    return app(\Modules\Cleaning\Services\CleaningBookingWorkerSessionVisibilityService::class)->canViewBooking($booking, $worker);
+                }
                 if ((int) $booking->number_of_workers <= 1 && ! $this->shouldScopeV2WorkerRooms($booking)) {
                     return true;
                 }
@@ -686,7 +701,44 @@ final class CleaningBookingController
         CleaningBooking $booking,
         CleaningBookingFilterRequest $request,
         Worker $worker,
-    ): array {
+    ): ?array {
+        if ($booking->contract_version === 'v3') {
+            $schedule = app(\Modules\Cleaning\Services\CleaningBookingWorkerScheduleService::class)->present($booking, $worker);
+            $daily = app(\Modules\Cleaning\Services\CleaningV3DailyBookingProjection::class)->present($booking, $request->user(), $schedule);
+            $session = $schedule['sessions'][0] ?? null;
+            if ($daily === null || count($schedule['sessions'] ?? []) !== 1
+                || (int) ($session['sessionId'] ?? $session['id'] ?? 0) !== $daily['executionId']) {
+                return null; // Concurrent revocation must not expose stale scope.
+            }
+            if ($request->input('filter.workerView') === 'agenda'
+                && ($daily['myMembership'] === null || in_array($daily['status'], ['cancelled', 'skipped', 'superseded'], true))) {
+                return null;
+            }
+            $own = $session['workerAssignmentState'] ?? $session['myAssignment'] ?? null;
+            $amount = $own['workerAmount'] ?? $own['netAmount'] ?? null;
+            $preview = in_array('accept', $daily['allowedActions'], true) ? ($session['pricingPreview'] ?? null) : null;
+            $listStatus = in_array('accept', $daily['allowedActions'], true) && $daily['myMembership'] === null
+                ? 'pending' : $daily['status'];
+            return [
+                'id' => (int) $booking->id,
+                'bookingNumber' => $booking->booking_number,
+                'contractVersion' => 3,
+                'status' => $listStatus,
+                'worker_order_status' => $own['status'] ?? $listStatus,
+                'bookingKind' => $booking->booking_kind,
+                'propertyType' => $booking->property_type,
+                'locationName' => app(\Modules\Cleaning\Services\CleaningWorkerCustomerDataDisclosurePolicy::class)->neighborhoodLabel($booking),
+                'scheduledDate' => $daily['scheduledDate'], 'scheduledTime' => $daily['scheduledTime'],
+                'estimatedHours' => $daily['durationMinutes'] / 60,
+                'numberOfWorkers' => $daily['requiredWorkers'],
+                'accepted_workers_count' => $daily['acceptedWorkers'],
+                'pending_workers_count' => $daily['remainingWorkers'],
+                'workerAmount' => $amount ?? ($preview['workerAmount'] ?? null),
+                'currency' => $own['currency'] ?? $preview['currency'] ?? 'SYP',
+                'isPricingFinal' => $amount !== null,
+                'dailyBooking' => $daily,
+            ];
+        }
         $payload = CleaningBookingResource::make($booking)->resolve($request);
         $safe = Arr::only($payload, [
             'id', 'bookingNumber', 'displayTitle', 'status', 'statusLabel', 'globalStatus',
@@ -766,6 +818,40 @@ final class CleaningBookingController
         }
 
         return $safe;
+    }
+
+    /** Filter before pagination with durable admission and the same exact
+     * worker visibility/eligibility used by acceptance. Existing accepted work
+     * remains readable when new commercial intake is disabled. */
+    private function visibleDailyIds(Worker $worker): array
+    {
+        if (! $worker->user?->is_active) {
+            return [];
+        }
+        $offersEnabled = config('cleaning_v3_catalog.independent_daily_bookings_enabled', false)
+            && config('cleaning_v3_catalog.new_booking_admission_enabled', false)
+            && config('cleaning_v3_catalog.operational_approval_enabled', false);
+        $projection = app(\Modules\Cleaning\Services\CleaningV3DailyBookingProjection::class);
+        $visibility = app(\Modules\Cleaning\Services\CleaningBookingWorkerSessionVisibilityService::class);
+        return CleaningBooking::query()->where('contract_version', 'v3')
+            ->where('property_type', '!=', 'event_assistance')
+            ->whereHas('sessions', fn ($q) => $q->where('status', '!=', 'superseded'), '=', 1)
+            ->where(function ($q) use ($worker, $offersEnabled): void {
+                $q->whereHas('sessions.workerAssignments', fn ($assignments) => $assignments
+                    ->where('worker_id', $worker->id)->whereNull('released_at')
+                    ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues()));
+                if ($offersEnabled) {
+                    $q->orWhere(fn ($pending) => $pending->where('status', CleaningBookingStatus::Pending->value)
+                        ->where('property_details->v3_admission_hold', false));
+                }
+            })->get()->filter(function (CleaningBooking $booking) use ($worker, $projection, $visibility, $offersEnabled): bool {
+                $visit = $projection->execution($booking);
+                if ($visit === null || ! $visibility->canViewSession($booking, $visit, $worker)) {
+                    return false;
+                }
+                return $offersEnabled || $visit->workerAssignments()->where('worker_id', $worker->id)
+                    ->whereNull('released_at')->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())->exists();
+            })->pluck('id')->map(fn ($id): int => (int) $id)->values()->all();
     }
 
     private function workerSessionProjection(CleaningBooking $booking, Worker $worker): array

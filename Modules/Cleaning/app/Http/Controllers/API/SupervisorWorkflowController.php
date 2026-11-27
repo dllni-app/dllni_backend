@@ -507,7 +507,9 @@ final class SupervisorWorkflowController
 
     private function assigned(Request $request, int $id, bool $lock = false): CleaningBooking
     {
-        return $this->teams->assignedBooking($request->user(), $id, $lock);
+        $booking = $this->teams->assignedBooking($request->user(), $id, $lock);
+        abort_if($booking->contract_version === 'v3', 409, 'V3_VISIT_SCOPED_EXECUTION_REQUIRED');
+        return $booking;
     }
 
     private function customer(Request $request, int $id, bool $lock = false): CleaningBooking

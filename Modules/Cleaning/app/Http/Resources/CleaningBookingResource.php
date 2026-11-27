@@ -1239,6 +1239,14 @@ final class CleaningBookingResource extends JsonResource
             ? $this->status->value
             : (string) $this->status;
 
+        if ($this->contract_version === 'v3') {
+            $statuses = $this->resource->sessions()->where('status', '!=', 'superseded')->pluck('status')
+                ->map(fn ($status) => $status instanceof CleaningBookingSessionStatus ? $status->value : (string) $status);
+            if ($statuses->isNotEmpty()) {
+                return app(\Modules\Cleaning\Services\CleaningV3VisitStatusProjector::class)->project($statuses->all())['status'];
+            }
+        }
+
         // Only completed parents need this defensive reconciliation. Normal
         // lifecycle mutations already keep active parent states synchronized,
         // and avoiding a session query for every list row prevents an N+1.

@@ -415,11 +415,19 @@ final class CleaningBooking extends Model
 
     public function scopeWithoutExcludedWorker(Builder $query, int $workerId): Builder
     {
-        return $query->where(fn ($q) => $q->whereNull('contract_version')->orWhere('contract_version', '!=', 'v3')
-            ->orWhereNull('property_details->v3_admission_hold')->orWhere('property_details->v3_admission_hold', false))
+        return $query->operationallyAdmitted()
             ->where(fn ($q) => $q->whereNull('contract_version')->orWhere('contract_version', '!=', 'v3')
             ->orWhereNull('property_details->v3_excluded_worker_ids')
             ->orWhereJsonDoesntContain('property_details->v3_excluded_worker_ids', $workerId));
+    }
+
+    public function scopeOperationallyAdmitted(Builder $query): Builder
+    {
+        return $query->where(fn ($q) => $q->whereNull('contract_version')->orWhere('contract_version', '!=', 'v3')
+            ->orWhere(fn ($approved) => $approved->where('property_details->v3_admission_hold', false)
+                ->whereExists(fn ($record) => $record->selectRaw('1')->from('cleaning_v3_operational_approvals')
+                    ->whereColumn('booking_id', 'cleaning_bookings.id')
+                    ->whereColumn('quote_id', 'cleaning_bookings.property_details->v3_current_quote_id'))));
     }
 
     public function specificWorkerIds(): array

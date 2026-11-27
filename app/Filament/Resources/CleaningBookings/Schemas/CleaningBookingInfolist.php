@@ -20,6 +20,8 @@ use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\CleaningBookingFinancialExposureService;
 use Modules\Cleaning\Services\CleaningBookingTeamPresentation;
 use Modules\Cleaning\Services\CleaningCouponPricingService;
+use Modules\Cleaning\Services\CleaningV3DailyBookingProjection;
+use Modules\Cleaning\Services\CleaningV3DisplayFormatter;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 use Throwable;
 
@@ -45,7 +47,10 @@ final class CleaningBookingInfolist
                                         TextEntry::make('status')
                                             ->label('الحالة')
                                             ->badge()
-                                            ->formatStateUsing(fn ($state): string => $state?->label() ?? '-'),
+                                            ->formatStateUsing(function ($state, CleaningBooking $record): string {
+                                                $daily = app(CleaningV3DailyBookingProjection::class)->present($record);
+                                                return $daily === null ? ($state?->label() ?? '-') : CleaningV3DisplayFormatter::state($daily['state']);
+                                            }),
                                         TextEntry::make('booking_kind')
                                             ->label('نوع الحجز')
                                             ->state(fn ($record): string => $record->dashboardKindLabel())
@@ -80,8 +85,11 @@ final class CleaningBookingInfolist
                                             ->formatStateUsing(fn ($state): string => self::integer($state))
                                             ->visible(fn ($record): bool => ! self::isEventAssistance($record)),
                                         TextEntry::make('estimated_hours')
-                                            ->label('الساعات التقديرية')
-                                            ->formatStateUsing(fn ($state): string => self::integer($state)),
+                                            ->label('المدة التقديرية')
+                                            ->formatStateUsing(fn ($state, CleaningBooking $record): string => CleaningV3DisplayFormatter::duration(
+                                                app(CleaningV3DailyBookingProjection::class)->present($record)['durationMinutes']
+                                                    ?? (int) round((float) $state * 60)
+                                            )),
                                         TextEntry::make('scheduled_date')
                                             ->label('التاريخ')
                                             ->formatStateUsing(fn ($state): string => self::date($state)),

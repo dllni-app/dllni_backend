@@ -70,6 +70,7 @@ final class CleaningBookingWorkerScheduleService
                 );
                 $previews[(int) $session->id] = [
                     'workerAmount' => $quote['workerAmount'],
+                    ...isset($quote['workerAmountSyp']) ? ['workerAmountSyp' => $quote['workerAmountSyp']] : [],
                     'serviceShareAmount' => $quote['serviceShareAmount'],
                     'travelFee' => $quote['travelFee'],
                     'currency' => $quote['currency'],

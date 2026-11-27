@@ -11,7 +11,8 @@ use Modules\Cleaning\Models\CleaningBooking;
  * Read-only historical V2/V3 multi-visit identity.
  *
  * V2 creates one Booking per appointment and stores their common quote link
- * in cleaning_quote_bookings. V3 retains one Booking with multiple sessions.
+ * in cleaning_quote_bookings. New V3 daily bookings use the same origin link
+ * while historical V3 and event bookings retain multiple sessions.
  * This never consolidates, cancels, re-prices or mutates historical bookings.
  */
 final class CleaningRecurringBookingIdentityService
@@ -19,7 +20,16 @@ final class CleaningRecurringBookingIdentityService
     public function isRecurringOrMultiVisit(CleaningBooking $booking): bool
     {
         if ((string) ($booking->contract_version ?? '') === 'v3') {
-            return $booking->sessions()->count() > 1;
+            if ($booking->sessions()->count() > 1) {
+                return true;
+            }
+            $origin = data_get($booking->property_details, 'v3_daily_origin_quote_id');
+            if (! is_string($origin)) {
+                return false;
+            }
+            return DB::table('cleaning_quote_bookings')->where('quote_id', $origin)
+                ->where('cleaning_booking_id', $booking->id)->exists()
+                && DB::table('cleaning_quote_bookings')->where('quote_id', $origin)->limit(2)->count() > 1;
         }
 
         // Legacy V2 group: each appointment gets its own Booking id, but all

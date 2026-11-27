@@ -103,13 +103,14 @@ trait CleaningBookingFilterQuery
 
         $discoverableBookingIds = app(\Modules\Cleaning\Services\CleaningGeographicDispatchService::class)
             ->discoverableBookingIds($worker);
+        $dailyIds = request()->attributes->get('cleaning_v3_worker_visible_daily_ids', []);
 
         // A declined offer is worker-scoped, not a cancellation of the booking.
         // Exclude it from *all* branches, including legacy worker_id and old
         // assignment/history branches, so it cannot reappear after refresh.
         return $query
             ->whereDoesntHave('rejections', fn (Builder $rejections) => $rejections->where('worker_id', $worker->id))
-            ->where(function (Builder $q) use ($worker, $canReceiveNewRequests, $discoverableBookingIds): void {
+            ->where(function (Builder $q) use ($worker, $canReceiveNewRequests, $discoverableBookingIds, $dailyIds): void {
             $q->where('worker_id', $worker->id)
                 ->orWhereHas('workerAssignments', function (Builder $assignments) use ($worker): void {
                     $assignments
@@ -172,7 +173,7 @@ trait CleaningBookingFilterQuery
                             ->orWhereHas('sessions.workerAssignments', fn (Builder $a) => $a
                                 ->where('worker_id', $worker->id)->whereNotNull('accepted_at'));
                     });
-                });
+                })->orWhereIn('id', $dailyIds);
             });
     }
 
@@ -224,6 +225,32 @@ trait CleaningBookingFilterQuery
 
         if ($view === 'mine') {
             return $this->scopeAssignedToCurrentWorker($query, true);
+        }
+
+        if ($view === 'agenda') {
+            // An accepted member of a partially staffed daily booking still
+            // has an appointment even while the parent remains pending.
+            // Keep legacy calendar status semantics and require actual V3
+            // membership, never an invitation or a parent worker flag.
+            $dailyIds = request()->attributes->get('cleaning_v3_worker_visible_daily_ids', []);
+            return $query->where(function (Builder $agenda) use ($worker, $dailyIds): void {
+                $agenda->where(function (Builder $legacy): void {
+                    $legacy->where(fn (Builder $contracts) => $contracts
+                        ->whereNull('contract_version')->orWhere('contract_version', '!=', 'v3'))
+                        ->whereIn('status', [
+                            'worker_assigned', 'awaiting_start_verification', 'awaiting_worker_start_confirmation',
+                            'in_progress', 'awaiting_customer_completion', 'time_extension_requested',
+                            'under_dispute', 'completed',
+                        ]);
+                    $this->scopeAssignedToCurrentWorker($legacy, true);
+                })->orWhere(function (Builder $daily) use ($worker, $dailyIds): void {
+                    $daily->whereIn('id', $dailyIds)->whereHas('sessions', fn (Builder $visit) => $visit
+                        ->whereNotIn('status', ['cancelled', 'skipped', 'superseded'])
+                        ->whereHas('workerAssignments', fn (Builder $assignment) => $assignment
+                            ->where('worker_id', $worker->id)->whereNull('released_at')
+                            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())));
+                });
+            });
         }
 
         if ($view !== 'available') {

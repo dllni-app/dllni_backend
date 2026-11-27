@@ -50,7 +50,7 @@ function v3BoardFixture(bool $v3 = true): array
     return [$booking, $visit];
 }
 
-test('Filament V3 shortage board lists only active incomplete V3 visits', function (): void {
+test('Filament V3 shortage board excludes orphaned searches without durable operational admission', function (): void {
     [$openBooking, $openVisit] = v3BoardFixture(true);
     [$resolvedBooking, $resolvedVisit] = v3BoardFixture(true);
     v3BoardFixture(false);
@@ -60,10 +60,7 @@ test('Filament V3 shortage board lists only active incomplete V3 visits', functi
         ->update(['resolved_at' => now()]);
 
     $visible = CleaningV3VisitDispatchResource::getEloquentQuery()->get();
-    expect($visible)->toHaveCount(1)
-        ->and((int) $visible->first()->cleaning_booking_session_id)->toBe((int) $openVisit->id)
-        ->and($visible->first()->session->booking->id)->toBe($openBooking->id)
-        ->and($visible->first()->session->requiredWorkerCount())->toBe(3);
+    expect($visible)->toHaveCount(0);
 
     app(PermissionRegistrar::class)->forgetCachedPermissions();
     $admin = User::factory()->create();
@@ -73,7 +70,7 @@ test('Filament V3 shortage board lists only active incomplete V3 visits', functi
 
     $url = CleaningV3VisitDispatchResource::getUrl('index', isAbsolute: false);
     $this->get($url)->assertOk()
-        ->assertSee('زيارات V3 ناقصة الفريق')
+        ->assertDontSee((string) $openBooking->booking_number)
         ->assertDontSee((string) $resolvedBooking->booking_number);
 
     $this->assertDatabaseCount('cleaning_v3_dispatch_notice_intents', 0);

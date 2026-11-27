@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
-use Modules\Cleaning\Models\CleaningV3CatalogVersion;
+use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
 
 /**
  * Cash treasury reconciliation, after service completion only.
@@ -41,6 +41,81 @@ final class CleaningV3CashSettlementService
                 return app(CleaningV3SupervisorCashAccountingService::class)->project($visit, $calc, $digest);
             }
             return $this->state($visit, $quote, $calc, $digest);
+        }, 3);
+    }
+
+    /**
+     * Worker-owned read projection. Completion alone is not payment, and a
+     * pre-start assigned amount is not the final attendance-based entitlement.
+     * Reuse the signed reconciliation and expose only this beneficiary's facts.
+     */
+    public function workerEarning(int $assignmentId, Worker $worker): ?array
+    {
+        $actor = auth()->user();
+        if ($actor === null || ! $actor->is_active || (int) $actor->id !== (int) $worker->user_id) {
+            return null;
+        }
+        $scope = CleaningBookingSessionWorkerAssignment::query()->whereKey($assignmentId)
+            ->where('worker_id', $worker->id)->whereNotNull('accepted_at')
+            ->with('session.booking')->first();
+        $visit = $scope?->session;
+        $booking = $visit?->booking;
+        if ($booking === null || $booking->contract_version !== 'v3' || $booking->isEventAssistanceBooking()
+            || $visit->status !== CleaningBookingSessionStatus::Completed || $scope->work_started_at === null) {
+            return null;
+        }
+        return DB::transaction(function () use ($worker, $assignmentId, $booking, $visit): ?array {
+            $booking = CleaningBooking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
+            $visit = $booking->sessions()->whereKey($visit->id)->lockForUpdate()->firstOrFail();
+            $visit->setRelation('booking', $booking);
+            $assignment = $visit->workerAssignments()->whereKey($assignmentId)->where('worker_id', $worker->id)
+                ->whereNotNull('accepted_at')->whereNotNull('work_started_at')->lockForUpdate()->first();
+            if ($assignment === null || $visit->status !== CleaningBookingSessionStatus::Completed
+                || $booking->contract_version !== 'v3' || $booking->isEventAssistanceBooking()
+                || ! app(CleaningV3OperationalAdmissionPolicy::class)->approved($booking, $visit)
+                || app(CleaningV3DailyBookingProjection::class)->execution($booking)?->id !== $visit->id) {
+                return null;
+            }
+            $result = [
+                'key' => 'session_assignment:'.$assignment->id,
+                'bookingId' => (int) $booking->id,
+                'executionId' => (int) $visit->id,
+                'sessionAssignmentId' => (int) $assignment->id,
+                'bookingNumber' => $booking->booking_number,
+                'scheduledDate' => $visit->scheduled_date?->format('Y-m-d'),
+                'currency' => 'SYP',
+                'amountSyp' => null,
+                'commissionSyp' => null,
+                'reconciliationState' => 'awaiting_settlement',
+            ];
+            if ($visit->payment_status !== 'settled') {
+                return $result;
+            }
+            try {
+                if ($visit->payment_settled_at === null || ! $visit->is_pricing_final || $visit->customer_completed_at === null) {
+                    throw new DomainException('V3_CASH_COMPLETED_CONFIRMED_VISIT_REQUIRED');
+                }
+                [$quote, $calc, $digest] = $this->calculation($booking, $visit);
+                $settled = ($calc['cashCollectionMode'] ?? null) === 'supervisor_manual'
+                    ? app(CleaningV3SupervisorCashAccountingService::class)->project($visit, $calc, $digest)['status'] === 'received'
+                    : $this->state($visit, $quote, $calc, $digest)['allPayablesPosted'];
+                $payable = collect($calc['workerPayables'])->firstWhere('workerId', (int) $worker->id);
+                $commission = ($calc['cashCollectionMode'] ?? null) === 'supervisor_manual'
+                    ? '0.00' : ($payable['commissionReceivableSyp'] ?? null);
+                if (! $settled || $payable === null || $assignment->currency !== 'SYP'
+                    || CleaningV3CashSettlementBasis::cents((string) $assignment->getRawOriginal('worker_amount'))
+                        !== CleaningV3CashSettlementBasis::cents($payable['grossPayableSyp'])
+                    || CleaningV3CashSettlementBasis::cents((string) $assignment->getRawOriginal('admin_margin_amount'))
+                        !== CleaningV3CashSettlementBasis::cents($commission)) {
+                    throw new DomainException('V3_WORKER_EARNING_RECONCILIATION_REQUIRED');
+                }
+                $result['amountSyp'] = $payable['grossPayableSyp'];
+                $result['commissionSyp'] = $commission;
+                $result['reconciliationState'] = 'settled';
+            } catch (DomainException) {
+                $result['reconciliationState'] = 'review_required';
+            }
+            return $result;
         }, 3);
     }
 
@@ -230,31 +305,7 @@ final class CleaningV3CashSettlementService
 
     private function calculation(CleaningBooking $booking, CleaningBookingSession $visit): array
     {
-        $query = DB::table('cleaning_booking_quotes')->where('cleaning_booking_id', $booking->id)->where('contract_version', 'v3');
-        $currentId = data_get($booking->property_details, 'v3_current_quote_id');
-        if (is_string($currentId)) {
-            $query->where('id', $currentId);
-        }
-        $quotes = $query->lockForUpdate()->get();
-        if ($quotes->count() !== 1) {
-            throw new DomainException('V3_SETTLEMENT_QUOTE_LINK_REQUIRED');
-        }
-        $quote = $quotes->first();
-        $catalog = CleaningV3CatalogVersion::query()->whereKey($booking->catalog_version_id)->first();
-        $envelope = json_decode((string) $quote->snapshot, true);
-        if ($catalog === null || $catalog->status !== 'published' || $catalog->published_at === null
-            || (int) $quote->catalog_version_id !== (int) $catalog->id || (int) $quote->customer_id !== (int) $booking->customer_id
-            || ! is_array($envelope) || ($envelope['quoteId'] ?? null) !== $quote->id
-            || ! is_string($envelope['signature'] ?? null) || ! hash_equals((string) $quote->signature, $envelope['signature'])
-            || ! hash_equals((string) $catalog->published_digest, app(CleaningV3CatalogReviewManifestService::class)->fingerprint($catalog))) {
-            throw new DomainException('V3_SETTLEMENT_QUOTE_LINK_REQUIRED');
-        }
-        // Verify the historic quote at the original booking creation, not
-        // against today's catalog or current 15-minute quote lifetime.
-        $accepted = data_get($booking->property_details, 'v3_quote_accepted_at');
-        $acceptedAt = is_string($accepted) ? CarbonImmutable::parse($accepted)->utc() : CarbonImmutable::instance($booking->created_at)->utc();
-        $snapshot = app(CleaningV3SignedQuoteEnvelope::class)->verify($envelope, (int) $booking->customer_id,
-            $catalog->version_key, $catalog->published_digest, $acceptedAt);
+        [$quote] = app(CleaningV3AcceptedQuoteResolver::class)->load($booking, 'V3_SETTLEMENT_QUOTE_LINK_REQUIRED');
         // Each applied live extension is a separate signed consent chain.
         // The original quote remains immutable, and unrelated visits retain
         // their original price revisions.

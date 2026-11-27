@@ -45,8 +45,8 @@ final class PlatformCouponRedemptionService
         PlatformCoupon $coupon,
         int $userId,
         string $section,
-        float $subtotal,
-        float $discount,
+        float|string $subtotal,
+        float|string $discount,
         Model $order,
     ): PlatformCouponRedemption {
         return DB::transaction(function () use ($coupon, $userId, $section, $subtotal, $discount, $order): PlatformCouponRedemption {
@@ -65,7 +65,7 @@ final class PlatformCouponRedemptionService
                 PlatformCoupon::SECTION_RESTAURANT,
                 PlatformCoupon::SECTION_SUPERMARKET,
             ], true)
-                ? $this->financials->applyPlatformCoupon($order, $lockedCoupon, $discount)
+                ? $this->financials->applyPlatformCoupon($order, $lockedCoupon, (float) $discount)
                 : [
                     'funding_type' => null,
                     'platform_funded_amount' => 0.0,

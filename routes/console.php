@@ -50,6 +50,27 @@ Artisan::command('cleaning:v3-readiness {--json : Output machine-readable prefli
     return $result['readyForCommercialLaunch'] ? 0 : 2;
 })->purpose('Read-only structural and financial readiness audit for Cleaning V3');
 
+Artisan::command('cleaning:v3-qa-readiness {--database-only}', function (
+    Modules\Cleaning\Services\CleaningV3QaEnvironment $environment
+): int {
+    $localDatabase = $environment->isLocalDatabase();
+    $checks = ['authorizedLocalMysql' => $localDatabase];
+    if (! $this->option('database-only')) {
+        $checks += [
+            'qaSigningConfigured' => $localDatabase && $environment->signingKey() !== null,
+            'qaCatalogVerified' => $localDatabase && Modules\Cleaning\Services\CleaningV3AdminCatalogPublication::qaDigest() !== null,
+        ];
+        foreach (['admin_publication_enabled', 'read_enabled', 'cash_quote_enabled',
+            'new_quote_archive_enabled', 'new_booking_admission_enabled', 'operational_approval_enabled'] as $capability) {
+            $checks[$capability] = config('cleaning_v3_catalog.'.$capability) === true;
+        }
+    }
+    $ready = ! in_array(false, $checks, true);
+    $this->line(json_encode(['scope' => 'local-qa-preflight', 'ready' => $ready, 'checks' => $checks], JSON_THROW_ON_ERROR));
+
+    return $ready ? 0 : 2;
+})->purpose('Check the existing local Cleaning V3 QA environment without writing data');
+
 // V3 dispatch escalation writes only durable notice intentions. Delivery
 // must be retried through an audited outbox adapter; no cancellation occurs.
 Artisan::command('cleaning:v3-escalate-incomplete-visits', function (

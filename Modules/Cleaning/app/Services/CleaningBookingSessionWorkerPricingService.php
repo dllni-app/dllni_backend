@@ -96,6 +96,7 @@ final class CleaningBookingSessionWorkerPricingService
             'travelFee' => $transport / 100.0,
             'adminMarginAmount' => (($basis['commissionAdded'] ?? false) === true ? 0 : $share($commission)) / 100.0,
             'workerAmount' => ($service + $transport) / 100.0,
+            'workerAmountSyp' => CleaningV3CashSettlementBasis::money($service + $transport),
             'currency' => 'SYP',
         ];
     }

@@ -26,6 +26,7 @@ final class BookingWorkerAttendanceCodeController
                 ->whereIn('booking_kind', ['standard', SupervisedTeamService::KIND])
                 ->where('number_of_workers', '>', 1)
                 ->lockForUpdate()->firstOrFail();
+            abort_if($order->contract_version === 'v3', 409, 'V3_VISIT_SCOPED_EXECUTION_REQUIRED');
             abort_unless(in_array($order->status, [CleaningBookingStatus::WorkerAssigned,
                 CleaningBookingStatus::AwaitingStartVerification], true), 409);
             $assignment = $order->workerAssignments()->where('worker_id', $worker->id)
@@ -69,6 +70,7 @@ final class BookingWorkerAttendanceCodeController
         $result = DB::transaction(function () use ($request, $booking, $assignment, $data): string {
             $teams = app(SupervisedTeamService::class);
             $order = $teams->assignedBooking($request->user(), $booking, true);
+            abort_if($order->contract_version === 'v3', 409, 'V3_VISIT_SCOPED_EXECUTION_REQUIRED');
             abort_unless(in_array($order->status, [CleaningBookingStatus::WorkerAssigned,
                 CleaningBookingStatus::AwaitingStartVerification], true), 409);
             $workerAssignment = $order->workerAssignments()->whereKey($assignment)

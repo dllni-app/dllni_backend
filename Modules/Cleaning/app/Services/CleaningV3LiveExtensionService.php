@@ -110,21 +110,28 @@ final class CleaningV3LiveExtensionService
             abort_unless($customer || $crew, 404);
             $clock = app(CleaningV3WorkClockProjectionService::class)->project($visit);
             $revision = (int) $visit->price_revision;
-            $paused = $clock['state'] === 'paused' && data_get($booking->property_details, 'v3_admission_hold') === false
-                && $revision > 0 && $visit->payment_status !== 'settled';
+            $paused = $clock['state'] === 'paused'
+                && $visit->status === CleaningBookingSessionStatus::Paused
+                && app(CleaningV3OperationalAdmissionPolicy::class)->approved($booking, $visit)
+                && $revision > 0 && $visit->payment_status !== 'settled'
+                && ! DB::table('cleaning_v3_cash_movements')->where('cleaning_booking_session_id', $visitId)->exists();
             $minutes = (int) round((float) $visit->duration_hours * 60);
             $row = DB::table(self::TABLE)->where('cleaning_booking_session_id', $visitId)
                 ->when(! $customer, fn ($q) => $q->where('status', '!=', 'offered'))
                 ->where('status', '!=', 'superseded')->orderByDesc('created_at')->orderByDesc('id')->first();
             $offer = $row === null ? null : $this->present($row);
             if ($offer !== null && in_array($offer['status'], ['offered', 'customer_confirmed', 'crew_approved'], true)
-                && (! $paused || $offer['previousRevision'] !== $revision || $offer['clockRevision'] !== $clock['revision'])) {
+                && (! $paused || $offer['previousRevision'] !== $revision || $offer['clockRevision'] !== $clock['revision']
+                    || ! hash_equals($this->payload($row)['rosterDigest'], $this->rosterDigest($booking, $visit)))) {
                 $offer['status'] = 'stale';
             }
             $pending = in_array($offer['status'] ?? '', ['customer_confirmed', 'crew_approved'], true);
+            $maxAdditionalMinutes = CleaningV3LiveExtensionPricing::maxAdditionalMinutes($minutes);
             return ['visitId' => $visitId, 'priceRevision' => $revision, 'clockRevision' => $clock['revision'],
-                'plannedMinutes' => $minutes, 'maxAdditionalMinutes' => max(0, 480 - $minutes),
-                'canQuote' => $customer && $paused && ! $pending && $minutes <= 450,
+                'plannedMinutes' => $minutes, 'maxAdditionalMinutes' => $maxAdditionalMinutes,
+                'visitLimitMinutes' => CleaningV3LiveExtensionPricing::MAX_VISIT_MINUTES,
+                'extensionStepMinutes' => CleaningV3LiveExtensionPricing::EXTENSION_STEP_MINUTES,
+                'canQuote' => $customer && $paused && ! $pending && $maxAdditionalMinutes > 0,
                 'canConfirm' => $customer && $paused && ($offer['status'] ?? null) === 'offered',
                 'canDecide' => $crew && $paused && ($offer['status'] ?? null) === 'customer_confirmed',
                 'offer' => $offer];
@@ -365,7 +372,7 @@ final class CleaningV3LiveExtensionService
 
     private function assertPaused(CleaningBooking $booking, CleaningBookingSession $visit, int $revision, int $clockRevision): void
     {
-        if (data_get($booking->property_details, 'v3_admission_hold') !== false
+        if (! app(CleaningV3OperationalAdmissionPolicy::class)->approved($booking, $visit)
             || $visit->status !== CleaningBookingSessionStatus::Paused || (int) $visit->price_revision !== $revision
             || (int) $visit->clock_revision !== $clockRevision || $visit->payment_status === 'settled'
             || app(CleaningV3WorkClockProjectionService::class)->project($visit)['state'] !== 'paused'

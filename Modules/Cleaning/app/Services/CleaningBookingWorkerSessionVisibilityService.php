@@ -21,10 +21,16 @@ final class CleaningBookingWorkerSessionVisibilityService
 
     public function canViewBooking(CleaningBooking $booking, Worker $worker): bool
     {
-        if ($booking->contract_version === 'v3' && data_get($booking->property_details, 'v3_admission_hold') === true) {
+        if (! app(CleaningV3OperationalAdmissionPolicy::class)->approved($booking)) {
             return false;
         }
         $sessions = $this->bookingSessions($booking);
+
+        // V3 is always visit-scoped, including a single visit. Never fall
+        // back to the parent booking's legacy audience or assignment.
+        if ($booking->contract_version === 'v3') {
+            return $this->visibleSessionsFrom($booking, $worker, $sessions)->isNotEmpty();
+        }
 
         if ($sessions->isEmpty()) {
             // Ordinary single-visit cleaning bookings have no persisted child
@@ -79,7 +85,7 @@ final class CleaningBookingWorkerSessionVisibilityService
     /** @return Collection<int, CleaningBookingSession> */
     public function visibleSessions(CleaningBooking $booking, Worker $worker): Collection
     {
-        if ($booking->contract_version === 'v3' && data_get($booking->property_details, 'v3_admission_hold') === true) {
+        if (! app(CleaningV3OperationalAdmissionPolicy::class)->approved($booking)) {
             return collect();
         }
         return $this->visibleSessionsFrom($booking, $worker, $this->bookingSessions($booking));
@@ -113,6 +119,9 @@ final class CleaningBookingWorkerSessionVisibilityService
 
         return $sessions
             ->filter(function (CleaningBookingSession $session) use ($booking, $worker, $isEventAssistance): bool {
+                if (! app(CleaningV3OperationalAdmissionPolicy::class)->approved($booking, $session)) {
+                    return false;
+                }
                 if ($this->hasAcceptedAssignment($session, $worker)) {
                     return true;
                 }

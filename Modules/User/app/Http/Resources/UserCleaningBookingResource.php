@@ -26,6 +26,14 @@ final class UserCleaningBookingResource extends JsonResource
         $payload['isRecurringOrMultiVisit'] = app(
             \Modules\Cleaning\Services\CleaningRecurringBookingIdentityService::class
         )->isRecurringOrMultiVisit($this->resource);
+        if ($this->contract_version === 'v3') {
+            $daily = app(\Modules\Cleaning\Services\CleaningV3DailyBookingProjection::class)->present($this->resource, $request->user());
+            if ($daily !== null) {
+                $payload['createdFromRecurrence'] = is_string(data_get($this->property_details, 'v3_daily_origin_quote_id'));
+                $payload['isRecurringOrMultiVisit'] = false;
+                $payload['dailyBooking'] = $daily;
+            }
+        }
 
         $discountAmount = max(0.0, (float) ($this->discount_amount ?? 0));
         $extensionFeeTotal = max(0.0, (float) ($this->extension_fee_total ?? 0));
@@ -111,10 +119,14 @@ final class UserCleaningBookingResource extends JsonResource
             'canRetry' => $this->searchWindowExpired(),
             'retryCount' => (int) ($this->search_retry_count ?? 0),
         ];
-        if ($this->contract_version === 'v3' && data_get($this->property_details, 'v3_admission_hold') === true) {
-            $payload['v3AdmissionStatus'] = $this->status === CleaningBookingStatus::Cancelled ? 'cancelled' : 'pending_operational_review';
-            $payload['workerSearch'] = ['startedAt' => null, 'expiresAt' => null, 'escalationAt' => null,
-                'expired' => false, 'escalated' => false, 'discoveryActive' => false, 'canRetry' => false, 'retryCount' => 0];
+        if ($this->contract_version === 'v3') {
+            $approved = app(\Modules\Cleaning\Services\CleaningV3OperationalAdmissionPolicy::class)->approved($this->resource);
+            $payload['v3AdmissionStatus'] = $this->status === CleaningBookingStatus::Cancelled
+                ? 'cancelled' : ($approved ? 'approved' : 'pending_operational_review');
+            if (! $approved || $this->status === CleaningBookingStatus::Cancelled) {
+                $payload['workerSearch'] = ['startedAt' => null, 'expiresAt' => null, 'escalationAt' => null,
+                    'expired' => false, 'escalated' => false, 'discoveryActive' => false, 'canRetry' => false, 'retryCount' => 0];
+            }
         }
         $payload['lastHourTeamDecision'] = app(
             \Modules\Cleaning\Services\CleaningLastHourCoverageService::class

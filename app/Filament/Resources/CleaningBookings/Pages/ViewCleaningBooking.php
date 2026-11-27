@@ -249,12 +249,45 @@ final class ViewCleaningBooking extends ViewRecord
                         'SIGNED_PRICE_OR_VISIT_MISMATCH' => 'عدم تطابق عرض السعر أو الزيارات',
                         'VISIT_SCHEDULE_OR_ROSTER_REVIEW_REQUIRED' => 'المواعيد أو التعيينات تحتاج مراجعة',
                         'WORKER_APK_MANIFEST_UNAVAILABLE' => 'نسخة العامل الموقعة غير مهيأة',
+                        'VISIT_PAYMENT_POLICY_REVIEW_REQUIRED' => 'سياسة دفع الزيارة تحتاج مراجعة',
+                        'V3_OPERATIONAL_APPROVAL_DISABLED' => 'اعتماد التشغيل معطل',
+                        'V3_COMMERCIAL_RELEASE_NOT_READY' => 'لم تكتمل بوابات الجاهزية للإطلاق',
                         'CLEARED_FUNDING_SOURCE_INTEGRATION_REQUIRED' => 'مصدر تمويل المنصة المحقق غير مربوط بعد',
                         'SIGNED_APK_ROLLOUT_AND_VISIT_EXECUTION_QA_REQUIRED' => 'يلزم إثبات توافق النسخ واختبار التنفيذ',
                     ];
-                    Notification::make()->title('الحجز غير مؤهل للإرسال')
-                        ->body(implode(' | ', array_map(fn ($issue) => $labels[$issue] ?? $issue, $review['blockers'])))
-                        ->warning()->persistent()->send();
+                    if ($review['canDispatch']) {
+                        Notification::make()->title('الحجز مؤهل للمراجعة النهائية والاعتماد')
+                            ->success()->send();
+                    } else {
+                        Notification::make()->title('الحجز غير مؤهل للإرسال')
+                            ->body(implode(' | ', array_map(fn ($issue) => $labels[$issue] ?? $issue, $review['blockers'])))
+                            ->warning()->persistent()->send();
+                    }
+                }),
+            Action::make('approveV3OperationalAdmission')
+                ->label('اعتماد تشغيل الحجز V3')
+                ->visible(fn (): bool => config('cleaning_v3_catalog.operational_approval_enabled', false)
+                    && $this->record->contract_version === 'v3'
+                    && data_get($this->record->property_details, 'v3_admission_hold') === true
+                    && \Modules\Cleaning\Services\CleaningV3CashSettlementService::authorized())
+                ->authorize(fn (): bool => \Modules\Cleaning\Services\CleaningV3CashSettlementService::authorized())
+                ->requiresConfirmation()
+                ->modalDescription('يعاد فحص العرض الموقع والتمويل والزيارات وجاهزية التطبيقات قبل فتح البحث. الاعتماد ليس إثبات تحصيل نقدي.')
+                ->action(function (): void {
+                    try {
+                        $result = app(\Modules\Cleaning\Services\CleaningV3OperationalApprovalService::class)->approve((int) $this->record->id);
+                        if (! $result['approved']) {
+                            Notification::make()->title('تعذر اعتماد التشغيل')
+                                ->body(implode(' | ', $result['blockers']))->warning()->persistent()->send();
+                            return;
+                        }
+                        $this->record->refresh();
+                        Notification::make()->title('تم اعتماد التشغيل وفتح البحث للزيارات')
+                            ->success()->send();
+                    } catch (\DomainException $e) {
+                        Notification::make()->title('تعذر اعتماد التشغيل')
+                            ->body($e->getMessage())->danger()->persistent()->send();
+                    }
                 }),
             Action::make('reviewV3FundingRequirement')
                 ->label('متطلبات تمويل زيارة V3')
@@ -618,7 +651,7 @@ final class ViewCleaningBooking extends ViewRecord
                 ->label('إلغاء الحجز')
                 ->icon('heroicon-o-x-circle')
                 ->color('danger')
-                ->visible(fn (): bool => ! in_array($this->record->status, [
+                ->visible(fn (): bool => $this->record->contract_version !== 'v3' && ! in_array($this->record->status, [
                     CleaningBookingStatus::Completed,
                     CleaningBookingStatus::Cancelled,
                     CleaningBookingStatus::UnderDispute,
@@ -640,6 +673,8 @@ final class ViewCleaningBooking extends ViewRecord
                             ->whereKey($this->record->getKey())
                             ->lockForUpdate()
                             ->firstOrFail();
+
+                        abort_if($booking->contract_version === 'v3', 409, 'V3_CANCELLATION_POLICY_REQUIRED');
 
                         if (in_array($booking->status, [
                             CleaningBookingStatus::Completed,

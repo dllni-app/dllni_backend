@@ -108,6 +108,14 @@ final class CleaningV3CashQuoteController
                 $snapshot['paymentMethod'] = 'cash_on_delivery';
                 $snapshot['paymentStatus'] = 'unpaid';
                 $snapshot['settlementBasis'] = $review['settlementBasis'];
+                if (($data['event'] ?? null) === null) {
+                    $snapshot['workRequirementsDigests'] = app(\Modules\Cleaning\Services\CleaningV3WorkRequirements::class)
+                        ->digests($data['capacityCheck']);
+                }
+                if (config('cleaning_v3_catalog.independent_daily_bookings_enabled', false)
+                    && ($data['recurrenceRule'] ?? null) !== null && $amendment === null) {
+                    $snapshot['dailyAppointments'] = app(\Modules\Cleaning\Services\CleaningV3DailyQuoteScope::class)->fromPlan($plan);
+                }
                 $identity = [$customerId, $digest, $data['draftFingerprint'], $review['pricingFingerprint'], 'cash_on_delivery'];
                 if ($amendment !== null) {
                     $identity[] = $amendment;

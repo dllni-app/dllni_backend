@@ -21,4 +21,11 @@ return [
     // Existing accepted V3 visits never consult these flags for execution.
     'new_quote_archive_enabled' => (bool) env('CLEANING_V3_NEW_QUOTE_ARCHIVE_ENABLED', false),
     'new_booking_admission_enabled' => (bool) env('CLEANING_V3_NEW_BOOKING_ADMISSION_ENABLED', false),
+    // Compatibility rollout for NEW independently booked recurring days.
+    // Existing accepted bookings remain readable and executable when disabled.
+    'independent_daily_bookings_enabled' => (bool) env('CLEANING_V3_INDEPENDENT_DAILY_BOOKINGS_ENABLED', false),
+    // New operational approvals only. Never bypass verified funding or release evidence.
+    'operational_approval_enabled' => (bool) env('CLEANING_V3_OPERATIONAL_APPROVAL_ENABLED', false),
+    'qa_enabled' => (bool) env('CLEANING_V3_QA_ENABLED', false),
+    'qa_signing_key' => env('CLEANING_V3_QA_SIGNING_KEY'),
 ];

@@ -15,6 +15,7 @@ use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningV3CatalogVersion;
 use Modules\Cleaning\Services\CleaningV3CashSettlementBasis;
 use Modules\Cleaning\Services\CleaningV3CustomerPreferences;
+use Modules\Cleaning\Services\CleaningV3DailyQuoteScope;
 use Modules\Cleaning\Services\CleaningV3EquipmentPreviewService;
 use Modules\Cleaning\Services\CleaningV3QuoteBookingAdmissionService;
 use Modules\User\Models\UserAddress;
@@ -22,6 +23,57 @@ use Modules\User\Models\UserAddress;
 /** Materialize a confirmed unpaid booking, NOT permission to dispatch or work. */
 final class CleaningV3CreateBookingController
 {
+    /**
+     * Read-only recovery of an explicitly confirmed quote. The same locks as
+     * creation serialize a lost-response read against an in-flight acceptance.
+     * An unconsumed, unexpired quote is NOT proof that creation failed.
+     * This route deliberately works when new commercial work is disabled.
+     */
+    public function confirmationOutcome(Request $request, string $quoteId): JsonResponse
+    {
+        $headers = ['Cache-Control' => 'private, no-store'];
+        $customerId = (int) $request->user()->id;
+        try {
+            $outcome = DB::transaction(function () use ($customerId, $quoteId): array {
+                DB::table('cleaning_v3_catalog_publication')->where('id', 1)->sharedLock()->first();
+                DB::table('users')->where('id', $customerId)->lockForUpdate()->first();
+                $quote = DB::table('cleaning_booking_quotes')->where('id', $quoteId)
+                    ->where('customer_id', $customerId)->where('contract_version', 'v3')->lockForUpdate()->first();
+                if ($quote === null) {
+                    abort(404);
+                }
+                if ($quote->cleaning_booking_id === null) {
+                    $expired = \Carbon\CarbonImmutable::parse((string) $quote->expires_at, 'UTC')
+                        ->lte(\Carbon\CarbonImmutable::now('UTC'));
+                    return ['quoteId' => $quoteId, 'outcome' => $expired ? 'rejected_expired' : 'unresolved'];
+                }
+                $envelope = json_decode((string) $quote->snapshot, true, flags: JSON_THROW_ON_ERROR);
+                if (isset($envelope['snapshot']['dailyAppointments'])) {
+                    $receipt = $this->dailyResult($quote, $envelope['snapshot'], true);
+                } else {
+                    $booking = CleaningBooking::query()->whereKey($quote->cleaning_booking_id)
+                        ->where('customer_id', $customerId)->where('contract_version', 'v3')->firstOrFail();
+                    $acceptedAt = data_get($booking->property_details, 'v3_quote_accepted_at');
+                    $catalog = CleaningV3CatalogVersion::query()->whereKey($quote->catalog_version_id)->firstOrFail();
+                    if (data_get($booking->property_details, 'v3_current_quote_id') !== $quote->id
+                        || ! is_string($acceptedAt) || ($envelope['quoteId'] ?? null) !== $quote->id
+                        || ! hash_equals((string) $quote->signature, (string) ($envelope['signature'] ?? ''))) {
+                        throw new DomainException('V3_BOOKING_RECEIPT_MISMATCH');
+                    }
+                    $snapshot = app(\Modules\Cleaning\Services\CleaningV3SignedQuoteEnvelope::class)->verify(
+                        $envelope, $customerId, $catalog->version_key, $catalog->published_digest,
+                        \Carbon\CarbonImmutable::parse($acceptedAt)->utc(),
+                    );
+                    $receipt = $this->result($booking, true, $snapshot);
+                }
+                return ['quoteId' => $quoteId, 'outcome' => 'accepted', 'receipt' => $receipt];
+            }, 3);
+            return response()->json(['success' => true, 'data' => $outcome], 200, $headers);
+        } catch (DomainException $e) {
+            return response()->json(['success' => false, 'code' => $e->getMessage()], 409, $headers);
+        }
+    }
+
     public function __invoke(Request $request): JsonResponse
     {
         if (! config('cleaning_v3_catalog.new_booking_admission_enabled', false)
@@ -55,11 +107,16 @@ final class CleaningV3CreateBookingController
                 ksort($canonicalConfirmation);
                 $acceptanceHash = hash('sha256', json_encode($canonicalConfirmation, JSON_THROW_ON_ERROR));
                 if ($quote->cleaning_booking_id !== null) {
+                    $envelope = json_decode((string) $quote->snapshot, true);
+                    if (isset($envelope['snapshot']['dailyAppointments'])) {
+                        $this->assertDailyReplay($quote, $envelope['snapshot'], $confirmation);
+                        return $this->dailyResult($quote, $envelope['snapshot'], true);
+                    }
                     $booking = CleaningBooking::query()->whereKey($quote->cleaning_booking_id)->where('customer_id', $customerId)->firstOrFail();
                     if (! hash_equals((string) data_get($booking->property_details, 'v3_acceptance_hash'), $acceptanceHash)) {
                         throw new DomainException('V3_BOOKING_QUOTE_ALREADY_CONSUMED');
                     }
-                    return $this->result($booking, true);
+                    return $this->result($booking, true, $envelope['snapshot'] ?? null);
                 }
                 $preferences = app(CleaningV3CustomerPreferences::class)->resolve($customerId, $draft['preferences'] ?? null, true);
                 // Hold the persisted pricing inputs until the booking is linked.
@@ -87,6 +144,7 @@ final class CleaningV3CreateBookingController
                     throw new DomainException('REQUOTE_REQUIRED');
                 }
                 $amendment = $snapshot['amendment'] ?? null;
+                app(\Modules\Cleaning\Services\CleaningV3WorkRequirements::class)->assertCapacity($snapshot, $data['capacityCheck']);
                 $existingBooking = null;
                 $existingVisits = null;
                 if ($amendment !== null) {
@@ -121,6 +179,14 @@ final class CleaningV3CreateBookingController
                 $requests = $equipment->requests($catalog->items, $answers);
                 $allocation = $equipment->allocate($requests, $data['appointments'], true);
                 $event = $data['event'] ?? null;
+                $daily = array_key_exists('dailyAppointments', $snapshot);
+                $dailyEnabled = config('cleaning_v3_catalog.independent_daily_bookings_enabled', false);
+                if ($daily && (! $dailyEnabled || $event !== null || $amendment !== null || ($data['recurrenceRule'] ?? null) === null)) {
+                    throw new DomainException('V3_INDEPENDENT_DAILY_BOOKINGS_PAUSED');
+                }
+                if ($dailyEnabled && ($data['recurrenceRule'] ?? null) !== null && $event === null && $amendment === null && ! $daily) {
+                    throw new DomainException('REQUOTE_REQUIRED');
+                }
                 $propertyItem = $catalog->items->firstWhere('item_key', $draft['propertyKey'] ?? '');
                 if ($propertyItem === null && $catalog->items->where('source_type', 'property')->where('is_enabled', true)->count() === 1) {
                     $propertyItem = $catalog->items->where('source_type', 'property')->where('is_enabled', true)->first();
@@ -133,26 +199,37 @@ final class CleaningV3CreateBookingController
                 $visits = collect($data['appointments'])->flatMap(fn ($a) => array_map(fn ($v) => [...$v, 'appointmentKey' => $a['appointmentKey']], $a['visits']))
                     ->sortBy('startAt')->values();
                 $rows = collect($snapshot['commercialReview']['visits'])->keyBy('occurrenceKey');
-                $totals = $snapshot['commercialReview']['totals'];
+                $commercialTotals = $snapshot['commercialReview']['totals'];
+                $address = $preferences['address'];
+                $owned = UserAddress::query()->whereKey($address['addressId'])->firstOrFail();
+                $groups = $daily ? $visits->map(fn ($visit) => collect([$visit])) : collect([$visits]);
+                $bookings = [];
+                $acceptedAt = now('UTC')->toIso8601String();
+                $work = collect($data['capacityCheck']['visits'])->keyBy('occurrenceKey');
+                foreach ($groups as $groupIndex => $visits) {
+                $first = $visits->first();
+                $totals = $daily ? $rows->get($first['occurrenceKey']) : $commercialTotals;
                 // Respect the narrower historic booking money columns.
                 if (CleaningV3CashSettlementBasis::cents($totals['totalAmountSyp']) > 9999999999) {
                     throw new DomainException('V3_BOOKING_AMOUNT_LIMIT');
                 }
-                $address = $preferences['address'];
-                $owned = UserAddress::query()->whereKey($address['addressId'])->firstOrFail();
-                $first = $visits->first();
                 $supervised = $event === null && $visits->max('requiredWorkers') > 1;
                 $details = [
                     'address' => $address['address'], 'location_name' => $address['label'],
                     'address_details' => $address['details'], 'v3_address_id' => $address['addressId'],
                     'v3_excluded_worker_ids' => $preferences['excludedWorkerIds'],
                     'v3_admission_hold' => true, 'v3_acceptance_hash' => $acceptanceHash,
-                    'v3_current_quote_id' => $quote->id, 'v3_quote_accepted_at' => now('UTC')->toIso8601String(),
+                    'v3_current_quote_id' => $quote->id, 'v3_quote_accepted_at' => $acceptedAt,
                     'v3_answers' => $answers, 'v3_scope_selections' => $draft['scopeSelections'] ?? [],
                     'cleaning_mode' => $draft['cleaningMode'] ?? null,
                     'schedule' => ['mode' => $data['recurrenceRule'] === null ? 'single' : 'recurring',
                         'rule' => $data['recurrenceRule'], 'skippedOccurrences' => $data['skippedOccurrences']],
                 ];
+                if ($daily || data_get($existingBooking?->property_details, 'v3_daily_origin_quote_id') !== null) {
+                    $details['v3_daily_origin_quote_id'] = $daily ? $quote->id : data_get($existingBooking->property_details, 'v3_daily_origin_quote_id');
+                    $details['v3_daily_origin_accepted_at'] = $daily ? $acceptedAt : data_get($existingBooking->property_details, 'v3_daily_origin_accepted_at');
+                    $details['schedule'] = ['mode' => 'single'];
+                }
                 if ($existingBooking !== null && (string) $existingBooking->property_type !== $property) {
                     throw new DomainException('V3_REVISION_PROPERTY_CHANGED');
                 }
@@ -179,20 +256,31 @@ final class CleaningV3CreateBookingController
                 // Never fire legacy dispatch/repricing observers for an
                 // unpaid, not yet operationally admitted booking.
                 $booking->saveQuietly();
+                if ($daily) {
+                    DB::table('cleaning_quote_bookings')->insert([
+                        'quote_id' => $quote->id, 'cleaning_booking_id' => $booking->id,
+                        'appointment_sequence' => $groupIndex + 1,
+                    ]);
+                }
                 if ($coupon !== null) {
                     // Existing redemption service serializes total and per-user
                     // use limits. Suppress legacy repricing/dispatch observers.
                     $subtotal = bcsub(bcadd($totals['totalAmountSyp'], $totals['discountAmountSyp'], 2),
                         $totals['additionalWorkerFeeSyp'], 2);
-                    $redemption = CleaningBooking::withoutEvents(fn () => app(\App\Services\Coupons\PlatformCouponRedemptionService::class)->record(
-                        $coupon, $customerId, PlatformCoupon::SECTION_CLEANING,
-                        (float) $subtotal, (float) $totals['discountAmountSyp'], $booking,
-                    ));
-                    $redemption->forceFill(['funding_type' => PlatformCoupon::FUNDING_PLATFORM,
-                        'platform_funded_amount' => $totals['discountAmountSyp'], 'merchant_funded_amount' => '0.00',
-                        'funding_snapshot' => ['version' => 1, 'source' => 'v3_company_commission_cap', 'quoteId' => $quote->id],
-                    ])->save();
-                    $booking->forceFill(['discount_amount' => $totals['discountAmountSyp'],
+                    if ($groupIndex === 0) {
+                        $commercialSubtotal = bcsub(bcadd($commercialTotals['totalAmountSyp'], $commercialTotals['discountAmountSyp'], 2),
+                            $commercialTotals['additionalWorkerFeeSyp'], 2);
+                        $redemption = CleaningBooking::withoutEvents(fn () => app(\App\Services\Coupons\PlatformCouponRedemptionService::class)->record(
+                            $coupon, $customerId, PlatformCoupon::SECTION_CLEANING,
+                            $commercialSubtotal, $commercialTotals['discountAmountSyp'], $booking,
+                        ));
+                        $redemption->forceFill(['funding_type' => PlatformCoupon::FUNDING_PLATFORM,
+                            'platform_funded_amount' => $commercialTotals['discountAmountSyp'], 'merchant_funded_amount' => '0.00',
+                            'funding_snapshot' => ['version' => 1, 'source' => 'v3_company_commission_cap', 'quoteId' => $quote->id],
+                        ])->save();
+                    }
+                    $booking->forceFill(['platform_coupon_id' => $coupon->id, 'platform_coupon_code' => $coupon->code,
+                        'discount_amount' => $totals['discountAmountSyp'],
                         'subtotal_before_discount' => $subtotal])->saveQuietly();
                 }
                 if ($existingBooking === null) {
@@ -201,7 +289,6 @@ final class CleaningV3CreateBookingController
                         'from_status' => null, 'to_status' => 'pending', 'created_at' => now(), 'updated_at' => now(),
                     ]);
                 }
-                $work = collect($data['capacityCheck']['visits'])->keyBy('occurrenceKey');
                 foreach ($visits as $index => $plan) {
                     $key = $plan['occurrenceKey'];
                     $row = $rows->get($key);
@@ -227,6 +314,9 @@ final class CleaningV3CreateBookingController
                     ]);
                     $visit->forceFill(['appointment_key' => $plan['appointmentKey'], 'occurrence_key' => $key,
                         'price_revision' => $snapshot['pricingRevision']])->saveQuietly();
+                    if ($daily) {
+                        app(CleaningV3DailyQuoteScope::class)->assertExecution($snapshot, $groupIndex + 1, $visit, true);
+                    }
                     // Persist equipment allocations against the real visit.
                     foreach ($allocation[$key] ?? [] as $entries) {
                         foreach ($entries as $entry) {
@@ -240,11 +330,18 @@ final class CleaningV3CreateBookingController
                         }
                     }
                 }
+                $bookings[] = $booking;
+                }
+                $booking = $bookings[0];
                 DB::table('cleaning_booking_quotes')->where('id', $quote->id)->update([
                     'cleaning_booking_id' => $booking->id, 'updated_at' => now(),
                     'v3_confirmed_draft' => json_encode($draft, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
                 ]);
-                return $this->result($booking, false);
+                if ($daily) {
+                    $quote->cleaning_booking_id = $booking->id;
+                    return $this->dailyResult($quote, $snapshot, false);
+                }
+                return $this->result($booking, false, $snapshot);
             }, 3);
             return response()->json(['success' => true, 'data' => $result], $result['replayed'] ? 200 : 201, $headers);
         } catch (DomainException $e) {
@@ -253,14 +350,108 @@ final class CleaningV3CreateBookingController
         }
     }
 
-    private function result(CleaningBooking $booking, bool $replayed): array
+    private function assertDailyReplay(object $quote, array $snapshot, array $confirmation): void
     {
-        return ['bookingId' => (int) $booking->id, 'bookingNumber' => $booking->booking_number,
-            'paymentStatus' => 'unpaid', 'admissionStatus' => $booking->status->value === 'cancelled' ? 'cancelled' : 'pending_operational_review',
-            'canDispatch' => false, 'replayed' => $replayed,
+        $expected = [
+            'quoteId' => $quote->id, 'idempotencyKey' => $quote->idempotency_key,
+            'requestHash' => $quote->request_hash, 'quoteSignature' => $quote->signature,
+            'acceptedTotalSyp' => $snapshot['totalWithAdditionalWorkerFees'],
+            'pricingRevision' => $snapshot['pricingRevision'],
+            'pricingFingerprint' => $snapshot['commercialReview']['pricingFingerprint'],
+            'draftFingerprint' => $snapshot['commercialReview']['draftFingerprint'],
+        ];
+        ksort($expected);
+        ksort($confirmation);
+        if ($expected !== $confirmation) {
+            throw new DomainException('V3_BOOKING_QUOTE_ALREADY_CONSUMED');
+        }
+    }
+
+    private function dailyResult(object $quote, array $snapshot, bool $replayed): array
+    {
+        $links = DB::table('cleaning_quote_bookings')->where('quote_id', $quote->id)
+            ->orderBy('appointment_sequence')->get();
+        if ($links->count() !== count($snapshot['dailyAppointments'])
+            || (int) $links->first()?->cleaning_booking_id !== (int) $quote->cleaning_booking_id) {
+            throw new DomainException('V3_DAILY_BOOKING_RECEIPT_MISMATCH');
+        }
+        $catalog = CleaningV3CatalogVersion::query()->whereKey($quote->catalog_version_id)->firstOrFail();
+        $envelope = json_decode((string) $quote->snapshot, true, flags: JSON_THROW_ON_ERROR);
+        $scope = app(CleaningV3DailyQuoteScope::class);
+        $receipt = [];
+        $first = null;
+        foreach ($links as $index => $link) {
+            $booking = CleaningBooking::query()->whereKey($link->cleaning_booking_id)
+                ->where('customer_id', $quote->customer_id)->where('contract_version', 'v3')
+                ->where('catalog_version_id', $quote->catalog_version_id)->first();
+            $accepted = data_get($booking?->property_details, 'v3_daily_origin_accepted_at');
+            if ($booking === null || ! is_string($accepted)
+                || data_get($booking->property_details, 'v3_daily_origin_quote_id') !== $quote->id
+                || (int) $link->appointment_sequence !== $index + 1) {
+                throw new DomainException('V3_DAILY_BOOKING_RECEIPT_MISMATCH');
+            }
+            if ($index === 0) {
+                $first = $booking;
+                $snapshot = app(\Modules\Cleaning\Services\CleaningV3SignedQuoteEnvelope::class)->verify(
+                    $envelope, (int) $quote->customer_id, $catalog->version_key, $catalog->published_digest,
+                    \Carbon\CarbonImmutable::parse($accepted)->utc(),
+                );
+                if (($envelope['quoteId'] ?? null) !== $quote->id
+                    || ! hash_equals((string) $quote->signature, (string) ($envelope['signature'] ?? ''))) {
+                    throw new DomainException('V3_DAILY_BOOKING_RECEIPT_MISMATCH');
+                }
+            }
+            $plan = $scope->appointment($snapshot, $index + 1);
+            $visits = $booking->sessions()->where('status', '!=', 'superseded')->get();
+            $visit = $visits->first();
+            $row = collect($snapshot['commercialReview']['visits'])->firstWhere('occurrenceKey', $plan['occurrenceKey']);
+            if ($visits->count() !== 1 || $visit->occurrence_key !== $plan['occurrenceKey']
+                || $visit->appointment_key !== $plan['appointmentKey'] || $row === null) {
+                throw new DomainException('V3_DAILY_BOOKING_RECEIPT_MISMATCH');
+            }
+            $approved = app(\Modules\Cleaning\Services\CleaningV3OperationalAdmissionPolicy::class)->approved($booking);
+            $receipt[] = [
+                'bookingId' => (int) $booking->id, 'bookingNumber' => $booking->booking_number,
+                'occurrenceKey' => $plan['occurrenceKey'], 'appointmentKey' => $plan['appointmentKey'],
+                'scheduledDate' => $plan['scheduledDate'], 'scheduledTime' => $plan['scheduledTime'],
+                'amount' => $row['totalAmountSyp'], 'visitId' => (int) $visit->id,
+                // The receipt describes the original signed acceptance, not
+                // a later revision of this independently editable booking.
+                'priceRevision' => (int) $snapshot['pricingRevision'],
+                'admissionStatus' => $booking->status->value === 'cancelled' ? 'cancelled'
+                    : ($approved ? 'approved' : 'pending_operational_review'),
+            ];
+        }
+        // The old singular aliases describe ONLY the first booking and its
+        // own visit. Never send sibling IDs as actionable children of it.
+        return [...$this->result($first, $replayed), 'receiptKind' => 'independent_daily',
+            'confirmationQuoteId' => (string) $quote->id, 'bookings' => $receipt];
+    }
+
+    private function result(CleaningBooking $booking, bool $replayed, ?array $snapshot = null): array
+    {
+        $approved = app(\Modules\Cleaning\Services\CleaningV3OperationalAdmissionPolicy::class)->approved($booking);
+        $result = ['bookingId' => (int) $booking->id, 'bookingNumber' => $booking->booking_number,
+            'paymentStatus' => 'unpaid', 'admissionStatus' => $booking->status->value === 'cancelled' ? 'cancelled'
+                : ($approved ? 'approved' : 'pending_operational_review'),
+            'canDispatch' => $approved && $booking->status->value === 'pending', 'replayed' => $replayed,
             'visits' => $booking->sessions()->orderBy('sequence')->get()->map(fn ($v) => [
                 'visitId' => (int) $v->id, 'occurrenceKey' => $v->occurrence_key,
                 'appointmentKey' => $v->appointment_key, 'priceRevision' => (int) $v->price_revision,
             ])->all()];
+        if ($snapshot !== null) {
+            $firstVisit = $booking->sessions()->orderBy('sequence')->first();
+            $result['bookings'] = [[
+                'bookingId' => (int) $booking->id, 'bookingNumber' => $booking->booking_number,
+                'occurrenceKey' => count($result['visits']) === 1 ? $firstVisit?->occurrence_key : null,
+                'appointmentKey' => count($result['visits']) === 1 ? $firstVisit?->appointment_key : null,
+                'scheduledDate' => $firstVisit?->scheduled_date?->format('Y-m-d'),
+                'scheduledTime' => $firstVisit === null ? null : mb_substr((string) $firstVisit->scheduled_time, 0, 5),
+                'amount' => $snapshot['totalWithAdditionalWorkerFees'],
+                'admissionStatus' => $result['admissionStatus'],
+                'visitId' => count($result['visits']) === 1 ? (int) $firstVisit->id : null,
+            ]];
+        }
+        return $result;
     }
 }

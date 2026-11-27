@@ -84,6 +84,11 @@ final class CleaningV3VisitDispatchService
             }
 
             $now = $this->clock($clock);
+            if ($visit->isTerminal()) {
+                DB::table('cleaning_v3_visit_dispatches')->where('id', $record->id)
+                    ->whereNull('resolved_at')->update(['resolved_at' => $now, 'updated_at' => $now]);
+                return;
+            }
             $covered = $this->acceptedCount($visit) >= $visit->requiredWorkerCount();
             if ($covered && $record->resolved_at === null) {
                 DB::table('cleaning_v3_visit_dispatches')->where('id', $record->id)
@@ -192,8 +197,10 @@ final class CleaningV3VisitDispatchService
 
         $status = match (true) {
             $session->isTerminal() => 'closed',
+            data_get($session->booking->property_details, 'v3_admission_hold') === true => 'not_started',
             $record === null => 'not_started',
             $remaining === 0 => 'covered',
+            ! in_array($session->status->value, ['scheduled', 'worker_assigned'], true) => 'closed',
             $appointmentPast => 'reschedule_required',
             $record->escalated_at !== null => 'escalated',
             default => 'searching',

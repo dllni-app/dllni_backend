@@ -449,7 +449,8 @@ it('returns only assigned supervisor V3 visit identities, without changing V2 su
         'scheduled_date' => now()->addDay()->toDateString(),
         'scheduled_time' => '10:00',
         'duration_hours' => 2,
-        'required_workers' => 1,
+        'required_workers' => 2,
+        'supervision_mode' => 'supervisor',
         'status' => 'scheduled',
         'coverage_status' => 'searching',
     ]);
@@ -459,12 +460,15 @@ it('returns only assigned supervisor V3 visit identities, without changing V2 su
         'scheduled_date' => now()->addDays(2)->toDateString(),
         'scheduled_time' => '10:00',
         'duration_hours' => 2,
-        'required_workers' => 1,
+        'required_workers' => 2,
+        'supervision_mode' => 'supervisor',
         'status' => 'scheduled',
         'coverage_status' => 'searching',
     ]);
 
     Sanctum::actingAs($supervisor);
+    $this->getJson('/api/v1/supervisor/bookings/'.$booking->id)->assertNotFound();
+    \Tests\Support\CleaningV3AdmittedStateFixture::apply($booking);
     $this->getJson('/api/v1/supervisor/bookings/'.$booking->id)
         ->assertOk()
         ->assertJsonPath('data.contractVersion', 3)

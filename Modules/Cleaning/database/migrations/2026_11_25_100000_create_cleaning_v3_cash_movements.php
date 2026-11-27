@@ -18,7 +18,6 @@ return new class extends Migration
             $table->foreign('quote_id', 'cv3_cash_quote_fk')->references('id')->on('cleaning_booking_quotes')->restrictOnDelete();
             $table->string('reference', 128)->unique('cv3_cash_ref_uq');
             $table->string('collection_reference', 128)->nullable();
-            $table->foreign('collection_reference', 'cv3_cash_collection_fk')->references('reference')->on('cleaning_v3_cash_movements')->restrictOnDelete();
             $table->string('kind', 24);
             $table->string('beneficiary_key', 96);
             $table->string('status', 24);
@@ -32,6 +31,12 @@ return new class extends Migration
             $table->timestamp('verified_at')->nullable();
             $table->timestamps();
             $table->index(['cleaning_booking_session_id', 'kind', 'status'], 'cv3_cash_visit_kind_idx');
+        });
+
+        // MySQL 8.4 requires the unique referenced key to exist first.
+        Schema::table('cleaning_v3_cash_movements', static function (Blueprint $table): void {
+            $table->foreign('collection_reference', 'cv3_cash_collection_fk')
+                ->references('reference')->on('cleaning_v3_cash_movements')->restrictOnDelete();
         });
     }
 

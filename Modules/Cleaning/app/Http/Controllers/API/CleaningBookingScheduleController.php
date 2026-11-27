@@ -53,6 +53,21 @@ final class CleaningBookingScheduleController
             ? $this->workerSchedules->present($cleaning_booking, $viewerWorker)
             : $this->customerSchedules->present($cleaning_booking);
 
+        $daily = $cleaning_booking->contract_version === 'v3'
+            ? app(\Modules\Cleaning\Services\CleaningV3DailyBookingProjection::class)->present($cleaning_booking, $user, $schedule) : null;
+        $requirements = [];
+        if ($daily !== null && $isCustomer
+            && in_array('cancel_booking', $daily['allowedActions'], true)
+            && app(CleaningV3RevisionDraftController::class)->available((int) $user->id, $bookingId)) {
+            $daily['allowedActions'][] = 'revise_booking';
+        }
+        if ($daily !== null && $viewerWorker instanceof Worker) {
+            $execution = app(\Modules\Cleaning\Services\CleaningV3DailyBookingProjection::class)->execution($cleaning_booking);
+            $requirements = $execution !== null && (int) $execution->id === $daily['executionId']
+                ? app(\Modules\Cleaning\Services\CleaningV3WorkRequirements::class)->forWorker($cleaning_booking, $execution, $viewerWorker)
+                : ['requirementsAvailable' => false, 'requirements' => null];
+        }
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -66,9 +81,13 @@ final class CleaningBookingScheduleController
                 'hasReview' => $hasReview,
                 'canReview' => $canReview,
                 'schedule' => $schedule,
+                ...($daily !== null ? ['dailyBooking' => $daily] : []),
+                ...$requirements,
                 ...($isCustomer && $cleaning_booking->contract_version === 'v3' ? [
-                    'v3AdmissionStatus' => data_get($cleaning_booking->property_details, 'v3_admission_hold') === true
-                        ? ($cleaning_booking->status === CleaningBookingStatus::Cancelled ? 'cancelled' : 'pending_operational_review') : null,
+                    'v3AdmissionStatus' => $cleaning_booking->status === CleaningBookingStatus::Cancelled
+                        ? 'cancelled'
+                        : (app(\Modules\Cleaning\Services\CleaningV3OperationalAdmissionPolicy::class)->approved($cleaning_booking)
+                            ? 'approved' : 'pending_operational_review'),
                     'v3CashSettlements' => app(\Modules\Cleaning\Services\CleaningV3CashSettlementService::class)
                         ->customerSummary($bookingId, (int) $user->id),
                 ] : []),

@@ -33,6 +33,9 @@ use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
 use Modules\Cleaning\Services\CleaningBookingAdminPricingService;
 use Modules\Cleaning\Services\CleaningBookingTeamPresentation;
 use Modules\Cleaning\Services\CleaningBookingTeamService;
+use Modules\Cleaning\Services\CleaningOperationsReportingService;
+use Modules\Cleaning\Services\CleaningV3DailyBookingProjection;
+use Modules\Cleaning\Services\CleaningV3DisplayFormatter;
 use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
 use Modules\Cleaning\Services\CleaningMaterialInventoryService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
@@ -52,7 +55,10 @@ final class CleaningBookingsTable
                     ->label(self::headerLabel('الحالة', 'الحالة الحالية للحجز.'))
                     ->badge()
                     ->color(fn ($state): string => self::statusColor($state))
-                    ->formatStateUsing(fn ($state): string => self::statusLabel($state)),
+                    ->formatStateUsing(function ($state, CleaningBooking $record): string {
+                        $daily = app(CleaningV3DailyBookingProjection::class)->present($record);
+                        return $daily === null ? self::statusLabel($state) : CleaningV3DisplayFormatter::state($daily['state']);
+                    }),
                 TextColumn::make('booking_kind')
                     ->label(self::headerLabel('نوع الحجز', 'يميز بين تنظيف عادي، تنظيف عميق، وطلب مساعدة مناسبة.'))
                     ->getStateUsing(fn (CleaningBooking $record): string => $record->dashboardKindLabel())
@@ -124,9 +130,10 @@ final class CleaningBookingsTable
                     ->sortable(),
                 TextColumn::make('estimated_duration_display')
                     ->label(self::headerLabel('مدة العمل المتوقعة', 'المدة التقديرية للعمل في هذا الحجز بالساعات.'))
-                    ->getStateUsing(fn (CleaningBooking $record): string => (
-                        mb_rtrim(mb_rtrim(number_format(max(0.0, (float) ($record->estimated_hours ?: $record->total_hours ?: 0)), 2, '.', ''), '0'), '.')
-                    ).' ساعة')
+                    ->getStateUsing(fn (CleaningBooking $record): string => CleaningV3DisplayFormatter::duration(
+                        app(CleaningV3DailyBookingProjection::class)->present($record)['durationMinutes']
+                            ?? (int) round(max(0.0, (float) ($record->estimated_hours ?: $record->total_hours ?: 0)) * 60)
+                    ))
                     ->badge()
                     ->color('info'),
                 TextColumn::make('accepted_workers')
@@ -153,7 +160,8 @@ final class CleaningBookingsTable
                     ->formatStateUsing(fn ($state): string => self::time($state)),
                 TextColumn::make('total_price')
                     ->label(self::headerLabel('الإجمالي', 'المبلغ الإجمالي بأرقام صحيحة.'))
-                    ->formatStateUsing(fn ($state): string => self::money($state))
+                    ->formatStateUsing(fn ($state, CleaningBooking $record): string => ($record->getAttributes()['contract_version'] ?? null) === 'v3'
+                        ? CleaningV3DisplayFormatter::money($record->getRawOriginal('total_price')) : self::money($state))
                     ->weight(FontWeight::Bold)
                     ->color('success')
                     ->tooltip(fn (CleaningBooking $record): string => self::priceFormula($record))
@@ -205,7 +213,10 @@ final class CleaningBookingsTable
                     )),
                 Filter::make('scheduled_today')
                     ->label('مجدول اليوم')
-                    ->query(fn (Builder $query): Builder => $query->scheduledOn(today())),
+                    ->query(fn (Builder $query): Builder => app(CleaningOperationsReportingService::class)->scheduledBookingsQuery($query)),
+                Filter::make('active_search')
+                    ->label('بحث نشط عن العمال')
+                    ->query(fn (Builder $query): Builder => app(CleaningOperationsReportingService::class)->searchingBookingsQuery($query)),
                 Filter::make('multi_day_event')
                     ->label('مناسبة متعددة الأيام')
                     ->query(fn (Builder $query): Builder => $query
@@ -370,7 +381,7 @@ final class CleaningBookingsTable
                     ->label('إضافة عامل')
                     ->icon('heroicon-o-user-plus')
                     ->color('success')
-                    ->visible(fn (CleaningBooking $record): bool => in_array($record->status, [CleaningBookingStatus::Pending, CleaningBookingStatus::WorkerAssigned], true)
+                    ->visible(fn (CleaningBooking $record): bool => $record->contract_version !== 'v3' && in_array($record->status, [CleaningBookingStatus::Pending, CleaningBookingStatus::WorkerAssigned], true)
                         && $record->acceptedWorkerCount() < max(1, (int) ($record->number_of_workers ?? 1)))
                     ->modalHeading('إضافة عامل')
                     ->form([
@@ -387,6 +398,7 @@ final class CleaningBookingsTable
                             : (string) $record->status;
 
                         try {
+                            abort_if($record->fresh()->contract_version === 'v3', 409, 'V3_VISIT_SCOPED_ASSIGNMENT_REQUIRED');
                             $worker = Worker::query()->with('user')->findOrFail((int) $data['worker_id']);
                             self::assertDashboardWorkerEligibility($record, $worker);
                             $updated = app(CleaningBookingTeamService::class)->acceptWorker(
@@ -413,7 +425,7 @@ final class CleaningBookingsTable
                     ->label('إلغاء تعيين العامل')
                     ->icon('heroicon-o-user-minus')
                     ->color('warning')
-                    ->visible(fn (CleaningBooking $record): bool => in_array($record->status, [CleaningBookingStatus::Pending, CleaningBookingStatus::WorkerAssigned], true) && $record->acceptedWorkerCount() > 0)
+                    ->visible(fn (CleaningBooking $record): bool => $record->contract_version !== 'v3' && in_array($record->status, [CleaningBookingStatus::Pending, CleaningBookingStatus::WorkerAssigned], true) && $record->acceptedWorkerCount() > 0)
                     ->modalHeading('إلغاء تعيين العامل')
                     ->form([
                         Select::make('worker_id')
@@ -424,6 +436,7 @@ final class CleaningBookingsTable
                         TextInput::make('reason')->label('السبب')->maxLength(255),
                     ])
                     ->action(function (CleaningBooking $record, array $data): void {
+                        abort_if($record->fresh()->contract_version === 'v3', 409, 'V3_VISIT_SCOPED_ASSIGNMENT_REQUIRED');
                         $worker = Worker::query()->with('user')->findOrFail((int) $data['worker_id']);
                         $updated = app(CleaningBookingTeamService::class)->rejectWorker(
                             $record->fresh(['workerAssignments.worker.user']),
@@ -495,7 +508,7 @@ final class CleaningBookingsTable
                     ->label('إلغاء الحجز')
                     ->icon('heroicon-o-x-circle')
                     ->color('danger')
-                    ->visible(fn (CleaningBooking $record): bool => ! in_array($record->status, [
+                    ->visible(fn (CleaningBooking $record): bool => $record->contract_version !== 'v3' && ! in_array($record->status, [
                         CleaningBookingStatus::Completed,
                         CleaningBookingStatus::Cancelled,
                         CleaningBookingStatus::UnderDispute,
@@ -520,6 +533,8 @@ final class CleaningBookingsTable
                                 ->whereKey($record->getKey())
                                 ->lockForUpdate()
                                 ->firstOrFail();
+
+                            abort_if($booking->contract_version === 'v3', 409, 'V3_CANCELLATION_POLICY_REQUIRED');
 
                             if (in_array($booking->status, [
                                 CleaningBookingStatus::Completed,
@@ -834,6 +849,11 @@ final class CleaningBookingsTable
 
     private static function workerPayoutAmount(CleaningBooking $record): float
     {
+        if (($record->getAttributes()['contract_version'] ?? null) === 'v3') {
+            $session = app(CleaningBookingTeamPresentation::class)->displaySession($record);
+            return $session === null ? 0.0 : (float) $session->workerAssignments()
+                ->whereNull('released_at')->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())->sum('worker_amount');
+        }
         $assignments = $record->relationLoaded('workerAssignments')
             ? $record->workerAssignments
             : $record->workerAssignments()->get();

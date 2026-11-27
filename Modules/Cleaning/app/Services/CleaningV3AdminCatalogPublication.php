@@ -26,9 +26,43 @@ final class CleaningV3AdminCatalogPublication
 
     public static function digest(): ?string
     {
+        if (app(CleaningV3QaEnvironment::class)->signingKey() !== null) {
+            return self::verifiedQaDigest();
+        }
+
+        return self::commercialDigest();
+    }
+
+    public static function qaDigest(): ?string
+    {
+        return app(CleaningV3QaEnvironment::class)->signingKey() === null
+            ? null : self::verifiedQaDigest();
+    }
+
+    private static function verifiedQaDigest(): ?string
+    {
+        if (! Schema::hasTable('cleaning_v3_catalog_versions')) {
+            return null;
+        }
+
+        $version = CleaningV3CatalogVersion::query()
+            ->where('version_key', CleaningV3QaEnvironment::CATALOG_KEY)
+            ->where('status', CleaningV3CatalogVersion::PUBLISHED)->whereNotNull('published_at')->first();
+
+        return self::verifiedDigest($version);
+    }
+
+    public static function commercialDigest(): ?string
+    {
         if (! config('cleaning_v3_catalog.admin_publication_enabled', false)) {
             $digest = config('cleaning_v3_catalog.approved_publication_digest');
-            return is_string($digest) ? $digest : null;
+            if (! is_string($digest) || (Schema::hasTable('cleaning_v3_catalog_versions')
+                && CleaningV3CatalogVersion::query()->where('version_key', CleaningV3QaEnvironment::CATALOG_KEY)
+                    ->where('published_digest', $digest)->exists())) {
+                return null;
+            }
+
+            return $digest;
         }
         if (! Schema::hasTable('cleaning_v3_catalog_publication')) {
             return null;
@@ -36,8 +70,18 @@ final class CleaningV3AdminCatalogPublication
         $pointer = DB::table('cleaning_v3_catalog_publication')->where('id', 1)->first();
         $version = $pointer?->catalog_version_id === null ? null : CleaningV3CatalogVersion::query()
             ->whereKey($pointer->catalog_version_id)->where('status', 'published')->whereNotNull('published_at')->first();
-        if ($version === null || ! is_string($version->published_digest)
+        if ($version === null || $version->version_key === CleaningV3QaEnvironment::CATALOG_KEY
+            || ! is_string($version->published_digest)
             || ! hash_equals($version->published_digest, (string) $pointer->digest)) {
+            return null;
+        }
+
+        return self::verifiedDigest($version);
+    }
+
+    private static function verifiedDigest(?CleaningV3CatalogVersion $version): ?string
+    {
+        if ($version === null || ! is_string($version->published_digest)) {
             return null;
         }
         // Detect bypasses of model immutability and concurrent child edits.
@@ -170,6 +214,10 @@ final class CleaningV3AdminCatalogPublication
                 throw new DomainException('V3_PUBLICATION_REGISTRY_UNAVAILABLE');
             }
             $version = CleaningV3CatalogVersion::query()->whereKey($draft->id)->lockForUpdate()->firstOrFail();
+            $isQa = $version->version_key === CleaningV3QaEnvironment::CATALOG_KEY;
+            if ($isQa !== (app(CleaningV3QaEnvironment::class)->signingKey() !== null)) {
+                throw new DomainException('V3_CATALOG_PUBLICATION_ENVIRONMENT_MISMATCH');
+            }
             $version->assertEditable();
             $items = $version->items()->lockForUpdate()->get();
             foreach ($items as $item) {
@@ -190,9 +238,11 @@ final class CleaningV3AdminCatalogPublication
                 'status' => 'published', 'published_by' => auth()->id(),
                 'published_at' => $now, 'published_digest' => $actual, 'updated_at' => $now,
             ]);
-            DB::table('cleaning_v3_catalog_publication')->where('id', 1)->update([
-                'catalog_version_id' => $version->id, 'digest' => $actual, 'updated_at' => $now,
-            ]);
+            if (! $isQa) {
+                DB::table('cleaning_v3_catalog_publication')->where('id', 1)->update([
+                    'catalog_version_id' => $version->id, 'digest' => $actual, 'updated_at' => $now,
+                ]);
+            }
             return $version->fresh();
         }, 3);
     }
@@ -202,6 +252,9 @@ final class CleaningV3AdminCatalogPublication
         abort_unless(self::authorized(), 403);
         return DB::transaction(function () use ($source) {
             $source = CleaningV3CatalogVersion::query()->whereKey($source->id)->where('status', 'published')->firstOrFail();
+            if ($source->version_key === CleaningV3QaEnvironment::CATALOG_KEY) {
+                throw new DomainException('V3_QA_CATALOG_DUPLICATION_UNAVAILABLE');
+            }
             $source->load('items.presets', 'items.tariffRules');
             $draft = CleaningV3CatalogVersion::query()->create(['title' => mb_substr($source->title.' - نسخة جديدة', 0, 180), 'notes' => $source->notes]);
             foreach ($source->items as $item) {

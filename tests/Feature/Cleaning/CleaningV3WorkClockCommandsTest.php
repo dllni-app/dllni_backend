@@ -282,6 +282,10 @@ test('a supervised visit can only be paused by the currently assigned supervisor
     ]);
 
     $this->postJson($url.'/pause-requests/'.$id.'/decision', [
+        'decision' => 'approve', 'commandKey' => 'real-supervisor-before-admission', 'expectedRevision' => 2,
+    ])->assertNotFound();
+    \Tests\Support\CleaningV3AdmittedStateFixture::apply($visit->booking);
+    $this->postJson($url.'/pause-requests/'.$id.'/decision', [
         'decision' => 'approve', 'commandKey' => 'real-supervisor', 'expectedRevision' => 2,
     ])->assertOk()->assertJsonPath('data.state', 'paused');
 

@@ -45,22 +45,29 @@ final class UserCleaningOrderCancelController
                     return $booking;
                 }
                 $visits = $booking->sessions()->lockForUpdate()->get();
+                if ($visits->count() === 1 && ! $booking->isEventAssistanceBooking()) {
+                    abort_unless(app(\Modules\Cleaning\Services\CleaningV3DailyBookingProjection::class)
+                        ->canCancelHeld($booking, $visits->first()), 409, 'V3_CANCELLATION_REVIEW_REQUIRED');
+                }
                 abort_if($visits->contains(fn ($visit) => $visit->status->value !== 'scheduled'
                     || $visit->workerAssignments()->exists()), 409, 'V3_CANCELLATION_REVIEW_REQUIRED');
                 $ids = $visits->pluck('id');
                 abort_if(DB::table('cleaning_v3_cash_movements')->whereIn('cleaning_booking_session_id', $ids)->exists()
-                    || DB::table('cleaning_work_intervals')->whereIn('cleaning_booking_session_id', $ids)->exists(), 409);
+                    || DB::table('cleaning_work_intervals')->whereIn('cleaning_booking_session_id', $ids)->exists()
+                    || DB::table('cleaning_visit_funding_reservations')->whereIn('active_visit_id', $ids)->exists(), 409);
                 DB::table('cleaning_equipment_reservations')->where('cleaning_booking_id', $booking->id)
                     ->where('status', 'reserved')->update(['status' => 'released', 'updated_at' => now()]);
                 foreach ($visits as $visit) {
                     $visit->forceFill(['status' => 'cancelled'])->saveQuietly();
                 }
-                app(\App\Services\Coupons\PlatformCouponRedemptionService::class)->reverseForOrder(
-                    $booking, 'v3_unstarted_booking_cancelled', (int) $booking->customer_id,
-                );
                 $booking->forceFill(['status' => CleaningBookingStatus::Cancelled, 'cancelled_at' => now(),
                     'cancelled_by_role' => 'customer', 'cancellation_reason' => $reason, 'cancellation_fee' => 0,
                     'total_price' => 0])->saveQuietly();
+                try {
+                    app(\Modules\Cleaning\Services\CleaningV3DailyCouponCancellation::class)->reverseIfEligible($booking);
+                } catch (\DomainException $exception) {
+                    abort(409, $exception->getMessage());
+                }
                 DB::table('booking_status_logs')->insert(['booking_id' => $booking->id, 'booking_type' => CleaningBooking::class,
                     'from_status' => 'pending', 'to_status' => 'cancelled', 'created_at' => now(), 'updated_at' => now()]);
                 return $booking;

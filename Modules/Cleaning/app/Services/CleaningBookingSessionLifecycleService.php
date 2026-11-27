@@ -50,6 +50,15 @@ final class CleaningBookingSessionLifecycleService
             $this->assertSessionNotTerminal($locked);
             $assignment = $this->activeAssignment($locked, $worker, true);
 
+            // Supervisor changes are forbidden after travel begins. Require
+            // an active supervisor first, while the parent booking is locked,
+            // so a supervised V3 visit cannot become stranded without custody.
+            if ($booking->contract_version === 'v3'
+                && $locked->supervision_mode === CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR
+                && app(CleaningSupervisorAssignmentService::class)->activeSupervisorId($booking) === null) {
+                throw new InvalidArgumentException('يجب تعيين المشرف قبل بدء التحرك إلى الزيارة.');
+            }
+
             if ($assignment->started_travel_at === null) {
                 $this->qaClock->forScheduling($locked, auth()->user() instanceof \App\Models\User ? auth()->user() : null, 'worker_start_travel');
                 $startedAt = now();
@@ -114,6 +123,10 @@ final class CleaningBookingSessionLifecycleService
         return DB::transaction(function () use ($booking, $session, $worker): array {
             $locked = $this->lockSession($booking, $session);
             $this->assertSessionNotTerminal($locked);
+            if ($booking->contract_version === 'v3'
+                && $locked->supervision_mode === CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR) {
+                throw new InvalidArgumentException('Supervisor-managed V3 verification must use the supervisor workflow.');
+            }
             $assignment = $this->activeAssignment($locked, $worker, true);
 
             if ($assignment->arrived_at === null) {
@@ -216,8 +229,11 @@ final class CleaningBookingSessionLifecycleService
             $code,
             &$verifiedWorkerId,
             &$verifiedNow,
-        ): CleaningBookingSession {
+        ): ?CleaningBookingSession {
             $locked = $this->lockSession($booking, $session);
+            abort_if($booking->contract_version === 'v3'
+                && $locked->supervision_mode === CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR,
+                409, 'V3_SUPERVISOR_EXECUTION_REQUIRED');
             $this->assertSessionNotTerminal($locked);
             $providedHash = $this->securityCodeHash($code);
 
@@ -237,7 +253,7 @@ final class CleaningBookingSessionLifecycleService
 
             if (! $record) {
                 $this->incrementActiveSecurityCodeAttempts($locked);
-                throw ValidationException::withMessages(['code' => ['Invalid security code.']]);
+                return null;
             }
 
             if (($record->consumed_at ?? null) !== null) {
@@ -303,6 +319,11 @@ final class CleaningBookingSessionLifecycleService
 
             return $this->freshSession($locked);
         });
+
+        if ($updatedSession === null) {
+            // Return the validation error after committing the failed attempt.
+            throw ValidationException::withMessages(['code' => ['Invalid security code.']]);
+        }
 
         if ($verifiedNow && $verifiedWorkerId !== null) {
             $this->broadcastStartVerified(
@@ -1275,7 +1296,10 @@ final class CleaningBookingSessionLifecycleService
                 : (string) $session->status,
         );
 
-        if ($statuses->every(static fn (string $status): bool => in_array($status, CleaningBookingSessionStatus::terminalValues(), true))) {
+        if ($booking->contract_version === 'v3') {
+            $projection = app(CleaningV3VisitStatusProjector::class)->project($statuses->values()->all());
+            $status = CleaningBookingStatus::from($projection['status']);
+        } elseif ($statuses->every(static fn (string $status): bool => in_array($status, CleaningBookingSessionStatus::terminalValues(), true))) {
             $status = $statuses->contains(CleaningBookingSessionStatus::Completed->value)
                 ? CleaningBookingStatus::Completed
                 : CleaningBookingStatus::Cancelled;
@@ -1305,6 +1329,8 @@ final class CleaningBookingSessionLifecycleService
         if ($status === CleaningBookingStatus::Completed && $lockedBooking->work_finished_at === null) {
             $updates['work_finished_at'] = now();
         }
+        // The observer preserves the status log and administrative notification;
+        // its commission handler explicitly excludes all V3 bookings.
         $lockedBooking->forceFill($updates)->save();
     }
 

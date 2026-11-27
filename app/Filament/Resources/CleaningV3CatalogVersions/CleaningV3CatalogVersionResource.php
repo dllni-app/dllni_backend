@@ -19,6 +19,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
 use Modules\Cleaning\Models\CleaningV3CatalogVersion;
+use Modules\Cleaning\Services\CleaningV3QaEnvironment;
 
 final class CleaningV3CatalogVersionResource extends Resource
 {
@@ -77,6 +78,7 @@ final class CleaningV3CatalogVersionResource extends Resource
                 \Filament\Actions\Action::make('duplicatePublished')
                     ->label('إنشاء مسودة لتعديل الأسعار')
                     ->visible(fn (CleaningV3CatalogVersion $record): bool => $record->status === CleaningV3CatalogVersion::PUBLISHED
+                        && $record->version_key !== CleaningV3QaEnvironment::CATALOG_KEY
                         && \Modules\Cleaning\Services\CleaningV3AdminCatalogPublication::authorized())
                     ->authorize(fn (): bool => \Modules\Cleaning\Services\CleaningV3AdminCatalogPublication::authorized())
                     ->requiresConfirmation()

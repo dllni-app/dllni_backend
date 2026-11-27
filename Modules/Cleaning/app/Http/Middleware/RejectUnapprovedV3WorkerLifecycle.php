@@ -56,9 +56,35 @@ final class RejectUnapprovedV3WorkerLifecycle
             );
         }
 
-        // A claimed capability is not proof of funding, genuine APK signing,
-        // approved pricing, worker entitlement, or a valid quote. Never let
-        // this header alone authorize any V3 mutation.
+        // Parent-level legacy routes must never execute a V3 visit.
+        $route = $request->route()?->getName();
+        if (is_string($route) && str_starts_with($route, 'api.')) {
+            $route = substr($route, 4);
+        }
+        $allowed = [
+            'cleaning-bookings.sessions.accept-all',
+            'cleaning-bookings.sessions.accept-selected',
+            'cleaning-bookings.sessions.start-travel',
+            'cleaning-bookings.sessions.location',
+            'cleaning-bookings.sessions.arrive',
+            'cleaning-bookings.sessions.security-code',
+            'cleaning-bookings.sessions.start-work',
+            'cleaning-bookings.sessions.complete',
+        ];
+        $visit = $request->route('cleaning_booking_session');
+        $policy = app(\Modules\Cleaning\Services\CleaningV3OperationalAdmissionPolicy::class);
+        if ($visit instanceof \Modules\Cleaning\Models\CleaningBookingSession
+            && $visit->supervision_mode === \Modules\Cleaning\Models\CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR
+            && in_array($route, ['cleaning-bookings.sessions.security-code', 'cleaning-bookings.sessions.start-work', 'cleaning-bookings.sessions.complete'], true)) {
+            return $this->deny('V3_SUPERVISOR_EXECUTION_REQUIRED',
+                'Use the verified supervisor visit workflow.', 409);
+        }
+        if (in_array($route, $allowed, true) && $policy->approved($booking)
+            && (in_array($route, ['cleaning-bookings.sessions.accept-all', 'cleaning-bookings.sessions.accept-selected'], true)
+                || ($visit instanceof \Modules\Cleaning\Models\CleaningBookingSession && $policy->approved($booking, $visit)))) {
+            return $next($request);
+        }
+        // Capability is a compatibility hint, never authorization.
         return $this->deny(
             'V3_FINANCIAL_APPROVAL_REQUIRED',
             'V3 work acceptance is unavailable until its financial and signing gates are verified.',

@@ -19,6 +19,9 @@ use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 
 final class WorkerSessionMetricsService
 {
+    /** Per-request memoization only; no shared cross-worker finance cache. */
+    private array $dailyBookings = [];
+    private array $dailyEarnings = [];
     private const ACCEPTED_PARENT_ASSIGNMENT_STATUSES = [
         'accepted',
         'accepted_waiting_team',
@@ -59,6 +62,24 @@ final class WorkerSessionMetricsService
             + $this->completedLegacyEarnings($legacyBookings, (int) $worker->id),
             2,
         );
+        $daily = $sessionAssignments->filter(fn ($assignment) => $this->isDaily($assignment)
+            && $assignment->session?->status === CleaningBookingSessionStatus::Completed
+            && $assignment->work_started_at !== null);
+        $confirmedDaily = '0.00';
+        $incompleteDaily = 0;
+        foreach ($daily as $assignment) {
+            $entry = $this->dailyEarning($assignment);
+            if (($entry['amountSyp'] ?? null) === null) {
+                $incompleteDaily++;
+            } else {
+                $confirmedDaily = bcadd($confirmedDaily, $entry['amountSyp'], 2);
+            }
+        }
+        $payload['dailyEarnings'] = [
+            'settledAmountSyp' => $confirmedDaily,
+            'currency' => 'SYP',
+            'incompleteEntries' => $incompleteDaily,
+        ];
         $todayEarnings = round(
             $this->completedSessionEarnings($todaySessionAssignments)
             + $this->completedLegacyEarnings($todayLegacyBookings, (int) $worker->id),
@@ -199,11 +220,18 @@ final class WorkerSessionMetricsService
         return CleaningBookingSessionWorkerAssignment::query()
             ->with(['session.booking'])
             ->where('worker_id', $worker->id)
-            ->whereNotIn('status', [
+            ->where(fn (Builder $query) => $query->whereNotIn('status', [
                 CleaningBookingWorkerAssignmentStatus::Rejected->value,
                 CleaningBookingWorkerAssignmentStatus::Withdrawn->value,
                 CleaningBookingWorkerAssignmentStatus::Cancelled->value,
-            ])
+            ])->orWhere(fn (Builder $released) => $released
+                ->whereIn('status', [CleaningBookingWorkerAssignmentStatus::Withdrawn->value, CleaningBookingWorkerAssignmentStatus::Cancelled->value])
+                ->whereNotNull('accepted_at')->whereNotNull('work_started_at')
+                ->whereHas('session', fn (Builder $session) => $session
+                    ->where('status', CleaningBookingSessionStatus::Completed->value)
+                    ->whereHas('booking', fn (Builder $booking) => $booking
+                        ->where('contract_version', 'v3')->where('property_type', '!=', 'event_assistance')
+                        ->whereHas('sessions', fn (Builder $current) => $current->where('status', '!=', 'superseded'), '=', 1)))))
             ->when($start !== null && $end !== null, fn (Builder $query): Builder => $query->whereHas('session', fn (Builder $session): Builder => $session->whereBetween('scheduled_date', [$start, $end])))
             ->get();
     }
@@ -252,7 +280,10 @@ final class WorkerSessionMetricsService
     {
         return (float) $assignments
             ->filter(fn (CleaningBookingSessionWorkerAssignment $assignment): bool => $assignment->session?->status === CleaningBookingSessionStatus::Completed)
-            ->sum('worker_amount');
+            ->sum(fn (CleaningBookingSessionWorkerAssignment $assignment): float =>
+                $this->isDaily($assignment)
+                    ? (float) ($this->dailyEarning($assignment)['amountSyp'] ?? 0)
+                    : (float) $assignment->worker_amount);
     }
 
     /** @param Collection<int, CleaningBookingSessionWorkerAssignment> $assignments */
@@ -260,7 +291,37 @@ final class WorkerSessionMetricsService
     {
         return (float) $assignments
             ->filter(fn (CleaningBookingSessionWorkerAssignment $assignment): bool => $assignment->session?->status === CleaningBookingSessionStatus::Completed)
-            ->sum('admin_margin_amount');
+            ->sum(fn (CleaningBookingSessionWorkerAssignment $assignment): float =>
+                $this->isDaily($assignment)
+                    ? (float) ($this->dailyEarning($assignment)['commissionSyp'] ?? 0)
+                    : (float) $assignment->admin_margin_amount);
+    }
+
+    private function isDaily(CleaningBookingSessionWorkerAssignment $assignment): bool
+    {
+        $booking = $assignment->session?->booking;
+        if ($booking === null || $booking->contract_version !== 'v3' || $booking->isEventAssistanceBooking()) {
+            return false;
+        }
+        $id = (int) $booking->id;
+        if (! array_key_exists($id, $this->dailyBookings)) {
+            $this->dailyBookings[$id] = app(CleaningV3DailyBookingProjection::class)->execution($booking)?->id;
+        }
+        return $this->dailyBookings[$id] === $assignment->session?->id;
+    }
+
+    private function dailyEarning(CleaningBookingSessionWorkerAssignment $assignment): ?array
+    {
+        $worker = auth()->user()?->worker;
+        if ($worker === null || (int) $assignment->worker_id !== (int) $worker->id) {
+            return null;
+        }
+        $key = $worker->id.':'.$assignment->id;
+        if (! array_key_exists($key, $this->dailyEarnings)) {
+            $this->dailyEarnings[$key] = app(CleaningV3CashSettlementService::class)
+                ->workerEarning((int) $assignment->id, $worker);
+        }
+        return $this->dailyEarnings[$key];
     }
 
     /** @param Collection<int, CleaningBooking> $bookings */

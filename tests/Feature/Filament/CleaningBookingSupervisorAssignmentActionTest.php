@@ -39,39 +39,33 @@ function dashboardSupervisorActor(string $role, bool $permissions = false): User
 
 function supervisorDashboardBooking(array $attributes = []): CleaningBooking
 {
-    $firstVisitDate = now(config('app.timezone'))->addDays(4)->toDateString();
-    $secondVisitDate = now(config('app.timezone'))->addDays(11)->toDateString();
+    // V2 persists one booking per appointment, not an obsolete roomPeriods
+    // group. Exercise the actual booking-level supervisor assignment boundary.
+    $date = now(config('app.timezone'))->addDays(4)->toDateString();
     $booking = CleaningBooking::factory()->create(array_merge([
+        'contract_version' => 'v2',
         'booking_kind' => 'standard',
         'status' => CleaningBookingStatus::WorkerAssigned,
         'number_of_workers' => 2,
-        'scheduled_date' => $firstVisitDate,
+        'estimated_hours' => 4,
+        'scheduled_date' => $date,
         'scheduled_time' => '09:00',
-        'property_details' => ['_supervisor_pricing' => ['hourlyRate' => 400, 'billableMinutes' => 240, 'fee' => 1600]],
+        'property_details' => ['_supervisor_pricing' => ['hourlyRate' => 400, 'billableMinutes' => 120, 'fee' => 800]],
     ], $attributes));
 
-    foreach ([1 => $firstVisitDate, 2 => $secondVisitDate] as $visit => $date) {
-        $session = $booking->sessions()->create([
-            'sequence' => $visit,
+    $booking->sessions()->create([
+            'sequence' => 1,
             'session_type' => CleaningBookingSession::TYPE_RECURRING_CLEANING,
             'calculation_mode' => 'task',
-            'scheduled_date' => $date,
-            'scheduled_time' => '09:00',
+            'scheduled_date' => $booking->scheduled_date->toDateString(),
+            'scheduled_time' => $booking->scheduled_time,
             'duration_hours' => 2,
             'required_workers' => 2,
             'supervision_mode' => CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR,
             'supervision_initialized_at' => now(),
             'coverage_status' => 'searching',
             'status' => 'scheduled',
-        ]);
-        $booking->roomPeriods()->create([
-            'cleaning_booking_session_id' => $session->id,
-            'client_key' => 'bedroom.1', 'visit_sequence' => $visit,
-            'room_type' => 'bedroom', 'room_size' => 'small', 'cleaning_mode' => 'regular',
-            'scheduled_date' => $date, 'scheduled_time' => '09:00',
-            'required_workers' => 2, 'estimated_duration_minutes' => 120,
-        ]);
-    }
+    ]);
 
     return $booking;
 }
@@ -97,25 +91,21 @@ it('assigns an active supervisor from the Filament booking header and audits a V
         ->callAction('assign_supervisor', data: ['supervisor_user_id' => $supervisor->id])
         ->assertHasNoActionErrors();
 
-    $this->assertDatabaseMissing('cleaning_supervisor_assignments', [
+    $this->assertDatabaseHas('cleaning_supervisor_assignments', [
         'cleaning_booking_id' => $booking->id,
+        'supervisor_user_id' => $supervisor->id,
+        'assigned_by_user_id' => $admin->id,
+        'active_slot' => 1,
     ]);
-    foreach ($booking->sessions as $session) {
-        $this->assertDatabaseHas('cleaning_booking_session_supervisor_assignments', [
-            'cleaning_booking_session_id' => $session->id,
-            'supervisor_user_id' => $supervisor->id,
-            'assigned_by_user_id' => $admin->id,
-            'active_slot' => 1,
-        ]);
-    }
     expect(DB::table('cleaning_supervisor_activity')
         ->where('cleaning_booking_id', $booking->id)
-        ->where('action', 'visit_supervisor_assigned')
-        ->count())->toBe(2);
+        ->where('action', 'supervisor_assigned')
+        ->count())->toBe(1);
 
     Livewire::test(ViewCleaningBooking::class, ['record' => $booking->getRouteKey()])
         ->callAction('assign_supervisor', data: ['supervisor_user_id' => $inactive->id]);
-    expect(DB::table('cleaning_booking_session_supervisor_assignments')->count())->toBe(2);
+    expect(DB::table('cleaning_supervisor_assignments')->where('cleaning_booking_id', $booking->id)->count())->toBe(1);
+    $this->assertDatabaseMissing('cleaning_supervisor_assignments', ['cleaning_booking_id' => $booking->id, 'supervisor_user_id' => $inactive->id]);
 });
 
 it('allows an ops manager with booking update permission and hides the action from support staff', function (): void {
@@ -128,7 +118,7 @@ it('allows an ops manager with booking update permission and hides the action fr
     Livewire::test(ViewCleaningBooking::class, ['record' => $booking->getRouteKey()])
         ->assertActionHidden('assign_supervisor');
     expect(fn () => app(CleaningSupervisorAssignmentService::class)->assign(
-        $support, $booking->id, $supervisor->id, null, true, fromDashboard: true
+        $support, $booking->id, $supervisor->id, null, fromDashboard: true
     ))->toThrow(Symfony\Component\HttpKernel\Exception\HttpException::class);
 
     $this->actingAs($ops);
@@ -136,20 +126,20 @@ it('allows an ops manager with booking update permission and hides the action fr
         ->assertActionVisible('assign_supervisor')
         ->callAction('assign_supervisor', data: ['supervisor_user_id' => $supervisor->id])
         ->assertHasNoActionErrors();
-    foreach ($booking->sessions as $session) {
-        $this->assertDatabaseHas('cleaning_booking_session_supervisor_assignments', [
-            'cleaning_booking_session_id' => $session->id,
-            'assigned_by_user_id' => $ops->id,
-            'supervisor_user_id' => $supervisor->id,
-            'active_slot' => 1,
-        ]);
-    }
+    $this->assertDatabaseHas('cleaning_supervisor_assignments', [
+        'cleaning_booking_id' => $booking->id,
+        'assigned_by_user_id' => $ops->id,
+        'supervisor_user_id' => $supervisor->id,
+        'active_slot' => 1,
+    ]);
 });
 
 it('hides supervisor assignment on standard unscheduled and completed bookings but offers it for supervised team', function (): void {
     $this->actingAs(dashboardSupervisorActor('admin'));
-    $solo = CleaningBooking::factory()->create(['booking_kind' => 'standard', 'number_of_workers' => 1]);
-    $unscheduled = CleaningBooking::factory()->create(['booking_kind' => 'standard', 'number_of_workers' => 3]);
+    $solo = CleaningBooking::factory()->create(['booking_kind' => 'standard', 'number_of_workers' => 1, 'status' => CleaningBookingStatus::Pending]);
+    // The schema requires date/time; a zero planned workload is not a valid
+    // schedulable standard team, even when a placeholder date exists.
+    $unscheduled = CleaningBooking::factory()->create(['booking_kind' => 'standard', 'number_of_workers' => 3, 'estimated_hours' => 0, 'status' => CleaningBookingStatus::Pending]);
     $completed = supervisorDashboardBooking(['status' => CleaningBookingStatus::Completed]);
     $legacy = CleaningBooking::factory()->create([
         'booking_kind' => 'supervised_team', 'status' => CleaningBookingStatus::WorkerAssigned,
@@ -163,41 +153,32 @@ it('hides supervisor assignment on standard unscheduled and completed bookings b
         ->assertActionVisible('assign_supervisor');
 });
 
-it('rejects overlapping V2 follow-up visits without leaving a second assignment', function (): void {
+it('rejects overlapping independent V2 follow-up bookings without leaving a second assignment', function (): void {
     $admin = dashboardSupervisorActor('admin');
     $supervisor = dashboardSupervisorActor('Cleaning Supervisor');
     $first = supervisorDashboardBooking();
-    $overlapDate = $first->sessions()->where('sequence', 2)->value('scheduled_date');
-    $laterDate = now(config('app.timezone'))->addDays(18)->toDateString();
+    $overlapDate = now(config('app.timezone'))->addDays(11)->toDateString();
+    $followUp = supervisorDashboardBooking(['scheduled_date' => $overlapDate, 'customer_id' => $first->customer_id]);
     $overlap = supervisorDashboardBooking([
         'scheduled_date' => $overlapDate,
         'scheduled_time' => '09:30',
     ]);
-    $overlap->roomPeriods()->where('visit_sequence', 1)
-        ->update(['scheduled_date' => $overlapDate, 'scheduled_time' => '09:30']);
-    $overlap->sessions()->where('sequence', 1)
-        ->update(['scheduled_date' => $overlapDate, 'scheduled_time' => '09:30']);
-    $overlap->roomPeriods()->where('visit_sequence', 2)
-        ->update(['scheduled_date' => $laterDate, 'scheduled_time' => '09:30']);
-    $overlap->sessions()->where('sequence', 2)
-        ->update(['scheduled_date' => $laterDate, 'scheduled_time' => '09:30']);
     $this->actingAs($admin);
 
     Livewire::test(ViewCleaningBooking::class, ['record' => $first->getRouteKey()])
         ->callAction('assign_supervisor', data: ['supervisor_user_id' => $supervisor->id])
         ->assertHasNoActionErrors();
+    Livewire::test(ViewCleaningBooking::class, ['record' => $followUp->getRouteKey()])
+        ->callAction('assign_supervisor', data: ['supervisor_user_id' => $supervisor->id])
+        ->assertHasNoActionErrors();
     Livewire::test(ViewCleaningBooking::class, ['record' => $overlap->getRouteKey()])
         ->callAction('assign_supervisor', data: ['supervisor_user_id' => $supervisor->id]);
 
-    expect(DB::table('cleaning_booking_session_supervisor_assignments')->count())->toBe(2);
-    foreach ($overlap->sessions as $session) {
-        $this->assertDatabaseMissing('cleaning_booking_session_supervisor_assignments', [
-            'cleaning_booking_session_id' => $session->id,
-        ]);
-    }
+    expect(DB::table('cleaning_supervisor_assignments')->where('supervisor_user_id', $supervisor->id)->count())->toBe(2);
+    $this->assertDatabaseMissing('cleaning_supervisor_assignments', ['cleaning_booking_id' => $overlap->id]);
 });
 
-it('keeps repeated V2 booking header assignment idempotent in visit history', function (): void {
+it('keeps repeated V2 booking header assignment idempotent in booking history', function (): void {
     $admin = dashboardSupervisorActor('admin');
     $supervisor = dashboardSupervisorActor('Cleaning Supervisor');
     $booking = supervisorDashboardBooking();
@@ -210,18 +191,16 @@ it('keeps repeated V2 booking header assignment idempotent in visit history', fu
         ->callAction('assign_supervisor', data: ['supervisor_user_id' => $supervisor->id])
         ->assertHasNoActionErrors();
 
-    expect(DB::table('cleaning_booking_session_supervisor_assignments')->count())->toBe(2);
-    foreach ($booking->sessions as $session) {
-        $this->assertDatabaseHas('cleaning_booking_session_supervisor_assignments', [
-            'cleaning_booking_session_id' => $session->id,
-            'supervisor_user_id' => $supervisor->id,
-            'active_slot' => 1,
-        ]);
-    }
+    expect(DB::table('cleaning_supervisor_assignments')->where('cleaning_booking_id', $booking->id)->count())->toBe(1);
+    $this->assertDatabaseHas('cleaning_supervisor_assignments', [
+        'cleaning_booking_id' => $booking->id,
+        'supervisor_user_id' => $supervisor->id,
+        'active_slot' => 1,
+    ]);
     expect(DB::table('cleaning_supervisor_activity')
         ->where('cleaning_booking_id', $booking->id)
-        ->where('action', 'visit_supervisor_assigned')
-        ->count())->toBe(2);
+        ->where('action', 'supervisor_assigned')
+        ->count())->toBe(1);
 });
 
 it('blocks transferring supervised-team equipment until the checkout has a confirmed return', function (): void {

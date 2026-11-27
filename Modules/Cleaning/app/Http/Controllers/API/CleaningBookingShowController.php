@@ -14,7 +14,9 @@ use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Http\Resources\CleaningBookingOperationalResource;
 use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Services\CleaningBookingWorkerScheduleService;
 use Modules\Cleaning\Services\CleaningBookingWorkerSessionVisibilityService;
+use Modules\Cleaning\Services\CleaningV3DailyBookingProjection;
 use Modules\Cleaning\Services\CleaningV3WorkerBookingReadProjection;
 use Modules\Cleaning\Services\CleaningWorkerCustomerDataDisclosurePolicy;
 use Modules\Cleaning\Support\WorkerBookingRequirementsPresenter;
@@ -24,20 +26,20 @@ final class CleaningBookingShowController
 {
     public function __invoke(CleaningBooking $cleaning_booking): CleaningBookingOperationalResource|JsonResponse
     {
-        // Supervisor-managed work has a separate redacted read endpoint.
-        if ($cleaning_booking->isSupervisedTeam()) {
-            abort(404);
-        }
         $worker = Auth::user()?->worker;
         if ($worker instanceof Worker && (string) ($cleaning_booking->contract_version ?? '') === 'v3') {
-            // A V3 parent represents multiple independent visits. Never return
-            // booking-wide property, customer or location details to a worker.
+            $dailyProjection = app(CleaningV3DailyBookingProjection::class);
+            $execution = $dailyProjection->execution($cleaning_booking);
+            // Preserve the legacy supervised multi-execution route boundary.
+            abort_if($cleaning_booking->isSupervisedTeam() && $execution === null, 404);
+            // V3 worker reads are execution-scoped, including supervised daily
+            // offers. Never return booking-wide property or customer details.
             // Precise navigation remains scoped to an authorized visit route.
             $visibility = app(CleaningBookingWorkerSessionVisibilityService::class);
             abort_unless($visibility->canViewBooking($cleaning_booking, $worker), 404);
             $visible = $visibility->visibleSessions($cleaning_booking, $worker);
 
-            return response()->json(['data' => app(CleaningV3WorkerBookingReadProjection::class)->present(
+            $payload = app(CleaningV3WorkerBookingReadProjection::class)->present(
                 [
                     'id' => (int) $cleaning_booking->id,
                     'bookingNumber' => (string) $cleaning_booking->booking_number,
@@ -51,7 +53,38 @@ final class CleaningBookingShowController
                     'scheduledTime' => mb_substr((string) $visit->scheduled_time, 0, 5),
                     'status' => $visit->status?->value ?? (string) $visit->status,
                 ])->values()->all(),
-            )])->header('Cache-Control', 'private, no-store');
+            );
+            if ($execution !== null && $visible->contains(fn ($visit): bool => (int) $visit->id === (int) $execution->id)) {
+                $schedule = app(CleaningBookingWorkerScheduleService::class)->present($cleaning_booking, $worker);
+                $daily = $dailyProjection->present($cleaning_booking, Auth::user(), $schedule);
+                if ($daily !== null && (int) $daily['executionId'] === (int) $execution->id) {
+                    $payload['dailyBooking'] = $daily;
+                    $requestedSession = request()->query('sessionId');
+                    if ($requestedSession !== null) {
+                        abort_unless(is_scalar($requestedSession) && ctype_digit((string) $requestedSession)
+                            && (int) $requestedSession === (int) $execution->id, 404);
+                        $disclosure = app(CleaningWorkerCustomerDataDisclosurePolicy::class);
+                        if ($disclosure->mayViewDestination($cleaning_booking, $worker, request())
+                            && $cleaning_booking->address_latitude !== null && $cleaning_booking->address_longitude !== null) {
+                            $payload['destination'] = [
+                                'latitude' => (float) $cleaning_booking->address_latitude,
+                                'longitude' => (float) $cleaning_booking->address_longitude,
+                                'label' => data_get($cleaning_booking->property_details, 'full_address')
+                                    ?: data_get($cleaning_booking->property_details, 'address')
+                                    ?: $disclosure->neighborhoodLabel($cleaning_booking),
+                            ];
+                        }
+                    }
+                    $payload = [...$payload, ...app(\Modules\Cleaning\Services\CleaningV3WorkRequirements::class)
+                        ->forWorker($cleaning_booking, $execution, $worker)];
+                }
+            }
+
+            return response()->json(['data' => $payload])->header('Cache-Control', 'private, no-store');
+        }
+        // Legacy supervisor-managed work has a separate redacted endpoint.
+        if ($cleaning_booking->isSupervisedTeam()) {
+            abort(404);
         }
         if ($worker instanceof Worker && $this->shouldScopeV2WorkerRooms($cleaning_booking)) {
             $eligibleOffer = $this->isWorkerDispatchCandidate($cleaning_booking)

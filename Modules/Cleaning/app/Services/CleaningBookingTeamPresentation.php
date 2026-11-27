@@ -15,10 +15,8 @@ final class CleaningBookingTeamPresentation
 {
     public function currentSession(CleaningBooking $booking): ?CleaningBookingSession
     {
-        if (! $booking->isV2OperationalGroup()) {
-            return null;
-        }
-
+        // Historical task bookings can have real execution sessions without
+        // the V2 open-time marker. Prefer their persisted roster as well.
         return $booking->sessions()
             ->whereNotIn('status', CleaningBookingSessionStatus::terminalValues())
             ->orderBy('sequence')
@@ -36,6 +34,11 @@ final class CleaningBookingTeamPresentation
         $current = $this->currentSession($booking);
         if ($current !== null) {
             return $current;
+        }
+
+        if (($booking->getAttributes()['contract_version'] ?? null) === 'v3') {
+            return $booking->sessions()->where('status', '!=', 'superseded')
+                ->orderByDesc('sequence')->orderByDesc('id')->first();
         }
 
         $status = $booking->status instanceof CleaningBookingStatus

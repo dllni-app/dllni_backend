@@ -13,7 +13,7 @@ use Modules\Cleaning\Models\CleaningV3CatalogVersion;
  * substitute for human tariff/funding approval, MySQL concurrency QA,
  * application compatibility testing or signed publication evidence.
  */
-final class CleaningV3ReleaseReadinessAuditService
+final class CleaningV3ReleaseReadinessAuditService implements CleaningV3ReleaseReadiness
 {
     /** @return array<string,mixed> */
     public function audit(): array
@@ -35,11 +35,16 @@ final class CleaningV3ReleaseReadinessAuditService
             'cleaning_v3_catalog_publication',
             'cleaning_v3_cash_movements',
             'cleaning_v3_supervisor_attendance_proofs',
+            'cleaning_v3_live_extension_quotes',
+            'cleaning_v3_supervisor_cash_accounts',
+            'cleaning_v3_supervisor_cash_earnings',
+            'cleaning_booking_quotes',
             'cleaning_booking_sessions',
             'cleaning_visit_funding_reservations',
             'cleaning_work_intervals',
             'cleaning_work_pause_requests',
             'cleaning_v3_visit_dispatches',
+            'cleaning_v3_operational_approvals',
             'cleaning_v3_dispatch_notice_intents',
         ] as $table) {
             $checks[] = $this->check(
@@ -49,7 +54,14 @@ final class CleaningV3ReleaseReadinessAuditService
             );
         }
 
-        $approvedDigest = (string) \Modules\Cleaning\Services\CleaningV3AdminCatalogPublication::digest();
+        $checks[] = $this->check(
+            'column_cleaning_financial_settings_v3_supervisor_visit_compensation',
+            Schema::hasTable('cleaning_financial_settings')
+                && Schema::hasColumn('cleaning_financial_settings', 'v3_supervisor_visit_compensation'),
+            'The fixed per-visit supervisor cash policy requires its additive settings column.',
+        );
+
+        $approvedDigest = (string) CleaningV3AdminCatalogPublication::commercialDigest();
         $digestValid = preg_match('/^[a-f0-9]{64}$/D', $approvedDigest) === 1;
         $checks[] = $this->check(
             'approved_catalog_digest',

@@ -44,6 +44,7 @@ use Modules\Cleaning\Http\Controllers\API\ServicePricingController;
 use Modules\Cleaning\Http\Controllers\API\SupervisedWorkerBookingController;
 use Modules\Cleaning\Http\Controllers\API\SupervisorAppController;
 use Modules\Cleaning\Http\Controllers\API\SupervisorWorkflowController;
+use Modules\Cleaning\Http\Controllers\API\SupervisedVisitController;
 use Modules\Cleaning\Http\Controllers\API\WorkerAccountProfileController;
 use Modules\Cleaning\Http\Controllers\API\WorkerAccountStatusController;
 use Modules\Cleaning\Http\Controllers\API\WorkerCurrentLocationController;
@@ -81,6 +82,13 @@ Route::prefix('v1')->group(function () {
             Route::get('bookings', [SupervisorAppController::class, 'index']);
             Route::get('schedule', [SupervisorAppController::class, 'schedule']);
             Route::get('bookings/{booking}', [SupervisorAppController::class, 'show'])->whereNumber('booking');
+            Route::prefix('bookings/{booking}/visits/{visit}')->where(['booking' => '[0-9]+', 'visit' => '[0-9]+'])
+                ->group(function (): void {
+                    Route::post('verification-requests', [SupervisedVisitController::class, 'requestVerification'])->middleware('throttle:10,1');
+                    Route::post('verification/confirm', [SupervisedVisitController::class, 'confirmVerification'])->middleware('throttle:10,1');
+                    Route::post('start', [SupervisedVisitController::class, 'start']);
+                    Route::post('handover-requests', [SupervisedVisitController::class, 'requestHandover']);
+                });
             Route::get('bookings/{booking}/attendance', [SupervisorAppController::class, 'attendance'])->whereNumber('booking');
             Route::get('bookings/{booking}/timeline', [SupervisorAppController::class, 'timeline'])->whereNumber('booking');
             Route::get('bookings/{booking}/incidents', [SupervisorAppController::class, 'incidents'])->whereNumber('booking');
@@ -89,9 +97,9 @@ Route::prefix('v1')->group(function () {
             Route::post('bookings/{booking}/verification-requests', [SupervisorWorkflowController::class, 'verificationRequest']);
             Route::get('bookings/{booking}/verification/status', [SupervisorWorkflowController::class, 'verificationStatus']);
             Route::post('bookings/{booking}/verification/confirm', [SupervisorWorkflowController::class, 'verificationConfirm'])
-                ->whereNumber('booking')->middleware('throttle:6,1');
+                ->whereNumber('booking')->middleware('throttle:6,1,supervisor-verification-confirm');
             Route::post('bookings/{booking}/worker-attendance/{assignment}/confirm', [BookingWorkerAttendanceCodeController::class, 'confirm'])
-                ->whereNumber('booking')->whereNumber('assignment')->middleware('throttle:12,1');
+                ->whereNumber('booking')->whereNumber('assignment')->middleware('throttle:12,1,supervisor-attendance-confirm');
             Route::post('bookings/{booking}/start', [SupervisorWorkflowController::class, 'start']);
             Route::get('bookings/{booking}/extensions', [SupervisorWorkflowController::class, 'extensionIndex']);
             Route::post('bookings/{booking}/extension-requests', [SupervisorWorkflowController::class, 'extensionRequest']);
@@ -107,6 +115,8 @@ Route::prefix('v1')->group(function () {
     });
     // Customer-owned decisions. The supervisor cannot call these endpoints for another customer's booking.
     Route::middleware('auth:sanctum')->prefix('supervised-team/customer/bookings')->group(function (): void {
+        Route::get('{booking}/visits/{visit}/verification-code', [SupervisedVisitController::class, 'customerCode'])
+            ->whereNumber(['booking', 'visit'])->middleware('throttle:20,1');
         Route::get('{booking}', [SupervisorWorkflowController::class, 'customerShow'])->whereNumber('booking');
         Route::get('{booking}/verification-code', [SupervisorWorkflowController::class, 'customerVerificationCode']);
         Route::post('{booking}/extensions/{extension}/decision', [SupervisorWorkflowController::class, 'extensionDecision']);
@@ -134,6 +144,8 @@ Route::prefix('v1')->group(function () {
         Route::post('cleaning/v3/workload/preview', CleaningV3WorkloadPricePreviewController::class)->middleware('throttle:20,1');
         Route::post('cleaning/v3/quotes', \Modules\Cleaning\Http\Controllers\API\CleaningV3CashQuoteController::class)->middleware('throttle:20,1');
         Route::post('cleaning/v3/bookings', \Modules\Cleaning\Http\Controllers\API\CleaningV3CreateBookingController::class)->middleware('throttle:20,1');
+        Route::get('cleaning/v3/confirmations/{quoteId}', [\Modules\Cleaning\Http\Controllers\API\CleaningV3CreateBookingController::class, 'confirmationOutcome'])
+            ->whereUuid('quoteId')->middleware('throttle:20,1');
         Route::get('cleaning/v3/bookings/{bookingId}/revision-draft', \Modules\Cleaning\Http\Controllers\API\CleaningV3RevisionDraftController::class)->whereNumber('bookingId')->middleware('throttle:20,1');
         // Exact-visit, customer-only V3 dispatch progress; never resets the search deadline.
         Route::get('cleaning-bookings/{booking}/sessions/{session}/dispatch', CleaningV3VisitDispatchController::class)
@@ -170,6 +182,10 @@ Route::prefix('v1')->group(function () {
         Route::post('cleaning/worker/current-location', WorkerCurrentLocationController::class);
         Route::get('cleaning/worker/homepage', WorkerHomepageEligibilityController::class);
         Route::get('cleaning/worker/statistics', WorkerStatisticsController::class);
+        Route::get('cleaning/worker/daily-earnings', [\Modules\Cleaning\Http\Controllers\API\CleaningV3WorkerDailyEarningsController::class, 'index'])
+            ->middleware('throttle:20,1');
+        Route::get('cleaning/worker/daily-earnings/{assignment}', [\Modules\Cleaning\Http\Controllers\API\CleaningV3WorkerDailyEarningsController::class, 'show'])
+            ->whereNumber('assignment')->middleware('throttle:30,1');
         Route::get('cleaning/worker/reviews', [WorkerReviewController::class, 'index']);
         Route::get('worker/{worker}', WorkerDetailsController::class);
         Route::get('cleaning/worker/profile', Modules\Cleaning\Http\Controllers\API\WorkerProfileController::class);

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Services;
 
-use Carbon\CarbonImmutable;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -25,30 +24,50 @@ final class CleaningV3OperationalAdmissionReview
                 $issues[] = 'BOOKING_NOT_PENDING_OPERATIONAL_REVIEW';
             }
             $catalog = CleaningV3CatalogVersion::query()->whereKey($booking->catalog_version_id)->first();
-            $query = DB::table('cleaning_booking_quotes')->where('cleaning_booking_id', $booking->id)->where('contract_version', 'v3');
-            if (is_string($current = data_get($booking->property_details, 'v3_current_quote_id'))) {
-                $query->where('id', $current);
-            }
-            $quotes = $query->lockForUpdate()->get();
+            $isQa = $catalog?->version_key === CleaningV3QaEnvironment::CATALOG_KEY;
             $valid = false;
-            if ($catalog !== null && $catalog->status === 'published' && $quotes->count() === 1) {
-                $quote = $quotes->first();
-                $envelope = json_decode((string) $quote->snapshot, true);
+            if ($catalog !== null) {
                 try {
-                    if (! is_array($envelope) || ($envelope['quoteId'] ?? null) !== $quote->id
-                        || ! hash_equals((string) $quote->signature, (string) ($envelope['signature'] ?? ''))
-                        || (int) $quote->catalog_version_id !== (int) $catalog->id
-                        || (int) $quote->customer_id !== (int) $booking->customer_id
-                        || ! hash_equals((string) $catalog->published_digest, app(CleaningV3CatalogReviewManifestService::class)->fingerprint($catalog))) {
-                        throw new DomainException('INVALID_QUOTE');
-                    }
-                    $accepted = data_get($booking->property_details, 'v3_quote_accepted_at');
-                    $at = is_string($accepted) ? CarbonImmutable::parse($accepted)->utc() : CarbonImmutable::instance($booking->created_at)->utc();
-                    $snapshot = app(CleaningV3SignedQuoteEnvelope::class)->verify($envelope, (int) $booking->customer_id,
-                        $catalog->version_key, $catalog->published_digest, $at);
+                    [, $snapshot, $sequence] = app(CleaningV3AcceptedQuoteResolver::class)
+                        ->load($booking, 'INVALID_QUOTE');
                     $rows = collect($snapshot['commercialReview']['visits'] ?? [])->keyBy('occurrenceKey');
-                    $valid = ($snapshot['paymentStatus'] ?? null) === 'unpaid' && $rows->count() === $visits->count()
-                        && $visits->isNotEmpty() && bccomp($snapshot['totalWithAdditionalWorkerFees'], (string) $booking->getRawOriginal('total_price'), 2) === 0;
+                    if ($sequence !== null) {
+                        // Only the selected signed occurrence is reviewed; the
+                        // original commercial quote remains unchanged.
+                        if ($visits->count() !== 1) {
+                            throw new DomainException('SIGNED_VISIT_SCHEDULE_MISMATCH');
+                        }
+                        app(CleaningV3DailyQuoteScope::class)->assertExecution($snapshot, $sequence, $visits->first(), true);
+                        $rows = $rows->only([$visits->first()->occurrence_key]);
+                    } else {
+                    // The signed draft fingerprint binds the canonical visit
+                    // dates, times, durations and crews. Reconstruct it from
+                    // persisted sessions, not the mutable request archive.
+                    $appointments = $visits->groupBy('appointment_key')->map(
+                        fn ($group, $key) => ['appointmentKey' => (string) $key,
+                            'visits' => $group->map(fn ($visit) => [
+                                'occurrenceKey' => $visit->occurrence_key,
+                                'scheduledDate' => $visit->scheduled_date?->format('Y-m-d'),
+                                'scheduledTime' => mb_substr((string) $visit->scheduled_time, 0, 5),
+                                'durationMinutes' => (int) round((float) $visit->duration_hours * 60),
+                                'requiredWorkers' => $visit->requiredWorkerCount(),
+                            ])->values()->all()]
+                    )->values()->all();
+                    $plan = app(CleaningV3VisitPlanner::class)->plan([
+                        'contractVersion' => 3,
+                        'catalogVersionKey' => $catalog->version_key,
+                        'catalogRevision' => $catalog->published_digest,
+                        'appointments' => $appointments,
+                    ], allowMultipleLocalDates: true);
+                    if (! hash_equals($snapshot['draftFingerprint'], $plan['draftFingerprint'])) {
+                        throw new DomainException('SIGNED_VISIT_SCHEDULE_MISMATCH');
+                    }
+                    }
+                    $expectedTotal = $sequence === null ? $snapshot['totalWithAdditionalWorkerFees']
+                        : $rows->first()['totalAmountSyp'];
+                    $valid = ($snapshot['paymentMethod'] ?? null) === 'cash_on_delivery'
+                        && ($snapshot['paymentStatus'] ?? null) === 'unpaid' && $rows->count() === $visits->count()
+                        && $visits->isNotEmpty() && bccomp($expectedTotal, (string) $booking->getRawOriginal('total_price'), 2) === 0;
                     foreach ($visits as $visit) {
                         $row = $rows->get($visit->occurrence_key);
                         $valid = $valid && $row !== null && $row['appointmentKey'] === $visit->appointment_key
@@ -64,13 +83,17 @@ final class CleaningV3OperationalAdmissionReview
                 $issues[] = 'SIGNED_PRICE_OR_VISIT_MISMATCH';
             }
             if ($visits->isEmpty() || $visits->contains(fn ($v) => $v->status->value !== 'scheduled'
-                || $v->startsAt() === null || $v->startsAt()->isPast() || $v->workerAssignments()->exists())) {
+                || $v->startsAt() === null || ! $v->startsAt()->isFuture() || $v->workerAssignments()->exists()
+                || $v->payment_status !== 'pending' || DB::table('cleaning_v3_visit_dispatches')
+                    ->where('cleaning_booking_session_id', $v->id)->exists())) {
                 $issues[] = 'VISIT_SCHEDULE_OR_ROSTER_REVIEW_REQUIRED';
             }
-            try {
-                app(CleaningWorkerApkUpdateManifestService::class)->manifest();
-            } catch (DomainException) {
-                $issues[] = 'WORKER_APK_MANIFEST_UNAVAILABLE';
+            if (! $isQa) {
+                try {
+                    app(CleaningWorkerApkUpdateManifestService::class)->manifest();
+                } catch (DomainException) {
+                    $issues[] = 'WORKER_APK_MANIFEST_UNAVAILABLE';
+                }
             }
             $fundingRequests = [];
             $fundingVerified = $valid && $visits->isNotEmpty();
@@ -93,12 +116,33 @@ final class CleaningV3OperationalAdmissionReview
                     $issues[] = 'CLEARED_FUNDING_SOURCE_INTEGRATION_REQUIRED';
                 }
             }
-            // Never convert signed proof or APK metadata into proof of a
-            // compatible deployed worker/supervisor execution contract.
-            $issues[] = 'SIGNED_APK_ROLLOUT_AND_VISIT_EXECUTION_QA_REQUIRED';
+            if (! config('cleaning_v3_catalog.operational_approval_enabled', false)) {
+                $issues[] = 'V3_OPERATIONAL_APPROVAL_DISABLED';
+            }
+            $release = app(CleaningV3ReleaseReadiness::class)->audit();
+            if ($isQa) {
+                $digest = CleaningV3AdminCatalogPublication::qaDigest();
+                if ($digest === null || ! hash_equals($digest, (string) $catalog->published_digest)
+                    || ! config('cleaning_v3_catalog.admin_publication_enabled', false)
+                    || ! config('cleaning_v3_catalog.read_enabled', false)) {
+                    $issues[] = 'V3_QA_PUBLICATION_NOT_READY';
+                }
+                if (collect($fundingRequests)->contains(fn ($request) => ($request['collectionMode'] ?? null) !== 'supervisor_manual')) {
+                    $issues[] = 'V3_QA_MANUAL_CASH_POLICY_REQUIRED';
+                }
+            } else {
+                if (($release['readyForCommercialLaunch'] ?? false) !== true || ($release['blockerCodes'] ?? null) !== []) {
+                    $issues[] = 'V3_COMMERCIAL_RELEASE_NOT_READY';
+                }
+                if (in_array('mysql_concurrency_and_mobile_e2e_evidence', $release['blockerCodes'] ?? [], true)) {
+                    $issues[] = 'SIGNED_APK_ROLLOUT_AND_VISIT_EXECUTION_QA_REQUIRED';
+                }
+            }
             return ['bookingId' => $bookingId, 'signedPriceVerified' => $valid,
                 'visitCount' => $visits->count(), 'fundingVerified' => $fundingVerified, 'paymentPolicyReady' => $paymentPolicyReady, 'fundingRequests' => $fundingRequests,
-                'canDispatch' => false, 'blockers' => array_values(array_unique($issues))];
+                'canDispatch' => $issues === [], 'blockers' => array_values(array_unique($issues)),
+                'admissionScope' => $isQa ? 'qa' : 'commercial',
+                'releaseBlockers' => $release['blockerCodes'] ?? []];
         }, 3);
     }
 }

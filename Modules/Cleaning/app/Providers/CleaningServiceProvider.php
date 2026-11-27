@@ -43,6 +43,8 @@ final class CleaningServiceProvider extends ServiceProvider
 
     public function register(): void
     {
+        $this->app->bind(\Modules\Cleaning\Services\CleaningV3ReleaseReadiness::class,
+            \Modules\Cleaning\Services\CleaningV3ReleaseReadinessAuditService::class);
         $this->app->register(EventServiceProvider::class);
         $this->app->register(RouteServiceProvider::class);
     }

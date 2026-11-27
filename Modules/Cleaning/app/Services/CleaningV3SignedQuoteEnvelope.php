@@ -115,7 +115,7 @@ final class CleaningV3SignedQuoteEnvelope
             'draftFingerprint', 'pricingRevision', 'currency',
             'visits', 'eligibleBaseTotal', 'discountTotal',
             'netBeforeAdditionalWorkerFees', 'additionalWorkerFees',
-            'totalWithAdditionalWorkerFees', 'commercialReview', 'paymentMethod', 'paymentStatus', 'settlementBasis', 'amendment',
+            'totalWithAdditionalWorkerFees', 'commercialReview', 'paymentMethod', 'paymentStatus', 'settlementBasis', 'amendment', 'dailyAppointments', 'workRequirementsDigests',
         ]) !== [] || ($snapshot['contractVersion'] ?? null) !== 3) {
             throw new DomainException('INVALID_V3_QUOTE_SNAPSHOT');
         }
@@ -221,6 +221,12 @@ final class CleaningV3SignedQuoteEnvelope
             }
             app(CleaningV3CashSettlementBasis::class)->assertValid($snapshot);
         }
+        if (array_key_exists('dailyAppointments', $snapshot)) {
+            app(CleaningV3DailyQuoteScope::class)->validate($snapshot);
+        }
+        if (array_key_exists('workRequirementsDigests', $snapshot)) {
+            app(CleaningV3WorkRequirements::class)->assertCoverage($snapshot);
+        }
         if ($totals['total'] > 99999999999999) {
             throw new DomainException('INVALID_V3_QUOTE_TOTALS');
         }
@@ -264,6 +270,15 @@ final class CleaningV3SignedQuoteEnvelope
     /** @param array<string,mixed> $signedPayload */
     private function mac(array $signedPayload): string
     {
+        if ($signedPayload['snapshot']['catalogVersionKey'] === CleaningV3QaEnvironment::CATALOG_KEY) {
+            $qaKey = app(CleaningV3QaEnvironment::class)->signingKey();
+            if ($qaKey === null) {
+                throw new DomainException('V3_QA_SIGNING_UNAVAILABLE');
+            }
+
+            return hash_hmac('sha256', "cleaning-v3-qa\n".$this->canonical($signedPayload), $qaKey);
+        }
+
         $key = config('app.key');
         if (! is_string($key) || $key === '') {
             throw new DomainException('V3_SIGNING_KEY_UNAVAILABLE');

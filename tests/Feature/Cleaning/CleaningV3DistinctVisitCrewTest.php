@@ -68,7 +68,17 @@ test('the same worker cannot occupy both visits of one V3 twelve-hour event even
     $result = app(CleaningBookingSessionAcceptanceService::class)
         ->acceptSelectedSessions($booking, $worker, [(int) $second->id]);
     expect($result['acceptedSessionIds'])->toBe([])
+        ->and($result['rejected'][0]['reasonCode'])->toBe('v3_admission_pending');
+    \Tests\Support\CleaningV3AdmittedStateFixture::apply($booking);
+    $result = app(CleaningBookingSessionAcceptanceService::class)
+        ->acceptSelectedSessions($booking, $worker, [(int) $second->id]);
+    expect($result['acceptedSessionIds'])->toBe([])
         ->and($result['rejected'][0]['reasonCode'])->toBe('v3_distinct_crew_required');
+    $otherWorker = Worker::factory()->create();
+    $result = app(CleaningBookingSessionAcceptanceService::class)
+        ->acceptSelectedSessions($booking, $otherWorker, [(int) $second->id]);
+    expect($result['acceptedSessionIds'])->toBe([])
+        ->and($result['rejected'][0]['reasonCode'])->toBe('v3_funding_unavailable');
 });
 
 test('releasing a worker from the first event visit permits a new independent assignment', function (): void {

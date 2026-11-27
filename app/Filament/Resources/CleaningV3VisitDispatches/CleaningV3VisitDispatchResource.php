@@ -28,7 +28,7 @@ final class CleaningV3VisitDispatchResource extends Resource
 
     public static function getNavigationLabel(): string
     {
-        return 'زيارات V3 ناقصة الفريق';
+        return 'الحجوزات ناقصة الفريق';
     }
 
     public static function getModelLabel(): string
@@ -66,8 +66,9 @@ final class CleaningV3VisitDispatchResource extends Resource
     {
         return parent::getEloquentQuery()
             ->whereNull('resolved_at')
-            ->whereHas('session.booking', static fn (Builder $query): Builder => $query->where('contract_version', 'v3'))
-            ->whereHas('session', static fn (Builder $query): Builder => $query->whereNotIn('status', ['completed', 'cancelled', 'skipped', 'superseded']))
+            ->whereHas('session.booking', static fn (Builder $query): Builder => $query->where('contract_version', 'v3')->operationallyAdmitted())
+            ->whereHas('session', static fn (Builder $query): Builder => $query->whereIn('status', ['scheduled', 'worker_assigned'])
+                ->whereRaw('(SELECT COUNT(DISTINCT a.worker_id) FROM cleaning_booking_session_worker_assignments a WHERE a.cleaning_booking_session_id = cleaning_booking_sessions.id AND a.released_at IS NULL AND a.status IN ('.implode(',', array_fill(0, count(CleaningBookingWorkerAssignmentStatus::acceptedValues()), '?')).')) < cleaning_booking_sessions.required_workers', CleaningBookingWorkerAssignmentStatus::acceptedValues()))
             ->with(['session.booking', 'session.workerAssignments']);
     }
 
@@ -77,10 +78,12 @@ final class CleaningV3VisitDispatchResource extends Resource
             ->columns([
                 TextColumn::make('session.booking.booking_number')
                     ->label('رقم الطلب')
+                    ->url(fn (CleaningV3VisitDispatch $record): string => \App\Filament\Resources\CleaningBookings\CleaningBookingResource::getUrl('view', ['record' => $record->session->cleaning_booking_id]))
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('session.sequence')
-                    ->label('رقم الزيارة'),
+                    ->label('تسلسل التنفيذ')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('session.scheduled_date')
                     ->label('التاريخ')
                     ->date('Y-m-d'),

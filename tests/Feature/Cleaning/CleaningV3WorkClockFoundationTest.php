@@ -284,6 +284,8 @@ test('only the current, explicitly assigned supervisor can read a V3 team clock'
     ]);
 
     Sanctum::actingAs($supervisor);
+    $this->getJson($url)->assertNotFound();
+    \Tests\Support\CleaningV3AdmittedStateFixture::apply($visit->booking);
     $this->getJson($url)->assertOk()
         ->assertJsonPath('data.visitId', $visit->id)
         ->assertJsonPath('data.activeSeconds', 0)

@@ -39,11 +39,14 @@ final class CleaningV3WorkerBookingReadProjection
             ];
         }
 
+        $statuses = array_values(array_filter(array_column($visits, 'status'), 'is_string'));
+        $status = $statuses === [] ? 'unavailable' : (new CleaningV3VisitStatusProjector)->project($statuses)['status'];
+
         return [
             'id' => (int) ($booking['id'] ?? 0),
             'bookingNumber' => (string) ($booking['bookingNumber'] ?? ''),
             'contractVersion' => 3,
-            'status' => (string) ($booking['status'] ?? ''),
+            'status' => $status,
             'locationSummary' => (string) ($booking['locationSummary'] ?? 'المنطقة غير محددة'),
             'sessions' => array_values($visits),
         ];

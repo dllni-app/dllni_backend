@@ -9,6 +9,7 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Services\CleaningOperationsReportingService;
+use Modules\Cleaning\Services\CleaningV3DisplayFormatter;
 
 final class CleaningBookingStats extends StatsOverviewWidget
 {
@@ -19,14 +20,14 @@ final class CleaningBookingStats extends StatsOverviewWidget
     protected function getStats(): array
     {
         $reporting = app(CleaningOperationsReportingService::class);
+        $cash = $reporting->verifiedCashForDay();
 
         return [
             Stat::make(__('cleaning_admin.booking.stats.total'), $reporting->totalBookings())
-                ->description('عدد الحجوزات الرئيسية؛ المناسبة متعددة الأيام تُحسب حجزاً واحداً.')
+                ->description('كل حجز يومي مستقل يُحسب مرة واحدة.')
                 ->icon('heroicon-o-calendar-days')
                 ->color('primary'),
-            Stat::make('جلسات التنفيذ', $reporting->totalExecutionSessions())
-                ->description('كل يوم في المناسبة يُحسب جلسة تنفيذ مستقلة.')
+            Stat::make('الحجوزات الملغاة', $this->statusCount(CleaningBookingStatus::Cancelled))
                 ->icon('heroicon-o-rectangle-stack')
                 ->color('info'),
             Stat::make(__('cleaning_admin.booking.stats.pending'), $this->statusCount(CleaningBookingStatus::Pending))
@@ -41,14 +42,18 @@ final class CleaningBookingStats extends StatsOverviewWidget
             Stat::make(__('cleaning_admin.booking.stats.in_progress'), $this->statusCount(CleaningBookingStatus::InProgress))
                 ->icon('heroicon-o-play')
                 ->color('success'),
-            Stat::make('جلسات اليوم', $reporting->scheduledExecutionSessionsForDay())
-                ->description('تعتمد على جلسات الأيام لا على تاريخ الحجز الرئيسي فقط.')
+            Stat::make('حجوزات اليوم', $reporting->scheduledBookingsForDay())
+                ->description('الحجوزات المجدولة غير الملغاة.')
                 ->icon('heroicon-o-calendar')
                 ->color('gray'),
-            Stat::make('ربح الإدارة اليوم', number_format($reporting->adminRevenueForDay(), 0, '.', ',').' '.config('app.currency', 'SYP'))
-                ->description($reporting->completedExecutionSessionsForDay().' جلسات مكتملة اليوم')
+            Stat::make('هامش الإدارة المحسوب اليوم', CleaningV3DisplayFormatter::money($reporting->adminRevenueForDay()))
+                ->description('هامش محسوب وليس تحصيلاً نقدياً.')
                 ->icon('heroicon-o-banknotes')
                 ->color('success'),
+            Stat::make('نقد العملاء المحقق بالخزينة اليوم', CleaningV3DisplayFormatter::money($cash['treasuryCustomerCashSyp']))
+                ->icon('heroicon-o-banknotes')->color('success'),
+            Stat::make('مبالغ الشركة المستلمة من المشرفين اليوم', CleaningV3DisplayFormatter::money($cash['supervisorCompanyReceiptsSyp']))
+                ->icon('heroicon-o-banknotes')->color('success'),
         ];
     }
 
@@ -59,9 +64,6 @@ final class CleaningBookingStats extends StatsOverviewWidget
 
     private function searchingCount(): int
     {
-        return CleaningBooking::query()
-            ->where('status', CleaningBookingStatus::Pending->value)
-            ->whereHas('acceptedWorkerAssignments')
-            ->count();
+        return app(CleaningOperationsReportingService::class)->searchingBookings();
     }
 }

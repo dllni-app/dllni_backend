@@ -27,7 +27,7 @@ final class CleaningV3WorkClockAccessPolicy
 
         return $this->isCustomer($actor, $booking)
             || $this->isAcceptedWorker($actor, $visit)
-            || $this->isCurrentSupervisor($actor, $booking);
+            || $this->isCurrentSupervisor($actor, $booking, $visit);
     }
 
     public function isCustomer(?User $actor, CleaningBooking $booking): bool
@@ -43,7 +43,7 @@ final class CleaningV3WorkClockAccessPolicy
         }
 
         if ($this->requiresSupervisor($booking, $visit)) {
-            return $this->isCurrentSupervisor($actor, $booking);
+            return $this->isCurrentSupervisor($actor, $booking, $visit);
         }
 
         if ((int) $visit->requiredWorkerCount() === 1) {
@@ -84,11 +84,12 @@ final class CleaningV3WorkClockAccessPolicy
             ->exists();
     }
 
-    private function isCurrentSupervisor(?User $actor, CleaningBooking $booking): bool
+    private function isCurrentSupervisor(?User $actor, CleaningBooking $booking, CleaningBookingSession $visit): bool
     {
         return $actor instanceof User
             && $actor->is_active
             && $actor->hasRole(SupervisedTeamService::ROLE)
+            && app(CleaningV3OperationalAdmissionPolicy::class)->approved($booking, $visit)
             && app(SupervisedTeamService::class)->assignedQuery($actor)
                 ->whereKey($booking->getKey())->exists();
     }

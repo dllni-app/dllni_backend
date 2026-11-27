@@ -9,14 +9,36 @@ use DomainException;
 /** A visit-specific revision; never changes the frozen crew, discount or fee. */
 final class CleaningV3LiveExtensionPricing
 {
+    public const MAX_VISIT_MINUTES = 480;
+
+    public const EXTENSION_STEP_MINUTES = 30;
+
+    /** Maximum additional time that can actually be quoted in one visit. */
+    public static function maxAdditionalMinutes(int $plannedMinutes): int
+    {
+        if ($plannedMinutes <= 0 || $plannedMinutes >= self::MAX_VISIT_MINUTES) {
+            return 0;
+        }
+
+        return intdiv(self::MAX_VISIT_MINUTES - $plannedMinutes, self::EXTENSION_STEP_MINUTES)
+            * self::EXTENSION_STEP_MINUTES;
+    }
+
+    public static function allowsDuration(int $plannedMinutes, int $additionalMinutes): bool
+    {
+        return $additionalMinutes >= self::EXTENSION_STEP_MINUTES
+            && $additionalMinutes % self::EXTENSION_STEP_MINUTES === 0
+            && $additionalMinutes <= self::maxAdditionalMinutes($plannedMinutes);
+    }
+
     public function revise(array $verifiedSnapshot, string $occurrence, int $additionalMinutes): array
     {
         $basis = app(CleaningV3CashSettlementBasis::class);
         $basis->assertValid($verifiedSnapshot);
         $row = collect($verifiedSnapshot['commercialReview']['visits'])->firstWhere('occurrenceKey', $occurrence);
         $visit = $verifiedSnapshot['settlementBasis']['visits'][$occurrence] ?? null;
-        if ($row === null || $visit === null || $additionalMinutes < 30 || $additionalMinutes % 30 !== 0
-            || $visit['plannedMinutes'] + $additionalMinutes > 480) {
+        if ($row === null || $visit === null
+            || ! self::allowsDuration($visit['plannedMinutes'], $additionalMinutes)) {
             throw new DomainException('V3_EXTENSION_DURATION_INVALID');
         }
         $oldMinutes = $visit['plannedMinutes'];

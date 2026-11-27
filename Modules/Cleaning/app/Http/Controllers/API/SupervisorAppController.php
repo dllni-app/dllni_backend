@@ -65,7 +65,7 @@ final class SupervisorAppController
             'todayTotal' => (clone $query)->whereDate('scheduled_date', $today)->count(),
             'inProgress' => (clone $query)->where('status', CleaningBookingStatus::InProgress)->count(),
             'awaitingHandover' => (clone $query)->where('status', CleaningBookingStatus::AwaitingCustomerCompletion)
-                ->where('supervised_state', 'handover_pending')->count(),
+                ->where(fn ($q) => $q->where('supervised_state', 'handover_pending')->orWhere('contract_version', 'v3'))->count(),
             'nextBooking' => $next ? $this->teams->summary($next) : null,
             'serverNow' => now()->toIso8601String(), 'timezone' => config('app.timezone'),
         ]]);
@@ -74,14 +74,28 @@ final class SupervisorAppController
     public function index(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'status' => ['sometimes', 'in:pending,worker_assigned,awaiting_start_verification,awaiting_worker_start_confirmation,in_progress,awaiting_customer_completion,time_extension_requested,partially_completed,under_dispute,completed,cancelled'],
+            'status' => ['sometimes', 'in:staffing,handover_pending,pending,worker_assigned,awaiting_start_verification,awaiting_worker_start_confirmation,in_progress,awaiting_customer_completion,time_extension_requested,partially_completed,under_dispute,completed,cancelled'],
             'date' => ['sometimes', 'date_format:Y-m-d'],
             'search' => ['sometimes', 'string', 'max:50'],
             'perPage' => ['sometimes', 'integer', 'min:1', 'max:50'],
         ]);
         $query = $this->teams->assignedQuery($request->user());
         if (isset($data['status'])) {
-            $query->where('status', $data['status']);
+            // The app's existing preparation and handover tabs are
+            // presentation groups, not persisted booking enum values.
+            if ($data['status'] === 'staffing') {
+                $query->whereIn('status', [
+                    CleaningBookingStatus::Pending,
+                    CleaningBookingStatus::WorkerAssigned,
+                    CleaningBookingStatus::AwaitingStartVerification,
+                    CleaningBookingStatus::AwaitingWorkerStartConfirmation,
+                ]);
+            } elseif ($data['status'] === 'handover_pending') {
+                $query->where('status', CleaningBookingStatus::AwaitingCustomerCompletion)
+                    ->where(fn ($q) => $q->where('supervised_state', 'handover_pending')->orWhere('contract_version', 'v3'));
+            } else {
+                $query->where('status', $data['status']);
+            }
         }
         if (isset($data['date'])) {
             $query->whereDate('scheduled_date', $data['date']);

@@ -160,6 +160,18 @@ test('V3 customer preferences verify address revision, gender and own completed 
     expect($booking->excludesWorker($worker->id))->toBeTrue()
         ->and($booking->excludesWorker($otherWorker->id))->toBeFalse()
         ->and(\Modules\Cleaning\Models\CleaningBooking::query()->whereKey($booking->id)->withoutExcludedWorker($worker->id)->exists())->toBeFalse()
+        ->and(\Modules\Cleaning\Models\CleaningBooking::query()->whereKey($booking->id)->withoutExcludedWorker($otherWorker->id)->exists())->toBeFalse();
+    // An unadmitted V3 order is discoverable to neither worker. Once the
+    // durable admission exists, the customer's own exclusion still applies.
+    if (! $booking->sessions()->exists()) {
+        $booking->sessions()->create([
+            'sequence' => 1, 'session_type' => 'recurring_cleaning', 'calculation_mode' => 'task',
+            'scheduled_date' => now()->addDay()->toDateString(), 'scheduled_time' => '09:00',
+            'duration_hours' => 2, 'required_workers' => 1, 'status' => 'scheduled',
+        ]);
+    }
+    \Tests\Support\CleaningV3AdmittedStateFixture::apply($booking);
+    expect(\Modules\Cleaning\Models\CleaningBooking::query()->whereKey($booking->id)->withoutExcludedWorker($worker->id)->exists())->toBeFalse()
         ->and(\Modules\Cleaning\Models\CleaningBooking::query()->whereKey($booking->id)->withoutExcludedWorker($otherWorker->id)->exists())->toBeTrue();
     $session = new \Modules\Cleaning\Models\CleaningBookingSession();
     expect(app(\Modules\Cleaning\Services\CleaningBookingSessionWorkerEligibilityService::class)->check($booking, $session, $worker)['reasonCode'])->toBe('worker_excluded_by_customer');

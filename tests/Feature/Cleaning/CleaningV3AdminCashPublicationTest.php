@@ -296,9 +296,12 @@ test('cash reconciliation requires linked signed price, closed work, distinct ve
         expect(fn () => $accounting->receive($booking->id, $visit->id, '170000.00', 'QA-early-receipt', $evidence))
             ->toThrow(DomainException::class);
         Sanctum::actingAs($supervisor, ['supervisor']);
-        $this->getJson('/api/v1/supervisor/cash-accounting')->assertOk()->assertJsonPath('data.unreportedVisits.0.visitId', $visit->id);
+        $this->getJson('/api/v1/supervisor/cash-accounting')->assertOk()
+            ->assertJsonPath('data.unreportedVisits.0.visitId', $visit->id)
+            ->assertJsonPath('data.unreportedVisits.0.bookingId', $booking->id)
+            ->assertJsonPath('data.unreportedVisits.0.canReport', true);
         $url = '/api/v1/supervisor/bookings/'.$booking->id.'/visits/'.$visit->id.'/cash-accounting';
-        $this->getJson($url)->assertOk()->assertJsonPath('data.companyAmountSyp', '170000.00')
+        $this->getJson($url)->assertOk()->assertJsonPath('data.bookingId', $booking->id)->assertJsonPath('data.companyAmountSyp', '170000.00')
             ->assertJsonCount(2, 'data.workerPayments')->assertJsonPath('data.workerPayments.0.amountSyp', '101000.00');
         $data = ['collectedAmountSyp' => $due, 'reference' => 'QA-supervisor-report', 'evidence' => $evidence, 'cashReceivedAndPayablesPaid' => true];
         $this->postJson($url, [...$data, 'collectedAmountSyp' => '1.00'])->assertStatus(409);
@@ -306,6 +309,7 @@ test('cash reconciliation requires linked signed price, closed work, distinct ve
         $this->postJson($url, $data)->assertOk()->assertJsonPath('data.status', 'reported');
         $this->postJson($url, $data)->assertOk()->assertJsonPath('data.status', 'reported');
         $this->getJson('/api/v1/supervisor/cash-accounting')->assertOk()->assertJsonPath('data.companyOutstandingSyp', '170000.00')
+            ->assertJsonPath('data.reports.0.bookingId', $booking->id)
             ->assertJsonPath('data.ownReportedEarningsSyp', '15000.00')->assertJsonPath('data.companyDeliveredSyp', '0.00');
         expect($visit->fresh()->payment_status)->toBe('pending');
         $intruder = User::factory()->create(['is_active' => true]);
@@ -647,7 +651,7 @@ test('pending signed revision updates the same visit, preserves historical quote
     // Simulate an already admitted visit solely in this isolated integration test.
     $booking->refresh();
     $visit->refresh();
-    $booking->forceFill(['property_details' => [...$booking->property_details, 'v3_admission_hold' => false]])->saveQuietly();
+    \Tests\Support\CleaningV3AdmittedStateFixture::apply($booking, $admin);
     $visit->forceFill(['status' => 'in_progress', 'work_started_at' => now()])->saveQuietly();
     for ($i = 0; $i < 2; $i++) {
         $workerUser = User::factory()->create(['is_active' => true]);

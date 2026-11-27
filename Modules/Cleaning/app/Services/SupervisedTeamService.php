@@ -32,7 +32,7 @@ final class SupervisedTeamService
     {
         $this->assertSupervisor($user);
 
-        return CleaningBooking::query()->where(function (Builder $bookings): void {
+        return CleaningBooking::query()->operationallyAdmitted()->where(function (Builder $bookings): void {
             $bookings->where('booking_kind', self::KIND)
                 ->orWhere(function (Builder $standard): void {
                     $standard->where('booking_kind', 'standard')
@@ -51,7 +51,7 @@ final class SupervisedTeamService
     {
         $query = $this->assignedQuery($user);
         $booking = ($forUpdate ? $query->lockForUpdate() : $query)->find($bookingId);
-        if (! $booking) {
+        if (! $booking || ! app(CleaningV3OperationalAdmissionPolicy::class)->approved($booking)) {
             throw new HttpResponseException(response()->json([
                 'code' => 'BOOKING_NOT_FOUND', 'message' => 'الطلب غير موجود.',
             ], 404));
@@ -62,6 +62,23 @@ final class SupervisedTeamService
 
     public function attendance(CleaningBooking $booking): array
     {
+        if ($booking->contract_version === 'v3') {
+            // Never interpret a V3 arrival or customer code as a legacy
+            // supervisor attendance proof, nor combine sibling visit crews.
+            $visits = app(CleaningV3SupervisorVisitRoster::class)->project($booking);
+            $current = count($visits) === 1 ? $visits[0] : null;
+            $verified = $current['customerVerifiedWorkers'] ?? null;
+            $arrived = $current['physicallyArrivedWorkers'] ?? null;
+            return ['bookingId' => (int) $booking->id, 'bookingNumber' => $booking->booking_number,
+                'requiredWorkers' => $current['requiredWorkers'] ?? null,
+                'acceptedWorkers' => $current['acceptedWorkers'] ?? null,
+                'physicallyArrivedWorkers' => $arrived,
+                'arrivedWorkers' => $verified,
+                'teamReady' => $current !== null && $verified >= $current['requiredWorkers'],
+                'pendingAttendanceWorkers' => $current === null ? null : max(0, $arrived - $verified),
+                'workers' => $current['workers'] ?? [],
+                'v3Visits' => $visits];
+        }
         $assignments = $booking->workerAssignments()->with('worker.user')->orderBy('id')->get();
         $accepted = $assignments->filter(fn ($assignment): bool => in_array(
             $assignment->status?->value ?? (string) $assignment->status,
@@ -110,6 +127,8 @@ final class SupervisedTeamService
     public function summary(CleaningBooking $booking): array
     {
         $attendance = $this->attendance($booking);
+        $daily = $booking->contract_version === 'v3'
+            ? app(CleaningV3DailyBookingProjection::class)->present($booking, auth()->user()) : null;
         $state = (string) ($booking->supervised_state ?: 'staffing');
         $terminal = in_array($booking->status, [
             \Modules\Cleaning\Enums\CleaningBookingStatus::Completed,
@@ -141,7 +160,7 @@ final class SupervisedTeamService
         if ($state === 'handover_confirmed' && ! $terminal) {
             $actions[] = 'submit_report';
         }
-        $minutes = max(1, (int) ($booking->supervised_duration_minutes ?: ceil(
+        $minutes = $daily['durationMinutes'] ?? max(1, (int) ($booking->supervised_duration_minutes ?: ceil(
             ((float) $booking->estimated_hours * 60) / max(1, (int) $booking->number_of_workers)
         )));
         $scheduledEnd = $booking->supervised_scheduled_end_at;
@@ -153,26 +172,32 @@ final class SupervisedTeamService
             );
             $scheduledEnd ??= $scheduledStart->copy()->addMinutes($minutes);
         }
+        if ($daily !== null) {
+            $execution = app(CleaningV3DailyBookingProjection::class)->execution($booking);
+            $scheduledStart = $execution?->startsAt();
+            $scheduledEnd = $execution?->endsAt();
+            $state = $daily['state'];
+            $actions = $daily['allowedActions'];
+        }
 
         return [
             'id' => $booking->id,
             // Expose visit identities only to the currently assigned supervisor
             // through the already authorization-scoped summary endpoint.
             'contractVersion' => (string) ($booking->contract_version ?? '') === 'v3' ? 3 : 2,
-            'v3VisitIds' => (string) ($booking->contract_version ?? '') === 'v3'
-                ? $booking->sessions()->orderBy('sequence')->pluck('id')->map(static fn ($id): int => (int) $id)->all()
-                : [],
+            'v3VisitIds' => array_column($attendance['v3Visits'] ?? [], 'visitId'),
+            'v3Visits' => $attendance['v3Visits'] ?? [],
             'bookingNumber' => $booking->booking_number,
             'serviceType' => (string) $booking->booking_kind,
             'status' => $booking->status?->value ?? (string) $booking->status,
             'teamState' => $state,
-            'scheduledDate' => $booking->scheduled_date?->format('Y-m-d'),
-            'scheduledTime' => mb_substr((string) $booking->scheduled_time, 0, 5),
+            'scheduledDate' => $daily['scheduledDate'] ?? $booking->scheduled_date?->format('Y-m-d'),
+            'scheduledTime' => $daily['scheduledTime'] ?? mb_substr((string) $booking->scheduled_time, 0, 5),
             'scheduledStartAt' => $scheduledStart?->toIso8601String(),
             'scheduledEndAt' => $scheduledEnd?->toIso8601String(),
             'originalScheduledEndAt' => $booking->supervised_original_end_at?->toIso8601String(),
-            'workStartedAt' => $booking->work_started_at?->toIso8601String(),
-            'workFinishedAt' => $booking->work_finished_at?->toIso8601String(),
+            'workStartedAt' => isset($execution) ? $execution->work_started_at?->toIso8601String() : $booking->work_started_at?->toIso8601String(),
+            'workFinishedAt' => isset($execution) ? $execution->work_finished_at?->toIso8601String() : $booking->work_finished_at?->toIso8601String(),
             'durationMinutes' => $minutes,
             'requiredWorkers' => $attendance['requiredWorkers'],
             'acceptedWorkers' => $attendance['acceptedWorkers'],
@@ -182,7 +207,8 @@ final class SupervisedTeamService
             'pendingAttendanceWorkers' => $attendance['pendingAttendanceWorkers'],
             'serverNow' => now()->toIso8601String(),
             'timezone' => config('app.timezone'),
-            'allowedActions' => array_values(array_unique($actions)),
+            'allowedActions' => $booking->contract_version === 'v3' ? ($daily['allowedActions'] ?? []) : array_values(array_unique($actions)),
+            ...($daily !== null ? ['dailyBooking' => $daily] : []),
         ];
     }
 

@@ -21,6 +21,15 @@ final class CleaningWorkerCustomerDataDisclosurePolicy
 {
     public function neighborhoodLabel(CleaningBooking $booking): string
     {
+        // Prefer the controlled catalog rather than a potentially precise
+        // address copied into a historical free-text neighborhood field.
+        if ($booking->neighborhood_id !== null) {
+            $district = $booking->neighborhood;
+            $label = $district?->name_ar ?: $district?->name_en;
+            if (is_string($label) && mb_trim($label) !== '') {
+                return mb_trim($label);
+            }
+        }
         $candidates = [
             $booking->neighborhood_name,
             data_get($booking->property_details, 'neighborhood'),
@@ -37,6 +46,7 @@ final class CleaningWorkerCustomerDataDisclosurePolicy
             if ($name !== ''
                 && mb_strlen($name) <= 80
                 && ! preg_match('/[\r\n]/u', $name)
+                && ! preg_match('/[,،;؛]|\p{N}|\b(?:street|building|floor|apartment|house|road|avenue)\b|(?:شارع|بناء|طابق|شقة|هاتف)/iu', $name)
                 && ! preg_match('/[-+]?\d{1,3}\.\d+\s*[,،]\s*[-+]?\d{1,3}\.\d+/u', $name)
             ) {
                 return $name;
@@ -64,7 +74,8 @@ final class CleaningWorkerCustomerDataDisclosurePolicy
             ? $booking->status->value
             : (string) $booking->status;
 
-        if (! in_array($bookingStatus, [
+        $isV3 = $booking->contract_version === 'v3';
+        if (! $isV3 && ! in_array($bookingStatus, [
             CleaningBookingStatus::WorkerAssigned->value,
             CleaningBookingStatus::AwaitingStartVerification->value,
             CleaningBookingStatus::AwaitingWorkerStartConfirmation->value,
@@ -79,6 +90,10 @@ final class CleaningWorkerCustomerDataDisclosurePolicy
             ?? $request->route('session')
             ?? $request->query('sessionId');
         if ($sessionParameter !== null) {
+            if (! $sessionParameter instanceof CleaningBookingSession
+                && (! is_scalar($sessionParameter) || ! ctype_digit((string) $sessionParameter))) {
+                return false;
+            }
             $session = $sessionParameter instanceof CleaningBookingSession
                 ? $sessionParameter
                 : CleaningBookingSession::query()->find($sessionParameter);
@@ -87,9 +102,16 @@ final class CleaningWorkerCustomerDataDisclosurePolicy
                 || (int) $session->cleaning_booking_id !== (int) $booking->id) {
                 return false;
             }
+            if ($isV3 && ((int) $request->user()?->id !== (int) $worker->user_id
+                || ! $request->user()?->is_active
+                || ! app(CleaningV3OperationalAdmissionPolicy::class)->approved($booking, $session)
+                || ! in_array($session->status->value, ['scheduled', 'worker_assigned', 'awaiting_start_verification'], true))) {
+                return false;
+            }
 
             $assignment = $session->workerAssignments()
                 ->where('worker_id', $worker->id)
+                ->when($isV3, fn ($query) => $query->whereNull('released_at'))
                 ->whereIn('status', CleaningBookingWorkerAssignmentStatus::activeValues())
                 ->first();
             $sessionStatus = $session->status instanceof CleaningBookingSessionStatus
@@ -102,7 +124,7 @@ final class CleaningWorkerCustomerDataDisclosurePolicy
                 && $assignment->arrived_at === null;
         }
 
-        if ($booking->sessions()->exists()) {
+        if ($isV3 || $booking->sessions()->exists()) {
             return false;
         }
 

@@ -126,7 +126,11 @@ final class CleaningV3SupervisorCashAccountingService
         return DB::transaction(function () use ($actor) {
             $totals = array_fill_keys(['reportedCollectedSyp', 'reportedWorkerPaymentsSyp', 'ownReportedEarningsSyp',
                 'ownConfirmedEarningsSyp', 'companyOutstandingSyp', 'companyDeliveredSyp'], '0.00');
-            $rows = DB::table(self::TABLE)->where('collector_user_id', $actor->id)->orderByDesc('id')->get();
+            $rows = DB::table(self::TABLE.' as a')
+                ->join('cleaning_booking_sessions as v', 'v.id', '=', 'a.visit_id')
+                ->join('cleaning_bookings as b', 'b.id', '=', 'v.cleaning_booking_id')
+                ->where('a.collector_user_id', $actor->id)->orderByDesc('a.id')
+                ->get(['a.*', 'b.id as booking_id', 'b.booking_number', 'v.scheduled_date']);
             foreach ($rows as $row) {
                 $totals['reportedCollectedSyp'] = bcadd($totals['reportedCollectedSyp'], (string) $row->customer_amount, 2);
                 $totals['reportedWorkerPaymentsSyp'] = bcadd($totals['reportedWorkerPaymentsSyp'], (string) $row->worker_amount, 2);
@@ -146,15 +150,41 @@ final class CleaningV3SupervisorCashAccountingService
                 ->whereHas('booking', fn ($q) => $q->where('contract_version', 'v3')->whereHas('supervisorAssignments',
                     fn ($a) => $a->where('supervisor_user_id', $actor->id)))
                 ->whereNotIn('id', DB::table(self::TABLE)->select('visit_id'))
+                ->whereNotNull('customer_completed_at')->where('is_pricing_final', true)
                 ->orderByDesc('id')->limit(100)->get();
             $pending = [];
             foreach ($visits as $visit) {
-                if (data_get($visit->pricing_snapshot, 'settlementBasis.commissionAdded') === true) {
-                    $pending[] = ['bookingId' => (int) $visit->cleaning_booking_id, 'visitId' => (int) $visit->id];
+                if (data_get($visit->pricing_snapshot, 'settlementBasis.commissionAdded') !== true) {
+                    continue;
+                }
+                // A historical supervisor assignment is not evidence of
+                // responsibility for collecting this completed day's cash.
+                // Reuse the locked, signed financial calculation, including
+                // the final collector check used by the reporting command.
+                try {
+                    [$booking, $lockedVisit, $calc, $digest] = $this->lockedCalculation(
+                        (int) $visit->cleaning_booking_id, (int) $visit->id);
+                    if ((int) $actor->id !== $calc['collectorUserId']) {
+                        continue;
+                    }
+                    $state = $this->project($lockedVisit, $calc, $digest);
+                    if ($state['status'] !== 'awaiting_report') {
+                        continue;
+                    }
+                    $pending[] = ['bookingId' => (int) $booking->id, 'visitId' => (int) $lockedVisit->id,
+                        'bookingNumber' => (string) $booking->booking_number,
+                        'scheduledDate' => $lockedVisit->scheduled_date?->format('Y-m-d'),
+                        'canReport' => config('cleaning_v3_catalog.cash_settlement_enabled', false)
+                            && $state['fundingGapSyp'] === '0.00'];
+                } catch (DomainException) {
+                    // Unverified financial snapshots need operations review,
+                    // not an actionable report from a guessed collector.
                 }
             }
             return ['currency' => 'SYP', ...$totals, 'unreportedVisits' => $pending,
                 'reports' => $rows->take(100)->map(fn ($row) => ['visitId' => (int) $row->visit_id,
+                    'bookingId' => (int) $row->booking_id, 'bookingNumber' => (string) $row->booking_number,
+                    'scheduledDate' => $row->scheduled_date === null ? null : substr((string) $row->scheduled_date, 0, 10),
                     'customerAmountSyp' => bcadd((string) $row->customer_amount, '0', 2),
                     'companyAmountSyp' => bcadd((string) $row->company_amount, '0', 2),
                     'status' => $row->received_at === null ? 'reported' : 'received'])->values()->all()];
@@ -171,7 +201,7 @@ final class CleaningV3SupervisorCashAccountingService
         $workerPayments = array_map(fn ($payable) => ['workerId' => $payable['workerId'],
             'name' => $names->get($payable['workerId'])?->user?->name ?? ('#'.$payable['workerId']),
             'amountSyp' => $payable['grossPayableSyp']], $calc['workerPayables']);
-        $state = ['visitId' => (int) $visit->id, 'collectorUserId' => $calc['collectorUserId'],
+        $state = ['visitId' => (int) $visit->id, 'bookingId' => (int) $visit->cleaning_booking_id, 'collectorUserId' => $calc['collectorUserId'],
             'workerPayments' => $workerPayments,
             'customerAmountSyp' => $calc['totalDueSyp'], 'workerAmountSyp' => $worker,
             'supervisorAmountSyp' => $calc['supervisorPayableSyp'], 'companyAmountSyp' => $calc['companyCashDueSyp'],

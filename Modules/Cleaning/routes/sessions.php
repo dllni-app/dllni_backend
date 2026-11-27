@@ -59,7 +59,7 @@ Route::prefix('v1')
         Route::get(
             'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/security-code',
             [CleaningBookingSessionLifecycleController::class, 'securityCode'],
-        )->name('cleaning-bookings.sessions.security-code');
+        )->name('cleaning-bookings.sessions.security-code')->middleware(RejectUnapprovedV3WorkerLifecycle::class);
 
         Route::post(
             'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/start-verification/confirm',

@@ -64,7 +64,10 @@ final class CleaningBookingSchedulePresenter
         $firstDate = $sessions->min('scheduled_date');
         $lastDate = $sessions->max('scheduled_date');
         $canReschedule = $this->eventScheduleCanReschedule($booking, $sessions, $viewerWorker);
-        $isRecurring = $sessions->contains(
+        $isV3 = $booking->contract_version === 'v3';
+        // Retain the historical multi-visit grouping for read compatibility.
+        // New ordinary V3 daily bookings are never presented as a series.
+        $isRecurring = (! $isV3 || $sessions->count() > 1) && $sessions->contains(
             fn (CleaningBookingSession $session): bool => (string) $session->session_type === CleaningBookingSession::TYPE_RECURRING_CLEANING,
         );
         $isOpenTime = $sessions->contains(
@@ -73,9 +76,11 @@ final class CleaningBookingSchedulePresenter
         $isRecurringPaused = $isRecurring && $booking->recurring_paused_at !== null;
         $isCustomerView = ! $viewerWorker instanceof Worker;
         $canPauseRecurring = $isCustomerView
+            && ! $isV3
             && $isRecurring
             && $sessions->contains(fn (CleaningBookingSession $session): bool => $this->canPauseRecurringSession($session));
         $canResumeRecurring = $isCustomerView
+            && ! $isV3
             && $isRecurringPaused
             && $sessions->contains(
                 fn (CleaningBookingSession $session): bool => $this->status($session) === CleaningBookingSessionStatus::Paused->value,
@@ -206,8 +211,28 @@ final class CleaningBookingSchedulePresenter
                     CleaningBookingSessionStatus::Scheduled->value,
                     CleaningBookingSessionStatus::WorkerAssigned->value,
                 ], true);
-        $canConfirmStartVerification = $isCustomerView
+        $isSupervisedV3 = $session->booking->contract_version === 'v3'
+            && $session->supervision_mode === CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR;
+        $isV3 = $session->booking->contract_version === 'v3';
+        if ($isV3) {
+            $admitted = app(CleaningV3OperationalAdmissionPolicy::class)->approved($session->booking, $session);
+            $canStartTravel = $admitted && $canStartTravel && (! $isSupervisedV3
+                || app(CleaningSupervisorAssignmentService::class)->activeSupervisorId($session->booking) !== null);
+            $canArrive = $admitted && $canArrive;
+            $canStartWork = $admitted && ! $isSupervisedV3 && $canStartWork;
+            $canComplete = $admitted && ! $isSupervisedV3 && $canComplete;
+            // V3 legacy visit cancellation is not an authorized financial mutation.
+            // The held-booking cancellation endpoint is the supported entry.
+            $canCancel = false;
+            $canReschedule = false;
+            $canSendSos = false;
+        }
+        $canConfirmStartVerification = $isCustomerView && ! $isSupervisedV3
             && $status === CleaningBookingSessionStatus::AwaitingStartVerification->value;
+        $canViewSupervisorCode = $isCustomerView && $isSupervisedV3
+            && in_array($status, ['awaiting_start_verification', 'awaiting_worker_start_confirmation'], true)
+            && app(CleaningV3OperationalAdmissionPolicy::class)->approved($session->booking, $session)
+            && app(CleaningV3SupervisedVisitService::class)->verificationStatus((int) $session->id) === 'pending';
         $canConfirmCompletion = $isCustomerView
             && $status === CleaningBookingSessionStatus::AwaitingCustomerCompletion->value;
         $hasStartedTravelAssignment = $session->workerAssignments->contains(
@@ -305,7 +330,7 @@ final class CleaningBookingSchedulePresenter
                     'note' => $assignment->attendance_note,
                 ];
             })->values();
-        $canUseAttendanceActions = $isCustomerView
+        $canUseAttendanceActions = ! $isV3 && $isCustomerView
             && (string) $session->session_type === CleaningBookingSession::TYPE_RECURRING_CLEANING
             && in_array($status, [
                 CleaningBookingSessionStatus::Scheduled->value,
@@ -330,6 +355,11 @@ final class CleaningBookingSchedulePresenter
             $attendanceActionWorkerIds[CleaningBookingSessionAttendanceService::ACTION_CANCEL] = $noTravelWorkerIds->all();
         }
 
+        if ($isV3) {
+            $canSendSos = false;
+            $canConfirmStartVerification = $admitted && $canConfirmStartVerification;
+            $canConfirmCompletion = $admitted && $canConfirmCompletion;
+        }
         $payload = [
             'id' => (int) $session->id,
             'sessionId' => (int) $session->id,
@@ -354,7 +384,9 @@ final class CleaningBookingSchedulePresenter
             'canStartWork' => $canStartWork,
             'canComplete' => $canComplete,
             'canConfirmStartVerification' => $canConfirmStartVerification,
+            'canViewSupervisorCode' => $canViewSupervisorCode,
             'canConfirmCompletion' => $canConfirmCompletion,
+            'canRejectCompletion' => $isSupervisedV3 && $canConfirmCompletion,
             'canSendSos' => $canSendSos,
             'canExtend' => $canRequestOpenTimeExtension,
             'canRequestOpenTimeExtension' => $canRequestOpenTimeExtension,
@@ -364,7 +396,7 @@ final class CleaningBookingSchedulePresenter
             'canCancel' => $canCancel,
             'canSkip' => $canSkip,
             'canReschedule' => $isCustomerView && $canReschedule,
-            'coverageStatus' => $session->coverage_status?->value ?? (string) $session->coverage_status,
+            'coverageStatus' => $isV3 && $session->isTerminal() ? 'closed' : ($session->coverage_status?->value ?? (string) $session->coverage_status),
             'coverageStatusLabel' => $session->coverage_status?->label(),
             'requiredWorkers' => $session->requiredWorkerCount(),
             'acceptedWorkers' => $session->acceptedWorkerCount(),
@@ -442,6 +474,9 @@ final class CleaningBookingSchedulePresenter
         ];
         if ($viewerWorker instanceof Worker) {
             $payload['qaEarlyActionsAllowed'] = $qaEarlyActionsAllowed;
+        }
+        if ($isV3) {
+            $payload['dispatch'] = app(CleaningV3VisitDispatchService::class)->project($session);
         }
 
         return $payload;

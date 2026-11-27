@@ -4,11 +4,17 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Http\Controllers\API;
 
+use App\Models\Worker;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingSession;
+use Modules\Cleaning\Services\CleaningBookingWorkerScheduleService;
+use Modules\Cleaning\Services\CleaningBookingWorkerSessionVisibilityService;
+use Modules\Cleaning\Services\CleaningV3DailyBookingProjection;
+use Modules\Cleaning\Services\CleaningV3OperationalAdmissionPolicy;
 use Modules\Cleaning\Services\CleaningWorkerCustomerDataDisclosurePolicy;
 
 final class SupervisedWorkerBookingController
@@ -16,6 +22,11 @@ final class SupervisedWorkerBookingController
     public function __invoke(Request $request, CleaningBooking $booking): JsonResponse
     {
         $worker = $request->user()?->worker;
+        if ($booking->contract_version === 'v3') {
+            abort_unless($worker instanceof Worker && $request->user()?->is_active, 404);
+
+            return $this->dailyV3($request, $booking, $worker);
+        }
         $isManagedStandardTeam = (string) $booking->booking_kind === 'standard'
             && (int) $booking->number_of_workers > 1
             && $booking->supervisorAssignments()->where('active_slot', 1)
@@ -148,6 +159,74 @@ final class SupervisedWorkerBookingController
             ])->values(),
             'allowedActions' => in_array($booking->status?->value ?? (string) $booking->status,
                 ['completed', 'cancelled'], true) ? ['view'] : ['view', 'sos'],
+        ]])->header('Cache-Control', 'private, no-store');
+    }
+
+    /** V3 never uses the legacy parent membership/attendance proof namespace. */
+    private function dailyV3(Request $request, CleaningBooking $booking, Worker $worker): JsonResponse
+    {
+        $projection = app(CleaningV3DailyBookingProjection::class);
+        $visit = $projection->execution($booking);
+        abort_unless($visit !== null
+            && $visit->supervision_mode === CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR
+            && app(CleaningV3OperationalAdmissionPolicy::class)->approved($booking, $visit)
+            && app(CleaningBookingWorkerSessionVisibilityService::class)->canViewSession($booking, $visit, $worker), 404);
+        // An eligible offer is not an accepted team membership. No legacy
+        // parent assignment or released execution can grant this detail.
+        $assignment = $visit->workerAssignments()->where('worker_id', $worker->id)
+            ->whereNull('released_at')->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())->firstOrFail();
+        $requested = $request->query('sessionId');
+        abort_if($requested !== null && (! is_scalar($requested) || (string) $requested !== (string) $visit->id), 404);
+
+        $schedule = app(CleaningBookingWorkerScheduleService::class)->present($booking, $worker);
+        $daily = $projection->present($booking, $request->user(), $schedule);
+        abort_unless($daily !== null && (int) $daily['executionId'] === (int) $visit->id
+            && count($schedule['sessions'] ?? []) === 1
+            && (int) ($schedule['sessions'][0]['sessionId'] ?? 0) === (int) $visit->id, 404);
+        $disclosure = app(CleaningWorkerCustomerDataDisclosurePolicy::class);
+        $neighborhood = $disclosure->neighborhoodLabel($booking);
+        $destination = $requested !== null && $disclosure->mayViewDestination($booking, $worker, $request)
+            && $booking->address_latitude !== null && $booking->address_longitude !== null
+            ? ['latitude' => (float) $booking->address_latitude, 'longitude' => (float) $booking->address_longitude,
+                'label' => data_get($booking->property_details, 'full_address') ?: data_get($booking->property_details, 'address') ?: $neighborhood]
+            : null;
+        $supervisor = $booking->supervisorAssignments()->where('active_slot', 1)->whereNull('released_at')
+            ->with('supervisor')->first();
+
+        return response()->json(['data' => [
+            'id' => (int) $booking->id,
+            'bookingNumber' => $booking->booking_number,
+            'contractVersion' => 3,
+            'serviceType' => 'supervised_team',
+            'status' => $daily['status'],
+            'scheduledDate' => $daily['scheduledDate'],
+            'scheduledTime' => $daily['scheduledTime'],
+            'neighborhoodName' => $neighborhood,
+            'destination' => $destination,
+            'propertyType' => $booking->property_type,
+            'supervisor' => $supervisor?->supervisor?->is_active ? [
+                'id' => (int) $supervisor->supervisor_user_id,
+                'name' => $supervisor->supervisor->name,
+                'phone' => $supervisor->supervisor->phone,
+            ] : null,
+            'myMembership' => [
+                'executionId' => (int) $visit->id,
+                'sessionAssignmentId' => (int) $assignment->id,
+                'status' => $assignment->status->value,
+            ],
+            'myAttendance' => [
+                'startedTravelAt' => $assignment->started_travel_at?->toIso8601String(),
+                'arrivedAt' => $assignment->arrived_at?->toIso8601String(),
+                'attendanceConfirmed' => $assignment->start_approved_at !== null,
+                // Older clients would call parent-level mutations using these
+                // flags. Keep them read-only; V3 consumers use dailyBooking.
+                'canStartTravel' => false,
+                'canArrive' => false,
+                'canIssueAttendanceCode' => false,
+            ],
+            'allowedActions' => ['view'],
+            'dailyBooking' => $daily,
+            ...app(\Modules\Cleaning\Services\CleaningV3WorkRequirements::class)->forWorker($booking, $visit, $worker),
         ]])->header('Cache-Control', 'private, no-store');
     }
 }

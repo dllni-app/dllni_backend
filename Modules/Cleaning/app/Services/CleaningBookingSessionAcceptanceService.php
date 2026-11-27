@@ -39,6 +39,9 @@ final class CleaningBookingSessionAcceptanceService
         CleaningBookingSession $session,
         Worker $worker,
     ): bool {
+        if (! app(CleaningV3OperationalAdmissionPolicy::class)->approved($booking, $session)) {
+            return false;
+        }
         if ($this->workerAlreadyAccepted($session, $worker)) {
             return true;
         }
@@ -342,7 +345,7 @@ final class CleaningBookingSessionAcceptanceService
         CleaningBookingSession $session,
         Worker $worker,
     ): ?array {
-        if ((string) $booking->contract_version === 'v3' && data_get($booking->property_details, 'v3_admission_hold') === true) {
+        if (! app(CleaningV3OperationalAdmissionPolicy::class)->approved($booking, $session)) {
             return $this->rejection((int) $session->id, 'v3_admission_pending', 'Visit is not operationally admitted.');
         }
         $status = $session->status instanceof CleaningBookingSessionStatus
@@ -376,6 +379,21 @@ final class CleaningBookingSessionAcceptanceService
         }
         if ($session->startsAt() === null || ! $session->startsAt()->isFuture()) {
             return $this->rejection((int) $session->id, 'session_past_due', 'Past-due visits are not available for acceptance.');
+        }
+
+        if ($booking->contract_version === 'v3') {
+            // Reject closed, full, or sequentially incompatible seats before
+            // reading funding. Every otherwise open V3 seat still revalidates
+            // the signed funding policy; admission alone never authorizes it.
+            try {
+                $funding = DB::transaction(fn () => app(CleaningV3OperationalFundingService::class)
+                    ->requirement($booking, $session));
+                if (! $funding['verified'] && ! ($funding['cashPricePayable'] ?? false)) {
+                    return $this->rejection((int) $session->id, 'v3_funding_unavailable', 'Visit payment policy requires review.');
+                }
+            } catch (\DomainException) {
+                return $this->rejection((int) $session->id, 'v3_funding_unavailable', 'Visit payment policy requires review.');
+            }
         }
 
         $eligibility = $this->eligibilityService->check($booking, $session, $worker);

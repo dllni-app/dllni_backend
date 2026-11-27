@@ -354,7 +354,8 @@ final class CleaningBookingSessionLifecycleController
         $schedule = $viewerWorker instanceof Worker
             ? $this->workerSchedules->present($freshBooking, $viewerWorker, $session)
             : $this->presenter->present($freshBooking);
-        $reviewWorkerIds = CleaningBookingSessionWorkerAssignment::query()
+        $isV3Worker = $freshBooking->contract_version === 'v3' && $viewerWorker instanceof Worker;
+        $reviewWorkerIds = $isV3Worker ? [] : CleaningBookingSessionWorkerAssignment::query()
             ->where('cleaning_booking_session_id', $session->id)
             ->where('status', CleaningBookingWorkerAssignmentStatus::Completed->value)
             ->orderBy('id')
@@ -372,20 +373,20 @@ final class CleaningBookingSessionLifecycleController
                 'bookingId' => (int) $freshBooking->id,
                 'bookingNumber' => $freshBooking->booking_number,
                 'status' => $freshBooking->status?->value ?? (string) $freshBooking->status,
-                'totalPrice' => (float) $freshBooking->total_price,
+                ...($isV3Worker ? [] : ['totalPrice' => (float) $freshBooking->total_price]),
                 'currency' => (string) config('app.currency', 'SYP'),
                 'schedule' => $schedule,
-                'reviewTarget' => [
+                ...($isV3Worker ? [] : ['reviewTarget' => [
                     'sessionId' => (int) $session->id,
                     'workerIds' => $reviewWorkerIds,
-                ],
+                ]]),
             ],
             'sessionId' => (int) $session->id,
         ]);
 
-        // Visit schedules, worker assignments and review targets are private
-        // to the authenticated customer or authorized worker alike. Never
-        // allow browser/proxy caches to persist lifecycle response payloads.
+        // V3 workers receive their scoped schedule, never customer pricing
+        // or customer review targets. Keep legacy and customer envelopes
+        // intact, and never cache authenticated lifecycle responses.
         return $response->header('Cache-Control', 'private, no-store');
     }
 

@@ -1,0 +1,552 @@
+{
+    "fixtureVersion": "phase2-v1-provisional",
+    "source": "CleaningV3IndependentRecurringBookingTest authenticated rollback-only local MySQL requests",
+    "capturedAt": "2026-11-26T20:30:48+00:00",
+    "cases": {
+        "customer.created": {
+            "httpStatus": 201,
+            "body": {
+                "data": {
+                    "bookingId": 337,
+                    "bookingNumber": "CLN-V3-TJ2UBIOBRHA6MSSFU8MH",
+                    "paymentStatus": "unpaid",
+                    "admissionStatus": "pending_operational_review",
+                    "canDispatch": false,
+                    "replayed": false,
+                    "visits": [
+                        {
+                            "visitId": 351,
+                            "occurrenceKey": "independent-qa-0001",
+                            "appointmentKey": "independent-qa-20261128",
+                            "priceRevision": 1
+                        }
+                    ],
+                    "receiptKind": "independent_daily",
+                    "confirmationQuoteId": "f6b79579-2e08-4970-85e7-ccb96e37378e",
+                    "bookings": [
+                        {
+                            "bookingId": 337,
+                            "bookingNumber": "CLN-V3-TJ2UBIOBRHA6MSSFU8MH",
+                            "occurrenceKey": "independent-qa-0001",
+                            "appointmentKey": "independent-qa-20261128",
+                            "scheduledDate": "2026-11-28",
+                            "scheduledTime": "09:00",
+                            "amount": "387000.00",
+                            "visitId": 351,
+                            "priceRevision": 1,
+                            "admissionStatus": "pending_operational_review"
+                        },
+                        {
+                            "bookingId": 338,
+                            "bookingNumber": "CLN-V3-QPZ01TFUDKCJQQ7THALP",
+                            "occurrenceKey": "independent-qa-0002",
+                            "appointmentKey": "independent-qa-20261129",
+                            "scheduledDate": "2026-11-29",
+                            "scheduledTime": "09:00",
+                            "amount": "387000.00",
+                            "visitId": 352,
+                            "priceRevision": 1,
+                            "admissionStatus": "pending_operational_review"
+                        },
+                        {
+                            "bookingId": 339,
+                            "bookingNumber": "CLN-V3-S8NFPG1CTKPETCGNBCQ8",
+                            "occurrenceKey": "independent-qa-0003",
+                            "appointmentKey": "independent-qa-20261130",
+                            "scheduledDate": "2026-11-30",
+                            "scheduledTime": "09:00",
+                            "amount": "387000.00",
+                            "visitId": 353,
+                            "priceRevision": 1,
+                            "admissionStatus": "pending_operational_review"
+                        }
+                    ]
+                }
+            }
+        },
+        "customer.searching": {
+            "httpStatus": 200,
+            "body": {
+                "data": {
+                    "isRecurringOrMultiVisit": false,
+                    "createdFromRecurrence": true,
+                    "dailyBooking": {
+                        "bookingId": 337,
+                        "executionId": 351,
+                        "status": "scheduled",
+                        "state": "searching",
+                        "scheduledDate": "2026-11-28",
+                        "scheduledTime": "09:00",
+                        "durationMinutes": 150,
+                        "requiredWorkers": 2,
+                        "acceptedWorkers": 0,
+                        "remainingWorkers": 2,
+                        "dispatchStatus": "searching",
+                        "searchActive": true,
+                        "clock": null,
+                        "allowedActions": [],
+                        "priceRevision": 1,
+                        "serverNow": "2026-11-26T20:30:30+00:00"
+                    }
+                }
+            }
+        },
+        "customer.held": {
+            "httpStatus": 200,
+            "body": {
+                "data": {
+                    "dailyBooking": {
+                        "bookingId": 338,
+                        "executionId": 352,
+                        "status": "scheduled",
+                        "state": "pending_operational_review",
+                        "scheduledDate": "2026-11-29",
+                        "scheduledTime": "09:00",
+                        "durationMinutes": 150,
+                        "requiredWorkers": 2,
+                        "acceptedWorkers": 0,
+                        "remainingWorkers": 2,
+                        "dispatchStatus": "not_started",
+                        "searchActive": false,
+                        "clock": null,
+                        "allowedActions": [
+                            "cancel_booking"
+                        ],
+                        "priceRevision": 1,
+                        "serverNow": "2026-11-26T20:30:30+00:00"
+                    }
+                }
+            }
+        },
+        "customer.replayed": {
+            "httpStatus": 200,
+            "body": {
+                "data": {
+                    "bookingId": 337,
+                    "bookingNumber": "CLN-V3-TJ2UBIOBRHA6MSSFU8MH",
+                    "paymentStatus": "unpaid",
+                    "admissionStatus": "approved",
+                    "canDispatch": true,
+                    "replayed": true,
+                    "visits": [
+                        {
+                            "visitId": 351,
+                            "occurrenceKey": "independent-qa-0001",
+                            "appointmentKey": "independent-qa-20261128",
+                            "priceRevision": 1
+                        }
+                    ],
+                    "receiptKind": "independent_daily",
+                    "confirmationQuoteId": "f6b79579-2e08-4970-85e7-ccb96e37378e",
+                    "bookings": [
+                        {
+                            "bookingId": 337,
+                            "bookingNumber": "CLN-V3-TJ2UBIOBRHA6MSSFU8MH",
+                            "occurrenceKey": "independent-qa-0001",
+                            "appointmentKey": "independent-qa-20261128",
+                            "scheduledDate": "2026-11-28",
+                            "scheduledTime": "09:00",
+                            "amount": "387000.00",
+                            "visitId": 351,
+                            "priceRevision": 1,
+                            "admissionStatus": "approved"
+                        },
+                        {
+                            "bookingId": 338,
+                            "bookingNumber": "CLN-V3-QPZ01TFUDKCJQQ7THALP",
+                            "occurrenceKey": "independent-qa-0002",
+                            "appointmentKey": "independent-qa-20261129",
+                            "scheduledDate": "2026-11-29",
+                            "scheduledTime": "09:00",
+                            "amount": "387000.00",
+                            "visitId": 352,
+                            "priceRevision": 1,
+                            "admissionStatus": "pending_operational_review"
+                        },
+                        {
+                            "bookingId": 339,
+                            "bookingNumber": "CLN-V3-S8NFPG1CTKPETCGNBCQ8",
+                            "occurrenceKey": "independent-qa-0003",
+                            "appointmentKey": "independent-qa-20261130",
+                            "scheduledDate": "2026-11-30",
+                            "scheduledTime": "09:00",
+                            "amount": "387000.00",
+                            "visitId": 353,
+                            "priceRevision": 1,
+                            "admissionStatus": "cancelled"
+                        }
+                    ]
+                }
+            }
+        },
+        "worker.offer": {
+            "httpStatus": 200,
+            "body": {
+                "data": {
+                    "contractVersion": 3,
+                    "dailyBooking": {
+                        "bookingId": 337,
+                        "executionId": 351,
+                        "status": "scheduled",
+                        "state": "searching",
+                        "scheduledDate": "2026-11-28",
+                        "scheduledTime": "09:00",
+                        "durationMinutes": 150,
+                        "requiredWorkers": 2,
+                        "acceptedWorkers": 0,
+                        "remainingWorkers": 2,
+                        "dispatchStatus": "searching",
+                        "searchActive": true,
+                        "clock": null,
+                        "allowedActions": [
+                            "accept"
+                        ],
+                        "priceRevision": 1,
+                        "serverNow": "2026-11-26T20:30:30+00:00"
+                    },
+                    "requirementsAvailable": true,
+                    "requirements": [
+                        {
+                            "lineId": "351:7dc9bfcae6e946ae5db8bf0d1f31b1241bd49678297a0fe1d06bf16c2e1a03f4",
+                            "itemKey": "qa.room",
+                            "scopeKey": "whole",
+                            "label": "غرف الاختبار",
+                            "measurementMode": "count",
+                            "quantity": "2.00",
+                            "effortMinutes": 60
+                        }
+                    ]
+                }
+            }
+        },
+        "worker.requirements_unavailable": {
+            "httpStatus": 200,
+            "body": {
+                "data": {
+                    "contractVersion": 3,
+                    "dailyBooking": {
+                        "bookingId": 337,
+                        "executionId": 351,
+                        "status": "scheduled",
+                        "state": "searching",
+                        "scheduledDate": "2026-11-28",
+                        "scheduledTime": "09:00",
+                        "durationMinutes": 150,
+                        "requiredWorkers": 2,
+                        "acceptedWorkers": 0,
+                        "remainingWorkers": 2,
+                        "dispatchStatus": "searching",
+                        "searchActive": true,
+                        "clock": null,
+                        "allowedActions": [
+                            "accept"
+                        ],
+                        "priceRevision": 1,
+                        "serverNow": "2026-11-26T20:30:30+00:00"
+                    },
+                    "requirementsAvailable": false,
+                    "requirements": null
+                }
+            }
+        },
+        "worker.accepted": {
+            "httpStatus": 200,
+            "body": {
+                "data": {
+                    "contractVersion": 3,
+                    "myMembership": {
+                        "executionId": 351,
+                        "sessionAssignmentId": 150,
+                        "status": "accepted_waiting_for_order_start"
+                    },
+                    "dailyBooking": {
+                        "bookingId": 337,
+                        "executionId": 351,
+                        "status": "scheduled",
+                        "state": "searching",
+                        "scheduledDate": "2026-11-28",
+                        "scheduledTime": "09:00",
+                        "durationMinutes": 150,
+                        "requiredWorkers": 2,
+                        "acceptedWorkers": 1,
+                        "remainingWorkers": 1,
+                        "dispatchStatus": "searching",
+                        "searchActive": true,
+                        "clock": null,
+                        "allowedActions": [],
+                        "priceRevision": 1,
+                        "serverNow": "2026-11-26T20:30:30+00:00"
+                    },
+                    "requirementsAvailable": true,
+                    "requirements": [
+                        {
+                            "lineId": "351:7dc9bfcae6e946ae5db8bf0d1f31b1241bd49678297a0fe1d06bf16c2e1a03f4",
+                            "itemKey": "qa.room",
+                            "scopeKey": "whole",
+                            "label": "غرف الاختبار",
+                            "measurementMode": "count",
+                            "quantity": "2.00",
+                            "effortMinutes": 60
+                        }
+                    ]
+                }
+            }
+        },
+        "supervisor.partial_crew": {
+            "httpStatus": 200,
+            "body": {
+                "data": {
+                    "dailyBooking": {
+                        "bookingId": 337,
+                        "executionId": 351,
+                        "status": "scheduled",
+                        "state": "searching",
+                        "scheduledDate": "2026-11-28",
+                        "scheduledTime": "09:00",
+                        "durationMinutes": 150,
+                        "requiredWorkers": 2,
+                        "acceptedWorkers": 1,
+                        "remainingWorkers": 1,
+                        "dispatchStatus": "searching",
+                        "searchActive": true,
+                        "clock": null,
+                        "allowedActions": [],
+                        "priceRevision": 1,
+                        "serverNow": "2026-11-26T20:30:30+00:00"
+                    }
+                }
+            }
+        },
+        "supervisor.arrived": {
+            "httpStatus": 200,
+            "body": {
+                "data": {
+                    "dailyBooking": {
+                        "bookingId": 337,
+                        "executionId": 351,
+                        "status": "awaiting_start_verification",
+                        "state": "awaiting_start_verification",
+                        "scheduledDate": "2026-11-28",
+                        "scheduledTime": "09:00",
+                        "durationMinutes": 150,
+                        "requiredWorkers": 2,
+                        "acceptedWorkers": 2,
+                        "remainingWorkers": 0,
+                        "dispatchStatus": "covered",
+                        "searchActive": false,
+                        "clock": null,
+                        "allowedActions": [
+                            "request_verification"
+                        ],
+                        "priceRevision": 1,
+                        "serverNow": "2026-11-26T20:30:30+00:00"
+                    }
+                }
+            }
+        },
+        "supervisor.code_pending": {
+            "httpStatus": 200,
+            "body": {
+                "data": {
+                    "dailyBooking": {
+                        "bookingId": 337,
+                        "executionId": 351,
+                        "status": "awaiting_start_verification",
+                        "state": "awaiting_start_verification",
+                        "scheduledDate": "2026-11-28",
+                        "scheduledTime": "09:00",
+                        "durationMinutes": 150,
+                        "requiredWorkers": 2,
+                        "acceptedWorkers": 2,
+                        "remainingWorkers": 0,
+                        "dispatchStatus": "covered",
+                        "searchActive": false,
+                        "clock": null,
+                        "allowedActions": [
+                            "confirm_verification"
+                        ],
+                        "priceRevision": 1,
+                        "serverNow": "2026-11-26T20:30:30+00:00"
+                    }
+                }
+            }
+        },
+        "supervisor.verified": {
+            "httpStatus": 200,
+            "body": {
+                "data": {
+                    "dailyBooking": {
+                        "bookingId": 337,
+                        "executionId": 351,
+                        "status": "awaiting_start_verification",
+                        "state": "awaiting_start_verification",
+                        "scheduledDate": "2026-11-28",
+                        "scheduledTime": "09:00",
+                        "durationMinutes": 150,
+                        "requiredWorkers": 2,
+                        "acceptedWorkers": 2,
+                        "remainingWorkers": 0,
+                        "dispatchStatus": "covered",
+                        "searchActive": false,
+                        "clock": null,
+                        "allowedActions": [
+                            "start_work"
+                        ],
+                        "priceRevision": 1,
+                        "serverNow": "2026-11-26T20:30:30+00:00"
+                    }
+                }
+            }
+        },
+        "customer.running": {
+            "httpStatus": 200,
+            "body": {
+                "data": {
+                    "dailyBooking": {
+                        "bookingId": 337,
+                        "executionId": 351,
+                        "status": "in_progress",
+                        "state": "in_progress",
+                        "scheduledDate": "2026-11-28",
+                        "scheduledTime": "09:00",
+                        "durationMinutes": 150,
+                        "requiredWorkers": 2,
+                        "acceptedWorkers": 2,
+                        "remainingWorkers": 0,
+                        "dispatchStatus": "covered",
+                        "searchActive": false,
+                        "clock": {
+                            "state": "running",
+                            "revision": 1,
+                            "serverNow": "2026-11-26T20:32:30+00:00",
+                            "activeSeconds": 120,
+                            "activeSince": "2026-11-26T20:30:30+00:00",
+                            "pausePending": false,
+                            "pendingPauseRequestId": null,
+                            "visitId": 351,
+                            "canSettle": false
+                        },
+                        "allowedActions": [
+                            "request_pause"
+                        ],
+                        "priceRevision": 1,
+                        "serverNow": "2026-11-26T20:32:30+00:00"
+                    }
+                }
+            }
+        },
+        "supervisor.pause_pending": {
+            "httpStatus": 200,
+            "body": {
+                "data": {
+                    "dailyBooking": {
+                        "bookingId": 337,
+                        "executionId": 351,
+                        "status": "in_progress",
+                        "state": "in_progress",
+                        "scheduledDate": "2026-11-28",
+                        "scheduledTime": "09:00",
+                        "durationMinutes": 150,
+                        "requiredWorkers": 2,
+                        "acceptedWorkers": 2,
+                        "remainingWorkers": 0,
+                        "dispatchStatus": "covered",
+                        "searchActive": false,
+                        "clock": {
+                            "state": "running",
+                            "revision": 2,
+                            "serverNow": "2026-11-26T20:32:30+00:00",
+                            "activeSeconds": 120,
+                            "activeSince": "2026-11-26T20:30:30+00:00",
+                            "pausePending": true,
+                            "pendingPauseRequestId": 41,
+                            "visitId": 351,
+                            "canSettle": false
+                        },
+                        "allowedActions": [
+                            "approve_pause",
+                            "reject_pause",
+                            "request_handover"
+                        ],
+                        "priceRevision": 1,
+                        "serverNow": "2026-11-26T20:32:30+00:00"
+                    }
+                }
+            }
+        },
+        "supervisor.paused": {
+            "httpStatus": 200,
+            "body": {
+                "data": {
+                    "dailyBooking": {
+                        "bookingId": 337,
+                        "executionId": 351,
+                        "status": "paused",
+                        "state": "paused",
+                        "scheduledDate": "2026-11-28",
+                        "scheduledTime": "09:00",
+                        "durationMinutes": 150,
+                        "requiredWorkers": 2,
+                        "acceptedWorkers": 2,
+                        "remainingWorkers": 0,
+                        "dispatchStatus": "covered",
+                        "searchActive": false,
+                        "clock": {
+                            "state": "paused",
+                            "revision": 3,
+                            "serverNow": "2026-11-26T20:33:30+00:00",
+                            "activeSeconds": 120,
+                            "activeSince": null,
+                            "pausePending": false,
+                            "pendingPauseRequestId": null,
+                            "visitId": 351,
+                            "canSettle": false
+                        },
+                        "allowedActions": [
+                            "resume_work"
+                        ],
+                        "priceRevision": 1,
+                        "serverNow": "2026-11-26T20:33:30+00:00"
+                    }
+                }
+            }
+        },
+        "customer.completed": {
+            "httpStatus": 200,
+            "body": {
+                "data": {
+                    "dailyBooking": {
+                        "bookingId": 337,
+                        "executionId": 351,
+                        "status": "completed",
+                        "state": "completed",
+                        "scheduledDate": "2026-11-28",
+                        "scheduledTime": "09:00",
+                        "durationMinutes": 150,
+                        "requiredWorkers": 2,
+                        "acceptedWorkers": 2,
+                        "remainingWorkers": 0,
+                        "dispatchStatus": "closed",
+                        "searchActive": false,
+                        "clock": {
+                            "state": "completed",
+                            "revision": 5,
+                            "serverNow": "2026-11-26T20:34:30+00:00",
+                            "activeSeconds": 180,
+                            "activeSince": null,
+                            "pausePending": false,
+                            "pendingPauseRequestId": null,
+                            "visitId": 351,
+                            "canSettle": false
+                        },
+                        "allowedActions": [
+                            "review"
+                        ],
+                        "priceRevision": 1,
+                        "serverNow": "2026-11-26T20:34:30+00:00"
+                    }
+                }
+            }
+        }
+    }
+}

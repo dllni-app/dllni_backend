@@ -4,12 +4,10 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Services;
 
-use Carbon\CarbonImmutable;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
-use Modules\Cleaning\Models\CleaningV3CatalogVersion;
 
 /** Load the original customer-approved signed commercial price under a visit lock. */
 final class CleaningV3ConfirmedVisitPrice
@@ -20,31 +18,10 @@ final class CleaningV3ConfirmedVisitPrice
             || (int) $visit->cleaning_booking_id !== (int) $booking->id) {
             throw new DomainException('V3_VISIT_PRICE_TRANSACTION_REQUIRED');
         }
-        $query = DB::table('cleaning_booking_quotes')->where('cleaning_booking_id', $booking->id)
-            ->where('contract_version', 'v3');
-        if (is_string($current = data_get($booking->property_details, 'v3_current_quote_id'))) {
-            $query->where('id', $current);
-        }
-        $quotes = $query->lockForUpdate()->get();
-        $catalog = CleaningV3CatalogVersion::query()->whereKey($booking->catalog_version_id)->first();
-        if ($quotes->count() !== 1 || $catalog === null || $catalog->status !== 'published' || $catalog->published_at === null
-            || ! hash_equals((string) $catalog->published_digest, app(CleaningV3CatalogReviewManifestService::class)->fingerprint($catalog))) {
-            throw new DomainException('V3_CONFIRMED_QUOTE_REQUIRED');
-        }
-        $quote = $quotes->first();
-        $envelope = json_decode((string) $quote->snapshot, true);
-        if (! is_array($envelope) || ($envelope['quoteId'] ?? null) !== $quote->id
-            || ! is_string($envelope['signature'] ?? null) || ! hash_equals((string) $quote->signature, $envelope['signature'])
-            || (int) $quote->customer_id !== (int) $booking->customer_id || (int) $quote->catalog_version_id !== (int) $catalog->id) {
-            throw new DomainException('V3_CONFIRMED_QUOTE_REQUIRED');
-        }
-        $accepted = data_get($booking->property_details, 'v3_quote_accepted_at');
-        $at = is_string($accepted) ? CarbonImmutable::parse($accepted)->utc() : CarbonImmutable::instance($booking->created_at)->utc();
-        $snapshot = app(CleaningV3SignedQuoteEnvelope::class)->verify($envelope, (int) $booking->customer_id,
-            $catalog->version_key, $catalog->published_digest, $at);
-        if (($snapshot['paymentMethod'] ?? null) !== 'cash_on_delivery'
-            || ($snapshot['paymentStatus'] ?? null) !== 'unpaid') {
-            throw new DomainException('V3_CONFIRMED_QUOTE_REQUIRED');
+        [$quote, $snapshot, $sequence] = app(CleaningV3AcceptedQuoteResolver::class)
+            ->load($booking, 'V3_CONFIRMED_QUOTE_REQUIRED');
+        if ($sequence !== null) {
+            app(CleaningV3DailyQuoteScope::class)->assertExecution($snapshot, $sequence, $visit);
         }
         $key = $visit->occurrence_key;
         $row = collect($snapshot['commercialReview']['visits'] ?? [])->firstWhere('occurrenceKey', $key);
