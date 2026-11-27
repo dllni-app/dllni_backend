@@ -195,6 +195,15 @@ Route::prefix('v1/user')->group(function (): void {
     Route::get('offers', UserMarketingOffersIndexController::class);
     Route::get('offers/{marketingOffer}', UserMarketingOfferShowController::class);
 
+    // Legacy worker releases use these customer-prefixed notification routes.
+    Route::middleware(['auth:sanctum', \App\Http\Middleware\EnsureCustomerOrCleaningWorkerAccount::class])->group(function (): void {
+        Route::get('notifications', UserNotificationsIndexController::class);
+        Route::patch('notifications/read-all', UserNotificationsMarkAllAsReadController::class);
+        Route::delete('notifications/all', UserNotificationsDestroyAllController::class);
+        Route::delete('notifications/{id}', UserNotificationsDestroyController::class);
+        Route::patch('notifications/{id}/read', UserNotificationsMarkAsReadController::class);
+    });
+
     Route::middleware(['auth:sanctum', \App\Http\Middleware\EnsureCustomerAccount::class])->group(function (): void {
 
         Route::post('products/normalize-text', UserNormalizeProductTextController::class);
@@ -206,11 +215,6 @@ Route::prefix('v1/user')->group(function (): void {
         Route::patch('account', UserAccountUpdateController::class);
         Route::put('account/password', UserAccountPasswordController::class);
 
-        Route::get('notifications', UserNotificationsIndexController::class);
-        Route::patch('notifications/read-all', UserNotificationsMarkAllAsReadController::class);
-        Route::delete('notifications/all', UserNotificationsDestroyAllController::class);
-        Route::delete('notifications/{id}', UserNotificationsDestroyController::class);
-        Route::patch('notifications/{id}/read', UserNotificationsMarkAsReadController::class);
         Route::put('notifications/token', RegisterFcmTokenController::class);
 
         Route::post('sos', [UserSosController::class, 'store']);

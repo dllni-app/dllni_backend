@@ -375,3 +375,57 @@ it('marks all worker notification feed items as read', function (): void {
 
     expect($workerUser->fresh()->unreadNotifications()->count())->toBe(0);
 });
+
+it('supports the legacy cleaning worker notification routes without granting customer access', function (): void {
+    $worker = User::factory()->create(['module_type' => \App\Enums\UserModuleType::CleaningWorker]);
+    Worker::factory()->create(['user_id' => $worker->id]);
+    $customer = User::factory()->create();
+    $attributes = [
+        'type' => 'Illuminate\\Notifications\\DatabaseNotification',
+        'data' => ['title' => 'Notification', 'body' => ''],
+        'read_at' => null,
+    ];
+    $first = $worker->notifications()->create(['id' => (string) Str::uuid()] + $attributes);
+    $second = $worker->notifications()->create(['id' => (string) Str::uuid()] + $attributes);
+    $foreign = $customer->notifications()->create(['id' => (string) Str::uuid()] + $attributes);
+
+    Sanctum::actingAs($worker);
+
+    $this->getJson('/api/v1/user/notifications')
+        ->assertOk()
+        ->assertJsonCount(2, 'data')
+        ->assertJsonMissing(['id' => $foreign->id]);
+
+    $this->patchJson("/api/v1/user/notifications/{$foreign->id}/read")->assertNotFound();
+    $this->deleteJson("/api/v1/user/notifications/{$foreign->id}")->assertNotFound();
+
+    $this->patchJson("/api/v1/user/notifications/{$first->id}/read")->assertNoContent();
+    expect($first->fresh()->read_at)->not->toBeNull();
+    $this->patchJson('/api/v1/user/notifications/read-all')->assertNoContent();
+    expect($second->fresh()->read_at)->not->toBeNull();
+
+    $this->deleteJson("/api/v1/user/notifications/{$first->id}")->assertNoContent();
+    expect($worker->notifications()->count())->toBe(1);
+    $this->deleteJson('/api/v1/user/notifications/all')->assertNoContent();
+    expect($worker->notifications()->count())->toBe(0);
+    expect($foreign->fresh())->not->toBeNull();
+    expect($foreign->fresh()->read_at)->toBeNull();
+
+    $this->getJson('/api/v1/user/me')->assertForbidden();
+    $this->getJson('/api/v1/user/addresses')->assertForbidden();
+});
+
+it('keeps legacy notification routes restricted to customers and cleaning workers', function (\App\Enums\UserModuleType $module): void {
+    Sanctum::actingAs(User::factory()->create(['module_type' => $module]));
+
+    $id = (string) Str::uuid();
+    $this->getJson('/api/v1/user/notifications')->assertForbidden();
+    $this->patchJson('/api/v1/user/notifications/read-all')->assertForbidden();
+    $this->patchJson("/api/v1/user/notifications/{$id}/read")->assertForbidden();
+    $this->deleteJson('/api/v1/user/notifications/all')->assertForbidden();
+    $this->deleteJson("/api/v1/user/notifications/{$id}")->assertForbidden();
+})->with([
+    \App\Enums\UserModuleType::RestaurantSeller,
+    \App\Enums\UserModuleType::SupermarketSeller,
+    \App\Enums\UserModuleType::DeliveryDriver,
+]);
