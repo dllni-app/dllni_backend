@@ -241,10 +241,6 @@ final class CleaningBookingSessionLifecycleService
                 && $locked->supervision_mode === CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR,
                 409, 'V3_SUPERVISOR_EXECUTION_REQUIRED');
             $this->assertSessionNotTerminal($locked);
-            if (CleaningV3OperationalAdmissionService::admitted($booking)
-                && $locked->supervision_mode === CleaningBookingSession::SUPERVISION_MODE_SUPERVISOR) {
-                throw new InvalidArgumentException('V3_SUPERVISOR_ACTION_REQUIRED');
-            }
             $providedHash = $this->securityCodeHash($code);
 
             $record = DB::table('booking_security_codes')
