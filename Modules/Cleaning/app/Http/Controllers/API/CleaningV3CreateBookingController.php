@@ -40,8 +40,14 @@ final class CleaningV3CreateBookingController
             return response()->json(['success' => false, 'code' => 'INVALID_V3_BOOKING_REQUEST',
                 'message' => 'يرجى تأكيد عرض السعر وشروط الحجز.'], 422, $headers);
         }
+        $customerNotes = $draft['customerNotes'] ?? '';
+        if (! is_string($customerNotes) || mb_strlen($customerNotes) > 2000) {
+            return response()->json(['success' => false, 'code' => 'INVALID_V3_CUSTOMER_NOTES',
+                'message' => 'يرجى مراجعة ملاحظات الطلب.'], 422, $headers);
+        }
+        $customerNotes = trim($customerNotes);
         try {
-            $result = DB::transaction(function () use ($request, $customerId, $confirmation, $draft) {
+            $result = DB::transaction(function () use ($request, $customerId, $confirmation, $draft, $customerNotes) {
                 DB::table('cleaning_v3_catalog_publication')->where('id', 1)->sharedLock()->first();
                 DB::table('users')->where('id', $customerId)->lockForUpdate()->first();
                 $quote = DB::table('cleaning_booking_quotes')->where('id', $confirmation['quoteId'])
@@ -57,6 +63,9 @@ final class CleaningV3CreateBookingController
                 if ($quote->cleaning_booking_id !== null) {
                     $booking = CleaningBooking::query()->whereKey($quote->cleaning_booking_id)->where('customer_id', $customerId)->firstOrFail();
                     if (! hash_equals((string) data_get($booking->property_details, 'v3_acceptance_hash'), $acceptanceHash)) {
+                        throw new DomainException('V3_BOOKING_QUOTE_ALREADY_CONSUMED');
+                    }
+                    if ((string) data_get($booking->property_details, 'notes', '') !== $customerNotes) {
                         throw new DomainException('V3_BOOKING_QUOTE_ALREADY_CONSUMED');
                     }
                     return $this->result($booking, true);
@@ -150,6 +159,7 @@ final class CleaningV3CreateBookingController
                     'v3_current_quote_id' => $quote->id, 'v3_quote_accepted_at' => now('UTC')->toIso8601String(),
                     'v3_answers' => $answers, 'v3_scope_selections' => $draft['scopeSelections'] ?? [],
                     'cleaning_mode' => $draft['cleaningMode'] ?? null,
+                    ...($customerNotes !== '' ? ['notes' => $customerNotes] : []),
                     'schedule' => ['mode' => $data['recurrenceRule'] === null ? 'single' : 'recurring',
                         'rule' => $data['recurrenceRule'], 'skippedOccurrences' => $data['skippedOccurrences']],
                 ];
