@@ -75,6 +75,11 @@ final class CleaningV3VisitPlanPreviewController
             $propertyKey = $request->input('propertyKey');
             $fields = app(\Modules\Cleaning\Services\CleaningV3PropertyFormSelector::class)->select($catalog['items'], $propertyKey);
             $payload = $request->all();
+            $customerNotes = $payload['customerNotes'] ?? '';
+            if (! is_string($customerNotes) || mb_strlen($customerNotes) > 2000) {
+                throw new CleaningV3VisitPlanException('customerNotes', 'INVALID_V3_CUSTOMER_NOTES');
+            }
+            $customerNotes = trim($customerNotes);
             $mode = $payload['cleaningMode'] ?? null;
             $scopes = array_key_exists('scopeSelections', $payload) ? $payload['scopeSelections'] : [];
             $checkRequested = array_key_exists('cleaningMode', $payload) || array_key_exists('scopeSelections', $payload);
@@ -121,7 +126,7 @@ final class CleaningV3VisitPlanPreviewController
                 throw new DomainException('INVALID_V3_PRICING_REVIEW_REQUEST');
             }
             unset($payload['cleaningMode'], $payload['scopeSelections'], $payload['preferences'], $payload['recurrenceRule'],
-                $payload['pricingPreviewRequested'], $payload['couponCode'], $payload['expectedPricingFingerprint'], $payload['eventRule']);
+                $payload['pricingPreviewRequested'], $payload['couponCode'], $payload['expectedPricingFingerprint'], $payload['eventRule'], $payload['customerNotes']);
             $plan = $planner->plan($payload, allowMultipleLocalDates: $checkRequested);
             if ($recurrence !== null && $recurrence['appointments'] !== $plan['appointments']) {
                 throw new DomainException('V3_RECURRENCE_PLAN_MISMATCH');
@@ -159,7 +164,7 @@ final class CleaningV3VisitPlanPreviewController
         // Bind both validated customer answers and the normalized schedule.
         // The resulting digest is NOT a quote signature and cannot be submitted.
         $draftFingerprint = hash('sha256', $plan['draftFingerprint'].'|'.json_encode(
-            ['propertyKey' => $propertyKey, 'answers' => $answers, 'cleaningMode' => $mode, 'scopeSelections' => $scopes, 'capacityCheck' => $capacityCheck, 'preferences' => $preferences, 'recurrenceRule' => $recurrence['recurrenceRule'] ?? null, 'event' => $event['event'] ?? null], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
+            ['propertyKey' => $propertyKey, 'answers' => $answers, 'cleaningMode' => $mode, 'scopeSelections' => $scopes, 'capacityCheck' => $capacityCheck, 'preferences' => $preferences, 'recurrenceRule' => $recurrence['recurrenceRule'] ?? null, 'event' => $event['event'] ?? null, ...($customerNotes !== '' ? ['customerNotes' => $customerNotes] : [])], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
         ));
         $commercialPrice = null;
         if ($pricingRequested) {
