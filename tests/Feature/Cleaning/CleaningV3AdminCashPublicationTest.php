@@ -432,6 +432,7 @@ test('confirmed cash booking persists one unpaid held order and exact visits, wi
         'contractVersion' => 3, 'catalogVersionKey' => $version->version_key,
         'catalogRevision' => $version->published_digest, 'cleaningMode' => 'regular',
         'answers' => ['qa.room' => 2, 'qa.tool' => 1], 'pricingPreviewRequested' => true,
+        'customerNotes' => 'يرجى تنظيف النافذة أولاً',
         'preferences' => ['addressId' => $address->id, 'addressRevision' => $revision,
             'genderPreference' => 'any', 'excludedWorkerIds' => []],
         'appointments' => [['appointmentKey' => 'appointment', 'visits' => [[
@@ -450,7 +451,12 @@ test('confirmed cash booking persists one unpaid held order and exact visits, wi
         ]);
         $form['couponCode'] = $coupon->code;
     }
-    $preview = $this->postJson('/api/v1/cleaning/v3/visit-plan/preview', $form)->assertOk();
+    $previewUrl = '/api/v1/cleaning/v3/visit-plan/preview';
+    $this->postJson($previewUrl, [...$form, 'customerNotes' => str_repeat('x', 2001)])->assertUnprocessable();
+    $this->postJson($previewUrl, [...$form, 'customerNotes' => ['invalid']])->assertUnprocessable();
+    $withoutNotes = $this->postJson($previewUrl, [...$form, 'customerNotes' => ''])->assertOk();
+    $preview = $this->postJson($previewUrl, $form)->assertOk();
+    expect($preview->json('data.draftFingerprint'))->not->toBe($withoutNotes->json('data.draftFingerprint'));
     $form['expectedPricingFingerprint'] = $preview->json('data.commercialPricePreview.pricingFingerprint');
     $quote = $this->postJson('/api/v1/cleaning/v3/quotes', [...$form, 'idempotencyKey' => (string) \Illuminate\Support\Str::uuid()])->assertOk()->json('data');
     $confirmation = [
@@ -464,11 +470,14 @@ test('confirmed cash booking persists one unpaid held order and exact visits, wi
     $url = '/api/v1/cleaning/v3/bookings';
     $this->postJson($url, [...$payload, 'confirmation' => [...$confirmation, 'acceptedTotalSyp' => '1.00']])->assertStatus(409);
     expect(DB::table('cleaning_bookings')->count())->toBe(0);
+    $this->postJson($url, [...$payload, 'draft' => [...$form, 'customerNotes' => 'changed']])->assertStatus(409);
+    expect(DB::table('cleaning_bookings')->count())->toBe(0);
     $created = $this->postJson($url, $payload)->assertCreated()
         ->assertJsonPath('data.admissionStatus', 'pending_operational_review')
         ->assertJsonPath('data.paymentStatus', 'unpaid')->assertJsonPath('data.canDispatch', false)
         ->assertJsonPath('data.visits.0.occurrenceKey', 'visit')->json('data');
     $booking = \Modules\Cleaning\Models\CleaningBooking::findOrFail($created['bookingId']);
+    expect($booking->property_details['notes'])->toBe($form['customerNotes']);
     expect($booking->contract_version)->toBe('v3')
         ->and($booking->sessions()->count())->toBe(1)
         ->and($booking->sessions()->first()->total_price)->toEqual($withCoupon ? 188500.50 : 208500.50)
@@ -476,6 +485,8 @@ test('confirmed cash booking persists one unpaid held order and exact visits, wi
         ->and(DB::table('cleaning_booking_quotes')->where('id', $quote['quoteId'])->value('cleaning_booking_id'))->toEqual($booking->id)
         ->and(app(\Modules\Cleaning\Services\CleaningGeographicDispatchService::class)->hasOpenWorkerSlots($booking))->toBeFalse();
     $this->postJson($url, $payload)->assertOk()->assertJsonPath('data.replayed', true)->assertJsonPath('data.bookingId', $booking->id);
+    $this->postJson($url, [...$payload, 'draft' => [...$form, 'customerNotes' => 'changed']])->assertStatus(409);
+    expect($booking->fresh()->property_details['notes'])->toBe($form['customerNotes']);
     expect(DB::table('cleaning_bookings')->count())->toBe(1)
         ->and(DB::table('cleaning_v3_visit_dispatches')->count())->toBe(0)
         ->and(DB::table('cleaning_v3_cash_movements')->count())->toBe(0);

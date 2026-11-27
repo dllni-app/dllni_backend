@@ -92,3 +92,23 @@ test('template property summary uses authoritative home type', function (): void
         ->assertJsonPath('data.propertyBookingValue', 'template_test_property')
         ->assertJsonPath('data.propertyLabel', 'Test property');
 });
+test('V3 templates keep relative grouping but reject calendar data and invalid group indexes', function (): void {
+    Sanctum::actingAs(User::factory()->create(['is_active' => true]));
+    $url = '/api/v1/cleaning/booking-templates';
+    $rows = [
+        ['index' => 1, 'appointmentIndex' => 1, 'durationMinutes' => 120, 'workerCount' => 2],
+        ['index' => 2, 'appointmentIndex' => 1, 'durationMinutes' => 90, 'workerCount' => 1],
+        ['index' => 3, 'appointmentIndex' => 2, 'durationMinutes' => 150, 'workerCount' => 3],
+    ];
+    $input = ['source' => 'v3', 'propertyKey' => 'apartment', 'recurring' => false, 'visitPreferences' => $rows];
+    $payload = ['name' => 'Grouped', 'creationKey' => (string) Str::uuid(), 'inputs' => $input];
+    $this->postJson($url, [...$payload, 'inputs' => [...$input, 'visitPreferences' => [
+        [...$rows[0], 'appointmentIndex' => 31],
+    ]]])->assertUnprocessable();
+    foreach (['date', 'scheduledTime', 'occurrenceKey', 'appointmentKey'] as $key) {
+        $this->postJson($url, [...$payload, 'inputs' => [...$input, 'visitPreferences' => [
+            [...$rows[0], $key => 'forbidden'],
+        ]]])->assertUnprocessable();
+    }
+    $this->postJson($url, $payload)->assertCreated()->assertJsonPath('data.inputs.visitPreferences', $rows);
+});
